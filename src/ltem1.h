@@ -39,6 +39,8 @@ extern "C"
 
 #include "platform/platformGpio.h"
 #include "platform/platformTiming.h"
+#include "platform/platformStdio.h"
+#include "platform/platformSpi.h"
 #include "components/nxp-sc16is741a.h"
 
 #define LTEM1_SPI_DATARATE	2000000U
