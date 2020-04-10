@@ -1,6 +1,6 @@
 /******************************************************************************
- *  \file crLtem1.h
- *  \author Jensen Miller, Greg Terrell, Greg Terrell
+ *  \file ltem1.h
+ *  \author Jensen Miller, Greg Terrell
  *  \license MIT License
  *
  *  Copyright (c) 2020 LooUQ Incorporated.
@@ -22,8 +22,8 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  *****************************************************************************/
-#ifndef __CRLTEM1_H__
-#define __CRLTEM1_H__
+#ifndef __LTEM1_H__
+#define __LTEM1_H__
 
 #ifdef __cplusplus
 extern "C"
@@ -37,13 +37,19 @@ extern "C"
 #include <stdbool.h>
 #endif // __cplusplus
 
-#include "platform/platformGpio.h"
-#include "platform/platformTiming.h"
-#include "platform/platformStdio.h"
-#include "platform/platformSpi.h"
-#include "components/nxp-sc16is741a.h"
+#include "platform/platform_gpio.h"
+#include "platform/platform_timing.h"
+#include "platform/platform_stdio.h"
+#include "platform/platform_spi.h"
+#include "components/nxp_sc16is741a.h"
+#include "components/quectel_bg96.h"
+#include "protocols/protocols.h"
+#include "atcmd.h"
+#include "iop.h"
+
 
 #define LTEM1_SPI_DATARATE	2000000U
+#define LTEM1_PROTOCOL_INDEX_MAX 5
 
 typedef struct
 {
@@ -57,34 +63,52 @@ typedef struct
 } ltem1_pinConfig_t;
 
 
+typedef struct ltem1_apn_tag
+{
+	uint8_t apn_index;
+	char apn_name[21];
+	uint32_t ipAddress;
+} ltem1_apn_t;
+
+typedef struct ltem1_modem_config_tag
+{
+	char imei[16];
+	char iccid [21];
+	char mfgmodel [21];
+	char fwver [41];
+	int rssi;
+} ltem1_modem_config_t;
+
+
 typedef struct ltem1_device_tag
 {
-	ltem1_pinConfig_t* pinConfig;
-	sc16is741a_device_t* bridge;
+	ltem1_pinConfig_t *pinConfig;
+	sc16is741a_device_t *bridge;
+	ltem1_modem_config_t *modemConfig;
+	at_command_t *pendingCmd;
+    iop_status_t *iopStatus;
 	bool urcPending;
-	// platformGpioPin spiIrqPin;
-	// platformGpioPin powerkeyPin;
-	// platformGpioPin resetPin;
-	// platformGpioPin wakePin;
-	// platformGpioPin statusPin;
-	// platformGpioPin connectedPin;
-	// platformGpioPin ringUrcPin;
+	ltem1_apn_t apns[2];
+	protocol_session_t protocols[6];
 } ltem1_device_t;
 
-typedef ltem1_device_t* ltem1_device;
+//typedef ltem1_device_t *ltem1_device;
 
+extern ltem1_device_t *g_ltem1;
 extern ltem1_pinConfig_t FEATHER_BREAKOUT;
 extern ltem1_pinConfig_t RPI_BREAKOUT;
 
 
-ltem1_device ltem1_init(const ltem1_pinConfig_t* ltem1_config, bool startIo);
-void ltem1_uninit(ltem1_device ltem1);
 
+ltem1_device ltem1_init(const ltem1_pinConfig_t* ltem1_config, bool startIo, bool enableIrqMode);
+void ltem1_uninit(ltem1_device ltem1);
+void ltem1_dowork();
 
 /* future static functions, open for testing */
-void ltem1_initIO(ltem1_device ltem1);
 void ltem1_powerOn(ltem1_device modem);
 void ltem1_powerOff(ltem1_device modem);
+
+void ltem1_initIO(ltem1_device ltem1, bool enableIrqMode);
 /* end-static */
 
 
@@ -94,4 +118,4 @@ void ltem1_powerOff(ltem1_device modem);
 
 
 
-#endif  /* !__CRLTEM1_H__ */
+#endif  /* !__LTEM1_H__ */

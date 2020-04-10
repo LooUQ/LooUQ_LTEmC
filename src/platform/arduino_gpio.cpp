@@ -6,7 +6,7 @@
 * Each platform function has a matching Arduino C++ free-function to wrap arduino functions.
 ------------------------------------------------------------------------------------------------------------------------- */
 
-#include "platformGpio.h"
+#include "platform_gpio.h"
 #include <Arduino.h>
 
 

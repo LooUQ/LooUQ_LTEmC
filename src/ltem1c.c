@@ -1,12 +1,13 @@
 //	Copyright (c) 2020 LooUQ Incorporated.
 //	Licensed under The MIT License. See LICENSE in the root directory.
 
-#include "ltem1.h"
-#include "components/nxp-sc16is741a.h"
-#include "components/quectel-bg96.h"
-#include "platform/platformStdio.h"
-#include "platform/platformGpio.h"
-#include "platform/platformTiming.h"
+#include "ltem1c.h"
+// #include "components/nxp_sc16is741a.h"
+// #include "components/quectel_bg96.h"
+// #include "platform/platform_stdio.h"
+// #include "platform/platform_gpio.h"
+// #include "platform/platform_timing.h"
+//#include "iop.h"
 
 
 ltem1_pinConfig_t FEATHER_BREAKOUT =
@@ -31,50 +32,22 @@ ltem1_pinConfig_t RPI_BREAKOUT =
     .wakePin = 0
 };
 
-
-
-static void
-ltem1_spiIrqCallback()
-{
-}
-
-
-
-static void
-ltem1_statusChangedCallback()
-{
-}
-
-
-
-static void
-ltem1_connectedChangedCallback()
-{
-}
-
-
-
-static void
-ltem1_urcSignaledCallback()
-{
-}
-
-
+ltem1_device_t *g_ltem1;
 
 /**
  *	\brief Power on the modem.
  *
  *	\param[in] modem The LTE modem.
  */
-void ltem1_powerOn(ltem1_device modem)
+void ltem1_powerOn(ltem1_device ltem1)
 {
-	if (!gpio_readPin(modem->pinConfig->statusPin))
+	if (!gpio_readPin(ltem1->pinConfig->statusPin))
 	{
 		DBGPRINTF("Powering LTEm1 On...");
-		gpio_writePin(modem->pinConfig->powerkeyPin, gpioValue_high);
+		gpio_writePin(g_ltem1->pinConfig->powerkeyPin, gpioValue_high);
 		timing_delay(BG96_POWERON_DELAY);
-		gpio_writePin(modem->pinConfig->powerkeyPin, gpioValue_low);
-		while (!gpio_readPin(modem->pinConfig->statusPin))
+		gpio_writePin(ltem1->pinConfig->powerkeyPin, gpioValue_low);
+		while (!gpio_readPin(ltem1->pinConfig->statusPin))
 		{
 			timing_delay(500);
 		}
@@ -93,11 +66,11 @@ void ltem1_powerOn(ltem1_device modem)
  *
  *	\param[in] modem The LTE modem.
  */
-void ltem1_powerOff(ltem1_device modem)
+void ltem1_powerOff(ltem1_device ltem1)
 {
-	gpio_writePin(modem->pinConfig->powerkeyPin, gpioValue_high);
+	gpio_writePin(ltem1->pinConfig->powerkeyPin, gpioValue_high);
 	timing_delay(BG96_POWEROFF_DELAY);
-	gpio_writePin(modem->pinConfig->powerkeyPin, gpioValue_low);
+	gpio_writePin(ltem1->pinConfig->powerkeyPin, gpioValue_low);
 }
 
 
@@ -107,9 +80,9 @@ void ltem1_powerOff(ltem1_device modem)
  *
  *	\param[in] modem The LTE modem.
  */
-void ltem1_initIO(ltem1_device ltem1)
+void ltem1_initIO(ltem1_device ltem1, bool enableIrqMode)
 {
-	// on Arduino, ensure pin is low "logical" state prior to opening
+	// on Arduino, ensure pin is in normal "logical" state prior to opening
 	gpio_writePin(ltem1->pinConfig->powerkeyPin, gpioValue_low);
 	gpio_writePin(ltem1->pinConfig->resetPin, gpioValue_low);
 	gpio_writePin(ltem1->pinConfig->spiCsPin, gpioValue_high);
@@ -120,17 +93,14 @@ void ltem1_initIO(ltem1_device ltem1)
 	gpio_openPin(ltem1->pinConfig->spiIrqPin, gpioMode_inputPullUp);
 	gpio_openPin(ltem1->pinConfig->spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
 
-	/* When interrupt is LOW, data is available. */
-	gpio_attachIsr(ltem1->pinConfig->spiIrqPin, true, gpioIrqTriggerOn_low, ltem1_spiIrqCallback);
+	if (enableIrqMode)
+	{
+		/* Interrupt when NXP sc16is741a bridge has event to service. */
+		gpio_attachIsr(ltem1->pinConfig->spiIrqPin, true, gpioIrqTriggerOn_low, iop_irqCallback_bridge);
 
-	/* Interrupt when STATUS changes. */
-	gpio_attachIsr(ltem1->pinConfig->statusPin, true, gpioIrqTriggerOn_change, ltem1_statusChangedCallback);
-
-	/* Interrupt when CONNECTED changes. */
-	//gpio_attachIsr(ltem1->pinConfig->connectedPin, true, gpioIrqTriggerOn_change, ltem1_connectedChangedCallback);
-
-	/* Interrupt when URC signaled. */
-	gpio_attachIsr(ltem1->pinConfig->ringUrcPin, true, gpioIrqTriggerOn_change, ltem1_urcSignaledCallback);
+		// /* Interrupt when BG96 signals external network URC message received. */
+		// gpio_attachIsr(ltem1->pinConfig->ringUrcPin, true, gpioIrqTriggerOn_change, ltem1_irqCallback_bg96Urc);
+	}
 }
 
 
@@ -140,12 +110,9 @@ void ltem1_initIO(ltem1_device ltem1)
  *
  *	\param[in] modem The LTE modem.
  */
-static void ltem1_initBridge(ltem1_device ltem1)
+static void ltem1_initBridge(ltem1_device ltem1, bool enableIrqMode)
 {
-	ltem1->bridge = sc16is741a_init(ltem1->pinConfig->spiCsPin, LTEM1_SPI_DATARATE, BG96_BAUDRATE_DEFAULT);
-	
-	/* Lastly, enable the FIFO. */
-	//sc16is741a_enableFifo(modem->serialBridge, true);
+	ltem1->bridge = sc16is741a_init(ltem1->pinConfig->spiCsPin, LTEM1_SPI_DATARATE, BG96_BAUDRATE_DEFAULT, enableIrqMode);
 }
 
 
@@ -155,11 +122,13 @@ static void ltem1_initBridge(ltem1_device ltem1)
  *
  *	\param[in] ltem1_config The LTE modem initial configurations.
  *  \param[in] startIo Initialize hardware and start modem.
+ *  \param[in] enableIrqMode Initialize ltem1 to use IRQ/ISR for communication events.
+ * 
  *	\returns An ltem1 modem instance.
  */
-ltem1_device ltem1_init(const ltem1_pinConfig_t* ltem1_config, bool startIo)
+ltem1_device ltem1_init(ltem1_device ltem1, const ltem1_pinConfig_t* ltem1_config, bool startIo, bool enableIrqMode)
 {
-	ltem1_device ltem1 = malloc(sizeof(ltem1_device_t));
+	ltem1 = malloc(sizeof(ltem1_device_t));
 	if (ltem1 == NULL)
 	{
 		/* [error]: modem allocation failed. */
@@ -171,9 +140,9 @@ ltem1_device ltem1_init(const ltem1_pinConfig_t* ltem1_config, bool startIo)
 
 	if (startIo)
 	{
-		ltem1_initIO(ltem1);
+		ltem1_initIO(ltem1, enableIrqMode);					// optionally wires up ISR functions.
 		ltem1_powerOn(ltem1);
-		ltem1_initBridge(ltem1);
+		ltem1_initBridge(ltem1, enableIrqMode);				// optionally configures bridge registers with IRQ settings.
 	}
 	return ltem1;
 }
@@ -201,4 +170,14 @@ void ltem1_uninit(ltem1_device ltem1)
 	//gpio_pinClose(modem->pinConfig->connectedPin);
 
 	free(ltem1);
+}
+
+
+
+/**
+ *	\brief Background work task runner. To be called in application Loop() periodically.
+ */
+void ltem1_dowork()
+{
+	// iop_classifyReadBuffers()
 }

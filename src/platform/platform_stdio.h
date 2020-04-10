@@ -1,6 +1,6 @@
 /******************************************************************************
- *  \file platformGpio.h
- *  \author Jensen Miller, Greg Terrell
+ *  \file platform_stdio.h
+ *  \author Greg Terrell
  *  \license MIT License
  *
  *  Copyright (c) 2020 LooUQ Incorporated.
@@ -22,59 +22,31 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  *****************************************************************************/
-#ifndef __PLATFORM_GPIO_H__
-#define __PLATFORM_GPIO_H__
+#ifndef __PLATFORM_STDIO_H__
+#define __PLATFORM_STDIO_H__
+
+#include <stdio.h>
+#include <stdarg.h>
+
+#define __DEBUG
 
 #ifdef __cplusplus
 extern "C"
 {
-#include <cstdint>
-#else
-#include <stdint.h>
 #endif // __cplusplus
 
+#ifdef __DEBUG
+#define DBGPRINTF(f_, ...) _dbg_printf((f_), ##__VA_ARGS__)
+#else
+#define DBGPRINTF(f_, ...) 
+#endif
 
-typedef enum {
-    gpioValue_low = 0,
-    gpioValue_high = 1
-} gpio_pinValue_t;
-
-
-typedef enum {
-    gpioMode_input = 0x0,
-    gpioMode_output = 0x1,
-    gpioMode_inputPullUp,
-    gpioMode_inputPullDown
-} gpio_pinMode_t;
-
-
-typedef enum {
-    gpioIrqTriggerOn_low,
-    gpioIrqTriggerOn_change,
-    gpioIrqTriggerOn_rising,
-    gpioIrqTriggerOn_falling
-} gpio_irqTrigger_t;
-
-
-typedef uint8_t platformGpioPin;
-// typedef struct platformGpioPin_tag* platformGpioPin;
-// typedef struct platformGpioPin_tag { uint8_t pinNum; };
-typedef void(*platformGpioPinIrqCallback)(void);
-
-
-
-void gpio_openPin(uint8_t pinNum, gpio_pinMode_t pinMode);
-void gpio_closePin(uint8_t pinNum);
-
-gpio_pinValue_t gpio_readPin(uint8_t pinNum);
-void gpio_writePin(uint8_t pinNum, gpio_pinValue_t val);
-
-void gpio_attachIsr(uint8_t pinNum, bool enabled, gpio_irqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback);
-void gpio_detachIsr(uint8_t pinNum);
-
+void _dbg_printf(const char *fmt, ...);
 
 #ifdef __cplusplus
 }
 #endif // __cplusplus
 
-#endif  /* !__PLATFORM_GPIO_H__ */
+
+
+#endif  /* !__PLATFORM_STDIO_H__ */

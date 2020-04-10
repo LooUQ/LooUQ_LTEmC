@@ -6,7 +6,7 @@
 * Each platform function has a matching Arduino C++ free-function to wrap arduino functions.
 ------------------------------------------------------------------------------------------------------------------------- */
 
-#include "platformTiming.h"
+#include "platform_timing.h"
 #include <Arduino.h>
 
 

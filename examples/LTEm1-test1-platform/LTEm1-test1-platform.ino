@@ -1,12 +1,36 @@
+/******************************************************************************
+ *  \file platformSpi.h
+ *  \author Greg Terrell
+ *  \license MIT License
+ *
+ *  Copyright (c) 2020 LooUQ Incorporated.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
+ * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+ * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+ * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ ******************************************************************************
+ * The test1-platformAbstraction.ino tests the LTEm1 for proper I/O operations 
+ * via the driver's platform abstraction functions. GPIO, timing, SPI 
+ * and PRINTF.
+ * 
+ * This sketch is designed to be console attached for observation of serial 
+ * output.
+ *****************************************************************************/
 
 #include <ltem1.h>
-//#include <LooUQ_LTEm1c\src\ltem1.h>
-
-// #include "src/platform/platformGpio.h"
-// #include "src/platform/platformTiming.h"
-// #include "src/platform/platformStdio.h"
-// #include "src/platform/platformSpi.h"
-// #include "src/components/nxp-sc16is741a.h"
 
 const int APIN_RANDOMSEED = 7;
 
@@ -41,7 +65,7 @@ void setup() {
   delay(5000);
   #endif
 
-  DBGPRINTF("LTEm1 c platformBasic");
+  DBGPRINTF("LTEm1 C Test1: platformBasic");
   gpio_openPin(LED_BUILTIN, gpioMode_output);
   DBGPRINTF("LED pin = %i \r\n", LED_BUILTIN);
 
@@ -70,37 +94,36 @@ regBuffer rxBuffer;
 
 
 void loop() {
+  uint8_t testPattern = random(256);
   txBuffer.msb = SC16IS741A_SPR_ADDR << 3;
-  txBuffer.lsb = random(256);
+  txBuffer.lsb = testPattern;
   rxBuffer.msb = (SC16IS741A_SPR_ADDR << 3) | 0x80;
-  rxBuffer.lsb = 0x00;
+  // rxBuffer.lsb doesn't matter prior to read
 
-  // write: reg addr + data
-  spi_transferWord(spi, txBuffer.val);
-  // read: reg addr + don't care
-  rxBuffer.val = spi_transferWord(spi, rxBuffer.val);
+  spi_transferWord(ltem1->bridge->spi, txBuffer.val);
+  rxBuffer.val = spi_transferWord(ltem1->bridge->spi, rxBuffer.val);
 
-  if (txBuffer.lsb != rxBuffer.lsb)
-    indicateFailure("Scratchpad write/read failed."); 
+  DBGPRINTF("Writing scratchpad regiser with transferWord...");
+  if (testPattern != rxBuffer.lsb)
+    indicateFailure("Scratchpad write/read failed (transferWord)."); 
+
+
+  // SPI operations are destructive to register addr; reset addr and incr pattern to differentiate
+  txBuffer.msb = SC16IS741A_SPR_ADDR << 3;
+  rxBuffer.msb = (SC16IS741A_SPR_ADDR << 3) | 0x80;  // write: reg addr + data
+  txBuffer.lsb = ++testPattern;
+
+  spi_transferBuffer(ltem1->bridge->spi, &txBuffer, 2);
+  spi_transferBuffer(ltem1->bridge->spi, &rxBuffer, 2);
+
+  if (testPattern != rxBuffer.lsb)
+    indicateFailure("Scratchpad write/read failed (transferBuffer)."); 
+
 
   loopCnt ++;
   indicateLoop(loopCnt, random(1000));
 }
 
-
-/*
-========================================================================================================================= */
-
-
-void atTest() {
-  /* test pattern
-      AT+QTEMP
-  //response ():
-      +QTEMP: 30,26,26
-
-      OK
-  */
-}
 
 
 /* test helpers

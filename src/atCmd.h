@@ -4,24 +4,32 @@
 #ifndef _ATCMD_H_
 #define _ATCMD_H_
 
+#include "ltem1c.h"
+
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct AtCommand_t
+
+typedef struct at_command_tag
 {
-  char* cmd;
-  char* result;
+  char *cmd;
+  char *result;
   int resultCode;
   unsigned long invokedAt;
   int timeoutMillis;
-} pendingAtCommand;
+  char *(*cmdresult_parser_func)();
+} at_command_t;
 
-int atCmd_Invoke(const char * atCmd);
-int atCmd_GetResult(char* atResult);
-void atCmd_Cancel();
+
+void atcmd_invoke(const char *atCmd);
+void atcmd_invokeAdv(const char *atCmd, uint8_t timeoutMillis,  char *responseBuf, uint8_t responseBufSz, char *(*cmdresult_parser_func)());
+uint8_t atcmd_getResult(char *atResult);
+void atcmd_cancel();
+
 
 #ifdef __cplusplus
 }

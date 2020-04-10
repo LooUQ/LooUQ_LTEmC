@@ -1,6 +1,6 @@
 /******************************************************************************
- *  \file platformStdio.h
- *  \author Greg Terrell
+ *  \file platform_timing.h
+ *  \author Jensen Miller, Greg Terrell
  *  \license MIT License
  *
  *  Copyright (c) 2020 LooUQ Incorporated.
@@ -22,26 +22,24 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  *****************************************************************************/
-#ifndef __PLATFORM_STDIO_H__
-#define __PLATFORM_STDIO_H__
-
-#include <stdio.h>
-#include <stdarg.h>
-
-#define __DEBUG
+#ifndef __PLATFORM_TIMING_H__
+#define __PLATFORM_TIMING_H__
 
 #ifdef __cplusplus
 extern "C"
 {
+#include <cstdint>
+#else
+#include <stdint.h>
 #endif // __cplusplus
 
-#ifdef __DEBUG
-#define DBGPRINTF(f_, ...) _dbg_printf((f_), ##__VA_ARGS__)
-#else
-#define DBGPRINTF(f_, ...) 
+#if 0
+typedef struct platform_thread_tag* platform_thread;
 #endif
 
-void _dbg_printf(const char *fmt, ...);
+void timing_delay(uint32_t delay_ms);
+uint32_t timing_millis();
+
 
 #ifdef __cplusplus
 }
@@ -49,4 +47,4 @@ void _dbg_printf(const char *fmt, ...);
 
 
 
-#endif  /* !__PLATFORM_STDIO_H__ */
+#endif  /* !__PLATFORM_TIMING_H__ */

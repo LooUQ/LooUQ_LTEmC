@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file sc16is741a.h
+ *  \file nxp_sc16is741a.h
  *  \author Jensen Miller, Greg Terrell
  *  \license MIT License
  *
@@ -37,16 +37,59 @@ extern "C"
 #include <stdbool.h>
 #endif // __cplusplus
 
-#include "../platform/platformSpi.h"
+#include "../platform/platform_spi.h"
 
-
+#pragma region structures
 
 #define SC16IS741A_FIFO_MAX         0x40U
+#define SC16IS741A_FIFO_EDGE        0x04U
+#define SC16IS741A_FIFO_XFER        (SC16IS741A_FIFO_MAX - (2 * SC16IS741A_FIFO_EDGE))
 #define SC16IS741A_FIFO_RnW_READ    0x01U
 #define SC16IS741A_FIFO_RnW_WRITE   0x00U
 
+// NXP Bridge register set selector values (applied to LCR register)
+#define SC16IS741A_REG_SET_GENERAL 0x00
+#define SC16IS741A_REG_SET_SPECIAL 0x80
+#define SC16IS741A_REG_SET_ENHANCED 0xBF
+
 typedef const uint8_t ro8;
 typedef uint8_t rw8;
+
+
+/**
+ *	\brief SC16IS741A First SPI byte for register addressing.
+ *
+ *	This byte tells the SPI slave what register to access and
+ *	whether this operation is a read or write.
+ */
+union __sc16is741a_reg_addr_byte__
+{
+	struct
+	{
+		ro8 : 1;
+		rw8 CH0 : 1;
+		rw8 CH1 : 1;
+		rw8 A : 4;
+		rw8 RnW : 1;
+	};
+	uint8_t reg_address;
+};
+
+
+
+/**
+ *	\brief SC16IS741A SPI bytes containing address and register value.
+ */
+union __sc16is741a_reg_payload__
+{
+	struct
+	{
+		union __sc16is741a_reg_addr_byte__ reg_addr;
+		uint8_t reg_data;
+	};
+	uint16_t reg_payload;
+};
+
 
 
 /**
@@ -55,8 +98,10 @@ typedef uint8_t rw8;
 typedef struct sc16is741a_device_tag
 {
 	spi_device spi;
-	uint8_t tx_buffer[SC16IS741A_FIFO_MAX + 2];
-	uint8_t rx_buffer[SC16IS741A_FIFO_MAX + 2];
+    union __sc16is741a_reg_addr_byte__ rx_addr_byte;
+    union __sc16is741a_reg_addr_byte__ tx_addr_byte;
+	//uint8_t tx_buffer[SC16IS741A_FIFO_MAX + 2];
+	//uint8_t rx_buffer[SC16IS741A_FIFO_MAX + 2];
 } sc16is741a_device_t;
 
 typedef sc16is741a_device_t* sc16is741a_device;
@@ -99,6 +144,14 @@ typedef enum
 } sc16is741a_reg_addr;
 
 
+/* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+*
+*  bit-order may be affected by compiler and platform for DEF_SC16IS741A_REG 
+*  register structs below. These are composed as bit [0] first.
+*
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
+
+
 /**
  *  \brief Interrupt enable register.
  */
@@ -122,10 +175,8 @@ DEF_SC16IS741A_REG(FCR,
     rw8 RX_FIFO_RST : 1;
     rw8 TX_FIFO_RST : 1;
     ro8 : 1;
-    rw8 TX_TRIGGER_LVL_LSB : 1;
-    rw8 TX_TRIGGER_LVL_MSB : 1;
-    rw8 RX_TRIGGER_LVL_LSB : 1;
-    rw8 RX_TRIGGER_LVL_MSB : 1;
+    rw8 TX_TRIGGER_LVL : 2;
+    rw8 RX_TRIGGER_LVL : 2;
 )
 
 
@@ -148,11 +199,26 @@ typedef enum
 
 
 /**
+ *  \brief Decode for Interrupt indicator register priority bits.
+ */
+typedef enum
+{
+    IRQ_1_RCVR_STATUS_ERROR = 0x03U,
+    IRQ_2_RCVR_TIMEOUT = 0x06U,
+    IRQ_2_RCVR_RHR = 0x02U,
+    IRQ_3_XMIT_THR = 0x01U,
+    IRQ_4_MODEM = 0x00U,
+    IRQ_6_XOFF = 0x08U,
+    IRQ_7_CTSRTS = 0x10U
+} sc16is741a_irq_priority_val;
+
+
+/**
  *  \brief Interrupt indicator register.
  */
 DEF_SC16IS741A_REG(IIR,
-    ro8 INT_STAT : 1;
-    ro8 INT_PRIORITY : 5;
+    ro8 IRQ_STAT : 1;
+    ro8 IRQ_PRIORITY : 5;
     ro8 FIFO_EN : 2;
 )
 
@@ -200,6 +266,9 @@ DEF_SC16IS741A_REG(LSR,
     ro8 FIFO_DATA_ERROR : 1;
 )
 
+#define NXP_LSR_DATA_IN_RECVR 0x01U
+#define NXP_LSR_THR_EMPTY 0x02U
+#define NXP_LSR_FIFO_DATA_ERROR 0x80U
 
 /**
  *  \brief Modem status register.
@@ -245,6 +314,15 @@ DEF_SC16IS741A_REG(EFCR,
 
 
 /**
+ *  \brief Modem status register.
+ */
+DEF_SC16IS741A_REG(TLR,
+    rw8 RX_TRIGGER_LVL : 4;
+    rw8 TX_TRIGGER_LVL : 4;
+)
+
+
+/**
  *  \brief
  */
 DEF_SC16IS741A_REG(EFR, 
@@ -255,21 +333,18 @@ DEF_SC16IS741A_REG(EFR,
     rw8 AUTO_nCTS : 1;
 )
 
-#define SC16IS741A_REG_SET_GENERAL 0x00
-#define SC16IS741A_REG_SET_SPECIAL 0x80
-#define SC16IS741A_REG_SET_ENHANCED 0xBF
+
+#pragma endregion
 
 
-sc16is741a_device sc16is741a_init(uint8_t chipSelLine, uint32_t spiClockSpeed, uint32_t uartBaudrate);
+sc16is741a_device sc16is741a_init(uint8_t chipSelLine, uint32_t spiClockSpeed, uint32_t uartBaudrate, bool enableIrqMode);
 void sc16is741a_uninit(sc16is741a_device bridge);
 
-int sc16is741a_write(sc16is741a_device bridge, const void * src, size_t src_len);
-int sc16is741a_read(sc16is741a_device bridge, void* dest, size_t dest_len, size_t * read_in);
+void sc16is741a_write(sc16is741a_device bridge, const void * src, size_t src_len);
+void sc16is741a_read(sc16is741a_device bridge, void* dest, size_t dest_len);
 
-void sc16is741a_regWrite(sc16is741a_device bridge, uint8_t reg_addr, const uint8_t * reg_data);
-void sc16is741a_regRead(sc16is741a_device bridge, uint8_t reg_addr, uint8_t* reg_data);
-void sc16is741a_enableFifo(sc16is741a_device bridge, bool enable);
-void sc16is741a_setUartBaudrate(sc16is741a_device bridge);
+void sc16is741a_writeReg(sc16is741a_device bridge, uint8_t reg_addr, uint8_t reg_data);
+uint8_t sc16is741a_readReg(sc16is741a_device bridge, uint8_t reg_addr);
 
 #ifdef __cplusplus
 }
