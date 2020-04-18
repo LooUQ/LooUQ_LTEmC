@@ -5,6 +5,6 @@
         "cstddef": "c",
         "limits": "c",
         "type_traits": "c",
-        "ltem1.h": "c"
+        "bitset": "cpp"
     }
 }

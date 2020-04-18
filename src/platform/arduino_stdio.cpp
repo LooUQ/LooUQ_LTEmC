@@ -3,7 +3,9 @@
 #include <Arduino.h>
 
 
-void _dbg_printf(const char *fmt, ...)
+#ifndef __SEGGER_RTT
+
+void _dbg_printf(print_color_t color, const char *fmt, ...)
 {
     char buf[120];
     va_list args;
@@ -15,3 +17,5 @@ void _dbg_printf(const char *fmt, ...)
 
     va_end(args);
 }
+
+#endif

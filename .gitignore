@@ -15,3 +15,4 @@ _deps
 
 ## VSCode build
 build/
+.build/

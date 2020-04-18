@@ -8,7 +8,7 @@
             "name": "Cortex Debug",
             "type": "cortex-debug",
             "cwd": "${workspaceRoot}",
-            "executable": "./build/${fileBasename}.elf",
+            "executable": ".//.build/${fileBasename}.elf",
             "request": "launch",
             "servertype": "jlink",
             "device": "ATSAMD21G18",

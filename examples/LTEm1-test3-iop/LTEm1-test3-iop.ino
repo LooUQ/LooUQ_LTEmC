@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEm1-test2-components.ino
+ *  \file LTEm1-test3-iop.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -22,8 +22,8 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  ******************************************************************************
- * The test2-ltem1Components.ino tests the LTEm1 NXP serial bridge chip and
- * BG96 module for basic serial operations. 
+ * The test3-iop.ino tests the LTEm1 interrupt driven Input-Ouput processing
+ * subsystem in the driver which multiplexes the command and protocol streams.
  *****************************************************************************/
 
 #include <ltem1c.h>
@@ -57,6 +57,9 @@ spi_config_t ltem1_spiConfig =
   csPin : ltem1_pinConfig.spiCsPin
 };
 
+ltem1_device_t *ltem1;
+//spi_device_t *spi; 
+
 
 void setup() {
     #ifdef USE_SERIAL
@@ -73,10 +76,16 @@ void setup() {
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
-    // create ltem1 and start it.
-    ltem1_create(&ltem1_pinConfig, ltem1_functionality_base);
+    ltem1 = ltem1_init(&ltem1_pinConfig, ltem1_functionality_iop);
+	if (ltem1 == NULL)
+	{
+        indicateFailure("LTEm1 create failed."); 
+	}
 }
 
+// void sendCommand(const char* cmd);
+// void recvResponse(char *response);
+// bool validOkResponse(const char *response);
 
 int loopCnt = 0;
 uint8_t testPattern;
@@ -106,26 +115,26 @@ void loop() {
     */
 
     uint8_t regValue = 0;
-    char cmd[] = "AT+GSN\0";
+    char cmd[] = "AT+GSN\r\0";
     //char cmd[] = "AT+QPOWD\0";
     PRINTF("Invoking cmd: %s \r\n", cmd);
 
     sendCommand(cmd);
 
     // wait for BG96 response in FIFO buffer
-    char response[65] = {0};
+    // char response[65] = {0};
 
-    recvResponse(response);
+    // recvResponse(response);
 
-    // test response v. expected 
-    char* validResponse = "AT+GSN\r\r\n86450";
-    uint8_t imeiPrefixTest = strncmp(validResponse, response, strlen(validResponse)); 
+    // // test response v. expected 
+    // char* validResponse = "AT+GSN\r\r\n86450";
+    // uint8_t imeiPrefixTest = strncmp(validResponse, response, strlen(validResponse)); 
 
-    PRINTF("Expecting 32 chars response, got %d \r\n", strlen(response));
-    PRINTF("Got response: %s", response);  
+    // PRINTF("Expecting 32 chars response, got %d \r\n", strlen(response));
+    // PRINTF("Got response: %s", response);  
 
-    if (imeiPrefixTest != 0 || strlen(response) != 32)
-        indicateFailure("Unexpected IMEI value returned on cmd test... failed."); 
+    // if (imeiPrefixTest != 0 || strlen(response) != 32)
+    //     indicateFailure("Unexpected IMEI value returned on cmd test... failed."); 
 
 
     loopCnt ++;
@@ -140,14 +149,7 @@ void loop() {
 
 void sendCommand(const char* cmd)
 {
-  for (size_t i = 0; i < 64; i++)
-  {
-    if (cmd[i] == NULL)
-      break;
-    sc16is741a_writeReg(SC16IS741A_FIFO_ADDR, cmd[i]);
-  }
-  sc16is741a_writeReg(SC16IS741A_FIFO_ADDR, ASCII_CR);
-  timing_delay(300);                                        // max response time per-Quectel
+    sc16is741a_write(cmd, strlen(cmd));
 }
 
 
@@ -163,8 +165,6 @@ void recvResponse(char *response)
     {
         lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
     }
-
-
     bufFill = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
     sc16is741a_read(response, bufFill);
 }

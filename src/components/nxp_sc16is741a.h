@@ -92,19 +92,15 @@ union __sc16is741a_reg_payload__
 
 
 
-/**
- *	\brief A NXP SC16IS741A Serial bridge device (SPI<=>UART on LTEm1)
- */
-typedef struct sc16is741a_device_tag
-{
-	spi_device spi;
-    union __sc16is741a_reg_addr_byte__ rx_addr_byte;
-    union __sc16is741a_reg_addr_byte__ tx_addr_byte;
-	//uint8_t tx_buffer[SC16IS741A_FIFO_MAX + 2];
-	//uint8_t rx_buffer[SC16IS741A_FIFO_MAX + 2];
-} sc16is741a_device_t;
+// /**
+//  *	\brief A NXP SC16IS741A Serial bridge device (SPI<=>UART on LTEm1)
+//  */
+// typedef struct sc16is741a_device_tag
+// {
+// 	spi_device_t *spi;
+// } sc16is741a_device_t;
 
-typedef sc16is741a_device_t* sc16is741a_device;
+//typedef sc16is741a_device_t* sc16is741a_device;
 
 
 #define DEF_SC16IS741A_REG(REG_NAME, REG_BITS) \
@@ -337,14 +333,17 @@ DEF_SC16IS741A_REG(EFR,
 #pragma endregion
 
 
-sc16is741a_device sc16is741a_init(uint8_t chipSelLine, uint32_t spiClockSpeed, uint32_t uartBaudrate, bool enableIrqMode);
-void sc16is741a_uninit(sc16is741a_device bridge);
+// sc16is741a_device_t *sc16is741a_create(uint8_t chipSelLine, uint32_t spiClockSpeed, uint32_t uartBaudrate);
+// void sc16is741a_uninit();
+void sc16is741a_start();
+void sc16is741a_enableIrqMode();
 
-void sc16is741a_write(sc16is741a_device bridge, const void * src, size_t src_len);
-void sc16is741a_read(sc16is741a_device bridge, void* dest, size_t dest_len);
+void sc16is741a_write(const void * src, size_t src_len);
+void sc16is741a_read(void* dest, size_t dest_len);
 
-void sc16is741a_writeReg(sc16is741a_device bridge, uint8_t reg_addr, uint8_t reg_data);
-uint8_t sc16is741a_readReg(sc16is741a_device bridge, uint8_t reg_addr);
+void sc16is741a_writeReg(uint8_t reg_addr, uint8_t reg_data);
+uint8_t sc16is741a_readReg(uint8_t reg_addr);
+
 
 #ifdef __cplusplus
 }

@@ -29,20 +29,17 @@
 #include <stdint.h>
 #include "ltem1c.h"
 
-#define IOP_PROTOCOLS_MAX 5
-#define IOP_PROTOCOLS_SIZE (IOP_PROTOCOLS_MAX + 1)
+#define IOP_PROTOCOLS_COUNT 6
 #define IOP_ERROR -1
 
-#define IOP_READ_BUFFERS_MAX 5
-#define IOP_READ_BUFFERS_SIZE (IOP_READ_BUFFERS_MAX + 1)
-#define IOP_READ_BUFFERS_PRIMARY_BUFFER_SIZE 60
-#define IOP_READ_BUFFERS_END -1
-
+#define IOP_RD_BUFFERS_COUNT 6
+#define IOP_RD_BUFFERS_PRIMARY_BUFFER_SIZE 65
+#define IOP_RD_BUFFER_EMPTY -1
+#define IOP_RD_BUFFER_NOTFOUND -1
 
 
 typedef enum
 {
-	iop_process_notclassified = -1,
     iop_process_protocol_0 = 0,
     iop_process_protocol_1 = 1,
     iop_process_protocol_2 = 2,
@@ -53,29 +50,24 @@ typedef enum
 } iop_processes_t; 
 
 
-typedef struct iop_readbuffer_descr_tag
+typedef struct iop_rd_buffer_tag
 {
     bool occupied;
     uint8_t next;
-    char primaryBuf[60];
-    iop_processes_t ownerProc;
-    char *expandBufHead;
-    char *expandBufTail;
-} iop_readbuffer_descr_t;
+    char primBuf[65];
+    iop_processes_t process;
+    bool isIrd;
+    char *expBufHead;
+    char *expBufTail;
+} iop_rd_buffer_t;
 
 
-//static ltem1_device g_ltem1;
-
-
-typedef struct iop_status_tag
+typedef volatile struct iop_status_tag
 {
     int8_t readLast;
-    int8_t cmdLast;
-    int8_t protoLast[IOP_PROTOCOLS_SIZE];
-    bool cmdPending;
-    bool recvPending;
-    bool qirdPending;
-    iop_readbuffer_descr_t g_readBuffers[IOP_READ_BUFFERS_SIZE];
+    int8_t cmdHead;
+    int8_t protoHead[IOP_PROTOCOLS_COUNT];
+    iop_rd_buffer_t rdBufs[IOP_RD_BUFFERS_COUNT];
 } iop_status_t;
 
 
@@ -86,12 +78,11 @@ extern "C"
 #endif // __cplusplus
 
 
-void iop_init(ltem1_device ltem1);
-void iop_uinit();
+iop_status_t *iop_create();
+void iop_start();
+void iop_destroy();
 
-void iop_closeBuffer(uint8_t bufferIndex);
-void iop_classifyReadBuffers();
-void iop_irqCallback_bridge();
+void iop_closeRdBuffer(uint8_t bufferIndex);
 
 
 #ifdef __cplusplus

@@ -43,18 +43,27 @@ extern "C"
 #include "platform/platform_spi.h"
 #include "components/nxp_sc16is741a.h"
 #include "components/quectel_bg96.h"
-#include "protocols/protocols.h"
-#include "atcmd.h"
 #include "iop.h"
+#include "atcmd.h"
+// #include "protocols/protocols.h"
 
 
 #define LTEM1_SPI_DATARATE	2000000U
-#define LTEM1_PROTOCOL_INDEX_MAX 5
+#define LTEM1_PROTOCOL_COUNT 6
+
+
+typedef enum 
+{
+    ltem1_functionality_stop = 0,
+    ltem1_functionality_base = 1,
+    ltem1_functionality_iop = 2
+} ltem1_functionality_t;
+
 
 typedef struct
 {
     int spiCsPin;
-    int spiIrqPin;
+    int irqPin;
     int statusPin;
     int powerkeyPin;
     int resetPin;
@@ -70,47 +79,50 @@ typedef struct ltem1_apn_tag
 	uint32_t ipAddress;
 } ltem1_apn_t;
 
-typedef struct ltem1_modem_config_tag
+typedef struct ltem1_provisions_tag
 {
 	char imei[16];
 	char iccid [21];
 	char mfgmodel [21];
 	char fwver [41];
 	int rssi;
-} ltem1_modem_config_t;
+} ltem1_provisions_t;
 
 
 typedef struct ltem1_device_tag
 {
-	ltem1_pinConfig_t *pinConfig;
-	sc16is741a_device_t *bridge;
-	ltem1_modem_config_t *modemConfig;
-	at_command_t *pendingCmd;
-    iop_status_t *iopStatus;
-	bool urcPending;
+	ltem1_pinConfig_t *gpio;
+    spi_device_t *spi;
+	ltem1_provisions_t *provisions;
+    iop_status_t *iop;
+	atcommand_t *atcmd;
 	ltem1_apn_t apns[2];
-	protocol_session_t protocols[6];
+	// protocol_t protocols[6];
 } ltem1_device_t;
 
-//typedef ltem1_device_t *ltem1_device;
 
 extern ltem1_device_t *g_ltem1;
 extern ltem1_pinConfig_t FEATHER_BREAKOUT;
 extern ltem1_pinConfig_t RPI_BREAKOUT;
 
 
+void ltem1_create(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t funcLevel);
+void ltem1_destroy();
 
-ltem1_device ltem1_init(const ltem1_pinConfig_t* ltem1_config, bool startIo, bool enableIrqMode);
-void ltem1_uninit(ltem1_device ltem1);
+void ltem1_start(ltem1_functionality_t funcLevel);
+void ltem1_stop();
+
+
+
+// ltem1_device_t * ltem1_init(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t funcLevel);
+// void ltem1_uninit();
+void ltem1_enableIrqMode();
+
+// void ltem1_powerOn();
+// void ltem1_powerOff();
+
 void ltem1_dowork();
-
-/* future static functions, open for testing */
-void ltem1_powerOn(ltem1_device modem);
-void ltem1_powerOff(ltem1_device modem);
-
-void ltem1_initIO(ltem1_device ltem1, bool enableIrqMode);
-/* end-static */
-
+void ltem1_faultHandler(const char * fault);
 
 #ifdef __cplusplus
 }

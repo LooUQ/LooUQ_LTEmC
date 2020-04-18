@@ -36,7 +36,9 @@ extern "C"
 #endif // __cplusplus
 
 #define SPI_DATA_RATE 2000000U
- 
+#define SPI_NO_IRQ_PROTECTION -1
+
+
 typedef enum
 {
     spi_bitOrder_lsbFirst = 0x0,
@@ -69,19 +71,21 @@ typedef struct spi_config_tag
 
 typedef struct spi_device_tag
 {
-	spi_config_t* config;
+	spi_config_t *config;
 } spi_device_t;
 
-typedef spi_device_t* spi_device;
+//typedef spi_device_t* spi_device;
 
+spi_device_t *spi_create(uint8_t chipSelLine, bool startSpi);
+void spi_start(spi_device_t *spi);
+void spi_stop(spi_device_t *spi);
 
-spi_device spi_init(spi_config_t spiConfig);
-void spi_uninit(spi_device spi);
+void spi_protectFromInterrupt(spi_device_t *spi, int8_t irqNumber);
 
-uint8_t spi_transferByte(spi_device spi, uint8_t writeVal);
-uint16_t spi_transferWord(spi_device spi, uint16_t writeVal);
+uint8_t spi_transferByte(spi_device_t *spi, uint8_t writeVal);
+uint16_t spi_transferWord(spi_device_t *spi, uint16_t writeVal);
 
-void spi_transferBuffer(spi_device spi, uint8_t regAddrByte, void* buf, size_t xfer_len);
+void spi_transferBuffer(spi_device_t *spi, uint8_t regAddrByte, void* buf, size_t xfer_len);
 
 
 #ifdef __cplusplus

@@ -29,19 +29,33 @@
 #include <stdarg.h>
 
 #define __DEBUG
+#define __SEGGER_RTT
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif // __cplusplus
 
-#ifdef __DEBUG
-#define DBGPRINTF(f_, ...) _dbg_printf((f_), ##__VA_ARGS__)
+
+typedef enum print_color_tag {
+    debug_print_color_none,
+    debug_print_color_info,
+    debug_print_color_warn,
+    debug_print_color_error
+} print_color_t;
+
+
+#if defined(__DEBUG)
+#define PRINTF(f_, ...) _dbg_printf(debug_print_color_none, (f_), ##__VA_ARGS__)
+#define PRINTF_INFO(f_, ...) _dbg_printf(debug_print_color_info, (f_), ##__VA_ARGS__)
+#define PRINTF_WARN(f_, ...) _dbg_printf(debug_print_color_warn, (f_), ##__VA_ARGS__)
+#define PRINTF_ERROR(f_, ...) _dbg_printf(debug_print_color_error, (f_), ##__VA_ARGS__)
 #else
 #define DBGPRINTF(f_, ...) 
 #endif
 
-void _dbg_printf(const char *fmt, ...);
+
+void _dbg_printf(print_color_t color, const char *fmt, ...);
 
 #ifdef __cplusplus
 }

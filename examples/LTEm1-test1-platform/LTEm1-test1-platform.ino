@@ -30,98 +30,123 @@
  * output.
  *****************************************************************************/
 
-#include <ltem1.h>
+#include <ltem1c.h>
+
+//#define USE_SERIAL 0
+
+extern "C" {
+#include <SEGGER_RTT.h>
+}
+
 
 const int APIN_RANDOMSEED = 7;
 
 ltem1_pinConfig_t ltem1_pinConfig =
 {
-  spiCsPin : 5,
-  spiIrqPin : 12,
+  spiCsPin : 13,
+  irqPin : 12,
   statusPin : 6,
   powerkeyPin : 11,
   resetPin : 19,
-  ringUrcPin : 0,
-  wakePin : 0
+  ringUrcPin : 5,
+  wakePin : 10
 };
 
-spi_config_t ltem1_spiConfig = 
-{
-  dataRate : 2000000U,
-  dataMode : spi_dataMode_0,
-  bitOrder : spi_bitOrder_msbFirst,
-  csPin : ltem1_pinConfig.spiCsPin
-};
 
-ltem1_device ltem1;
-spi_device spi; 
+spi_device_t *spi; 
 
 
 void setup() {
-  Serial.begin(115200);
-  #if 0
-  while (!Serial) {}
-  #else
-  delay(5000);
-  #endif
+    #ifdef USE_SERIAL
+        Serial.begin(115200);
+        #if (USE_SERIAL)
+        while (!Serial) {}
+        #else
+        delay(5000);
+        #endif
+    #endif
 
-  DBGPRINTF("LTEm1 C Test1: platformBasic");
-  gpio_openPin(LED_BUILTIN, gpioMode_output);
-  DBGPRINTF("LED pin = %i \r\n", LED_BUILTIN);
+    PRINTF("LTEm1 C Test1: platformBasic \r\n");
+    gpio_openPin(LED_BUILTIN, gpioMode_output);
+    PRINTF("LED pin = %i \r\n", LED_BUILTIN);
 
-  randomSeed(analogRead(APIN_RANDOMSEED));
+    randomSeed(analogRead(APIN_RANDOMSEED));
 
-  ltem1 = ltem1_init(&ltem1_pinConfig, false);
-	if (ltem1 == NULL)
-	{
-    indicateFailure("LTEm1 create failed."); 
-	}
-  ltem1_initIO(ltem1);
-  ltem1_powerOn(ltem1);
+	gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_low);
+	gpio_writePin(ltem1_pinConfig.resetPin, gpioValue_low);
+	gpio_writePin(ltem1_pinConfig.spiCsPin, gpioValue_high);
+	gpio_openPin(ltem1_pinConfig.powerkeyPin, gpioMode_output);		    // powerKey: normal low
+	gpio_openPin(ltem1_pinConfig.statusPin, gpioMode_input);
+	
+    powerModemOn();
 
-	spi = spi_init(ltem1_spiConfig);
+	spi = spi_create(ltem1_pinConfig.spiCsPin, true);
 	if (spi == NULL)
 	{
-    indicateFailure("SPI open failed."); 
+        indicateFailure("SPI create failed."); 
 	}
 }
 
 int loopCnt = 0;
 
-union regBuffer { uint16_t val; struct { uint8_t lsb; uint8_t msb; }; };
+union regBuffer { uint16_t val; struct { uint8_t msb; uint8_t lsb; }; };
 regBuffer txBuffer;
 regBuffer rxBuffer;
+uint8_t testPattern;
 
 
 void loop() {
-  uint8_t testPattern = random(256);
-  txBuffer.msb = SC16IS741A_SPR_ADDR << 3;
-  txBuffer.lsb = testPattern;
-  rxBuffer.msb = (SC16IS741A_SPR_ADDR << 3) | 0x80;
-  // rxBuffer.lsb doesn't matter prior to read
+    testPattern = random(256);
+    txBuffer.msb = SC16IS741A_SPR_ADDR << 3;
+    rxBuffer.msb = (SC16IS741A_SPR_ADDR << 3) | 0x80;
+    txBuffer.lsb = testPattern;
+    // rxBuffer.lsb doesn't matter prior to read
 
-  spi_transferWord(ltem1->bridge->spi, txBuffer.val);
-  rxBuffer.val = spi_transferWord(ltem1->bridge->spi, rxBuffer.val);
+    spi_transferWord(spi, txBuffer.val);
+    rxBuffer.val = spi_transferWord(spi, rxBuffer.val);
 
-  DBGPRINTF("Writing scratchpad regiser with transferWord...");
-  if (testPattern != rxBuffer.lsb)
-    indicateFailure("Scratchpad write/read failed (transferWord)."); 
-
-
-  // SPI operations are destructive to register addr; reset addr and incr pattern to differentiate
-  txBuffer.msb = SC16IS741A_SPR_ADDR << 3;
-  rxBuffer.msb = (SC16IS741A_SPR_ADDR << 3) | 0x80;  // write: reg addr + data
-  txBuffer.lsb = ++testPattern;
-
-  spi_transferBuffer(ltem1->bridge->spi, &txBuffer, 2);
-  spi_transferBuffer(ltem1->bridge->spi, &rxBuffer, 2);
-
-  if (testPattern != rxBuffer.lsb)
-    indicateFailure("Scratchpad write/read failed (transferBuffer)."); 
+    PRINTF("Writing scratchpad regiser with transferWord...");
+    if (testPattern != rxBuffer.lsb)
+        indicateFailure("Scratchpad write/read failed (transferWord)."); 
 
 
-  loopCnt ++;
-  indicateLoop(loopCnt, random(1000));
+    // SPI operations are destructive to register addr; reset addr and incr pattern to differentiate
+    txBuffer.msb = SC16IS741A_SPR_ADDR << 3;
+    rxBuffer.msb = (SC16IS741A_SPR_ADDR << 3) | 0x80;  // write: reg addr + data
+    txBuffer.lsb = ++testPattern;
+
+    spi_transferBuffer(spi, txBuffer.msb, &txBuffer.lsb, 1);
+    spi_transferBuffer(spi, rxBuffer.msb, &rxBuffer.lsb, 1);
+
+    if (testPattern != rxBuffer.lsb)
+        indicateFailure("Scratchpad write/read failed (transferBuffer)."); 
+
+    loopCnt ++;
+    indicateLoop(loopCnt, random(1000));
+}
+
+/*
+========================================================================================================================= */
+
+
+void powerModemOn()
+{
+	if (!gpio_readPin(ltem1_pinConfig.statusPin))
+	{
+		PRINTF("Powering LTEm1 On...");
+		gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_high);
+		timing_delay(BG96_POWERON_DELAY);
+		gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_low);
+		while (!gpio_readPin(ltem1_pinConfig.statusPin))
+		{
+			timing_delay(500);
+		}
+		PRINTF("DONE.\r\n");
+	}
+	else
+	{
+		PRINTF("LTEm1 is already powered on.\r\n");
+	}
 }
 
 
@@ -131,61 +156,60 @@ void loop() {
 
 void indicateFailure(char failureMsg[])
 {
-	DBGPRINTF("\r\n** %s \r\n", failureMsg);
-  DBGPRINTF("** Test Assertion Failed. \r\n");
+	PRINTF_ERROR("\r\n** %s \r\n", failureMsg);
+    PRINTF_ERROR("** Test Assertion Failed. \r\n");
 
-  #if 1
-  DBGPRINTF("** Halting Execution \r\n");
-  while (1)
-  {
-      gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_high);
-      timing_delay(1000);
-      gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_low);
-      timing_delay(100);
-  }
-  #endif
+    #if 1
+    PRINTF_ERROR("** Halting Execution \r\n");
+    while (1)
+    {
+        gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_high);
+        timing_delay(1000);
+        gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_low);
+        timing_delay(100);
+    }
+    #endif
 }
 
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-  DBGPRINTF("Loop: %i \r\n", loopCnt);
-  DBGPRINTF("      Tx: %i \r\n", txBuffer.lsb);
-  DBGPRINTF("      Rx: %i \r\n", rxBuffer.lsb);
+    PRINTF("Loop: %i \r\n", loopCnt);
+    PRINTF("      Tx: %i \r\n", testPattern);
+    PRINTF("      Rx: %i \r\n", rxBuffer.lsb);
 
-  for (int i = 0; i < 6; i++)
-  {
-    gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_high);
-    timing_delay(50);
-    gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_low);
-    timing_delay(50);
-  }
+    for (int i = 0; i < 6; i++)
+    {
+        gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_high);
+        timing_delay(50);
+        gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_low);
+        timing_delay(50);
+    }
 
-  DBGPRINTF("Free memory: %u \r\n", getFreeMemory());
-  DBGPRINTF("Next test in (millis): %i\r\n\r\n", waitNext);
-  timing_delay(waitNext);
+    PRINTF("Free memory: %u \r\n", getFreeMemory());
+    PRINTF("Next test in (millis): %i\r\n\r\n", waitNext);
+    timing_delay(waitNext);
 }
+
 
 /* Check free memory (stack-heap) 
  * - Remove if not needed for production
 */
-
-  #ifdef __arm__
-  // should use uinstd.h to define sbrk but Due causes a conflict
-  extern "C" char* sbrk(int incr);
-  #else  // __ARM__
-  extern char *__brkval;
-  #endif  // __arm__
+#ifdef __arm__
+// should use uinstd.h to define sbrk but Due causes a conflict
+extern "C" char* sbrk(int incr);
+#else  // __ARM__
+extern char *__brkval;
+#endif  // __arm__
 
 int getFreeMemory() 
 {
-  char top;
-  #ifdef __arm__
-  return &top - reinterpret_cast<char*>(sbrk(0));
-  #elif defined(CORE_TEENSY) || (ARDUINO > 103 && ARDUINO != 151)
-  return &top - __brkval;
-  #else  // __arm__
-  return __brkval ? &top - __brkval : &top - __malloc_heap_start;
-  #endif  // __arm__
+    char top;
+    #ifdef __arm__
+    return &top - reinterpret_cast<char*>(sbrk(0));
+    #elif defined(CORE_TEENSY) || (ARDUINO > 103 && ARDUINO != 151)
+    return &top - __brkval;
+    #else  // __arm__
+    return __brkval ? &top - __brkval : &top - __malloc_heap_start;
+    #endif  // __arm__
 }
-
