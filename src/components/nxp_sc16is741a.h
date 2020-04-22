@@ -41,9 +41,7 @@ extern "C"
 
 #pragma region structures
 
-#define SC16IS741A_FIFO_MAX         0x40U
-#define SC16IS741A_FIFO_EDGE        0x04U
-#define SC16IS741A_FIFO_XFER        (SC16IS741A_FIFO_MAX - (2 * SC16IS741A_FIFO_EDGE))
+#define SC16IS741A_FIFO_BUFFER_SZ   0x40U
 #define SC16IS741A_FIFO_RnW_READ    0x01U
 #define SC16IS741A_FIFO_RnW_WRITE   0x00U
 
@@ -152,7 +150,7 @@ typedef enum
  *  \brief Interrupt enable register.
  */
 DEF_SC16IS741A_REG(IER,
-    rw8 RX_DATA_AVAIL_INT_EN : 1;
+    rw8 RHR_DATA_AVAIL_INT_EN : 1;
     rw8 THR_EMPTY_INT_EN : 1;
     rw8 RECEIVE_LINE_STAT_INT_EN : 1;
     rw8 MDM_STAT_INT_EN : 1;
@@ -213,8 +211,8 @@ typedef enum
  *  \brief Interrupt indicator register.
  */
 DEF_SC16IS741A_REG(IIR,
-    ro8 IRQ_STAT : 1;
-    ro8 IRQ_PRIORITY : 5;
+    ro8 IRQ_nPENDING : 1;
+    ro8 IRQ_SOURCE : 5;
     ro8 FIFO_EN : 2;
 )
 
@@ -329,6 +327,13 @@ DEF_SC16IS741A_REG(EFR,
     rw8 AUTO_nCTS : 1;
 )
 
+typedef enum
+{
+  resetFifo_action_Rx = 0x02U,
+  resetFifo_action_Tx = 0x04U,
+  resetFifo_action_RxTx = 0x06U
+} resetFifo_action_t;
+
 
 #pragma endregion
 
@@ -343,6 +348,11 @@ void sc16is741a_read(void* dest, size_t dest_len);
 
 void sc16is741a_writeReg(uint8_t reg_addr, uint8_t reg_data);
 uint8_t sc16is741a_readReg(uint8_t reg_addr);
+
+void sc16is741a_resetFifo(resetFifo_action_t resetAction);
+void sc16is741a_flushRxFifo();
+
+void displayFifoStatus(const char *dispMsg);
 
 
 #ifdef __cplusplus

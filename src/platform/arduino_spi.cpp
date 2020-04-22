@@ -23,7 +23,7 @@ static ardruino_spi_t arduino_spi_settings;
 /**
  *	\brief Initialize and configure SPI resource.
  */
-spi_device_t *spi_create(uint8_t chipSelLine, bool startSpi)
+spi_device_t *spi_create(uint8_t chipSelLine)
 {
     //spi_settings = new SPISettings(config.dataRate, (BitOrder)config.bitOrder, config.dataMode);
 
@@ -47,9 +47,6 @@ spi_device_t *spi_create(uint8_t chipSelLine, bool startSpi)
 
     arduino_spi_settings.nxpSettings = SPISettings(spi->config->dataRate, (BitOrder)spi->config->bitOrder, spi->config->dataMode);
     arduino_spi_settings.irqNumber = SPI_NO_IRQ_PROTECTION;
-
-    if (startSpi)
-        spi_start(spi);
 
     return spi;
 }

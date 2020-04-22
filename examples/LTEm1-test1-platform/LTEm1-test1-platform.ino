@@ -80,11 +80,12 @@ void setup() {
 	
     powerModemOn();
 
-	spi = spi_create(ltem1_pinConfig.spiCsPin, true);
+	spi = spi_create(ltem1_pinConfig.spiCsPin);
 	if (spi == NULL)
 	{
         indicateFailure("SPI create failed."); 
 	}
+    spi_start(spi);
 }
 
 int loopCnt = 0;

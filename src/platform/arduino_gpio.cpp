@@ -34,14 +34,15 @@ void gpio_writePin(uint8_t pNum, gpio_pinValue_t val)
     digitalWrite(pNum, val);
 }
 
-// void (*isr)(void)
-//void gpio_irqAttach(uint8_t pinNum, bool enabled, gpio_irqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback);
+
 void gpio_attachIsr(uint8_t pinNum, bool enabled, gpio_irqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback)
 {
+    attachInterrupt(digitalPinToInterrupt(pinNum), isrCallback, triggerOn);
 }
 
 
 void gpio_detachIsr(uint8_t pinNum)
 {
+    detachInterrupt(digitalPinToInterrupt(pinNum));
 }
 

@@ -91,10 +91,12 @@ typedef struct ltem1_provisions_tag
 
 typedef struct ltem1_device_tag
 {
+    bg96_readyState_t bg96ReadyState;
+    ltem1_functionality_t funcLevel;
 	ltem1_pinConfig_t *gpio;
     spi_device_t *spi;
 	ltem1_provisions_t *provisions;
-    iop_status_t *iop;
+    iop_state_t *iop;
 	atcommand_t *atcmd;
 	ltem1_apn_t apns[2];
 	// protocol_t protocols[6];
@@ -111,18 +113,11 @@ void ltem1_destroy();
 
 void ltem1_start(ltem1_functionality_t funcLevel);
 void ltem1_stop();
-
-
-
-// ltem1_device_t * ltem1_init(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t funcLevel);
-// void ltem1_uninit();
-void ltem1_enableIrqMode();
-
-// void ltem1_powerOn();
-// void ltem1_powerOff();
+void ltem1_reset(bool restart);
 
 void ltem1_dowork();
 void ltem1_faultHandler(const char * fault);
+
 
 #ifdef __cplusplus
 }

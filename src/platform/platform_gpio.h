@@ -49,10 +49,11 @@ typedef enum {
 
 
 typedef enum {
-    gpioIrqTriggerOn_low,
-    gpioIrqTriggerOn_change,
-    gpioIrqTriggerOn_rising,
-    gpioIrqTriggerOn_falling
+    gpioIrqTriggerOn_low = 0,
+    gpioIrqTriggerOn_high = 1,
+    gpioIrqTriggerOn_change =2,
+    gpioIrqTriggerOn_falling = 3,
+    gpioIrqTriggerOn_rising = 4
 } gpio_irqTrigger_t;
 
 

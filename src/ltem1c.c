@@ -50,11 +50,12 @@ static void initIO()
 	gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_low);
 	gpio_writePin(g_ltem1->gpio->spiCsPin, gpioValue_high);
 
-	gpio_openPin(g_ltem1->gpio->powerkeyPin, gpioMode_output);		    // powerKey: normal low
-	gpio_openPin(g_ltem1->gpio->statusPin, gpioMode_input);
+	gpio_openPin(g_ltem1->gpio->powerkeyPin, gpioMode_output);		// powerKey: normal low
 	gpio_openPin(g_ltem1->gpio->resetPin, gpioMode_output);			// resetPin: normal low
-	gpio_openPin(g_ltem1->gpio->irqPin, gpioMode_inputPullUp);
 	gpio_openPin(g_ltem1->gpio->spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+
+	gpio_openPin(g_ltem1->gpio->statusPin, gpioMode_input);
+	gpio_openPin(g_ltem1->gpio->irqPin, gpioMode_inputPullUp);
 }
 
 
@@ -93,14 +94,14 @@ static void initIO()
  */
 void ltem1_create(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t funcLevel)
 {
-	g_ltem1 = malloc(sizeof(ltem1_device_t));
+	g_ltem1 = calloc(1, sizeof(ltem1_device_t));
 	if (g_ltem1 == NULL)
 	{
         ltem1_faultHandler("ltem1-could not alloc ltem1 object");
 	}
 
 	g_ltem1->gpio = ltem1_config;
-    g_ltem1->spi = spi_create(g_ltem1->gpio->spiCsPin, false);
+    g_ltem1->spi = spi_create(g_ltem1->gpio->spiCsPin);
     //g_ltem1->spi = createSpiConfig(g_ltem1->gpio->spiCsPin, LTEM1_SPI_DATARATE, BG96_BAUDRATE_DEFAULT);
 
     g_ltem1->provisions = calloc(1, sizeof(ltem1_provisions_t));
@@ -135,13 +136,23 @@ void ltem1_start(ltem1_functionality_t funcLevel)
 			timing_delay(500);
 		}
 		PRINTF("DONE.\r\n");
+        g_ltem1->bg96ReadyState = bg96_readyState_powerOn;
+        g_ltem1->funcLevel = funcLevel;
 	}
 	else
 	{
-		PRINTF_INFO("LTEm1 is already powered on.\r\n");
+		PRINTF_INFO("LTEm1 found powered on.\r\n");
+        g_ltem1->bg96ReadyState = bg96_readyState_appReady;
+
+        // reset IRQ if latched: previous fired and not serviced
+        gpio_pinValue_t irqState = gpio_readPin(g_ltem1->gpio->irqPin);
+        if (irqState == gpioValue_low)
+            ltem1_reset(false);
 	}
 
+    // start NXP SPI-UART bridge
     spi_start(g_ltem1->spi);
+    sc16is741a_start();
 
     if (funcLevel == ltem1_functionality_iop)
     {
@@ -152,10 +163,33 @@ void ltem1_start(ltem1_functionality_t funcLevel)
 
 
 /**
+ *	\brief Performs a HW reset of LTEm1 and optionally executes start sequence.
+ */
+void ltem1_reset(bool restart)
+{
+	gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_low);
+	timing_delay(BG96_RESET_DELAY);
+	gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_high);
+
+    if (restart)
+    {
+        sc16is741a_start();
+        if (g_ltem1->funcLevel == ltem1_functionality_iop)
+        {
+            iop_start();
+        }
+        bg96_start();
+    }
+}
+
+
+
+/**
  *	\brief Powers off the modem without destroying memory objects. Modem device will require ltem1_start() to reinit HW.
  */
 void ltem1_stop()
 {
+    g_ltem1->bg96ReadyState = bg96_readyState_powerOff;
 	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
 	timing_delay(BG96_POWEROFF_DELAY);
 	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);

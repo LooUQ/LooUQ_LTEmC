@@ -76,7 +76,7 @@ typedef struct spi_device_tag
 
 //typedef spi_device_t* spi_device;
 
-spi_device_t *spi_create(uint8_t chipSelLine, bool startSpi);
+spi_device_t *spi_create(uint8_t chipSelLine);
 void spi_start(spi_device_t *spi);
 void spi_stop(spi_device_t *spi);
 

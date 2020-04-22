@@ -35,8 +35,44 @@ const char* const bg96_initCmds[] =
 };
 
 
-void bg96_sendInitCmds(const char* const initCmds[], size_t nmCmds){}
+#pragma region private functions
+/* --------------------------------------------------------------------------------------------- */
 
-void bg96_setNwScanSeq(const char* sequence){}
-void bg96_setNwScanMode(bg96_nw_scan_mode_t mode){}
-void bg96_setIotOpMode(bg96_nw_iot_mode_t mode){}
+static void sendInitCmds()
+//static void bg96_sendInitCmds(const char* const initCmds[], size_t nmCmds)
+{
+}
+
+
+#pragma endregion
+
+
+#pragma region public functions
+/* --------------------------------------------------------------------------------------------- */
+
+// void bg96_create()
+// {}
+
+// void bg96_destroy()
+// {}
+
+void bg96_start()
+{
+    sendInitCmds();
+}
+
+// void bg96_stop()
+// {}
+
+
+void bg96_setNwScanSeq(const char* sequence)
+{}
+
+void bg96_setNwScanMode(bg96_nw_scan_mode_t mode)
+{}
+
+void bg96_setIotOpMode(bg96_nw_iot_mode_t mode)
+{}
+
+#pragma endregion
+

@@ -19,80 +19,44 @@ sc16is741a_writeReg(REG_NAME##_ADDR, REG_NAME##_reg.reg);
 
 // Bridge<>BG96 UART framing - 8 data, no parity, 1 stop (bits)
 #define SC16IS741A_LCR_UART_FRAMING 0x03U
-#define SC16IS741A_EFR_ENHANCED_FUNCTIONS 0x10U
+//#define SC16IS741A_EFR_ENHANCED_FUNCTIONS 0x10U
 
 // [7:4] RX, [3:0] TX - level / 4 (buffer granularity is 4)
 #define SC16IS741A_TLR_TRIGGER_LEVELS 0x22U							// **!** testing value **!**
 //#define SC16IS741A_TLR_TRIGGER_LEVELS 0xFFU					    // 15 (*4) = 60 char buffer
 
+// fcr is a RdOnly register, flush and FIFO enable are both in this register 
+#define FCR_REGISTER_VALUE_BASIC_MODE 0xB7U
+#define FCR_REGISTER_VALUE_IOP_FIFO_ENABLE 0xB1U
+#define FCR_REGISTER_VALUE_IOP_RX_FLUSH 0x02U
+#define FCR_REGISTER_VALUE_IOP_TX_FLUSH 0x04U
 
-#pragma region privateFunctions
+
+
+/* Public fuctions
+------------------------------------------------------------------------------------------------------------------------- */
+
+#pragma region bridgeSetup
+
 
 /**
- *	\brief Initializes and enables use of the FIFO for UART communications.
- *
- *	\param[in] bridge The SC16IS741A bridge.
- *	\param[in] enable Whether to enable the FIFO.
- */
-static void enableFifo(bool enableFifo)
+*	\brief Configure NXP bridge HW in basic mode (no IRQ, no level triggering).
+*/
+void sc16is741a_start()
 {
-	SC16IS741A_FCR regSetting;
-	regSetting.FIFO_EN = enableFifo;
+	//enableFifo(true);
+    // Need EFR[4]=1 to enable bridge enhanced functions: TX trigger and TLR settings for IRQ
+    sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_ENHANCED);
+    REG_MODIFY(SC16IS741A_EFR, SC16IS741A_EFR_reg.ENHANCED_FNS_EN = true;)
+    sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_GENERAL);
 
-	if (enableFifo)
-	{
-        regSetting.RX_TRIGGER_LVL = RX_LVL_56CHARS;
-        regSetting.TX_TRIGGER_LVL = TX_LVL_56SPACES;
-	}
-	sc16is741a_writeReg(SC16IS741A_FCR_ADDR, regSetting.reg);
-}
+	SC16IS741A_FCR fcrRegister = {0};
+	fcrRegister.FIFO_EN = 1;
+    fcrRegister.RX_TRIGGER_LVL = RX_LVL_56CHARS;
+    fcrRegister.TX_TRIGGER_LVL = TX_LVL_56SPACES;
+	sc16is741a_writeReg(SC16IS741A_FCR_ADDR, fcrRegister.reg);
 
-
-
-// BG96 only supports flow control in transparent data mode
-
-/**
- *	\brief Enable flow control between SC16IS741 and BG96.
- *
- *	\param[in] bridge The SC16IS741A bridge;
- *	\param[in] enable Flow control enable/disable.
- */
-// static void sc16is741a_enableFlowControl(sc16is741a_device bridge, bool enable)
-// {
-// 	const uint8_t flowSetting = enable ? 0xC0 : 0x00;
-// 	sc16is741a_writeReg(bridge, SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_ENHANCED);
-// 	sc16is741a_writeReg(bridge, SC16IS741A_EFR_ADDR, flowSetting);
-// 	sc16is741a_writeReg(bridge, SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_GENERAL);
-// }
-
-
-
-/**
- *	\brief Read and discard rx FIFO contents.
- *
- *	\param[in] bridge The SC16IS741A bridge.
- */
-static void flushRxFifo()
-{
-	uint8_t flushValue;
-
-	for (int i = 0; i < 64; i++)
- 	{
-		if (sc16is741a_readReg(SC16IS741A_LSR_ADDR) == 0x60U)
-		{
-			break;
-		}
-		flushValue = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
-	}
-}
-
-
-
-/**
- *	\brief Start the SC16IS741A-BG96 UART.
- */
-static void startUart()
-{
+    //startUart();
 	// set baudrate, starts clock and UART
 	sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_SPECIAL);
 	sc16is741a_writeReg(SC16IS741A_DLL_ADDR, BAUDCLOCK_DIVISOR_DLL);
@@ -101,86 +65,6 @@ static void startUart()
 
 	// set byte framing on the wire:  8 data, no parity, 1 stop required by BG96
 	sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_LCR_UART_FRAMING);
-
-	// clear RX buffer, ready for operation
-	flushRxFifo();
-}
-
-
-#pragma endregion
-
-/* Public fuctions
-------------------------------------------------------------------------------------------------------------------------- */
-
-#pragma region bridgeSetup
-
-/**
- *	\brief Initialize SC16IS741A bridge.
- *
- *	\param[in] chipSelLine The chip select line for SPI.
- *	\param[in] spiClockSpeed The SPI clock speed.
- *	\param[in] uartBaudrate The UART baud rate.
- */
-// void sc16is741a_start(uint8_t chipSelLine, uint32_t spiDataRate, uint32_t uartBaudrate)
-// {
-// 	sc16is741a_device_t *bridge = calloc(1, sizeof(sc16is741a_device_t));
-// 	if (bridge == NULL)
-// 	{
-// 		/* [error]: could not allocate memory for bridge. */
-// 		return NULL;
-// 	}
-
-// 	spi_config_t spi_config = 
-// 	{
-// 		.dataRate = spiDataRate,
-// 		.dataMode = spi_dataMode_0,
-// 		.bitOrder = spi_bitOrder_msbFirst,
-// 		.csPin = chipSelLine
-// 	};
-
-//     // defer IRQ setting
-// 	bridge->spi = spi_init(spi_config);
-// 	if (bridge->spi == NULL)
-// 	{
-// 		/* [error]: could not initialize spi */
-// 		free(bridge);
-// 		return NULL;
-// 	}
-
-// 	// configure NXP bridge settings
-// 	sc16is741a_enableFifo(true);
-//     sc16is741a_startUart();
-// 	return bridge;
-// }
-
-
-
-// /**
-//  *	\brief Tear-down SC16IS741A bridge.
-//  *
-//  *	\param[in] chipSelLine The chip select line for SPI.
-//  *	\param[in] spiClockSpeed The SPI clock speed.
-//  *	\param[in] uartBaudrate The UART baud rate.
-//  */
-// void sc16is741a_uninit()
-// {
-// 	if (g_ltem1->bridge == NULL)
-// 	{
-// 		/* [error]: bridge is null. */
-// 		return;
-// 	}
-// 	platform_spi_uninit(g_ltem1->bridge->spi);
-// 	free(g_ltem1->bridge);
-// }
-
-
-/**
-*	\brief Configure NXP bridge HW.
-*/
-void sc16is741a_start()
-{
-	sc16is741a_enableFifo(true);
-    sc16is741a_startUart();
 }
 
 
@@ -193,25 +77,27 @@ void sc16is741a_start()
  */
 void sc16is741a_enableIrqMode()
 {
-	// IRQ Enabled: RX chars available, TX spaces available
-	SC16IS741A_IER ierSetting;
-	ierSetting.RX_DATA_AVAIL_INT_EN = true;
-	ierSetting.THR_EMPTY_INT_EN = true; 
-	sc16is741a_writeReg(SC16IS741A_IER_ADDR, ierSetting.reg);
-
-	// EFR[4] set(1) = (bridge) enable enhanced functions
-	sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_ENHANCED);
-	REG_MODIFY(SC16IS741A_EFR, SC16IS741A_EFR_reg.ENHANCED_FNS_EN = true;)
-	sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_GENERAL);
-
 	// MCR[2] set(1) = TLR enable
 	REG_MODIFY(SC16IS741A_MCR, SC16IS741A_MCR_reg.TCR_TLR_EN = true;) 
 
-	// TLR
-	SC16IS741A_TLR tlrSetting;
+	// TLR  
+    // NOTE: TLR can only be written when EFR[4] == 1 and MCR[2] == 1
+    // EFR[4] set=1 in enableFifo() previously at start of bridge init
+	SC16IS741A_TLR tlrSetting = {0};
 	tlrSetting.RX_TRIGGER_LVL = 0x0F;
 	tlrSetting.TX_TRIGGER_LVL = 0x0F;
 	sc16is741a_writeReg(SC16IS741A_TLR_ADDR, tlrSetting.reg);
+
+    // // clear RX/TX FIFO, clear any possible IRQ conditions
+    // sc16is741a_resetFifo(resetFifo_action_RxTx);
+
+   	// IRQ Enabled: RX chars available, TX spaces available
+	SC16IS741A_IER ierSetting = {0};
+	ierSetting.RHR_DATA_AVAIL_INT_EN = 1;
+	ierSetting.THR_EMPTY_INT_EN = 1; 
+    ierSetting.RECEIVE_LINE_STAT_INT_EN = 1;
+    //ierSetting.MDM_STAT_INT_EN = true;
+	sc16is741a_writeReg(SC16IS741A_IER_ADDR, ierSetting.reg);
 }
 
 
@@ -290,9 +176,55 @@ void sc16is741a_write(const void* src, size_t src_len)
 {
     union __sc16is741a_reg_addr_byte__ reg_addr = { 0 };
     reg_addr.A = SC16IS741A_FIFO_ADDR;
-    reg_addr.RnW = SC16IS741A_FIFO_RnW_READ;
+    reg_addr.RnW = SC16IS741A_FIFO_RnW_WRITE;
 
     spi_transferBuffer(g_ltem1->spi, reg_addr.reg_address, src, src_len);
 }
+
+
+
+/**
+ *	\brief Perform reset on bridge FIFO.
+ *
+ *  \param[in] resetAction What to reset TX, RX or both.
+ */
+void sc16is741a_resetFifo(resetFifo_action_t resetAction)
+{
+    // fcr is a RdOnly register, flush and FIFO enable are both in this register 
+    sc16is741a_writeReg(SC16IS741A_FCR_ADDR,  resetAction |= FCR_REGISTER_VALUE_IOP_FIFO_ENABLE);
+}
+
+
+
+/**
+ *	\brief Flush contents of RX FIFO.
+ */
+void sc16is741a_flushRxFifo()
+{
+    uint8_t rxFifoLvl;
+    u_int8_t rxDiscard;
+    for (size_t i = 0; i < 64; i++)
+    {
+        rxDiscard = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
+    }
+    
+    // do
+    // {
+    //     rxDiscard = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
+    //     rxFifoLvl = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
+    // } while (rxFifoLvl > 0);
+}
+
+
+
+void displayFifoStatus(const char *dispMsg)
+{
+    PRINTF_INFO("%s...\r\n", dispMsg);
+    uint8_t bufFill = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
+    PRINTF_INFO("  -- RX buf level=%d\r\n", bufFill);
+    bufFill = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
+    PRINTF_INFO("  -- TX buf level=%d\r\n", bufFill);
+}
+
 
 #pragma endregion

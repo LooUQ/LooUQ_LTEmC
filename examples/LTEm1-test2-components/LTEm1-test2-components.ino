@@ -73,7 +73,7 @@ void setup() {
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
-    // create ltem1 and start it.
+    // create ltem1 and start it, wait for it to ready itself
     ltem1_create(&ltem1_pinConfig, ltem1_functionality_base);
 }
 
@@ -106,8 +106,8 @@ void loop() {
     */
 
     uint8_t regValue = 0;
-    char cmd[] = "AT+GSN\0";
-    //char cmd[] = "AT+QPOWD\0";
+    char cmd[] = "AT+GSN\r\0";
+    //char cmd[] = "AT+QPOWD\r\0";
     PRINTF("Invoking cmd: %s \r\n", cmd);
 
     sendCommand(cmd);
@@ -124,9 +124,10 @@ void loop() {
     PRINTF("Expecting 32 chars response, got %d \r\n", strlen(response));
     PRINTF("Got response: %s", response);  
 
-    if (imeiPrefixTest != 0 || strlen(response) != 32)
+    if (loopCnt < 3 && strlen(response) == 43)
+        PRINTF_WARN("Received APP RDY from LTEm1.\r\n");
+    else if (imeiPrefixTest != 0 || strlen(response) != 32)
         indicateFailure("Unexpected IMEI value returned on cmd test... failed."); 
-
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -140,14 +141,14 @@ void loop() {
 
 void sendCommand(const char* cmd)
 {
-  for (size_t i = 0; i < 64; i++)
-  {
-    if (cmd[i] == NULL)
-      break;
-    sc16is741a_writeReg(SC16IS741A_FIFO_ADDR, cmd[i]);
-  }
-  sc16is741a_writeReg(SC16IS741A_FIFO_ADDR, ASCII_CR);
-  timing_delay(300);                                        // max response time per-Quectel
+    //sc16is741a_write(cmd, strlen(cmd));
+
+    size_t sendSz = strlen(cmd);
+    for (size_t i = 0; i < sendSz; i++)
+    {
+        sc16is741a_writeReg(SC16IS741A_FIFO_ADDR, cmd[i]);
+    }
+    timing_delay(300);                                        // max response time per-Quectel
 }
 
 
@@ -155,18 +156,14 @@ void sendCommand(const char* cmd)
 void recvResponse(char *response)
 {
     uint8_t lsrValue = 0;
-    uint8_t bufFill = 0;
-    char *expectedTerm = "OK\r\n";
-    bool yieldedOnce = false;
+    uint8_t recvSz = 0;
 
     while (!(lsrValue & NXP_LSR_DATA_IN_RECVR))
     {
         lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
     }
-
-
-    bufFill = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-    sc16is741a_read(response, bufFill);
+    recvSz = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
+    sc16is741a_read(response, recvSz);
 }
 
 
