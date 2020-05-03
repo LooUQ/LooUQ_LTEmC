@@ -30,9 +30,9 @@
 
 #define BG96_INIT_COMMAND_COUNT 1
 
-const char* const bg96_initCmds[] = 
+const char* const qbg_initCmds[] = 
 { 
-    "ATE0\r",             // don't echo AT commands on serial
+    "ATE0",             // don't echo AT commands on serial
 };
 
 
@@ -40,15 +40,14 @@ const char* const bg96_initCmds[] =
 /* --------------------------------------------------------------------------------------------- */
 
 static void sendInitCmds()
-//static void bg96_sendInitCmds(const char* const initCmds[], size_t nmCmds)
 {
     for (size_t i = 0; i < BG96_INIT_COMMAND_COUNT; i++)
     {
-        atcmd_invoke(bg96_initCmds[i]);
-        atcmd_result_t cmdResult = atcmd_awaitResult(g_ltem1->atcmd);
+        action_invoke(qbg_initCmds[i]);
+        action_result_t cmdResult = action_awaitResult(g_ltem1->dAction);
 
-        if (cmdResult != ATCMD_RESULT_SUCCESS)
-            ltem1_faultHandler("bg96:sendInitCmds init sequence encountered error");
+        if (cmdResult != ACTION_RESULT_SUCCESS)
+            ltem1_faultHandler("qbg:sendInitCmds init sequence encountered error");
     }
 }
 
@@ -63,11 +62,11 @@ static void sendInitCmds()
 /**
  *	\brief Power BG96 module on.
  */
-void bg96_powerOn()
+void qbg_powerOn()
 {
     PRINTF("Powering LTEm1 On...");
     gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
-    timing_delay(BG96_POWERON_DELAY);
+    timing_delay(QBG_POWERON_DELAY);
     gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
 
     // wait for status=ready
@@ -83,37 +82,64 @@ void bg96_powerOn()
 /**
  *	\brief Powers off the BG96 module.
  */
-void bg96_powerOff()
+void qbg_powerOff()
 {
     PRINTF("Powering LTEm1 Off\r");
 	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
-	timing_delay(BG96_POWEROFF_DELAY);
+	timing_delay(QBG_POWEROFF_DELAY);
 	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
 }
 
 
 
-void bg96_start()
+void qbg_start()
 {
     sendInitCmds();
 }
 
 
 
-void bg96_setNwScanSeq(const char* sequence)
+void qbg_setNwScanSeq(const char* sequence)
 {
 }
 
 
 
-void bg96_setNwScanMode(bg96_nw_scan_mode_t mode)
+void qbg_setNwScanMode(qbg_nw_scan_mode_t mode)
 {
 }
 
 
 
-void bg96_setIotOpMode(bg96_nw_iot_mode_t mode)
+void qbg_setIotOpMode(qbg_nw_iot_mode_t mode)
 {
+}
+
+
+
+// void qbg_queueUrcStateMsg(const char *message)
+// {
+// }
+
+
+void qbg_processUrcStateQueue()
+{
+    if (g_ltem1->iop->urcStateMsg == ASCII_cNULL)
+        return;
+
+    char *landmarkAt;
+
+    // pdp context deactivated (timeout)
+    landmarkAt = strstr(g_ltem1->iop->urcStateMsg, "pdpdeact");
+    if (landmarkAt != NULL)
+    {
+        uint16_t cntxt = strtol(g_ltem1->iop->urcStateMsg + 11, NULL, 10);
+        g_ltem1->network->contexts[cntxt].contextState = context_state_inactive;
+        g_ltem1->network->contexts[cntxt].ipAddress[0] = ASCII_cNULL;
+    }
+
+
+
 }
 
 

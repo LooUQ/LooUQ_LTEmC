@@ -79,7 +79,7 @@ void setup() {
 
     // set ltem1 to no cmd string echo (required for mdminfo_ parsers)
     atcmd_invoke("ATE0\r");
-    atcmd_result_t atResult = atcmd_awaitResult(g_ltem1->atcmd);
+    atcmd_result_t atResult = atcmd_awaitResult(g_ltem1->dAction);
 }
 
 
@@ -98,7 +98,7 @@ void loop() {
 
     PRINTF("\rRSSI = %d \r",mdminfo_rssi());
 
-    PRINTF_CY("Alt IMEI = %s \r", mdminfo_ltem1().imei);
+    PRINTF_DBG1("Alt IMEI = %s \r", mdminfo_ltem1().imei);
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -133,7 +133,7 @@ void indicateFailure(char failureMsg[])
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF_MA("\r\nLoop=%i \r\n", loopCnt);
+    PRINTF_DBG("\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {

@@ -1,5 +1,5 @@
 {
-    "sketch": "LTEm1-test1-platform.ino",
+    "sketch": "LTEm1-1-platform.ino",
     "port": "COM16",
     "board": "adafruit:samd:adafruit_feather_m0_express",
     "output": ".//.build",

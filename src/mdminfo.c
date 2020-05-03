@@ -13,9 +13,9 @@
 /* --------------------------------------------------------------------------------------------- */
 
 
-static bool iccidCompleteParser(const char *response)
+static action_result_t iccidCompleteParser(const char *response)
 {
-    return atcmd_gapCompletedHelper(response, "+ICCID: ", 20, ASCII_sCRLF);
+    return action_gapResultParser(response, "+ICCID: ", true, 20, ASCII_sCRLF);
 }
 
 
@@ -27,42 +27,40 @@ static bool iccidCompleteParser(const char *response)
 */
 struct ltem1_modemInfo_tag mdminfo_ltem1()
 {
-    char resultBuf[41] = {0};
-
     if (*g_ltem1->modemInfo->imei == NULL)
     {
-        atcmd_invoke("AT+GSN\r");                                       // uses singleton cmd struct in g_ltem1
-        atcmd_result_t atResult = atcmd_awaitResult(g_ltem1->atcmd);
+        action_invoke("AT+GSN\r");                                       // uses singleton cmd struct in g_ltem1
+        action_result_t atResult = action_awaitResult(NULL);
 
-        if (atResult == ATCMD_RESULT_SUCCESS)
+        if (atResult == ACTION_RESULT_SUCCESS)
         {
-            strncpy(g_ltem1->modemInfo->imei, g_ltem1->atcmd->resultHead + ASCII_szCRLF, IMEI_SIZE);
+            strncpy(g_ltem1->modemInfo->imei, g_ltem1->dAction->resultHead + ASCII_szCRLF, IMEI_SIZE);
         }
     }
 
     if (*g_ltem1->modemInfo->iccid == NULL)                             // uses custom cmd str
     {
-        atcmd_t *iccidCmd = atcmd_build("AT+ICCID\r", resultBuf, 41, 500, iccidCompleteParser);
-        atcmd_invokeAdv(iccidCmd);
-        atcmd_result_t atResult = atcmd_awaitResult(iccidCmd);
+        //action_t *iccidCmd = action_build("AT+ICCID\r", 41, 500, iccidCompleteParser);
+        action_invokeWithParser("AT+ICCID\r", iccidCompleteParser);
+        action_result_t atResult = action_awaitResult(NULL);
 
-        if (atResult == ATCMD_RESULT_SUCCESS)
+        if (atResult == ACTION_RESULT_SUCCESS)
         {
-            strncpy(g_ltem1->modemInfo->iccid, iccidCmd->resultHead + ICCID_OFFSET, ICCID_SIZE);
+            strncpy(g_ltem1->modemInfo->iccid, g_ltem1->dAction->resultHead + ICCID_OFFSET, ICCID_SIZE);
         }
     }
 
     if (*g_ltem1->modemInfo->fwver == NULL)
     {
-        atcmd_invoke("AT+QGMR\r");
-        atcmd_result_t atResult = atcmd_awaitResult(g_ltem1->atcmd);
+        action_invoke("AT+QGMR\r");
+        action_result_t atResult = action_awaitResult(NULL);
 
-        if (atResult == ATCMD_RESULT_SUCCESS)
+        if (atResult == ACTION_RESULT_SUCCESS)
         {
             char *term;
-            term = strstr(g_ltem1->atcmd->resultHead + ASCII_szCRLF, ASCII_sCRLF);
+            term = strstr(g_ltem1->dAction->resultHead + ASCII_szCRLF, ASCII_sCRLF);
             *term = '\0';
-            strcpy(g_ltem1->modemInfo->fwver, g_ltem1->atcmd->resultHead + ASCII_szCRLF);
+            strcpy(g_ltem1->modemInfo->fwver, g_ltem1->dAction->resultHead + ASCII_szCRLF);
             term = strchr(g_ltem1->modemInfo->fwver, '_');
             *term = ' ';
         }
@@ -70,15 +68,15 @@ struct ltem1_modemInfo_tag mdminfo_ltem1()
 
     if (*g_ltem1->modemInfo->mfgmodel == NULL)
     {
-        atcmd_invoke("ATI\r");
-        atcmd_result_t atResult = atcmd_awaitResult(g_ltem1->atcmd);
+        action_invoke("ATI\r");
+        action_result_t atResult = action_awaitResult(NULL);
 
-        if (atResult == ATCMD_RESULT_SUCCESS)
+        if (atResult == ACTION_RESULT_SUCCESS)
         {
             char *term;
-            term = strstr(g_ltem1->atcmd->resultHead + ASCII_szCRLF, "\r\nRev");
+            term = strstr(g_ltem1->dAction->resultHead + ASCII_szCRLF, "\r\nRev");
             *term = '\0';
-            strcpy(g_ltem1->modemInfo->mfgmodel, g_ltem1->atcmd->resultHead + ASCII_szCRLF);
+            strcpy(g_ltem1->modemInfo->mfgmodel, g_ltem1->dAction->resultHead + ASCII_szCRLF);
             term = strchr(g_ltem1->modemInfo->mfgmodel, '\r');
             *term = ':';
             term = strchr(g_ltem1->modemInfo->mfgmodel, '\n');
@@ -99,13 +97,13 @@ int16_t mdminfo_rssi()
     char *endPtr;
     int16_t result;
 
-    atcmd_invoke("AT+CSQ\r");
-    atcmd_result_t atResult = atcmd_awaitResult(g_ltem1->atcmd);
+    action_invoke("AT+CSQ\r");
+    action_result_t atResult = action_awaitResult(NULL);
 
-    if (atResult == ATCMD_RESULT_SUCCESS)
+    if (atResult == ACTION_RESULT_SUCCESS)
     {
         char *term;
-        term = strstr(g_ltem1->atcmd->resultHead + ASCII_szCRLF, "+CSQ");
+        term = strstr(g_ltem1->dAction->resultHead + ASCII_szCRLF, "+CSQ");
         result = strtol(term + 5, &endPtr, 10);
     }
 

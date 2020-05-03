@@ -33,11 +33,11 @@
 #define IOP_ERROR -1
 
 #define IOP_RX_CTRLBLOCK_COUNT 6
-#define IOP_RX_PRIMARY_BUFFER_SIZE 65
+#define IOP_RX_PRIMARY_BUFFER_SIZE 64
 #define IOP_EMPTY -1
 
-#define IOP_TX_BUFFER_SZ 1500
-
+#define IOP_TX_BUFFER_SZ 1460
+#define IOP_URC_STATEMSG_SZ 20
 
 typedef enum
 {
@@ -64,8 +64,8 @@ typedef struct iop_txCtrlBlock_tag
 {
     bool sendActive;
     char *txBuf;
-    char *nextChunk;
-    size_t sendSz;
+    char *chunkPtr;
+    size_t remainSz;
 } iop_txCtrlBlock_t;
 
 
@@ -77,8 +77,8 @@ typedef struct iop_rxCtrlBlock_tag
     char primBuf[65];
     iop_process_t process;
     bool isIrd;
-    char *expBufHead;
-    char *expBufTail;
+    char *extsnBufHead;
+    char *extsnBufTail;
 } iop_rxCtrlBlock_t;
 
 
@@ -87,8 +87,9 @@ typedef volatile struct iop_state_tag
     int8_t rxTailIndx;
     int8_t rxCmdHeadIndx;
     int8_t rxProtoHeadIndx[IOP_PROTOCOLS_COUNT];
-    iop_rxCtrlBlock_t rxCtrls[IOP_RX_CTRLBLOCK_COUNT];
+    iop_rxCtrlBlock_t rxCtrlBlks[IOP_RX_CTRLBLOCK_COUNT];
     iop_txCtrlBlock_t txCtrl;
+    char urcStateMsg[IOP_URC_STATEMSG_SZ];
 } iop_state_t;
 
 
@@ -106,7 +107,9 @@ void iop_destroy();
 bool iop_txClearToSend();
 bool iop_txSend(const char *sendData, size_t sendSz);
 
-iop_rx_result_t iop_rxGetQueued(iop_process_t process, char *recvData, size_t recvSz);
+iop_rx_result_t iop_rxGetCmdQueued(char *recvData, size_t recvSz);
+iop_rx_result_t iop_rxPushProtoQueued(iop_process_t process);
+
 //void iop_closeRxCtrl(uint8_t bufIndx);
 
 

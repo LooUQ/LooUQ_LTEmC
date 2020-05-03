@@ -53,8 +53,8 @@ typedef struct gnss_location_tag
 extern "C" {
 #endif
 
-atcmd_result_t gnss_on();          // AT+QGPS=1
-atcmd_result_t gnss_off();
+action_result_t gnss_on();          // AT+QGPS=1
+action_result_t gnss_off();
 
 gnss_location_t gnss_getLocation();
 

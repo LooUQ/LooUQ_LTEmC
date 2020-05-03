@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "ltem1.h": "c",
-        "iop.h": "c"
+        "iop.h": "c",
+        "ltem1c.h": "c"
     }
 }

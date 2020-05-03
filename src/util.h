@@ -29,12 +29,6 @@
 #include "ltem1c.h"
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif // __cplusplus
-
-
 #define IP_DISPLAY(NUM_IP, STRING_IP) \
 char STRING_IP##[16]; \
 sprintf(STRING_IP, "%d.%d.%d.%d", NUM_IP##.octet[0] , NUM_IP##.octet[1], NUM_IP##.octet[2], NUM_IP##.octet[3]);
@@ -47,6 +41,17 @@ union ip_addr_tag
 };
 
 typedef union ip_addr_tag ip_addr_t;
+
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif // __cplusplus
+
+ip_addr_t atcmd_parseIpAddr(const char *ipStr);
+
+void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision);
+char *strToken(char *source, int delimiter, char *token, uint8_t tokenMax);
 
 
 #ifdef __cplusplus

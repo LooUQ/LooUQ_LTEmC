@@ -54,9 +54,9 @@ typedef enum print_color_tag {
 #define PRINTF_WARN(f_, ...) _dbg_printf(debug_print_color_warn, (f_), ##__VA_ARGS__)
 #define PRINTF_ERR(f_, ...) _dbg_printf(debug_print_color_error, (f_), ##__VA_ARGS__)
 
-#define PRINTF_CY(f_, ...) _dbg_printf(debug_print_color_cyan, (f_), ##__VA_ARGS__)
-#define PRINTF_MA(f_, ...) _dbg_printf(debug_print_color_magenta, (f_), ##__VA_ARGS__)
-#define PRINTF_WH(f_, ...) _dbg_printf(debug_print_color_white, (f_), ##__VA_ARGS__)
+#define PRINTF_DBG(f_, ...) _dbg_printf(debug_print_color_magenta, (f_), ##__VA_ARGS__)
+#define PRINTF_DBG1(f_, ...) _dbg_printf(debug_print_color_cyan, (f_), ##__VA_ARGS__)
+#define PRINTF_DBG2(f_, ...) _dbg_printf(debug_print_color_white, (f_), ##__VA_ARGS__)
 
 #else
 #define DBGPRINTF(f_, ...) 

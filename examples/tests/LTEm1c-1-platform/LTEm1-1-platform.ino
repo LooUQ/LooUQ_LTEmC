@@ -136,7 +136,7 @@ void powerModemOn()
 	{
 		PRINTF("Powering LTEm1 On...");
 		gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_high);
-		timing_delay(BG96_POWERON_DELAY);
+		timing_delay(QBG_POWERON_DELAY);
 		gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_low);
 		while (!gpio_readPin(ltem1_pinConfig.statusPin))
 		{
@@ -157,11 +157,11 @@ void powerModemOn()
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF_ERROR("\r\n** %s \r\n", failureMsg);
-    PRINTF_ERROR("** Test Assertion Failed. \r\n");
+	PRINTF_ERR("\r\n** %s \r\n", failureMsg);
+    PRINTF_ERR("** Test Assertion Failed. \r\n");
 
     #if 1
-    PRINTF_ERROR("** Halting Execution \r\n");
+    PRINTF_ERR("** Halting Execution \r\n");
     while (1)
     {
         gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_high);

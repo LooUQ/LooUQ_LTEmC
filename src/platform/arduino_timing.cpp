@@ -13,6 +13,7 @@
 void timing_delay(uint32_t intervalMillis)
 {
     uint32_t start = millis();
+    yield();
     while (millis() - start < intervalMillis) {}
 }
 
@@ -20,4 +21,8 @@ void timing_delay(uint32_t intervalMillis)
 uint32_t timing_millis()
 {
     return millis();
+}
+
+void yield()
+{
 }

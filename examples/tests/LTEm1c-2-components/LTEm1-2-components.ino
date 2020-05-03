@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEm1-test4-atcmd.ino
+ *  \file LTEm1-test2-components.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -22,8 +22,8 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  ******************************************************************************
- * The test3-iop.ino tests the LTEm1 interrupt driven Input-Ouput processing
- * subsystem in the driver which multiplexes the command and protocol streams.
+ * The test2-ltem1Components.ino tests the LTEm1 NXP serial bridge chip and
+ * BG96 module for basic serial operations. 
  *****************************************************************************/
 
 #include <ltem1c.h>
@@ -57,9 +57,6 @@ spi_config_t ltem1_spiConfig =
   csPin : ltem1_pinConfig.spiCsPin
 };
 
-ltem1_device_t *ltem1;
-//spi_device_t *spi; 
-
 
 void setup() {
     #ifdef USE_SERIAL
@@ -71,67 +68,66 @@ void setup() {
         #endif
     #endif
 
-    PRINTF("LTEm1c test4-atcmd\r\n");
+    PRINTF("LTEm1c test2-components\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
-    ltem1_create(&ltem1_pinConfig, ltem1_functionality_atcmd);
-
-    // install test version override of okCompleteParser(), verbose AT result codes
-    // g_ltem1->atcmd->cmdCompleteParser_func = okCompletedParser;
+    // create ltem1 and start it, wait for it to ready itself
+    ltem1_create(&ltem1_pinConfig, ltem1_functionality_base);
 }
 
 
 int loopCnt = 0;
+uint8_t testPattern;
 
 void loop() {
-    /* BG96 test pattern: get mfg\model
+    testPattern = random(256);
+    uint8_t txBuffer_reg;
+    uint8_t rxBuffer_reg;
+
+    txBuffer_reg = testPattern;
+    // rxBuffer doesn't matter prior to read
+    
+    sc16is741a_writeReg(SC16IS741A_SPR_ADDR, txBuffer_reg);
+    rxBuffer_reg = sc16is741a_readReg(SC16IS741A_SPR_ADDR);
+
+    if (testPattern != rxBuffer_reg)
+        indicateFailure("Scratchpad write/read failed (write/read register)."); 
+
+
+    /* BG96 test pattern: get IMEI
     *
-    *  ATI
-    * 
-    *   Quectel
-    *   BG96
-    *   Revision: BG96MAR04A02M1G
-    * 
-    *   OK
+    *  AT+GSN
+    *         
+    *  <IMEI value (20 char)>
+    *
+    *  OK
     */
 
     uint8_t regValue = 0;
-    char cmd[] = "ATI\r\0";
+    char cmd[] = "AT+GSN\r\0";
+    //char cmd[] = "AT+QPOWD\r\0";
     PRINTF("Invoking cmd: %s \r\n", cmd);
 
-    atcmd_invoke(cmd);
+    sendCommand(cmd);
 
-    // // wait for BG96 response in FIFO buffer
-    // char cmdResponse[65] = {0};
-    // recvResponse(cmdResponse);
+    // wait for BG96 response in FIFO buffer
+    char response[65] = {0};
 
-    atcmd_result_t atResult = atcmd_awaitResult(g_ltem1->dAction);
-    // atcmd_result_t atResult;
-    // do
-    // {
-    //     atResult = atcmd_getResult(g_ltem1->atcmd);
+    recvResponse(response);
 
-    // } while (atResult == atcmd_result_pending);
-    
-    if (atResult == ATCMD_RESULT_SUCCESS)    // statusCode == 200
-    {
-        PRINTF("Got %d chars\r", strlen(g_ltem1->dAction->resultHead));
-        PRINTF("Resp: %s\r", g_ltem1->dAction->resultHead);  
+    // test response v. expected 
+    char* validResponse = "AT+GSN\r\r\n86450";
+    uint8_t imeiPrefixTest = strncmp(validResponse, response, strlen(validResponse)); 
 
-        // test response v. expected 
-        char* validResponse = "ATI\r\r\nQuectel";
-        uint8_t responseTest = strncmp(validResponse, g_ltem1->dAction->resultHead, strlen(validResponse)); 
+    PRINTF("Expecting 32 chars response, got %d \r\n", strlen(response));
+    PRINTF("Got response: %s", response);  
 
-        if (responseTest != 0 || strlen(g_ltem1->dAction->resultHead) != 54)
-            indicateFailure("Unexpected command response... failed."); 
-    }
-    else
-    {
-        PRINTF_ERR("atResult=%d \r", atResult);
-        // indicateFailure("Unexpected command response... failed."); 
-    }
+    if (loopCnt < 3 && strlen(response) == 43)
+        PRINTF_WARN("Received APP RDY from LTEm1.\r\n");
+    else if (imeiPrefixTest != 0 || strlen(response) != 32)
+        indicateFailure("Unexpected IMEI value returned on cmd test... failed."); 
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -141,39 +137,33 @@ void loop() {
 /*
 ========================================================================================================================= */
 
+#define ASCII_CR 13U
 
-// void sendCommand(const char* cmd)
-// {
-//     bool sendCompleted = false;
-//     uint8_t retries;
+void sendCommand(const char* cmd)
+{
+    //sc16is741a_write(cmd, strlen(cmd));
 
-//     while (!iop_txClearToSend() && retries < 500)
-//     {
-//         timing_delay(10);
-//     }
-
-//     if (iop_txClearToSend())
-//     {
-//         sendCompleted = iop_txSend(cmd, strlen(cmd));
-//     }
-//     if (sendCompleted)
-//         PRINTF("CmdSent\r\n");
-//     else
-//         PRINTF_ERROR("Cmd Send Failed");   
-// }
+    size_t sendSz = strlen(cmd);
+    for (size_t i = 0; i < sendSz; i++)
+    {
+        sc16is741a_writeReg(SC16IS741A_FIFO_ADDR, cmd[i]);
+    }
+    timing_delay(300);                                        // max response time per-Quectel
+}
 
 
 
 void recvResponse(char *response)
 {
-    iop_rx_result_t rxResult;
-    uint8_t retries;
-    do
+    uint8_t lsrValue = 0;
+    uint8_t recvSz = 0;
+
+    while (!(lsrValue & NXP_LSR_DATA_IN_RECVR))
     {
-        rxResult = iop_rxGetCmdQueued(response, 65);
-        timing_delay(100);
-        retries++;
-    } while (rxResult == iop_rx_result_nodata && retries < 5);
+        lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
+    }
+    recvSz = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
+    sc16is741a_read(response, recvSz);
 }
 
 
@@ -184,20 +174,18 @@ void recvResponse(char *response)
  *	\param[in] response The command response received from the BG96.
  *  \return bool If the response string ends in a valid OK sequence
  */
-bool okCompletedParser(const char *response)
+bool validOkResponse(const char *response)
 {
-    #define OK_COMPLETED_STRING "OK\r\n"
-    #define OK_COMPLETED_LENGTH 4
+    #define BUFF_SZ 64
+    #define EXPECTED_TERMINATOR_STR "OK\r\n"
+    #define EXPECTED_TERMINATOR_LEN 4
 
-    // safe strlen()
-    const char * tail = (const char *)memchr(response, '\0', ATCMD_DEFAULT_RESULT_BUF_SZ);
-    
-    if (tail == NULL)
-        tail = response + ATCMD_DEFAULT_RESULT_BUF_SZ;
+    const char * end = (const char *)memchr(response, '\0', BUFF_SZ);
+    if (end == NULL)
+        end = response + BUFF_SZ;
 
-    return strncmp(OK_COMPLETED_STRING, tail - OK_COMPLETED_LENGTH, OK_COMPLETED_LENGTH) == 0;
+    return strncmp(EXPECTED_TERMINATOR_STR, end - EXPECTED_TERMINATOR_LEN, EXPECTED_TERMINATOR_LEN) == 0;
 }
-
 
 
 /* test helpers
@@ -223,7 +211,7 @@ void indicateFailure(char failureMsg[])
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF_DBG("\r\nLoop=%i \r\n", loopCnt);
+    PRINTF_INFO("Loop: %i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -233,8 +221,8 @@ void indicateLoop(int loopCnt, int waitNext)
         timing_delay(50);
     }
 
-    PRINTF("FreeMem=%u\r\n", getFreeMemory());
-    PRINTF("NextTest (millis)=%i\r\r", waitNext);
+    PRINTF("Free memory: %u \r\n", getFreeMemory());
+    PRINTF("Next test in (millis): %i\r\n\r\n", waitNext);
     timing_delay(waitNext);
 }
 

@@ -4,8 +4,11 @@
 #include "ltem1c.h"
 
 #define GNSS_CMD_RESULTBUF_SZ 90
-#define GNSS_LOC_DATAOFFSET 11
+#define GNSS_LOC_DATAOFFSET 12
 #define GNSS_LOC_EXPECTED_TOKENCOUNT 11
+
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
 
 /*
 AT+QGPSLOC=2
@@ -15,68 +18,83 @@ AT+QGPSLOC=2
 OK
 */
 
-static uint16_t gnssLocCompleteParser(const char *response)
+static action_result_t gnssLocCompleteParser(const char *response)
 {
-    return atcmd_tokenCompletedHelper(response, "+QGPSLOC:", ASCII_cCOMMA, GNSS_LOC_EXPECTED_TOKENCOUNT);
+    action_result_t result = action_tokenResultParser(response, "+QGPSLOC:", ASCII_cCOMMA, GNSS_LOC_EXPECTED_TOKENCOUNT);
+
+    if (result != ACTION_RESULT_PENDING)
+        return result;
+    return action_cmeResultParser(response);
 }
 
 
 /* --------------------------------------------------------------------------------------------- */
 
 
-atcmd_result_t gnss_on()
+action_result_t gnss_on()
 {
-    atcmd_invoke("AT+QGPS=1\r");
-    return atcmd_awaitResult(g_ltem1->atcmd);
+    action_invoke("AT+QGPS=1\r");
+    return action_awaitResult(g_ltem1->dAction);
 }
 
 
 
-atcmd_result_t gnss_off()
+action_result_t gnss_off()
 {
-    atcmd_invoke("AT+QGPSEND\r");
-    return atcmd_awaitResult(g_ltem1->atcmd);
+    action_invoke("AT+QGPSEND\r");
+    return action_awaitResult(g_ltem1->dAction);
 }
 
 
 
 gnss_location_t gnss_getLocation()
 {
+    // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08
     gnss_location_t gnssResult;
-    // +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08
 
-    char cmdResultBuf[GNSS_CMD_RESULTBUF_SZ + 1] = {0};
-    char *tokPtr;
+    #define TOKEN_BUF_SZ 12
+    char tokenBuf[TOKEN_BUF_SZ];
+    char *continueAt;
 
-    atcmd_t *gnssCmd = atcmd_build("AT+QGPSLOC=2\r", cmdResultBuf, GNSS_CMD_RESULTBUF_SZ, 500, gnssLocCompleteParser);
-    atcmd_invokeAdv(gnssCmd);
-    atcmd_result_t cmdResult = atcmd_awaitResult(gnssCmd);
+    action_t *gnssCmd = action_build("AT+QGPSLOC=2", GNSS_CMD_RESULTBUF_SZ, 500, gnssLocCompleteParser);
+    action_invokeCustom(gnssCmd);
+    action_result_t cmdResult = action_awaitResult(gnssCmd);
 
-    if (cmdResult != ATCMD_RESULT_SUCCESS)
+    if (cmdResult != ACTION_RESULT_SUCCESS)
     {
         gnssResult.errcode = (uint16_t)cmdResult;
         return gnssResult;
     }
 
-    tokPtr = cmdResult + GNSS_LOC_DATAOFFSET;
+    continueAt = gnssCmd->resultHead + GNSS_LOC_DATAOFFSET;
 
-    *gnssResult.utc = strtok_r(tokPtr, ASCII_cCOMMA, &tokPtr);
-    gnssResult.lat.val = strtof(tokPtr, &tokPtr);
-    gnssResult.lon.val = strtof(tokPtr + 1, &tokPtr);
-    gnssResult.hdop = strtof(tokPtr + 1, &tokPtr);
-    gnssResult.altitude = strtof(tokPtr + 1, &tokPtr);
-    gnssResult.fixType = strtol(tokPtr + 1, &tokPtr, 10);
-    gnssResult.course = strtof(tokPtr + 1, &tokPtr);
-    gnssResult.speedkm = strtof(tokPtr + 1, &tokPtr);
-    gnssResult.speedkn = strtof(tokPtr + 1, &tokPtr);
-    *gnssResult.date = strtok_r(tokPtr, ASCII_cCOMMA, &tokPtr);
-    gnssResult.nsat = strtol(tokPtr, &tokPtr, 10);
+    continueAt = strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
+    if (continueAt != NULL)
+        strncpy(gnssResult.utc, tokenBuf, TOKEN_BUF_SZ);
+        
+    gnssResult.lat.val = strtof(continueAt, &continueAt);
+    gnssResult.lat.dir = ASCII_cSPACE;
+    gnssResult.lon.val = strtof(continueAt++, &continueAt);
+    gnssResult.lon.dir = ASCII_cSPACE;
+    gnssResult.hdop = strtof(continueAt++, &continueAt);
+    gnssResult.altitude = strtof(continueAt++, &continueAt);
+    gnssResult.fixType = strtol(continueAt++, &continueAt, 10);
+    gnssResult.course = strtof(continueAt++, &continueAt);
+    gnssResult.speedkm = strtof(continueAt++, &continueAt);
+    gnssResult.speedkn = strtof(continueAt++, &continueAt);
 
+    continueAt = strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
+    if (continueAt != NULL)
+        strncpy(gnssResult.date, tokenBuf, TOKEN_BUF_SZ);
+
+    gnssResult.nsat = strtol(continueAt, &continueAt, 10);
+
+    action_destroy(gnssCmd);
     return gnssResult;
 }
 
 
 
-/* future geo-fence */
+/* future geo-fence, likely separate fileset */
 // void gnss_geoAdd();
 // void gnss_geoDelete();

@@ -85,14 +85,24 @@ void ltem1_create(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t f
     g_ltem1->modemInfo = calloc(1, sizeof(ltem1_modemInfo_t));
 	if (g_ltem1->modemInfo == NULL)
 	{
-        ltem1_faultHandler("ltem1-could not alloc ltem1 provisions object");
+        ltem1_faultHandler("ltem1-could not alloc ltem1 modem info object");
 	}
 
+    g_ltem1->ltem1State = ltem1_state_idle;
+    g_ltem1->dataContext = 1;
+    
     if (funcLevel >= ltem1_functionality_iop)
         g_ltem1->iop = iop_create();
 
     if (funcLevel >= ltem1_functionality_atcmd)
-        g_ltem1->atcmd = atcmd_create(0);
+        g_ltem1->dAction = action_create(0);
+
+    if (funcLevel >= ltem1_functionality_services)
+    {
+        g_ltem1->network = ip_createNetwork();
+        g_ltem1->protocols = ip_createProtocols();
+        
+    }
 
     ltem1_start(funcLevel);
 }
@@ -108,23 +118,25 @@ void ltem1_start(ltem1_functionality_t funcLevel)
 
 	if (!gpio_readPin(g_ltem1->gpio->statusPin))
 	{
-        bg96_powerOn();
-        g_ltem1->bg96ReadyState = bg96_readyState_powerOn;
+        qbg_powerOn();
+        g_ltem1->qbgReadyState = qbg_readyState_powerOn;
         g_ltem1->funcLevel = funcLevel;
 	}
 	else
 	{
 		PRINTF_INFO("LTEm1 found powered on.\r\n");
-        g_ltem1->bg96ReadyState = bg96_readyState_appReady;
+        g_ltem1->qbgReadyState = qbg_readyState_appReady;
 
         // power off/on if IRQ latched: previously fired and not serviced
         gpio_pinValue_t irqState = gpio_readPin(g_ltem1->gpio->irqPin);
         if (irqState == gpioValue_low)
         {
-    		PRINTF_WARN("Invalid LTEm1 IRQ state, restarting.\r\n");
-            bg96_powerOff();
-            timing_delay(1000);
-            bg96_powerOn();
+    		PRINTF_WARN("Invalid LTEm1 IRQ state active.\r\n");
+            sc16is741a_writeReg(SC16IS741A_UARTRST_ADDR, SC16IS741A_SW_RESET_MASK);
+
+            // bg96_powerOff();
+            // timing_delay(1000);
+            // bg96_powerOn();
         }
 
         /* future HW rev, reset bridge v. BG */
@@ -143,8 +155,8 @@ void ltem1_start(ltem1_functionality_t funcLevel)
 
     // atcmd doesn't have a start/stop 
 
-    if (funcLevel >= ltem1_functionality_full)
-        bg96_start();
+    if (funcLevel >= ltem1_functionality_services)
+        qbg_start();
 }
 
 
@@ -176,7 +188,7 @@ void ltem1_reset(bool restart)
  */
 void ltem1_stop()
 {
-    g_ltem1->bg96ReadyState = bg96_readyState_powerOff;
+    g_ltem1->qbgReadyState = qbg_readyState_powerOff;
     bg96_powerOff();
 }
 
@@ -196,7 +208,8 @@ void ltem1_destroy()
 	gpio_pinClose(g_ltem1->gpio->resetPin);
 	gpio_pinClose(g_ltem1->gpio->statusPin);
 
-    atcmd_destroy(g_ltem1->atcmd);
+    ip_destroy();
+    action_destroy(g_ltem1->dAction);
     iop_destroy();
     spi_destroy(g_ltem1->spi);
 	free(g_ltem1);
@@ -209,6 +222,8 @@ void ltem1_destroy()
  */
 void ltem1_dowork()
 {
+    qbg_processUrcStateQueue();
+    ip_receiverDoWork();
 	// iop_classifyReadBuffers()
 }
 

@@ -44,7 +44,7 @@ sc16is741a_writeReg(REG_NAME##_ADDR, REG_NAME##_reg.reg);
 */
 void sc16is741a_start()
 {
-    // start with a known state on NXP bridge
+    // start with a known state on NXP bridge, soft-reset bridge
     sc16is741a_writeReg(SC16IS741A_UARTRST_ADDR, SC16IS741A_SW_RESET_MASK);
 
 	//enableFifo(true);
@@ -200,18 +200,14 @@ void sc16is741a_resetFifo(resetFifo_action_t resetAction)
  */
 void sc16is741a_flushRxFifo()
 {
-    uint8_t rxFifoLvl;
-    u_int8_t rxDiscard;
-    for (size_t i = 0; i < 64; i++)
+    uint8_t rxFifoLvl = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
+    // clear line status error, if set
+    uint8_t lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
+
+    for (size_t i = 0; i < rxFifoLvl; i++)
     {
-        rxDiscard = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
+        uint8_t rxDiscard = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
     }
-    
-    // do
-    // {
-    //     rxDiscard = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
-    //     rxFifoLvl = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-    // } while (rxFifoLvl > 0);
 }
 
 

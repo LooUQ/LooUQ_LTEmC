@@ -26,7 +26,7 @@
  *****************************************************************************/
 
 #include <ltem1c.h>
-
+#include <stdio.h>
 
 //#define USE_SERIAL 0
 
@@ -72,11 +72,11 @@ void setup() {
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
-    ltem1_create(&ltem1_pinConfig, ltem1_functionality_full);
-
+    ltem1_create(&ltem1_pinConfig, ltem1_functionality_services);
 
     // turn on GNSS
-    gnss_on();
+    atcmd_result_t cmdResult = gnss_on();
+    PRINTF("GNSS On result=%d (504 is already on)\r", cmdResult);
 }
 
 
@@ -86,8 +86,14 @@ gnss_location_t location;
 void loop() {
     location = gnss_getLocation();
 
+    char cLat[14];
+    char cLon[14];
+    
+    floatToString(location.lat.val, cLat, 12, 6);
+    floatToString(location.lon.val, cLon, 12, 6);
+
     PRINTF_INFO("Location Information\r");
-    PRINTF("Lat=%d, Lon=%d \r", location.lat.val, location.lon.val);
+    PRINTF("Lat=%s, Lon=%s \r", cLat, cLon);
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -96,6 +102,75 @@ void loop() {
 
 /*
 ========================================================================================================================= */
+
+// void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision)
+// {
+//     uint32_t max = pow(10, (bufSz - precision - 3));    //remember '-', '.' and '\0'
+//     if (abs(fVal) >= max)
+//     {
+//         *buf = '\0';
+//         return;
+//     }
+
+//     int iVal = (int)fVal;
+//     itoa(iVal, buf, 10);
+
+//     fVal = abs(fVal);
+//     iVal = abs(iVal);
+//     uint8_t pos = strlen(buf);
+//     buf[pos++] = '.';
+
+//     for (size_t i = 0; i < precision; i++)
+//     {
+//         fVal -= (float)iVal;      // hack off the whole part of the number
+//  		fVal *= 10;           // move next digit over
+//  		iVal = (int)fVal;
+//         char c = (char)iVal + 0x30;
+//  		buf[pos++] = c;
+//     }
+//     buf[pos++] = '\0';
+// }
+
+
+
+
+
+
+
+
+
+void floatToString(float fVal, uint8_t digits, char *buf, uint8_t bufSz)
+//void floattostring(char *buf, float fVal, char digits)
+{
+    char pos;  // position in string
+ 	char len;  // length of decimal part of result
+ 	char* curr;  // temp holder for next digit
+ 	int value;  // decimal digit(s) to convert
+ 	pos = 0;  // initialize pos, just to be sure
+ 
+ 	value = (int)fVal;  // truncate the floating point number
+ 	itoa(value, buf, 10);  // this is kinda dangerous depending on the length of str
+ 	// now str array has the digits before the decimal
+ 
+ 	if (fVal < 0 )  // handle negative numbers
+ 	{
+ 		fVal *= -1;
+ 		value *= -1;
+ 	}
+ 
+    len = strlen(buf);  // find out how big the integer part was
+ 	pos = len;  // position the pointer to the end of the integer part
+ 	buf[pos++] = '.';  // add decimal point to string
+ 	
+ 	while(pos < (digits + len + 1) )  // process remaining digits
+ 	{
+ 		fVal = fVal - (float)value;  // hack off the whole part of the number
+ 		fVal *= 10;  // move next digit over
+ 		value = (int)fVal;  // get next digit
+ 		itoa(value, curr, 10); // convert digit to string
+ 		buf[pos++] = *curr; // add digit to result string and increment pointer
+ 	}
+ }
 
 
 
@@ -122,7 +197,7 @@ void indicateFailure(char failureMsg[])
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF_MA("\r\nLoop=%i \r\n", loopCnt);
+    PRINTF_DBG("\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
