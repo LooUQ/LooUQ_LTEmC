@@ -3,38 +3,41 @@
 
 #include "ltem1c.h"
 
-#define DEFAULT_TIMEOUT_MILLIS 500
-#define DEFAULT_RESULT_BUF_SZ 80
-
-#define ATCMD_RESULT_PENDING 0
-#define ATCMD_RESULT_SUCCESS 200
-#define ATCMD_RESULT_TIMEOUT 408
-#define ATCMD_RESULT_FAILURE 500
-
-// ltem1_device g_ltem1;
-char g_atresult[DEFAULT_RESULT_BUF_SZ];
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 
-#pragma region static local functions
+#pragma region private functions
 /* --------------------------------------------------------------------------------------------- */
+
+
+static const char *strnlen(const char *charStr, uint16_t maxSz)
+{
+    return memchr(charStr, '\0', maxSz);
+}
+
+
 
 /**
  *	\brief Validate the response ends in a BG96 OK value.
  *
  *	\param[in] response The command response received from the BG96.
+ *
  *  \return bool If the response string ends in a valid OK sequence
  */
-static char* okCompleteParser(const char *response)
+static atcmd_result_t okCompletedParser(const char *response)
 {
-    #define BUFF_SZ 64
-    #define EXPECTED_TERMINATOR_STR "OK\r\n"
-    #define EXPECTED_TERMINATOR_LEN 4
+    // #define OK_COMPLETED_STRING "0\r"
+    // #define OK_COMPLETED_LENGTH 2
+    #define OK_COMPLETED_STRING "OK\r\n"
+    #define ERROR_COMPLETED_STRING "ERROR\r\n"
+    #define OK_COMPLETED_LENGTH 4
+    #define ERROR_COMPLETED_LENGTH 7
 
-    const char * end = (const char *)memchr(response, '\0', BUFF_SZ);
-    if (end == NULL)
-        end = response + BUFF_SZ;
+    char *tail = strnlen(response, ATCMD_DEFAULT_RESULT_BUF_SZ);
+    if (tail == NULL)
+        tail = response + ATCMD_DEFAULT_RESULT_BUF_SZ;
 
-    return strncmp(EXPECTED_TERMINATOR_STR, end - EXPECTED_TERMINATOR_LEN, EXPECTED_TERMINATOR_LEN) == 0;
+    return strncmp(OK_COMPLETED_STRING, tail - OK_COMPLETED_LENGTH, OK_COMPLETED_LENGTH) == 0;
 }
 
 
@@ -44,16 +47,58 @@ static char* okCompleteParser(const char *response)
 /**
  *	\brief Creates an AT command control stucture on the heap.
  *
+ *  \param[in]resultSz The size (length) of the command response buffer. Pass in 0 to use default size.
+ *
  *  \return AT command control structure.
  */
-atcommand_t *atcmd_create()
+atcmd_t *atcmd_create(uint8_t resultSz)
 {
-   	atcommand_t *atcmd = calloc(1, sizeof(atcommand_t));
+   	atcmd_t *atcmd = calloc(1, sizeof(atcmd_t));
 	if (atcmd == NULL)
 	{
         ltem1_faultHandler("atcmd-could not alloc at command object");
-	}	
+	}
+
+    if (resultSz == 0)
+        resultSz = ATCMD_DEFAULT_RESULT_BUF_SZ;
+
+    atcmd->resultHead = calloc(resultSz, sizeof(char));
+    if (atcmd->resultHead == NULL)
+    {
+        free(atcmd);
+        ltem1_faultHandler("atcmd-could not alloc response buffer");
+    }
+
+    atcmd_reset(atcmd);
+    atcmd->cmdCompleteParser_func = okCompletedParser;
+
     return atcmd;
+}
+
+
+
+/**
+ *	\brief Creates an AT command object with custom properties.
+ *
+ *	\param[in] cmdStr The AT command string to send to the BG96 module.
+ *  \param[in] timeoutMillis Command timeout period in milliseconds.
+ *  \param[in] resultBuf Pointer to application buffer for AT cmds with long or URC style result.
+ *  \param[in] resultBufSz Result buffer maximum chars.
+ *  \param[in] cmdCompleteParser_func Function pointer to custom result completion parser.
+ */
+atcmd_t *atcmd_build(const char* cmdStr, char* resultBuf, size_t resultBufSz, uint16_t timeoutMillis,  uint16_t (*cmdCompleteParser_func)(const char *response))
+{
+    atcmd_t *atCmd = atcmd_create(resultBufSz);
+
+    memcpy(atCmd->cmdStr, cmdStr, MIN(ATCMD_INVOKE_CMDSTR_SZ, strlen(cmdStr)));
+    atCmd->resultTail = atCmd->resultHead;
+    atCmd->resultSz = resultBufSz;
+    atCmd->timeoutMillis = timeoutMillis;
+    atCmd->cmdCompleteParser_func = cmdCompleteParser_func;
+
+    atCmd->invokedAt = 0;
+    atCmd->resultCode = 0;
+    atCmd->irdPending = iop_process_notAssigned;
 }
 
 
@@ -61,89 +106,227 @@ atcommand_t *atcmd_create()
 /**
  *	\brief Destroys AT command control stucture.
  */
-void atcmd_destroy()
+void atcmd_destroy(atcmd_t * atCmd)
 {
-    free(g_ltem1->atcmd);
+    free(atCmd);
 }
 
 
 
 /**
- *	\brief Invokes a simple AT command to the BG96 module (response < 80 chars, timeout < 10,000 millis and OK response).
+ *	\brief Resets (initializes) an AT command structure.
  *
- *	\param[in] atCmd The command string to send to the BG96.
- *  \param[in] startIo Initialize hardware and start modem.
- *  \param[in] enableIrqMode Initialize ltem1 to use IRQ/ISR for communication events.
+ *  \param[in] atCmd Pointer to command struct to reset
  */
-void atcmd_invoke(const char * atCmd)
+void atcmd_reset(atcmd_t *atCmd)
 {
-    atcmd_invokeAdv(atCmd, DEFAULT_TIMEOUT_MILLIS, g_atresult, DEFAULT_RESULT_BUF_SZ, NULL);
+    memset(atCmd->cmdStr, 0, ATCMD_INVOKE_CMDSTR_SZ);
+    atCmd->resultTail = atCmd->resultHead;
+    atCmd->resultSz = ATCMD_DEFAULT_RESULT_BUF_SZ;
+    atCmd->resultCode = ATCMD_RESULT_PENDING;
+    atCmd->invokedAt = 0;
+    atCmd->timeoutMillis = ATCMD_DEFAULT_TIMEOUT_MILLIS;
+    atCmd->irdPending = iop_process_notAssigned;
 }
 
 
+
 /**
- *	\brief Invokes an AT command to the BG96 module with options (URC, long timeout or verbose response).
+ *	\brief Invokes a simple AT command to the BG96 module using the driver default atCmd object. For more complex or verbose
+ *  command workflows use atcmd_invokeAdv() with a custom atCmd object (see atcmd_create()).
  *
- *	\param[in] atCmd The command string to send to the BG96.
- *  \param[in] timeoutMillis Command timeout period in milliseconds.
- *  \param[in] responseBuf Custom response buffer for long URC type commands.
- *  \param[in] responseBufSz Custom response buffer maximum chars.
- *  \param[in] urc_parse_func_ptr_t Function pointer to custom response parser.
+ *	\param[in] cmdStr The command string to send to the BG96 module.
  */
-void atcmd_invokeAdv(const char* atcmd, uint8_t timeout_millis,  char* response_buf, uint8_t response_bufsize, char* (*cmdresult_parser_func)())
+void atcmd_invoke(const char * cmdStr)
 {
-    strcpy(g_ltem1->atcmd->cmd, atcmd);
-    g_ltem1->atcmd->timeoutMillis = timeout_millis;
-    g_ltem1->atcmd->resultCode = ATCMD_RESULT_PENDING;
+    atcmd_reset(g_ltem1->atcmd);
+    strncpy(g_ltem1->atcmd->cmdStr, cmdStr, ATCMD_INVOKE_CMDSTR_SZ);
+    atcmd_invokeAdv(g_ltem1->atcmd);
+}
 
-    // set result to nulls in advance
-    g_ltem1->atcmd->result = response_buf;
-    memset(g_ltem1->atcmd->result, 0, response_bufsize);
 
-    // result parser
-    if (cmdresult_parser_func == NULL)
+
+/**
+ *	\brief Invokes an AT command to the BG96 module.
+ */
+void atcmd_invokeAdv(atcmd_t *atCmd)
+{
+    // result completed parser
+    if (atCmd->cmdCompleteParser_func == NULL)
     {
-        g_ltem1->atcmd->cmdresult_parser_func = okCompleteParser;
+        atCmd->cmdCompleteParser_func = okCompletedParser;
     }
-    g_ltem1->atcmd->invokedAt = timing_millis();
+    atCmd->invokedAt = timing_millis();
 
+    g_ltem1->pendingCmd = atCmd;
     // at command struct initialized for command, perform actual invoke to BG96
-    spi_transferBuffer(g_ltem1->spi, SC16IS741A_FIFO_RnW_WRITE, g_ltem1->atcmd->cmd, strlen(g_ltem1->atcmd->cmd));
+    sc16is741a_write(atCmd->cmdStr, MIN(strlen(atCmd->cmdStr), ATCMD_INVOKE_CMDSTR_SZ));
 }
 
 
 
-uint8_t atcmd_getResult(char *result)
+/**
+ *	\brief Gathers command response strings and determines if command has completed.
+ *
+ *  \param[in] atCmd Pointer to command struct
+ * 
+ *  \return AT command result type: completed=200, timedout=408, or (still) pending=0.
+ */
+atcmd_result_t atcmd_getResult(atcmd_t *atCmd)
 {
-  //    return pendingAtCommand.resultCode;
-  // wait for BG96 response in FIFO buffer
+    // return pendingAtCommand.resultCode;
+    // wait for BG96 response in FIFO buffer
 
-  uint8_t lsrValue = 0;
-  while (!lsrValue & NXP_LSR_DATA_IN_RECVR)
-  {
-    for (int i = 0; i < 64; i++)
+    atcmd_result_t parserResult = 0;
+    atcmd_result_t cmdResult = 0;
+
+    iop_rx_result_t rxResult = iop_rxGetQueued(iop_process_command, atCmd->resultTail, atCmd->resultSz);
+
+    if (rxResult == iop_rx_result_ready || rxResult == iop_rx_result_truncated)
     {
-      lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
-      if (lsrValue & NXP_LSR_DATA_IN_RECVR)
-      {
-        uint8_t fifoValue = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
-        g_atresult[i] = fifoValue;
-        continue;
-      }
-      break;
+        // deplete last result from the overall command result buffer
+        uint8_t resultSz = strlen(atCmd->resultTail);
+        atCmd->resultSz -= resultSz;
+        atCmd->resultTail += resultSz;
+
+        // invoke command result complete parser, true returned if complete
+        parserResult = (*atCmd->cmdCompleteParser_func)(atCmd->resultHead);
     }
-  }
-  return 200;
 
+    if (parserResult == ATCMD_RESULT_SUCCESS)    // parser signaled complete, successful
+    {
+        g_ltem1->pendingCmd = NULL;
+        return ATCMD_RESULT_SUCCESS;
+    }
+
+    if (parserResult >= ATCMD_RESULT_BASEERROR)          // parser signaled complete, with failure
+    {
+        g_ltem1->pendingCmd = NULL;
+        return parserResult;
+    }
+
+    bool timeout = timing_millis() - atCmd->invokedAt > atCmd->timeoutMillis;
+
+    if (timeout && atCmd->resultHead != atCmd->resultTail)          // got something but not valid completion
+    {
+        g_ltem1->pendingCmd = NULL;
+        return ATCMD_RESULT_ERROR;
+    }
+    else if (timeout)                                               // got nothing and ran out of time
+    {
+        g_ltem1->pendingCmd = NULL;
+        return ATCMD_RESULT_TIMEOUT;
+    }
+    return ATCMD_RESULT_PENDING;
 }
 
 
 
-void atcmd_cancel()
+/**
+ *	\brief Waits for an AT command result.
+ *
+ *  \param[in] atCmd Pointer to command struct
+ * 
+ *  \return AT command result type: completed=200, timedout=408, or response error=500.
+ */
+atcmd_result_t atcmd_awaitResult(atcmd_t *atCmd)
 {
-    // pendingAtCommand.invokedAt = 0;
-    // pendingAtCommand.resultCode = -1;
-    // pendingAtCommand.cmd = NULL;
-    // pendingAtCommand.result = NULL;
+    atcmd_result_t atResult;
+    do
+    {
+        atResult = atcmd_getResult(atCmd);
+
+    } while (atResult == ATCMD_RESULT_PENDING);
 }
 
+
+
+/**
+ *	\brief Cancels an AT command currently underway.
+ *
+ *  \param[in] atCmd Pointer to command struct
+ */
+void atcmd_cancel(atcmd_t *atCmd)
+{
+    // if singleton g_ltem1 atCmd is being cancelled reset it, if custom this is up to the caller
+    if (atCmd == g_ltem1->atcmd)
+    {
+        atcmd_reset(atCmd);
+    }
+    g_ltem1->pendingCmd = NULL;
+}
+
+
+/**
+ *	\brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
+ *
+ *  \param[in] response The string returned from the getResult function.
+ *  \param[in] landmark The string to look for to signal response matches command (scans from end backwards).
+ *  \param[in] gap The min. char count between landmark and terminator (0 is valid).
+ *  \param[in] terminator The string to signal the end of the command response, chars between landmark and terminator are considered valid part of response.
+ * 
+ *  \return True if the response meets the conditions in the landmark, gap and terminator values.
+ */
+uint16_t atcmd_gapCompletedHelper(const char *response, const char *landmark, u_int8_t gap, const char *terminator)
+{
+    char *landmarkAt;
+    char *next;
+    char *terminatorAt;
+
+    next = strstr(response, landmark);
+    if (next == NULL)
+        return false;
+
+    // find last occurrence of landmark
+    uint8_t landmarkSz = strlen(landmark);
+    while (next != NULL)
+    {
+        landmarkAt = next;
+        next = strstr(landmarkAt + landmarkSz, landmark);
+    }
+    terminatorAt = strstr(landmarkAt + landmarkSz, terminator);
+
+    if (terminatorAt != NULL && terminatorAt - (landmarkAt + landmarkSz) >= gap)
+        return true;
+
+    return false;
+}
+
+
+
+/**
+ *	\brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
+ *
+ *  \param[in] response The string returned from the getResult function.
+ *  \param[in] landmark The string to look for to signal response matches command (scans from end backwards).
+ *  \param[in] token The token delimeter char.
+ *  \param[in] tokenCnt The min number of tokens expected.
+ * 
+ *  \return True if the response meets the conditions in the landmark and token count required.
+ */
+uint16_t atcmd_tokenCompletedHelper(const char *response, const char *landmark, char token, uint8_t tokensRequired)
+{
+    char *landmarkAt;
+    char *next;
+    uint8_t delimitersFound = 0;
+
+    next = strstr(response, landmark);
+    if (next == NULL)
+        return false;
+
+    // find last occurrence of landmark
+    uint8_t landmarkSz = strlen(landmark);
+    while (next != NULL)
+    {
+        next = strstr(next + landmarkSz, landmark);
+    }
+
+    next = next + landmarkSz + 1;
+    while (delimitersFound < (tokensRequired - 1) && *next != NULL)
+    {
+        next = strchr(next + 1, token);
+        delimitersFound++;
+    }
+
+    return delimitersFound == (tokensRequired -1);
+}

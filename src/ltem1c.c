@@ -36,7 +36,7 @@ ltem1_pinConfig_t RPI_BREAKOUT =
 ltem1_device_t *g_ltem1;
 
 
-#pragma region privateFunctions
+#pragma region private functions
 
 /**
  *	\brief Initialize the modems IO.
@@ -59,31 +59,9 @@ static void initIO()
 }
 
 
-
-// /**
-//  *	\brief Initialize the data bridge.
-//  *
-//  *	\param[in] modem The LTE modem.
-//  */
-// static void initBridge()
-// {
-// 	g_ltem1->bridge = sc16is741a_init(g_ltem1->gpio->spiCsPin, LTEM1_SPI_DATARATE, BG96_BAUDRATE_DEFAULT);
-// }
-
-// static spi_config_t * createSpiConfig(uint8_t chipSelLine, uint32_t spiDataRate, uint32_t uartBaudrate)
-// {
-
-// 	spi_config_t *spi = spi_create(spi_config);
-// 	if (spi == NULL)
-// 	{
-//         ltem1_faultHandler("ltem1-could not alloc spi config");
-// 	}
-//     return spi;
-// }
-
 #pragma endregion
 
-#pragma region publicFunctions
+#pragma region public functions
 
 
 /**
@@ -104,14 +82,17 @@ void ltem1_create(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t f
     g_ltem1->spi = spi_create(g_ltem1->gpio->spiCsPin);
     //g_ltem1->spi = createSpiConfig(g_ltem1->gpio->spiCsPin, LTEM1_SPI_DATARATE, BG96_BAUDRATE_DEFAULT);
 
-    g_ltem1->provisions = calloc(1, sizeof(ltem1_provisions_t));
-	if (g_ltem1->provisions == NULL)
+    g_ltem1->modemInfo = calloc(1, sizeof(ltem1_modemInfo_t));
+	if (g_ltem1->modemInfo == NULL)
 	{
         ltem1_faultHandler("ltem1-could not alloc ltem1 provisions object");
 	}
 
-    if (funcLevel == ltem1_functionality_iop)
+    if (funcLevel >= ltem1_functionality_iop)
         g_ltem1->iop = iop_create();
+
+    if (funcLevel >= ltem1_functionality_atcmd)
+        g_ltem1->atcmd = atcmd_create(0);
 
     ltem1_start(funcLevel);
 }
@@ -127,15 +108,7 @@ void ltem1_start(ltem1_functionality_t funcLevel)
 
 	if (!gpio_readPin(g_ltem1->gpio->statusPin))
 	{
-		PRINTF("Powering LTEm1 On...");
-		gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
-		timing_delay(BG96_POWERON_DELAY);
-		gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
-		while (!gpio_readPin(g_ltem1->gpio->statusPin))
-		{
-			timing_delay(500);
-		}
-		PRINTF("DONE.\r\n");
+        bg96_powerOn();
         g_ltem1->bg96ReadyState = bg96_readyState_powerOn;
         g_ltem1->funcLevel = funcLevel;
 	}
@@ -144,20 +117,34 @@ void ltem1_start(ltem1_functionality_t funcLevel)
 		PRINTF_INFO("LTEm1 found powered on.\r\n");
         g_ltem1->bg96ReadyState = bg96_readyState_appReady;
 
-        // reset IRQ if latched: previous fired and not serviced
+        // power off/on if IRQ latched: previously fired and not serviced
         gpio_pinValue_t irqState = gpio_readPin(g_ltem1->gpio->irqPin);
         if (irqState == gpioValue_low)
-            ltem1_reset(false);
+        {
+    		PRINTF_WARN("Invalid LTEm1 IRQ state, restarting.\r\n");
+            bg96_powerOff();
+            timing_delay(1000);
+            bg96_powerOn();
+        }
+
+        /* future HW rev, reset bridge v. BG */
+        // // reset IRQ if latched: previous fired and not serviced
+        // gpio_pinValue_t irqState = gpio_readPin(g_ltem1->gpio->irqPin);
+        // if (irqState == gpioValue_low)
+        //     ltem1_reset(false);
 	}
 
     // start NXP SPI-UART bridge
     spi_start(g_ltem1->spi);
     sc16is741a_start();
 
-    if (funcLevel == ltem1_functionality_iop)
-    {
+    if (funcLevel >= ltem1_functionality_iop)
         iop_start();
-    }
+
+    // atcmd doesn't have a start/stop 
+
+    if (funcLevel >= ltem1_functionality_full)
+        bg96_start();
 }
 
 
@@ -167,19 +154,19 @@ void ltem1_start(ltem1_functionality_t funcLevel)
  */
 void ltem1_reset(bool restart)
 {
-	gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_low);
-	timing_delay(BG96_RESET_DELAY);
-	gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_high);
+	// gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_low);
+	// timing_delay(BG96_RESET_DELAY);
+	// gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_high);
 
-    if (restart)
-    {
-        sc16is741a_start();
-        if (g_ltem1->funcLevel == ltem1_functionality_iop)
-        {
-            iop_start();
-        }
-        bg96_start();
-    }
+    // if (restart)
+    // {
+    //     sc16is741a_start();
+    //     if (g_ltem1->funcLevel == ltem1_functionality_iop)
+    //     {
+    //         iop_start();
+    //     }
+    //     bg96_start();
+    // }
 }
 
 
@@ -190,9 +177,7 @@ void ltem1_reset(bool restart)
 void ltem1_stop()
 {
     g_ltem1->bg96ReadyState = bg96_readyState_powerOff;
-	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
-	timing_delay(BG96_POWEROFF_DELAY);
-	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
+    bg96_powerOff();
 }
 
 
@@ -211,7 +196,7 @@ void ltem1_destroy()
 	gpio_pinClose(g_ltem1->gpio->resetPin);
 	gpio_pinClose(g_ltem1->gpio->statusPin);
 
-    atcmd_destroy();
+    atcmd_destroy(g_ltem1->atcmd);
     iop_destroy();
     spi_destroy(g_ltem1->spi);
 	free(g_ltem1);
@@ -233,8 +218,18 @@ void ltem1_dowork()
  */
 void ltem1_faultHandler(const char * fault)
 {
-    PRINTF_ERROR(fault);
+    PRINTF_ERR(fault);
+    // NotImplemented if custom fault handler go there
     while(1) {};
+}
+
+
+
+/**
+ *	\brief Registers the address (void*) of your application custom fault handler.
+ */
+void ltem1_registerApplicationFaultHandler(void * customFaultHandler)
+{
 }
 
 #pragma endregion

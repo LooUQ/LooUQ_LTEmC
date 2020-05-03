@@ -25,13 +25,14 @@
  * Manages module genaral and non-protocol cellular radio functions,
  *****************************************************************************/
 
-#include "quectel_bg96.h"
+#include "..\ltem1c.h"
+//#include "quectel_bg96.h"
+
+#define BG96_INIT_COMMAND_COUNT 1
 
 const char* const bg96_initCmds[] = 
 { 
-    "ATE0",             // don't echo AT commands on serial
-    "ATV=0",            // command response verbosity = terse
-    "AT+IFC=2,2"        // turn on bi-directional flow control
+    "ATE0\r",             // don't echo AT commands on serial
 };
 
 
@@ -41,6 +42,14 @@ const char* const bg96_initCmds[] =
 static void sendInitCmds()
 //static void bg96_sendInitCmds(const char* const initCmds[], size_t nmCmds)
 {
+    for (size_t i = 0; i < BG96_INIT_COMMAND_COUNT; i++)
+    {
+        atcmd_invoke(bg96_initCmds[i]);
+        atcmd_result_t cmdResult = atcmd_awaitResult(g_ltem1->atcmd);
+
+        if (cmdResult != ATCMD_RESULT_SUCCESS)
+            ltem1_faultHandler("bg96:sendInitCmds init sequence encountered error");
+    }
 }
 
 
@@ -50,29 +59,62 @@ static void sendInitCmds()
 #pragma region public functions
 /* --------------------------------------------------------------------------------------------- */
 
-// void bg96_create()
-// {}
 
-// void bg96_destroy()
-// {}
+/**
+ *	\brief Power BG96 module on.
+ */
+void bg96_powerOn()
+{
+    PRINTF("Powering LTEm1 On...");
+    gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
+    timing_delay(BG96_POWERON_DELAY);
+    gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
+
+    // wait for status=ready
+    while (!gpio_readPin(g_ltem1->gpio->statusPin))
+    {
+        timing_delay(500);
+    }
+    PRINTF("DONE\r");
+}
+
+
+
+/**
+ *	\brief Powers off the BG96 module.
+ */
+void bg96_powerOff()
+{
+    PRINTF("Powering LTEm1 Off\r");
+	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
+	timing_delay(BG96_POWEROFF_DELAY);
+	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
+}
+
+
 
 void bg96_start()
 {
     sendInitCmds();
 }
 
-// void bg96_stop()
-// {}
 
 
 void bg96_setNwScanSeq(const char* sequence)
-{}
+{
+}
+
+
 
 void bg96_setNwScanMode(bg96_nw_scan_mode_t mode)
-{}
+{
+}
+
+
 
 void bg96_setIotOpMode(bg96_nw_iot_mode_t mode)
-{}
+{
+}
+
 
 #pragma endregion
-

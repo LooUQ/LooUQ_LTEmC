@@ -36,14 +36,26 @@ void _dbg_printf(print_color_t color, const char *fmt, ...)
         case debug_print_color_error:
             SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_RED);
             break;
+
+        case debug_print_color_cyan:
+            SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_CYAN);
+            break;
+        case debug_print_color_magenta:
+            SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_MAGENTA);
+            break;
+        case debug_print_color_white:
+            SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_WHITE);
+            break;
+
         default:
             SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_WHITE);
             break;
     }
+
     SEGGER_RTT_WriteString(0, buf);
     SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_WHITE);
+
     va_end(args);
-   
 }
 
 #endif

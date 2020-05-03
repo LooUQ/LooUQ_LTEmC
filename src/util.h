@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file quectel_bg96.h
+ *  \file ltem1.h
  *  \author Jensen Miller, Greg Terrell
  *  \license MIT License
  *
@@ -23,60 +23,35 @@
  *
  *****************************************************************************/
 
+#ifndef __LTEM1C_UTIL_H__
+#define __LTEM1C_UTIL_H__
 
-#include <stddef.h>
-
-#ifndef __QUECTEL_BG96_H__
-#define __QUECTEL_BG96_H__
+#include "ltem1c.h"
 
 
-// Quectel_BG96_Hardware_Design_V1.2.pdf
-#define BG96_POWERON_DELAY      500U
-#define BG96_POWEROFF_DELAY     1500U
-#define BG96_RESET_DELAY        300U
-#define BG96_BAUDRATE_DEFAULT   115200U
-
-#define BG96_RATSEQ_AUTO    "00"
-#define BG96_RATSEQ_GSM     "01"
-#define BG96_RATSEQ_CATM1   "02"
-#define BG96_RATSEQ_NBIOT   "03"
-
-typedef enum
+#ifdef __cplusplus
+extern "C"
 {
-    bg96_readyState_powerOff = 0,
-    bg96_readyState_powerOn = 1,
-    bg96_readyState_appReady = 2
-} bg96_readyState_t;
+#endif // __cplusplus
 
 
-typedef enum
+#define IP_DISPLAY(NUM_IP, STRING_IP) \
+char STRING_IP##[16]; \
+sprintf(STRING_IP, "%d.%d.%d.%d", NUM_IP##.octet[0] , NUM_IP##.octet[1], NUM_IP##.octet[2], NUM_IP##.octet[3]);
+
+
+union ip_addr_tag
 {
-    BG96_NW_SCAN_MODE_AUTO = 0U,
-    BG96_NW_SCAN_MODE_GSMONLY = 1U,
-    BG96_NW_SCAN_MODE_LTEONLY = 3U
-} bg96_nw_scan_mode_t;
+    uint8_t octet[4];
+	uint32_t packed;
+};
+
+typedef union ip_addr_tag ip_addr_t;
 
 
-typedef enum
-{
-    BG96_NW_IOT_MODE_M1 = 0U,
-    BG96_NW_IOT_MODE_NB1 = 1U,
-    BG96_NW_IOT_MODE_M1NB1 = 2U
-} bg96_nw_iot_mode_t;
+#ifdef __cplusplus
+}
+#endif // !__cplusplus
 
 
-// void bg96_create();
-// void bg96_destroy();
-
-void bg96_start();
-// void bg96_stop();
-
-void bg96_powerOn();
-void bg96_powerOff();
-
-void bg96_setNwScanSeq(const char* sequence);
-void bg96_setNwScanMode(bg96_nw_scan_mode_t mode);
-void bg96_setIotOpMode(bg96_nw_iot_mode_t mode);
-
-
-#endif  /* !__QUECTEL_BG96_H__ */
+#endif  /* !__LTEM1C_UTIL_H__ */

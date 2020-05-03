@@ -109,7 +109,7 @@ static void rxCloseCtrlBlock(uint8_t bufIndx)
  *
  *  \return Index of next buffer (to be new Head) containing protocol content.
  */
-static uint8_t rxGetNextProtoPayload(iop_processes_t proto)
+static uint8_t rxGetNextProtoPayload(iop_process_t proto)
 {
     uint8_t bufIndx = g_ltem1->iop->rxProtoHeadIndx[proto];
     do
@@ -237,39 +237,38 @@ static void interruptCallbackISR()
     *   write (THR): buffer emptied sufficiently to send more chars
     */
 
-    PRINTF_INFO("ISR[");
     uint8_t rxPass = 0;
     SC16IS741A_IIR iirVal;
-    size_t rxFilled;
+    uint8_t rxFilled;
+    uint8_t txAvailable;
+
+    iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
+    // rxFilled = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
+    // txAvailable = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
+
+    retryIsr:
+    PRINTF_INFO("ISR[");
     do
     {
-        iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
-        rxFilled = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-        uint8_t txAvailable = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
-
-        if (iirVal.IRQ_nPENDING)
+        if (iirVal.IRQ_nPENDING == 1)
         {
-            PRINTF_WARN("* ");
+            PRINTF_WARN("** ");
             // IRQ fired, so re-read IIR **VERIFY** nothing to service & reset source
             iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
         }
 
-
         // priority 1 -- receiver line status error : clear fifo of bad char
-
         if (iirVal.IRQ_SOURCE == 3)
         {
             PRINTF_INFO("-RXErr ");
             sc16is741a_flushRxFifo();
 
-            // priority serviced, re-read IIR to see if lower priority needs serviced
-            iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
+            // // priority serviced, re-read IIR to see if lower priority needs serviced
+            // iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
         }
-
 
         // priority 2 -- receiver time-out (src=6), receiver RHR full (src=2) 
         // Service Action: read RXLVL, read FIFO to empty
-
         if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)
         {
             uint8_t rxIndx;
@@ -285,7 +284,7 @@ static void interruptCallbackISR()
             {
                 rxIndx = rxGetNextAvailableCtrlBlock();
             }
-            //PRINTF("-rxIndx=%d ", rxIndx);
+            PRINTF("-indx=%d ", rxIndx);
 
             // read SPI into buffer
             sc16is741a_read(g_ltem1->iop->rxCtrls[rxIndx].primBuf, rxFilled);
@@ -294,54 +293,52 @@ static void interruptCallbackISR()
             // parse and update IOP ctrl block
             rxParseReadContentPreamble(rxIndx);
 
-            // debug
-            if (sc16is741a_readReg(SC16IS741A_RXLVL_ADDR) > 0)
-                PRINTF_ERROR("RX READ INCOMPLETE.");
-            // enddebug
-
-            // priority serviced, read IIR to see if additional servicing required
-            iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
-
-            //PRINTF("-rxExitSrc=%d ", iirVal.IRQ_SOURCE);
+            // // priority serviced, read IIR to see if additional servicing required
+            // iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
+            // PRINTF("-rxExitSrc=%d ", iirVal.IRQ_SOURCE);
         }
 
-
         // priority 3 -- transmit THR (threshold) : TX ready for more data
-
         if (iirVal.IRQ_SOURCE == 1)                                         // TX available
         {
             uint8_t txAvailable = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
             PRINTF_INFO("-TX ");
-            // PRINTF("-lvl=%d ", txAvailable);
+            PRINTF("-lvl=%d ", txAvailable);
 
             if (g_ltem1->iop->txCtrl.sendSz > 0)
                 txSendNextChunk(txAvailable);
             else
                 g_ltem1->iop->txCtrl.sendActive = false;
 
-            // priority serviced, re-read IIR to see if lower priority needs serviced
-            iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
+            // // priority serviced, re-read IIR to see if lower priority needs serviced
+            // iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
         }
 
+        /* -- NOT USED --
         // priority 4 -- modem interrupt
         // priority 6 -- receive XOFF/SpecChar
         // priority 7 -- nCTS, nRTS state change:
+        */
 
-        // while (!iirVal.IRQ_nPENDING)   // yep... not, not pending
-        // {
-        //     PRINTF_ERROR("ISR-??? src=%d", iirVal.IRQ_SOURCE);
-        //     iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
-        // }
+        iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
 
-    } while (!iirVal.IRQ_nPENDING);
+    } while (iirVal.IRQ_nPENDING == 0);
 
     PRINTF_INFO("]\r");
 
     gpio_pinValue_t irqPin = gpio_readPin(g_ltem1->gpio->irqPin);
     if (irqPin == gpioValue_low)
     {
+        txAvailable = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
         rxFilled = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-        PRINTF_ERROR("IRQ failed to reset. src=%d, rxP=%d", iirVal.IRQ_SOURCE, rxFilled);
+        iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
+        PRINTF_WARN("IRQ reset stalled. nIRQ=%d, src=%d, txLvl=%d, rxLvl=%d \r", iirVal.IRQ_nPENDING, iirVal.IRQ_SOURCE, txAvailable, rxFilled);
+
+        if (iirVal.IRQ_nPENDING == 0)
+        {
+            PRINTF_WARN("+");
+            goto retryIsr;
+        }
         ltem1_faultHandler("IRQ failed to reset.");
     }
 }
@@ -463,7 +460,7 @@ bool iop_txSend(const char *sendData, size_t sendSz)
 /**
  *	\brief Dequeue received data.
  */
-iop_rx_result_t iop_rxGetQueued(iop_processes_t process, char *recvData, size_t responseSz)
+iop_rx_result_t iop_rxGetQueued(iop_process_t process, char *recvData, size_t responseSz)
 {
     if (process == iop_process_command)                             // gather and return command response
     {

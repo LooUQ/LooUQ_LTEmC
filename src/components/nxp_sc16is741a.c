@@ -44,16 +44,19 @@ sc16is741a_writeReg(REG_NAME##_ADDR, REG_NAME##_reg.reg);
 */
 void sc16is741a_start()
 {
+    // start with a known state on NXP bridge
+    sc16is741a_writeReg(SC16IS741A_UARTRST_ADDR, SC16IS741A_SW_RESET_MASK);
+
 	//enableFifo(true);
-    // Need EFR[4]=1 to enable bridge enhanced functions: TX trigger and TLR settings for IRQ
+    //Need EFR[4]=1 to enable bridge enhanced functions: TX trigger and TLR settings for IRQ
     sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_ENHANCED);
-    REG_MODIFY(SC16IS741A_EFR, SC16IS741A_EFR_reg.ENHANCED_FNS_EN = true;)
+    REG_MODIFY(SC16IS741A_EFR, SC16IS741A_EFR_reg.ENHANCED_FNS_EN = 1;)
     sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_GENERAL);
 
 	SC16IS741A_FCR fcrRegister = {0};
 	fcrRegister.FIFO_EN = 1;
-    fcrRegister.RX_TRIGGER_LVL = RX_LVL_56CHARS;
-    fcrRegister.TX_TRIGGER_LVL = TX_LVL_56SPACES;
+    fcrRegister.RX_TRIGGER_LVL = (int)RX_LVL_56CHARS;
+    fcrRegister.TX_TRIGGER_LVL = (int)TX_LVL_56SPACES;
 	sc16is741a_writeReg(SC16IS741A_FCR_ADDR, fcrRegister.reg);
 
     //startUart();
@@ -77,26 +80,22 @@ void sc16is741a_start()
  */
 void sc16is741a_enableIrqMode()
 {
-	// MCR[2] set(1) = TLR enable
-	REG_MODIFY(SC16IS741A_MCR, SC16IS741A_MCR_reg.TCR_TLR_EN = true;) 
+	// // // MCR[2] set(1) = TLR enable
+	// REG_MODIFY(SC16IS741A_MCR, SC16IS741A_MCR_reg.TCR_TLR_EN = 1;) 
 
-	// TLR  
-    // NOTE: TLR can only be written when EFR[4] == 1 and MCR[2] == 1
-    // EFR[4] set=1 in enableFifo() previously at start of bridge init
-	SC16IS741A_TLR tlrSetting = {0};
-	tlrSetting.RX_TRIGGER_LVL = 0x0F;
-	tlrSetting.TX_TRIGGER_LVL = 0x0F;
-	sc16is741a_writeReg(SC16IS741A_TLR_ADDR, tlrSetting.reg);
+	// // TLR  
+    // // NOTE: TLR can only be written when EFR[4] == 1 and MCR[2] == 1
+    // // EFR[4] set=1 in enableFifo() previously at start of bridge init
+	// SC16IS741A_TLR tlrSetting = {0};
+	// tlrSetting.RX_TRIGGER_LVL = 0x0C;                           // 48 chars (12x4)
+	// tlrSetting.TX_TRIGGER_LVL = 0x0C;                           // 48 spaces (12x4)
+	// sc16is741a_writeReg(SC16IS741A_TLR_ADDR, tlrSetting.reg);
 
-    // // clear RX/TX FIFO, clear any possible IRQ conditions
-    // sc16is741a_resetFifo(resetFifo_action_RxTx);
-
-   	// IRQ Enabled: RX chars available, TX spaces available
+   	// IRQ Enabled: RX chars available, TX spaces available, UART framing error
 	SC16IS741A_IER ierSetting = {0};
 	ierSetting.RHR_DATA_AVAIL_INT_EN = 1;
 	ierSetting.THR_EMPTY_INT_EN = 1; 
     ierSetting.RECEIVE_LINE_STAT_INT_EN = 1;
-    //ierSetting.MDM_STAT_INT_EN = true;
 	sc16is741a_writeReg(SC16IS741A_IER_ADDR, ierSetting.reg);
 }
 

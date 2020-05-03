@@ -45,6 +45,10 @@ extern "C"
 #include "components/quectel_bg96.h"
 #include "iop.h"
 #include "atcmd.h"
+#include "mdminfo.h"
+#include "gnss.h"
+#include "util.h"
+
 // #include "protocols/protocols.h"
 
 
@@ -52,11 +56,22 @@ extern "C"
 #define LTEM1_PROTOCOL_COUNT 6
 
 
+#define ASCII_cCR '\r'
+#define ASCII_cCOMMA ','
+#define ASCII_sCRLF "\r\n"
+#define ASCII_sOKTERM "OK\r\n"
+
+#define ASCII_szCRLF 2
+
+
+
 typedef enum 
 {
     ltem1_functionality_stop = 0,
     ltem1_functionality_base = 1,
-    ltem1_functionality_iop = 2
+    ltem1_functionality_iop = 2,
+    ltem1_functionality_atcmd = 3,
+    ltem1_functionality_full = 4
 } ltem1_functionality_t;
 
 
@@ -79,14 +94,14 @@ typedef struct ltem1_apn_tag
 	uint32_t ipAddress;
 } ltem1_apn_t;
 
-typedef struct ltem1_provisions_tag
+
+typedef struct ltem1_modemInfo_tag
 {
 	char imei[16];
 	char iccid [21];
 	char mfgmodel [21];
 	char fwver [41];
-	int rssi;
-} ltem1_provisions_t;
+} ltem1_modemInfo_t;
 
 
 typedef struct ltem1_device_tag
@@ -95,9 +110,10 @@ typedef struct ltem1_device_tag
     ltem1_functionality_t funcLevel;
 	ltem1_pinConfig_t *gpio;
     spi_device_t *spi;
-	ltem1_provisions_t *provisions;
+	ltem1_modemInfo_t *modemInfo;
     iop_state_t *iop;
-	atcommand_t *atcmd;
+	atcmd_t *atcmd;
+    atcmd_t *pendingCmd;
 	ltem1_apn_t apns[2];
 	// protocol_t protocols[6];
 } ltem1_device_t;
@@ -116,7 +132,7 @@ void ltem1_stop();
 void ltem1_reset(bool restart);
 
 void ltem1_dowork();
-void ltem1_faultHandler(const char * fault);
+void ltem1_faultHandler(const char * fault) __attribute__ ((noreturn));
 
 
 #ifdef __cplusplus

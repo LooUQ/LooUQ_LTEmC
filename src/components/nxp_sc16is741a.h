@@ -41,14 +41,18 @@ extern "C"
 
 #pragma region structures
 
-#define SC16IS741A_FIFO_BUFFER_SZ   0x40U
-#define SC16IS741A_FIFO_RnW_READ    0x01U
-#define SC16IS741A_FIFO_RnW_WRITE   0x00U
+#define SC16IS741A_FIFO_BUFFER_SZ   0x40
+#define SC16IS741A_FIFO_RnW_READ    0x01
+#define SC16IS741A_FIFO_RnW_WRITE   0x00
 
 // NXP Bridge register set selector values (applied to LCR register)
-#define SC16IS741A_REG_SET_GENERAL 0x00
-#define SC16IS741A_REG_SET_SPECIAL 0x80
+#define SC16IS741A_REG_SET_GENERAL  0x00
+#define SC16IS741A_REG_SET_SPECIAL  0x80
 #define SC16IS741A_REG_SET_ENHANCED 0xBF
+
+#define SC16IS741A_HW_RESET_DELAY      1U
+#define SC16IS741A_SW_RESET_MASK       0x08
+
 
 typedef const uint8_t ro8;
 typedef uint8_t rw8;
@@ -311,8 +315,8 @@ DEF_SC16IS741A_REG(EFCR,
  *  \brief Modem status register.
  */
 DEF_SC16IS741A_REG(TLR,
-    rw8 RX_TRIGGER_LVL : 4;
     rw8 TX_TRIGGER_LVL : 4;
+    rw8 RX_TRIGGER_LVL : 4;
 )
 
 

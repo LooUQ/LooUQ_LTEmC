@@ -49,7 +49,7 @@ typedef enum
     iop_process_protocol_4 = 4,
     iop_process_protocol_5 = 5,
     iop_process_command = 9
-} iop_processes_t; 
+} iop_process_t; 
 
 
 typedef enum
@@ -75,7 +75,7 @@ typedef struct iop_rxCtrlBlock_tag
     uint8_t next;
     uint8_t primSz;
     char primBuf[65];
-    iop_processes_t process;
+    iop_process_t process;
     bool isIrd;
     char *expBufHead;
     char *expBufTail;
@@ -106,7 +106,7 @@ void iop_destroy();
 bool iop_txClearToSend();
 bool iop_txSend(const char *sendData, size_t sendSz);
 
-iop_rx_result_t iop_rxGetQueued(iop_processes_t process, char *recvData, size_t recvSz);
+iop_rx_result_t iop_rxGetQueued(iop_process_t process, char *recvData, size_t recvSz);
 //void iop_closeRxCtrl(uint8_t bufIndx);
 
 
