@@ -38,18 +38,19 @@
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
+#define ADV_RXCTRLBLK_INDEX(BFINDX) BFINDX = (++BFINDX == IOP_RX_CTRLBLOCK_COUNT) ? 0 : BFINDX
+
+
 // private function declarations
 
 static void txSendNextChunk(uint8_t fifoAvailable);
 
 static uint8_t rxOpenCtrlBlock();
 static void rxParseRecvContentPreamble(uint8_t rxIndx);
-static void rxIrdOpenExtendedBuffer(iop_rxCtrlBlock_t *rxCtrlStruct);
-static void rxCloseCtrlBlock(uint8_t bufIndx);
+static void rxProcessSocketIrd(iop_rxCtrlBlock_t *rxCtrlStruct, socket_t socketNm);
+static void rxResetCtrlBlock(uint8_t bufIndx);
 
 static void interruptCallbackISR();
-
-static uint8_t _rxGetNextProtoPayload(iop_process_t proto);
 
 
 /* public functions
@@ -62,29 +63,25 @@ static uint8_t _rxGetNextProtoPayload(iop_process_t proto);
  */
 iop_state_t *iop_create()
 {
-    iop_state_t *iop = calloc(1, sizeof(iop_state_t));
+    iop_t *iop = calloc(1, sizeof(iop_t));
 	if (iop == NULL)
 	{
         ltem1_faultHandler("iop-could not alloc iop status struct");
 	}
-    iop->txCtrl.txBuf = malloc(IOP_TX_BUFFER_SZ + 1);
+    iop->txCtrl.txBuf = calloc(IOP_TX_BUFFER_SZ + 1, sizeof(char));
     if (iop->txCtrl.txBuf == NULL)
     {
         free(iop);
         ltem1_faultHandler("iop-could not alloc iop TX buffers");
     }
 
-    // init TX struct values
-    *(iop->txCtrl.txBuf + IOP_TX_BUFFER_SZ) = "\0";
+    // init TX and RX struct values
     iop->txCtrl.remainSz = 0;
-
-    // init RX struct values to empty
-    iop->rxCmdHeadIndx = IOP_EMPTY;
+    iop->cmdHead = iop->cmdTail = IOP_EMPTY;
     for (size_t i = 0; i < IOP_PROTOCOLS_COUNT; i++)
     {
-        iop->rxProtoHeadIndx[i] = IOP_EMPTY;
+        iop->socketHead[i] = iop->socketTail[i] = 0;
     }
-
     return iop;
 }
 
@@ -120,7 +117,7 @@ void iop_destroy(void *iop)
  */
 bool iop_txClearToSend()
 {
-    return g_ltem1->qbgReadyState == qbg_readyState_appReady && !g_ltem1->iop->txCtrl.sendActive;
+    return g_ltem1->qbgReadyState == qbg_readyState_appReady && !g_ltem1->iop->iopState == iop_state_txPending;
 }
 
 
@@ -133,12 +130,12 @@ bool iop_txClearToSend()
  *
  *  \return True if send is completes.
  */
-bool iop_txSend(const char *sendData, size_t sendSz)
+bool iop_txSend(const char *sendData, uint16_t sendSz)
 {
     if (sendSz > IOP_TX_BUFFER_SZ)
         ltem1_faultHandler("iop-send data max size exceeded");
 
-    g_ltem1->iop->txCtrl.sendActive = true;
+    g_ltem1->iop->iopState = iop_state_txPending;
     memcpy(g_ltem1->iop->txCtrl.txBuf, sendData, sendSz);
 
     uint16_t thisChunkSz = MIN(sendSz, SC16IS741A_FIFO_BUFFER_SZ);
@@ -151,75 +148,123 @@ bool iop_txSend(const char *sendData, size_t sendSz)
     }
     else
     {
-        g_ltem1->iop->txCtrl.remainSz == sendSz - thisChunkSz;
-        g_ltem1->iop->txCtrl.chunkPtr = g_ltem1->iop->txCtrl.txBuf + SC16IS741A_FIFO_BUFFER_SZ;
+        g_ltem1->iop->txCtrl.remainSz = sendSz - thisChunkSz;
+        g_ltem1->iop->txCtrl.chunkPtr = g_ltem1->iop->txCtrl.txBuf + thisChunkSz;
     }
     return false;
 }
 
 
 
+
 /**
- *	\brief Dequeue received data.
+ *	 \brief Dequeue received data.
+ *
+ *   \param[in] recvBuf Pointer to the command receive buffer.
+ *   \param[in] recvMaxSz The command response max length (buffer size).
  */
-iop_rx_result_t iop_rxGetCmdQueued(char *recvData, size_t responseSz)
+iop_rxGetResult_t iop_rxGetCmdQueued(char *recvBuf, uint16_t recvMaxSz)
 {
-    if (g_ltem1->iop->rxCmdHeadIndx == IOP_EMPTY)
+    if (g_ltem1->iop->cmdTail == IOP_EMPTY)
         return iop_rx_result_nodata;
 
-    int8_t currIndx = g_ltem1->iop->rxCmdHeadIndx;
-    int8_t nextIndx;
-    do
+    uint8_t currIndx = g_ltem1->iop->cmdTail;
+
+    while (true)
     {
-        size_t copySz = MIN(responseSz, g_ltem1->iop->rxCtrlBlks[currIndx].primSz);
-        strncpy(recvData, g_ltem1->iop->rxCtrlBlks[currIndx].primBuf, copySz + 1);
-        rxCloseCtrlBlock(currIndx);
+        if (g_ltem1->iop->rxCtrlBlks[currIndx].occupied && g_ltem1->iop->rxCtrlBlks[currIndx].process == iop_process_command)
+        {
+            uint16_t copySz = MIN(recvMaxSz, g_ltem1->iop->rxCtrlBlks[currIndx].primSz);
+            strncpy(recvBuf, g_ltem1->iop->rxCtrlBlks[currIndx].primBuf, copySz + 1);
+            rxResetCtrlBlock(currIndx);
+            recvMaxSz -= copySz;                    // tally to check for overflow
+        }
 
-        responseSz -= copySz;
-        currIndx = g_ltem1->iop->rxCtrlBlks[currIndx].next;        // step
+        if (currIndx == g_ltem1->iop->cmdHead)
+            break;
 
-        if (responseSz < 0)
-            return iop_rx_result_truncated;
+        currIndx = ADV_RXCTRLBLK_INDEX(currIndx);
+        if (currIndx == g_ltem1->iop->cmdTail)
+            ltem1_faultHandler("iop-buffer underflow in iop_rxGetCmdQueued");
+    };
+    g_ltem1->iop->cmdTail = IOP_EMPTY;
 
-    } while(currIndx != IOP_EMPTY);
-
-    g_ltem1->iop->rxCmdHeadIndx = IOP_EMPTY;
+    if (recvMaxSz < 0)
+        return iop_rx_result_truncated;
+    
     return iop_rx_result_ready;
 }
 
 
-
-iop_rx_result_t iop_rxPushProtoQueued(iop_process_t socket)
+/**
+ *   \brief Transfer received data from iop buffers to application.
+ * 
+ *   \param[in] recvBuf Pointer to the command receive buffer.
+ *   \param[in] recvMaxSz The command response max length (buffer size).
+ * 
+ *   \return The number of bytes received (since previous call).
+*/
+uint16_t iop_rxGetSocketQueued(socket_t socketNm, char *recvBuf, uint16_t recvBufSz)
 {
-    if (g_ltem1->iop->rxProtoHeadIndx[socket] == IOP_EMPTY)
-        return iop_rx_result_nodata;
+    uint16_t recvdBytes;
 
-    int8_t currIndx = g_ltem1->iop->rxProtoHeadIndx[socket];
-    char *recvData;
-    uint16_t *recvDataSz;
+    if (g_ltem1->iop->socketTail[socketNm] == IOP_EMPTY)
+        return 0;
+
+    int8_t tailIndx = g_ltem1->iop->socketTail[socketNm];
 
     // if extended buffer in use, copy primary to start of extended buffer
     // determine which buffer (prim, aux) to return pointer to
-    if (g_ltem1->iop->rxCtrlBlks[currIndx].extsnBufHead)
+    if (g_ltem1->iop->rxCtrlBlks[tailIndx].extsnBufHead)
     {
-        recvData = g_ltem1->iop->rxCtrlBlks[currIndx].extsnBufHead;
-        recvDataSz = g_ltem1->iop->rxCtrlBlks[currIndx].extsnBufTail;
-        memcpy(recvData, g_ltem1->iop->rxCtrlBlks[currIndx].primBuf, g_ltem1->iop->rxCtrlBlks[currIndx].primSz);
+        recvdBytes == g_ltem1->iop->rxCtrlBlks[tailIndx].extsnBufTail - g_ltem1->iop->rxCtrlBlks[tailIndx].extsnBufHead;
+        memcpy(recvBuf, g_ltem1->iop->rxCtrlBlks[tailIndx].primBuf, g_ltem1->iop->rxCtrlBlks[tailIndx].primSz);
+        memcpy(recvBuf + recvdBytes, g_ltem1->iop->rxCtrlBlks[tailIndx].primBuf, recvdBytes);
+        recvdBytes += g_ltem1->iop->rxCtrlBlks[tailIndx].primSz;
     }
     else
     {
-        recvData = g_ltem1->iop->rxCtrlBlks[currIndx].primBuf;
-        recvDataSz = g_ltem1->iop->rxCtrlBlks[currIndx].primSz;
+        // offset IRD header from g_ltem1->iop->rxCtrlBlks[currIndx].primSz
+        recvdBytes = MIN(g_ltem1->iop->rxCtrlBlks[tailIndx].primSz, recvBufSz);
+        memcpy(recvBuf, g_ltem1->iop->rxCtrlBlks[tailIndx].dataStart, recvdBytes);
     }
 
-    // invoke protocol receiver func provided on ip_open() to push data into client
-    (*g_ltem1->protocols->sockets[socket].ipReceiver_func)(recvData, recvDataSz);
+    free(g_ltem1->iop->rxCtrlBlks[tailIndx].extsnBufHead);          // if extended buffer, free malloc'd buffer space
+    //iop_tailFinalize(socketNm);
+    return recvdBytes;
+}
 
-    // if extended, free extended buffer space
-    free(g_ltem1->iop->rxCtrlBlks[currIndx].extsnBufHead);
-    rxCloseCtrlBlock(currIndx);
 
-    //--done--
+
+/**
+ *   \brief Closes the tail (control block) of the socket stream.
+ * 
+ *   \param[in] The socket number to close tail buffer and update controls.
+*/
+void iop_tailFinalize(socket_t socketNm)
+{
+    uint8_t tail = g_ltem1->iop->socketTail[socketNm];
+
+    if (g_ltem1->iop->rxCtrlBlks[tail].occupied)
+        rxResetCtrlBlock(tail);
+
+    do                                                          // advance tail, next available message or head
+    {
+        if (tail == g_ltem1->iop->socketHead[socketNm])
+        {
+            return;
+        }
+
+        tail = ADV_RXCTRLBLK_INDEX(tail);
+
+        if (g_ltem1->iop->rxCtrlBlks[tail].occupied && g_ltem1->iop->rxCtrlBlks[tail].process == socketNm)  // at next socket rxCtrlBlk
+        {
+            g_ltem1->iop->socketTail[socketNm] = tail;
+            return;
+        }
+    } while (tail != g_ltem1->iop->socketTail[socketNm]);
+
+    ltem1_faultHandler("iop-iop_tailFinalize-buffer underflow");
 }
 
 
@@ -242,7 +287,7 @@ static void txSendNextChunk(uint8_t fifoAvailable)
     // update TX ctrl with remaining work to complete requested transmit
     g_ltem1->iop->txCtrl.remainSz -= thisTxSz;
     g_ltem1->iop->txCtrl.chunkPtr = g_ltem1->iop->txCtrl.chunkPtr + thisTxSz;
-    g_ltem1->iop->txCtrl.sendActive = g_ltem1->iop->txCtrl.remainSz > 0;
+    g_ltem1->iop->iopState = g_ltem1->iop->txCtrl.remainSz > 0 ? iop_state_txPending : iop_state_idle;
 }
 
 
@@ -254,22 +299,18 @@ static void txSendNextChunk(uint8_t fifoAvailable)
  */
 static uint8_t rxOpenCtrlBlock()
 {
-	/* command, process URC, process IRD are all independently sharing buffer ring 
-    *  reuse rx ctrl/buf if alread vacated
-    */
-
-    int bufIndx = g_ltem1->iop->rxTailIndx++;
-
-    while (g_ltem1->iop->rxCtrlBlks[bufIndx].occupied)
+    uint8_t volatile bufIndx = g_ltem1->iop->rxRecvHead;
+    do
     {
-        bufIndx = (bufIndx == IOP_RX_CTRLBLOCK_COUNT - 1) ? 0 : ++bufIndx;
+        bufIndx = ADV_RXCTRLBLK_INDEX(bufIndx);
 
-        if (bufIndx == g_ltem1->iop->rxTailIndx)
-            ltem1_faultHandler("iop buffer fault, none available");
+        if (bufIndx == g_ltem1->iop->rxRecvHead)
+            ltem1_faultHandler("iop-rxCtrlBlk overflow, none available");
     }
-    g_ltem1->iop->rxCtrlBlks[bufIndx].occupied = true;
+    while (g_ltem1->iop->rxCtrlBlks[bufIndx].occupied);
 
-    return g_ltem1->iop->rxTailIndx = bufIndx;
+    g_ltem1->iop->rxCtrlBlks[bufIndx].occupied = true;
+    return g_ltem1->iop->rxRecvHead = bufIndx;
 }
 
 
@@ -279,16 +320,14 @@ static uint8_t rxOpenCtrlBlock()
  *
  *	\param[in] bufferIndex The index into the buffer control struct to close.
  */
-static void rxCloseCtrlBlock(uint8_t bufIndx)
+static void rxResetCtrlBlock(uint8_t bufIndx)
 {
     iop_rxCtrlBlock_t *rxCtrl = &g_ltem1->iop->rxCtrlBlks[bufIndx];
 
     rxCtrl->occupied = false;
-    rxCtrl->process = iop_process_notAssigned;
-    rxCtrl->isIrd = false;
-    rxCtrl->next = IOP_EMPTY;
+    rxCtrl->process = iop_process_void;
+    rxCtrl->isURC = false;                                        // both URC (notice) and IRD (data) in rxCtrlBlks
     memset(rxCtrl->primBuf, 0, IOP_RX_PRIMARY_BUFFER_SIZE + 1);
-
     if (rxCtrl->extsnBufHead != NULL)
     {
         free(rxCtrl->extsnBufHead);
@@ -300,42 +339,23 @@ static void rxCloseCtrlBlock(uint8_t bufIndx)
 
 
 /**
- *	\brief Scan IOP Buffers for next (clockwise) buffer with proto contents.
+ *   \brief Scan (in ISR) recv'd 1st stream chunk and prepare expansion buffer for remainder of incoming chunks.
  *
- *  \return Index of next buffer (to be new Head) containing protocol content.
+ *   \param[in\out] rxCtrlStruct receive control/buffer structure.
  */
-static uint8_t _rxGetNextProtoPayload(iop_process_t proto)
-{
-    // uint8_t bufIndx = g_ltem1->iop->rxProtoHeadIndx[proto];
-    // do
-    // {
-    //     bufIndx = (bufIndx == IOP_RX_CTRLBLOCK_COUNT - 1) ? 0 : ++bufIndx;
-
-    //     if (bufIndx == g_ltem1->iop->rxProtoHeadIndx[proto])          // wrapped around notfound
-    //         return IOP_EMPTY;
-
-    // } while (g_ltem1->iop->rxCtrlBlks[bufIndx].process != proto);
-
-    // return g_ltem1->iop->rxTailIndx = bufIndx;
-}
-
-
-
-/**
- *	\brief Scan (in ISR) recv'd 1st stream chunk and prepare expansion buffer for remainder of incoming chunks.
- *
- *  \param[in\out] rxCtrlStruct receive control/buffer structure.
- */
-static void rxIrdOpenExtendedBuffer(iop_rxCtrlBlock_t *rxCtrlStruct)
+static void rxProcessSocketIrd(iop_rxCtrlBlock_t *rxCtrlStruct, socket_t socketNm)
 {
     /* note the protocol session is in invoking AT+QIRD=#, not returned in +QIRD result
     *  Example: +QIRD: 4,  where 4 is the number of chars arriving
     *     if chars arriving <= to primbuf size: all good, read will fit in primary
     *     if chars arriving > primbuf size, need to setup expandbuf (malloc)
     */
-    char *lenPtr = rxCtrlStruct->primBuf + RECV_HEADERSZ_IRD;
-    char *endPtr = NULL;
-    uint16_t irdLen = strtol(lenPtr, &endPtr, 10);
+
+    char *lenPtr = rxCtrlStruct->primBuf + RECV_HEADERSZ_IRD + 4;
+    uint16_t irdLen = strtol(lenPtr, &rxCtrlStruct->dataStart, 10);
+    rxCtrlStruct->dataStart += 2;
+    rxCtrlStruct->primSz = irdLen;
+    g_ltem1->iop->socketIrdBytes[socketNm] = irdLen;
 
     if (irdLen > IOP_RX_PRIMARY_BUFFER_SIZE)
     {
@@ -343,6 +363,7 @@ static void rxIrdOpenExtendedBuffer(iop_rxCtrlBlock_t *rxCtrlStruct)
         rxCtrlStruct->extsnBufHead = calloc(irdLen, sizeof(uint8_t));
         rxCtrlStruct->extsnBufTail = rxCtrlStruct->extsnBufHead + primLen;
     }
+    return irdLen;
 }
 
 
@@ -380,36 +401,45 @@ static void rxParseRecvContentPreamble(uint8_t rxIndx)
     */
 
     iop_rxCtrlBlock_t *rxCtrlBlock = &g_ltem1->iop->rxCtrlBlks[rxIndx];
-
     rxCtrlBlock->process = iop_process_command;    //default
 
-    if (strncmp("+QIURC: \"recv", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URC_IPRECV) == 0)
+    if (strncmp("+QIURC: \"recv", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URC_IPRECV) == 0 ||
+        strncmp("+QSSLURC: \"recv", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URC_SSLRECV) == 0 )
     {
-        char *connIdPtr = rxCtrlBlock->primBuf + RECV_HEADERSZ_URC_IPRECV;
+        uint8_t hdrSz = (rxCtrlBlock->primBuf + 5 == 'I') ? RECV_HEADERSZ_URC_IPRECV : RECV_HEADERSZ_URC_SSLRECV;
+        char *connIdPtr = rxCtrlBlock->primBuf + hdrSz;
         char *endPtr = NULL;
-        uint8_t connectId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-        rxCtrlBlock->process = connectId;
-    }
+        uint8_t sckt = (uint8_t)strtol(connIdPtr, &endPtr, 10);
 
-    if (strncmp("+QSSLURC: \"recv", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URC_SSLRECV) == 0)
-    {
-        char *connIdPtr = rxCtrlBlock->primBuf + RECV_HEADERSZ_URC_SSLRECV;
-        char *endPtr = NULL;
-        uint8_t connectId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-        rxCtrlBlock->process = connectId;
+        rxCtrlBlock->process = sckt;
+        rxCtrlBlock->isURC = true;
+        // if (g_ltem1->iop->socketTail[sckt] == IOP_EMPTY)
+        //     g_ltem1->iop->socketTail[sckt] = rxIndx;
+        g_ltem1->iop->socketHead[sckt] = rxIndx;
     }
 
     else if (strncmp("+QIRD", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_IRD) == 0)
     {
-        rxIrdOpenExtendedBuffer(rxCtrlBlock);
+        socket_t scktNm = g_ltem1->iop->irdSocket;
+
+        rxProcessSocketIrd(rxCtrlBlock, scktNm);
+        rxCtrlBlock->process = scktNm;
+        if (g_ltem1->iop->socketIrdBytes[scktNm] == 0)      // if no data, release ctrlBlk
+        {
+            rxCtrlBlock->occupied = false;
+            rxCtrlBlock->process = iop_process_void;
+        }
+        else
+            g_ltem1->iop->socketHead[scktNm] = rxIndx;      // data, so point head to this ctrlBlk
+        g_ltem1->iop->irdSocket = protocol_none;
     }
 
     else if (strncmp("APP RDY\r\n", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_APPRDY) == 0)
     {
         PRINTF("-appRdy ");
         g_ltem1->qbgReadyState = qbg_readyState_appReady;
-        rxCtrlBlock->occupied = false;                      // release ctrl/buffer, processed here
-        rxCtrlBlock->process = iop_process_notAssigned;
+        rxCtrlBlock->occupied = false;                      // release ctrlBlk, done with it
+        rxCtrlBlock->process = iop_process_void;
     }
 
     // catch async unsolicited state changes here
@@ -421,20 +451,16 @@ static void rxParseRecvContentPreamble(uint8_t rxIndx)
 
         strncpy(g_ltem1->iop->urcStateMsg + RECV_HEADERSZ_URCSTATE, rxCtrlBlock->primBuf, IOP_URC_STATEMSG_SZ);
         rxCtrlBlock->occupied = false;                      // release ctrl/buffer, processed here
-        rxCtrlBlock->process = iop_process_notAssigned;
+        rxCtrlBlock->process = iop_process_void;
     }
-    
 
-    // update IOP control struct
-    if (rxCtrlBlock->process == iop_process_command && g_ltem1->iop->rxCmdHeadIndx == IOP_EMPTY)
+    // if default of command message still holds set command index pointers
+    if (rxCtrlBlock->process == iop_process_command)
     {
-        g_ltem1->iop->rxCmdHeadIndx = rxIndx;
+        if (g_ltem1->iop->cmdTail == IOP_EMPTY)
+            g_ltem1->iop->cmdTail = rxIndx;
+        g_ltem1->iop->cmdHead = rxIndx;
     }
-    else
-    {
-        /* code */
-    }
-    
 }
 
 
@@ -467,7 +493,7 @@ static void interruptCallbackISR()
     {
         if (iirVal.IRQ_nPENDING == 1)
         {
-            PRINTF_WARN("** ");
+            // PRINTF_WARN("** ");
             // IRQ fired, so re-read IIR **VERIFY** nothing to service & reset source
             iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
         }
@@ -485,18 +511,18 @@ static void interruptCallbackISR()
         // Service Action: read RXLVL, read FIFO to empty
         if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)
         {
-            uint8_t rxIndx;
             PRINTF_INFO("RX=%d ", iirVal.IRQ_SOURCE);
             rxLevel = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
             //PRINTF("-lvl=%d ", rxLevel);
 
-            rxIndx = rxOpenCtrlBlock();
+            uint8_t volatile rxIndx = rxOpenCtrlBlock();
             PRINTF("-ix=%d ", rxIndx);
 
             // read SPI into buffer
             sc16is741a_read(g_ltem1->iop->rxCtrlBlks[rxIndx].primBuf, rxLevel);
             g_ltem1->iop->rxCtrlBlks[rxIndx].primSz = rxLevel;
-            PRINTF_DBG("\r%s\r", g_ltem1->iop->rxCtrlBlks[rxIndx].primBuf);
+            // PRINTF_DBG("(%d) ", rxLevel);
+            PRINTF_DBG("(%d)\r%s\r", rxLevel, g_ltem1->iop->rxCtrlBlks[rxIndx].primBuf);
 
             // parse and update IOP ctrl block
             rxParseRecvContentPreamble(rxIndx);
@@ -513,10 +539,10 @@ static void interruptCallbackISR()
             if (g_ltem1->iop->txCtrl.remainSz > 0)
             {
                 txSendNextChunk(txAvailable);
-                PRINTF("-sChnk ");
+                PRINTF("-chunk ");
             }
             else
-                g_ltem1->iop->txCtrl.sendActive = false;
+                g_ltem1->iop->iopState = iop_state_idle;
         }
 
         /* -- NOT USED --
@@ -550,4 +576,3 @@ static void interruptCallbackISR()
 
 
 #pragma endregion
-

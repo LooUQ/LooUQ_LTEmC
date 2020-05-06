@@ -39,18 +39,6 @@ const char* const qbg_initCmds[] =
 #pragma region private functions
 /* --------------------------------------------------------------------------------------------- */
 
-static void sendInitCmds()
-{
-    for (size_t i = 0; i < BG96_INIT_COMMAND_COUNT; i++)
-    {
-        action_invoke(qbg_initCmds[i]);
-        action_result_t cmdResult = action_awaitResult(g_ltem1->dAction);
-
-        if (cmdResult != ACTION_RESULT_SUCCESS)
-            ltem1_faultHandler("qbg:sendInitCmds init sequence encountered error");
-    }
-}
-
 
 #pragma endregion
 
@@ -94,7 +82,14 @@ void qbg_powerOff()
 
 void qbg_start()
 {
-    sendInitCmds();
+    for (size_t i = 0; i < BG96_INIT_COMMAND_COUNT; i++)
+    {
+        action_invoke(qbg_initCmds[i]);
+        action_result_t cmdResult = action_awaitResult(g_ltem1->dAction);
+
+        if (cmdResult != ACTION_RESULT_SUCCESS)
+            ltem1_faultHandler("qbg:sendInitCmds init sequence encountered error");
+    }
 }
 
 
@@ -124,7 +119,7 @@ void qbg_setIotOpMode(qbg_nw_iot_mode_t mode)
 
 void qbg_processUrcStateQueue()
 {
-    if (g_ltem1->iop->urcStateMsg == ASCII_cNULL)
+    if (g_ltem1->iop->urcStateMsg[0] == ASCII_cNULL)
         return;
 
     char *landmarkAt;
@@ -137,9 +132,6 @@ void qbg_processUrcStateQueue()
         g_ltem1->network->contexts[cntxt].contextState = context_state_inactive;
         g_ltem1->network->contexts[cntxt].ipAddress[0] = ASCII_cNULL;
     }
-
-
-
 }
 
 

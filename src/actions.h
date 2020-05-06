@@ -51,13 +51,13 @@ typedef struct action_tag
 
 
 action_t *action_create(uint8_t resultSz);
-action_t *action_build(const char* cmdStr, size_t resultBufSz, uint16_t timeoutMillis, action_result_t (*cmdCompleteParser_func)(const char *response));
+action_t *action_build(const char* cmdStr, uint16_t resultBufSz, uint16_t timeoutMillis, action_result_t (*cmdCompleteParser_func)(const char *response));
 void action_destroy(action_t * atCmd);
 
 void action_invokeCmd(const char *cmdStr);
 void action_invokeCmdWithParser(const char *cmdStr, uint16_t (*cmdCompleteParser_func)(const char *response));
 void action_invokeCustomCmd(action_t *cmdAction);
-void action_sendData(const char *txData);
+void action_sendData(const char *data, uint16_t dataSz);
 
 void action_reset(action_t *atCmd);
 

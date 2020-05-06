@@ -25,15 +25,15 @@ static action_result_t recvIrdPromptParser(const char *response);
 /**
  *	\brief Initialize the IP network contexts structure.
  */
-ltem1_network_t *ip_createNetwork()
+network_t *ip_createNetwork()
 {
-    ltem1_network_t *network = calloc(LTEM1_PROTOCOL_COUNT, sizeof(ltem1_network_t));
+    network_t *network = calloc(LTEM1_SOCKET_COUNT, sizeof(network_t));
 	if (network == NULL)
 	{
         ltem1_faultHandler("ipProtocols-could not alloc IP protocol struct");
 	}
 
-    pdp_context_t *context = calloc(LTEM1_PROTOCOL_COUNT, sizeof(pdp_context_t));
+    pdp_context_t *context = calloc(LTEM1_SOCKET_COUNT, sizeof(pdp_context_t));
 	if (context == NULL)
 	{
         ltem1_faultHandler("ipProtocols-could not alloc IP protocol struct");
@@ -63,15 +63,15 @@ void ip_destroyNetwork(void *network)
 /**
  *	\brief Initialize the IP protocols structure.
  */
-ltem1_protocols_t *ip_createProtocols()
+protocols_t *ip_createProtocols()
 {
-    ltem1_protocols_t *protocols = calloc(LTEM1_PROTOCOL_COUNT, sizeof(ltem1_protocols_t));
+    protocols_t *protocols = calloc(LTEM1_SOCKET_COUNT, sizeof(protocols_t));
 	if (protocols == NULL)
 	{
         ltem1_faultHandler("ipProtocols-could not alloc IP protocol struct");
 	}
 
-    protocol_socket_t *socket = calloc(LTEM1_PROTOCOL_COUNT, sizeof(protocol_socket_t));
+    socket_t *socket = calloc(LTEM1_SOCKET_COUNT, sizeof(socketCtrl_t));
 	if (socket == NULL)
 	{
         ltem1_faultHandler("ipProtocols-could not alloc IP protocol struct");
@@ -80,7 +80,7 @@ ltem1_protocols_t *ip_createProtocols()
 
     for (size_t i = 0; i < IOP_PROTOCOLS_COUNT; i++)
     {   
-        protocols->sockets[i].protocol = protocol_socketClosed;
+        protocols->sockets[i].protocol = protocol_none;
         protocols->sockets[i].contextId = g_ltem1->dataContext;
         protocols->sockets[i].ipReceiver_func = NULL;
     }
@@ -111,7 +111,7 @@ static action_result_t contextStatusCompleteParser(const char *response)
  *  \param[in] contextNum The APN to operate on. Typically 0 or 1
  *  \param[in] activate Attempt to activate the APN if found not active.
  */
-protocol_result_t ip_fetchNetworkContexts()
+socket_result_t ip_fetchNetworkContexts()
 {
     #define IP_QIACT_SZ 8
 
@@ -177,7 +177,7 @@ protocol_result_t ip_fetchNetworkContexts()
  * 
  *  \param[in] contextNum The APN to operate on. Typically 0 or 1
  */
-protocol_result_t ip_activateContext(uint8_t contextNum)
+socket_result_t ip_activateContext(uint8_t contextNum)
 {
     char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
     snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIACT=%d\r", contextNum);
@@ -194,7 +194,7 @@ protocol_result_t ip_activateContext(uint8_t contextNum)
  * 
  *  \param[in] contextNum The APN to operate on. Typically 0 or 1
  */
-protocol_result_t ip_deactivateContext(uint8_t contextNum)
+socket_result_t ip_deactivateContext(uint8_t contextNum)
 {
     char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
     snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIDEACT=%d\r", contextNum);
@@ -218,7 +218,7 @@ protocol_result_t ip_deactivateContext(uint8_t contextNum)
  *  \param[in] lclPort The port number on this side of the conversation, set to 0 to auto-assign.
  *  \param[in] ipReceiver_func The callback function in your application to be notified of received data ready.
  */
-protocol_result_t ip_open(ltem1_protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, void (*ipReceiver_func)(const char *recvBuf, uint16_t recvSz))
+socket_result_t ip_open(protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, void (*ipReceiver_func)(socket_t socketNum))
 {
     /*
     AT+QIOPEN=1,0,"UDP","97.83.32.119",9001,0,1
@@ -229,7 +229,7 @@ protocol_result_t ip_open(ltem1_protocol_t protocol, const char *host, uint16_t 
     */
 
     if (ipReceiver_func == NULL) return PROTOCOL_RESULT_ERROR;
-    if (protocol > protocol_ipAny) return PROTOCOL_RESULT_ERROR;
+    if (protocol > protocol_AnyIP) return PROTOCOL_RESULT_ERROR;
 
     if (protocol ==  protocol_tcpListener || protocol == protocol_udpService)
         strcpy(host, "127.0.0.1");
@@ -238,15 +238,18 @@ protocol_result_t ip_open(ltem1_protocol_t protocol, const char *host, uint16_t 
     char protoName[13] = {0};
     int8_t socketNum = PROTOCOL_RESULT_ERROR;
 
-    for (size_t i = 0; i < LTEM1_PROTOCOL_COUNT; i++)
+    for (size_t i = 0; i < LTEM1_SOCKET_COUNT; i++)
     {
-        if (g_ltem1->protocols->sockets[i].protocol == protocol_socketClosed)
+        if (g_ltem1->protocols->sockets[i].protocol == protocol_none)
         {
             g_ltem1->protocols->sockets[i].protocol = protocol;
             socketNum = i;
             break;
         }
     }
+    g_ltem1->protocols->sockets[socketNum].protocol = protocol;
+    g_ltem1->protocols->sockets[socketNum].ipReceiver_func = ipReceiver_func;
+
 
     switch (protocol)
     {
@@ -269,10 +272,10 @@ protocol_result_t ip_open(ltem1_protocol_t protocol, const char *host, uint16_t 
     action_invokeWithParser(openCmd, ipOpenCompleteParser);
     action_result_t cmdResult = action_awaitResult(NULL);
 
-    if (cmdResult != ACTION_RESULT_SUCCESS)
-    {
-        g_ltem1->protocols->sockets[socketNum].protocol == protocol_socketClosed;
-    }
+    //testing
+    (*g_ltem1->protocols->sockets[socketNum].ipReceiver_func)(0);
+    //testing
+
     return (cmdResult == ACTION_RESULT_SUCCESS) ? socketNum : cmdResult;
 }
 
@@ -296,7 +299,8 @@ void ip_close(uint8_t socketNum)
 
     if (atResult == ACTION_RESULT_SUCCESS)
     {
-        g_ltem1->protocols->sockets[socketNum].protocol = protocol_socketClosed;
+        g_ltem1->protocols->sockets[socketNum].protocol = protocol_none;
+        g_ltem1->protocols->sockets[socketNum].ipReceiver_func = NULL;
     }
 }
 
@@ -309,60 +313,109 @@ void ip_close(uint8_t socketNum)
  *	\param[in] sendBuf A buffer pointer containing the data to send.
  *  \param[in] sendSz The size of the buffer (< 1501 bytes).
  */
-protocol_result_t ip_send(uint8_t socketNum, char *sendData, uint16_t sendSz)
+socket_result_t ip_send(uint8_t socketNum, char *sendData, uint16_t sendSz)
 {
-    // AT+QISEND=2,10                           // TCP, UDP, TCP INCOMING
-
-    if (g_ltem1->ltem1State != ltem1_state_idle)
+    if (g_ltem1->iop->iopState != iop_state_idle)
         return PROTOCOL_RESULT_UNAVAILABLE;
 
     char sendCmd[30] = {0};
     snprintf(sendCmd, 30, "AT+QISEND=%d,%d", socketNum, sendSz);
     action_invokeWithParser(sendCmd, sendPromptParser);
 
-    action_result_t cmdResult;
+    action_result_t actionReslt;
     do
     {
-        cmdResult = action_getResult(NULL, false);
+        actionReslt = action_getResult(NULL, false);
 
-    } while (cmdResult == ACTION_RESULT_PENDING);
+    } while (actionReslt == ACTION_RESULT_PENDING);
 
-    if (cmdResult == ACTION_RESULT_SUCCESS)
+    if (actionReslt == ACTION_RESULT_SUCCESS)
     {
-        action_t *dataAction = action_build(sendData, 20, 500, action_okResultParser);
-        action_invokeCustom(dataAction);
-        cmdResult = action_awaitResult(g_ltem1->dAction);
+        action_sendData(sendData, sendSz);
+        actionReslt = action_awaitResult(g_ltem1->dAction);
     }
-    return cmdResult;
+    return actionReslt;
 }
 
 
 // TODO collapse into above ip_send
 
-protocol_result_t ip_sendUdpReply(uint8_t socketNum, const char *rmtHost, uint16_t rmtPort,  char *sendBuf, uint8_t sendSz)
-{
-    // AT+QISEND=2,10,“10.7.89.10”,6969         // UDP SERVICE
+// protocol_result_t ip_sendUdpReply(uint8_t socketNum, const char *rmtHost, uint16_t rmtPort,  char *sendBuf, uint8_t sendSz)
+// {
+//     // AT+QISEND=2,10,“10.7.89.10”,6969         // UDP SERVICE
 
-    char sendCmd[60] = {0};
-    snprintf(sendCmd,60, "AT+QISEND=%d,%d,\"%s\",%d", socketNum, sendSz, rmtHost, rmtPort);
+//     char sendCmd[60] = {0};
+//     snprintf(sendCmd,60, "AT+QISEND=%d,%d,\"%s\",%d", socketNum, sendSz, rmtHost, rmtPort);
 
     
-    return PROTOCOL_RESULT_SUCCESS;
+//     return PROTOCOL_RESULT_SUCCESS;
+// }
+
+
+
+/**
+ *   \brief Pull data from socket into application (ip protocol) 
+ * 
+ *   \param[in] socketNm The open socket identifier to check for data.
+ */ 
+uint16_t ip_recv(socket_t socketNm, char *recvBuf, uint16_t recvBufSz)
+{
+    return iop_rxGetSocketQueued(socketNm, recvBuf, recvBufSz);
 }
 
 
+
+/**
+ *   \brief Perform background tasks to move data through pipeline and update status values.
+*/
 void ip_receiverDoWork()
 {
-    for (size_t i = 0; i < LTEM1_PROTOCOL_COUNT; i++)
+    /*
+    * Check each socket for OPEN condition and NOT EMPTY (recv)
+    * 
+    * -- empty means no URC message and an IRD response with 0 length
+    */
+
+    for (uint8_t scktNm = 0; scktNm < LTEM1_SOCKET_COUNT; scktNm++)
     {
         // service each open protocol recv actions
-        if (g_ltem1->protocols->sockets[i].protocol < protocol_ipAny)
+        if (g_ltem1->protocols->sockets[scktNm].protocol < protocol_AnyIP)
         {
-            uint8_t protocol = g_ltem1->protocols->sockets[i].protocol;
+            uint8_t head = g_ltem1->iop->socketHead[scktNm];
+            uint8_t tail = g_ltem1->iop->socketTail[scktNm];
 
+            if (g_ltem1->iop->rxCtrlBlks[head].occupied)                    // socket has data
+            {
+                PRINTF_WARN("\rhead=%d ", head);
+                PRINTF_WARN("tail=%d ", tail);
+                PRINTF_WARN("tail.occ=%d ", g_ltem1->iop->rxCtrlBlks[tail].occupied);
+
+                // if (!g_ltem1->iop->rxCtrlBlks[tail].occupied )
+                //     tail = head;
+
+                if (g_ltem1->iop->rxCtrlBlks[tail].occupied)
+                {
+                    //process tail
+                    if (g_ltem1->iop->rxCtrlBlks[tail].isURC || g_ltem1->iop->socketIrdBytes[scktNm] > 0)
+                    {
+                        PRINTF_WARN("isURC=%d ", g_ltem1->iop->rxCtrlBlks[tail].isURC);
+                        PRINTF_WARN("tail.sz=%d ", g_ltem1->iop->rxCtrlBlks[tail].primSz);
+                        PRINTF_WARN("irdBytes=%d\r", g_ltem1->iop->socketIrdBytes[scktNm]);
+
+                        g_ltem1->iop->irdSocket = scktNm;
+                        char irdCmd[12] = {0};                                  // do not await IRD response (ISR does that)
+                        snprintf(irdCmd, 12, "AT+QIRD=%d", scktNm);
+                        action_invokeWithParser(irdCmd, NULL);                  // send IRD request to get recv'd data
+                    }
+                    if (g_ltem1->iop->socketIrdBytes[scktNm] > 0)           // process IRD (to application notification)
+                    {
+                        (*g_ltem1->protocols->sockets[scktNm].ipReceiver_func)(scktNm);
+                    }
+                }
+                iop_tailFinalize(scktNm);                                   // - tail needs advanced, cleared
+            }
         }
     }
-    
 }
 
 
@@ -420,14 +473,15 @@ static action_result_t sendPromptParser(const char *response)
 
 
 
-/**
- *	\brief [private] BG96 response parser looking for IRD prompt to read received data from network.
- */
-static action_result_t recvIrdPromptParser(const char *response)
-{
-    // +QIRD: 4,“10.7.76.34”,7687 //Data length is 4. The remote IP address is 10.7.76.34 and remote port is 7687.
+// /**
+//  *	\brief [private] BG96 response parser looking for IRD prompt to read received data from network.
+//  */
+// static action_result_t recvIrdPromptParser(const char *response)
+// {
+//      //Data length is 12. The remote IP address is 10.7.76.34 and remote port is 7687.
+//     // +QIRD: 12,“10.7.76.34”,7687\r\n<~~~DATA~~~>\r\n\r\nOK
 
-}
+// }
 
 
 #pragma endregion

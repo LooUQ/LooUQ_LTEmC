@@ -35,20 +35,22 @@ extern "C"
 #endif // __cplusplus
 
 
-ltem1_network_t *ip_createNetwork();
+network_t *ip_createNetwork();
 void ip_destroyNetwork();
-ltem1_protocols_t *ip_createProtocols();
+protocols_t *ip_createProtocols();
 void ip_destroyProtocols();
 
-protocol_result_t ip_fetchNetworkContexts();
-protocol_result_t ip_activateContext(uint8_t contextNum);
-protocol_result_t ip_deactivateContext(uint8_t contextNum);
+socket_result_t ip_fetchNetworkContexts();
+socket_result_t ip_activateContext(uint8_t contextNum);
+socket_result_t ip_deactivateContext(uint8_t contextNum);
 
-protocol_result_t ip_open(ltem1_protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, void (*ipReceiver_func)(const char *recvBuf, uint16_t recvSz));
+socket_result_t ip_open(protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, void (*ipReceiver_func)(socket_t));
 void ip_close(uint8_t socketNum);
 
-protocol_result_t ip_send(uint8_t socketNum, char *sendBuf, uint16_t sendSz);
-protocol_result_t ip_sendUdpReply(uint8_t socketNum, const char *rmtHost, uint16_t rmtPort,  char *sendBuf, uint8_t sendSz);
+socket_result_t ip_send(socket_t socketNum, char *sendBuf, uint16_t sendSz);
+uint16_t ip_recv(socket_t socketNum, char *recvBuf, uint16_t recvBufSz);
+
+// protocol_result_t ip_sendUdpReply(uint8_t socketNum, const char *rmtHost, uint16_t rmtPort,  char *sendBuf, uint8_t sendSz);
 
 void ip_receiverDoWork();
 

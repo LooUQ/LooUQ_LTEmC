@@ -25,7 +25,7 @@ static action_result_t iccidCompleteParser(const char *response)
 /**
  *  \brief Get the static device provisioning information about the LTEm1.
 */
-struct ltem1_modemInfo_tag mdminfo_ltem1()
+modemInfo_t mdminfo_ltem1()
 {
     if (*g_ltem1->modemInfo->imei == NULL)
     {

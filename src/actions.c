@@ -61,7 +61,7 @@ action_t *action_create(uint8_t resultSz)
  *  \param[in] resultBufSz Result buffer maximum chars.
  *  \param[in] cmdCompleteParser_func Function pointer to custom result completion parser.
  */
-action_t *action_build(const char* cmdStr, size_t resultBufSz, uint16_t timeoutMillis,  uint16_t (*cmdCompleteParser_func)(const char *response))
+action_t *action_build(const char* cmdStr, uint16_t resultBufSz, uint16_t timeoutMillis,  uint16_t (*cmdCompleteParser_func)(const char *response))
 {
     action_t *atCmd = action_create(resultBufSz);
 
@@ -73,7 +73,7 @@ action_t *action_build(const char* cmdStr, size_t resultBufSz, uint16_t timeoutM
 
     atCmd->invokedAt = 0;
     atCmd->resultCode = 0;
-    atCmd->irdPending = iop_process_notAssigned;
+    atCmd->irdPending = iop_process_void;
 }
 
 
@@ -103,7 +103,7 @@ void action_reset(action_t *atCmd)
     atCmd->resultCode = ACTION_RESULT_PENDING;
     atCmd->invokedAt = 0;
     atCmd->timeoutMillis = ACTION_DEFAULT_TIMEOUT_MILLIS;
-    atCmd->irdPending = iop_process_notAssigned;
+    atCmd->irdPending = iop_process_void;
     atCmd->cmdCompleteParser_func = action_okResultParser;
 }
 
@@ -145,13 +145,13 @@ void action_invokeWithParser(const char * cmdStr, uint16_t (*cmdCompleteParser_f
  */
 void action_invokeCustom(action_t *atCmd)
 {
-    if (atCmd->cmdCompleteParser_func == NULL)
-    {
-        atCmd->cmdCompleteParser_func = action_okResultParser;
-    }
+    // if (atCmd->cmdCompleteParser_func == NULL)
+    // {
+    //     atCmd->cmdCompleteParser_func = action_okResultParser;
+    // }
     atCmd->invokedAt = timing_millis();
 
-    g_ltem1->ltem1State = ltem1_state_actionPending;
+    g_ltem1->iop->iopState = iop_state_actionPending;
     g_ltem1->pendAction = atCmd;
 
     PRINTF("CMD=%s\r", atCmd->cmdStr);
@@ -164,16 +164,15 @@ void action_invokeCustom(action_t *atCmd)
 /**
  *	\brief Invokes an AT command to the BG96 module.
  */
-void action_invokeSendData(const char *txData)
+void action_sendData(const char *data, uint16_t dataSz)
 {
-    
     g_ltem1->dAction->cmdCompleteParser_func = action_okResultParser;
     g_ltem1->dAction->invokedAt = timing_millis();
 
-    g_ltem1->ltem1State = ltem1_state_actionPending;
+    g_ltem1->iop->iopState = iop_state_actionPending;
     g_ltem1->pendAction = g_ltem1->dAction;
 
-    iop_txSend(txData, strlen(txData));
+    iop_txSend(data, dataSz);
 }
 
 
@@ -194,7 +193,7 @@ action_result_t action_getResult(action_t *atCmd, bool autoClose)
         atCmd = g_ltem1->dAction;
 
     action_result_t parserResult = 0;
-    iop_rx_result_t rxResult = iop_rxGetCmdQueued(atCmd->resultTail, atCmd->resultSz);
+    iop_rxGetResult_t rxResult = iop_rxGetCmdQueued(atCmd->resultTail, atCmd->resultSz);
 
     if (rxResult == iop_rx_result_ready || rxResult == iop_rx_result_truncated)
     {
@@ -213,7 +212,7 @@ action_result_t action_getResult(action_t *atCmd, bool autoClose)
         if (autoClose)
         {
             g_ltem1->pendAction = NULL;
-            g_ltem1->ltem1State = ltem1_state_idle;
+            g_ltem1->iop->iopState = iop_state_idle;
         }
         return parserResult;
     }
@@ -224,7 +223,7 @@ action_result_t action_getResult(action_t *atCmd, bool autoClose)
         if (autoClose)
         {
             g_ltem1->pendAction = NULL;
-            g_ltem1->ltem1State = ltem1_state_idle;
+            g_ltem1->iop->iopState = iop_state_idle;
         }
         return ACTION_RESULT_ERROR;
     }
@@ -233,7 +232,7 @@ action_result_t action_getResult(action_t *atCmd, bool autoClose)
         if (autoClose)
         {
             g_ltem1->pendAction = NULL;
-            g_ltem1->ltem1State = ltem1_state_idle;
+            g_ltem1->iop->iopState = iop_state_idle;
         }
         return ACTION_RESULT_TIMEOUT;
     }
@@ -277,7 +276,7 @@ void action_cancel(action_t *action)
         action_reset(action);
     }
     g_ltem1->pendAction = NULL;
-    g_ltem1->ltem1State = ltem1_state_idle;
+    g_ltem1->iop->iopState = iop_state_idle;
 
 }
 
@@ -287,6 +286,8 @@ void action_cancel(action_t *action)
 #define OK_COMPLETED_LENGTH 4
 #define ERROR_COMPLETED_STRING "ERROR\r\n"
 #define ERROR_VALUE_OFFSET 7
+#define NOCARRIER_COMPLETED_STRING "NO CARRIER\r\n"
+#define NOCARRIER_VALUE_OFFSET 12
 
 
 /**

@@ -78,14 +78,6 @@ typedef enum
 } ltem1_functionality_t;
 
 
-typedef enum
-{
-    ltem1_state_idle = 0,
-    ltem1_state_actionPending = 1,
-    ltem1_state_ipProtoActive = 2
-} ltem1_state_t;
-
-
 typedef struct
 {
     int spiCsPin;
@@ -98,29 +90,19 @@ typedef struct
 } ltem1_pinConfig_t;
 
 
-typedef struct ltem1_modemInfo_tag
-{
-	char imei[16];
-	char iccid [21];
-	char mfgmodel [21];
-	char fwver [41];
-} ltem1_modemInfo_t;
-
-
 typedef struct ltem1_device_tag
 {
     ltem1_functionality_t funcLevel;
 	ltem1_pinConfig_t *gpio;
     spi_device_t *spi;
     qbg_readyState_t qbgReadyState;
-    ltem1_state_t ltem1State;
     uint8_t dataContext;
-    iop_state_t *iop;
+    iop_t *iop;
 	action_t *dAction;
     action_t *pendAction;
-	ltem1_modemInfo_t *modemInfo;
-    ltem1_network_t *network;
-	ltem1_protocols_t *protocols;
+	modemInfo_t *modemInfo;
+    network_t *network;
+	protocols_t *protocols;
 } ltem1_device_t;
 
 

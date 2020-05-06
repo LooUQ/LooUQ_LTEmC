@@ -82,26 +82,27 @@ void ltem1_create(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t f
     g_ltem1->spi = spi_create(g_ltem1->gpio->spiCsPin);
     //g_ltem1->spi = createSpiConfig(g_ltem1->gpio->spiCsPin, LTEM1_SPI_DATARATE, BG96_BAUDRATE_DEFAULT);
 
-    g_ltem1->modemInfo = calloc(1, sizeof(ltem1_modemInfo_t));
+    g_ltem1->modemInfo = calloc(1, sizeof(modemInfo_t));
 	if (g_ltem1->modemInfo == NULL)
 	{
         ltem1_faultHandler("ltem1-could not alloc ltem1 modem info object");
 	}
 
-    g_ltem1->ltem1State = ltem1_state_idle;
     g_ltem1->dataContext = 1;
-    
+
     if (funcLevel >= ltem1_functionality_iop)
+    {
         g_ltem1->iop = iop_create();
-
+        g_ltem1->iop->iopState = iop_state_idle;
+    }
     if (funcLevel >= ltem1_functionality_atcmd)
+    {
         g_ltem1->dAction = action_create(0);
-
+    }
     if (funcLevel >= ltem1_functionality_services)
     {
         g_ltem1->network = ip_createNetwork();
         g_ltem1->protocols = ip_createProtocols();
-        
     }
 
     ltem1_start(funcLevel);
@@ -222,8 +223,8 @@ void ltem1_destroy()
  */
 void ltem1_dowork()
 {
-    qbg_processUrcStateQueue();
     ip_receiverDoWork();
+    qbg_processUrcStateQueue();
 	// iop_classifyReadBuffers()
 }
 

@@ -21,8 +21,16 @@
 extern "C" {
 #endif
 
+typedef struct modemInfo_tag
+{
+	char imei[16];
+	char iccid [21];
+	char mfgmodel [21];
+	char fwver [41];
+} modemInfo_t;
 
-struct ltem1_modemInfo_tag mdminfo_ltem1();
+
+modemInfo_t mdminfo_ltem1();
 
 int16_t mdminfo_rssi();
 

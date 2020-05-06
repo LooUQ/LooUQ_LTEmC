@@ -32,8 +32,14 @@
 #define PROTOCOL_RESULT_ERROR           500
 #define PROTOCOL_RESULT_UNAVAILABLE     503
 
-#define LTEM1_PROTOCOL_COUNT 6
+#define LTEM1_SOCKET_COUNT 6
 #define LTEM1_CONTEXT_COUNT 3
+#define SOCKET_CLOSED 255
+
+
+typedef uint8_t socket_t; 
+typedef uint16_t socket_result_t;
+
 
 typedef enum 
 {
@@ -42,15 +48,15 @@ typedef enum
     protocol_tcpListener = 0x02,
     protocol_udpService = 0x03,
     protocol_ssl = 0x05,
-    protocol_ipAny = 0x09,
+    protocol_AnyIP = 0x05,
 
     protocol_http = 0x20,
     protocol_https = 0x21,
 
     protocol_mqtt = 0x30,
 
-    protocol_socketClosed = 0xFF
-} ltem1_protocol_t;
+    protocol_none = 0xFF
+} protocol_t;
 
 
 typedef enum 
@@ -76,27 +82,25 @@ typedef struct pdp_context_tag
 } pdp_context_t;
 
 
-typedef struct ltem1_contexts_tag
+typedef struct network_tag
 {
     pdp_context_t contexts[LTEM1_CONTEXT_COUNT];
-} ltem1_network_t;
+} network_t;
 
 
-typedef struct protocol_socket_tag
+typedef struct socketCtrl_tag
 {
-    ltem1_protocol_t protocol;
+    protocol_t protocol;
     uint8_t contextId;
-    void (*ipReceiver_func)(const char *recvBuf, uint16_t recvSz);
-} protocol_socket_t;
+    uint16_t recvBufSz;
+    void (*ipReceiver_func)(socket_t);
+} socketCtrl_t;
 
 
-typedef struct ltem1_protocols_tag
+typedef struct protocols_tag
 {
-    protocol_socket_t sockets[LTEM1_PROTOCOL_COUNT];
-} ltem1_protocols_t;
-
-
-typedef uint16_t protocol_result_t;
+    socketCtrl_t sockets[LTEM1_SOCKET_COUNT];
+} protocols_t;
 
 
 #ifdef __cplusplus
