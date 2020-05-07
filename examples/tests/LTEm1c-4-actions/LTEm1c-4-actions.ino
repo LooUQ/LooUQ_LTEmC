@@ -71,7 +71,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF("LTEm1c test4-atcmd\r\n");
+    PRINTF("LTEm1c test4-actions\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
     randomSeed(analogRead(APIN_RANDOMSEED));
@@ -101,13 +101,13 @@ void loop() {
     char cmd[] = "ATI\r\0";
     PRINTF("Invoking cmd: %s \r\n", cmd);
 
-    atcmd_invoke(cmd);
+    action_invoke(cmd);
 
     // // wait for BG96 response in FIFO buffer
     // char cmdResponse[65] = {0};
     // recvResponse(cmdResponse);
 
-    atcmd_result_t atResult = atcmd_awaitResult(g_ltem1->dAction);
+    action_result_t atResult = action_awaitResult(g_ltem1->dAction);
     // atcmd_result_t atResult;
     // do
     // {
@@ -115,7 +115,7 @@ void loop() {
 
     // } while (atResult == atcmd_result_pending);
     
-    if (atResult == ATCMD_RESULT_SUCCESS)    // statusCode == 200
+    if (atResult == ACTION_RESULT_SUCCESS)    // statusCode == 200
     {
         PRINTF("Got %d chars\r", strlen(g_ltem1->dAction->resultHead));
         PRINTF("Resp: %s\r", g_ltem1->dAction->resultHead);  
@@ -166,7 +166,7 @@ void loop() {
 
 void recvResponse(char *response)
 {
-    iop_rx_result_t rxResult;
+    iop_rxGetResult_t rxResult;
     uint8_t retries;
     do
     {
@@ -190,10 +190,10 @@ bool okCompletedParser(const char *response)
     #define OK_COMPLETED_LENGTH 4
 
     // safe strlen()
-    const char * tail = (const char *)memchr(response, '\0', ATCMD_DEFAULT_RESULT_BUF_SZ);
+    const char * tail = (const char *)memchr(response, '\0', ACTION_DEFAULT_RESULT_BUF_SZ);
     
     if (tail == NULL)
-        tail = response + ATCMD_DEFAULT_RESULT_BUF_SZ;
+        tail = response + ACTION_DEFAULT_RESULT_BUF_SZ;
 
     return strncmp(OK_COMPLETED_STRING, tail - OK_COMPLETED_LENGTH, OK_COMPLETED_LENGTH) == 0;
 }
@@ -210,7 +210,8 @@ void indicateFailure(char failureMsg[])
 
     #if 1
     PRINTF_ERR("** Halting Execution \r\n");
-    while (1)
+    bool halt = true;
+    while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_high);
         timing_delay(1000);

@@ -161,19 +161,19 @@ void action_invokeCustom(action_t *atCmd)
 
 
 
-/**
- *	\brief Invokes an AT command to the BG96 module.
- */
-void action_sendData(const char *data, uint16_t dataSz)
-{
-    g_ltem1->dAction->cmdCompleteParser_func = action_okResultParser;
-    g_ltem1->dAction->invokedAt = timing_millis();
+// /**
+//  *	\brief Invokes an AT command to the BG96 module.
+//  */
+// void action_sendData(const char *data, uint16_t dataSz)
+// {
+//     g_ltem1->dAction->cmdCompleteParser_func = action_okResultParser;
+//     g_ltem1->dAction->invokedAt = timing_millis();
 
-    g_ltem1->iop->iopState = iop_state_actionPending;
-    g_ltem1->pendAction = g_ltem1->dAction;
+//     g_ltem1->iop->iopState = iop_state_actionPending;
+//     g_ltem1->pendAction = g_ltem1->dAction;
 
-    iop_txSend(data, dataSz);
-}
+//     iop_txSend(data, dataSz);
+// }
 
 
 
@@ -392,7 +392,7 @@ action_result_t action_tokenResultParser(const char *response, const char *landm
  *
  *  \return Integer extended CME error code.
  */
-action_result_t action_cmeErrorResultParser(const char *response)
+action_result_t action_cmeResultParser(const char *response)
 {
     #define CME_PREABLE "+CME ERROR:"
     #define CME_PREABLE_SZ 11

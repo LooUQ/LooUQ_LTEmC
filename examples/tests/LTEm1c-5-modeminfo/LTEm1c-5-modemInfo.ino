@@ -78,13 +78,13 @@ void setup() {
     ltem1_create(&ltem1_pinConfig, ltem1_functionality_atcmd);
 
     // set ltem1 to no cmd string echo (required for mdminfo_ parsers)
-    atcmd_invoke("ATE0\r");
-    atcmd_result_t atResult = atcmd_awaitResult(g_ltem1->dAction);
+    action_invoke("ATE0\r");
+    action_result_t atResult = action_awaitResult(g_ltem1->dAction);
 }
 
 
 int loopCnt = 0;
-ltem1_modemInfo_t modemInfo;
+modemInfo_t modemInfo;
 
 
 void loop() {

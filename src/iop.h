@@ -35,7 +35,6 @@
 
 #define IOP_RX_CTRLBLOCK_COUNT 8
 #define IOP_RX_PRIMARY_BUFFER_SIZE 64
-#define IOP_EMPTY -1
 
 #define IOP_TX_BUFFER_SZ 1460
 #define IOP_URC_STATEMSG_SZ 20
@@ -95,8 +94,8 @@ typedef struct iop_rxCtrlBlock_tag
 
 typedef volatile struct iop_tag
 {
-    int8_t rxRecvHead;
     iop_state_t iopState;
+    int8_t rxRecvHead;
     int8_t cmdHead;
     int8_t cmdTail;
     int8_t socketHead[IOP_PROTOCOLS_COUNT];

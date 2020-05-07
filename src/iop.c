@@ -77,7 +77,7 @@ iop_state_t *iop_create()
 
     // init TX and RX struct values
     iop->txCtrl.remainSz = 0;
-    iop->cmdHead = iop->cmdTail = IOP_EMPTY;
+    iop->cmdHead = iop->cmdTail = 0;
     for (size_t i = 0; i < IOP_PROTOCOLS_COUNT; i++)
     {
         iop->socketHead[i] = iop->socketTail[i] = 0;
@@ -163,35 +163,35 @@ bool iop_txSend(const char *sendData, uint16_t sendSz)
  *   \param[in] recvBuf Pointer to the command receive buffer.
  *   \param[in] recvMaxSz The command response max length (buffer size).
  */
-iop_rxGetResult_t iop_rxGetCmdQueued(char *recvBuf, uint16_t recvMaxSz)
+iop_rxGetResult_t iop_rxGetCmdQueued(char *recvBuf, uint16_t recvBufSz)
 {
-    if (g_ltem1->iop->cmdTail == IOP_EMPTY)
+    if ( !g_ltem1->iop->rxCtrlBlks[g_ltem1->iop->cmdHead].occupied )
         return iop_rx_result_nodata;
 
-    uint8_t currIndx = g_ltem1->iop->cmdTail;
+    uint8_t tail = g_ltem1->iop->cmdTail;
+    memset(recvBuf, 0, recvBufSz);
 
-    while (true)
+    do
     {
-        if (g_ltem1->iop->rxCtrlBlks[currIndx].occupied && g_ltem1->iop->rxCtrlBlks[currIndx].process == iop_process_command)
+        if (g_ltem1->iop->rxCtrlBlks[tail].occupied && g_ltem1->iop->rxCtrlBlks[tail].process == iop_process_command)
         {
-            uint16_t copySz = MIN(recvMaxSz, g_ltem1->iop->rxCtrlBlks[currIndx].primSz);
-            strncpy(recvBuf, g_ltem1->iop->rxCtrlBlks[currIndx].primBuf, copySz + 1);
-            rxResetCtrlBlock(currIndx);
-            recvMaxSz -= copySz;                    // tally to check for overflow
+            uint16_t copySz = MIN(recvBufSz, g_ltem1->iop->rxCtrlBlks[tail].primSz);
+            strncpy(recvBuf, g_ltem1->iop->rxCtrlBlks[tail].primBuf, copySz + 1);
+            rxResetCtrlBlock(tail);
+            recvBufSz -= copySz;                    // tally to check for overflow
         }
 
-        if (currIndx == g_ltem1->iop->cmdHead)
+        if (tail == g_ltem1->iop->cmdHead)
             break;
 
-        currIndx = ADV_RXCTRLBLK_INDEX(currIndx);
-        if (currIndx == g_ltem1->iop->cmdTail)
+        tail = ADV_RXCTRLBLK_INDEX(tail);
+        if (tail == g_ltem1->iop->cmdTail)
             ltem1_faultHandler("iop-buffer underflow in iop_rxGetCmdQueued");
-    };
-    g_ltem1->iop->cmdTail = IOP_EMPTY;
 
-    if (recvMaxSz < 0)
-        return iop_rx_result_truncated;
+    } while (true);
     
+    if (recvBufSz < 0)
+        return iop_rx_result_truncated;
     return iop_rx_result_ready;
 }
 
@@ -207,29 +207,28 @@ iop_rxGetResult_t iop_rxGetCmdQueued(char *recvBuf, uint16_t recvMaxSz)
 uint16_t iop_rxGetSocketQueued(socket_t socketNm, char *recvBuf, uint16_t recvBufSz)
 {
     uint16_t recvdBytes;
+    int8_t tail = g_ltem1->iop->socketTail[socketNm];
 
-    if (g_ltem1->iop->socketTail[socketNm] == IOP_EMPTY)
+    if ( !g_ltem1->iop->rxCtrlBlks[tail].occupied )
         return 0;
-
-    int8_t tailIndx = g_ltem1->iop->socketTail[socketNm];
 
     // if extended buffer in use, copy primary to start of extended buffer
     // determine which buffer (prim, aux) to return pointer to
-    if (g_ltem1->iop->rxCtrlBlks[tailIndx].extsnBufHead)
+    if (g_ltem1->iop->rxCtrlBlks[tail].extsnBufHead)
     {
-        recvdBytes == g_ltem1->iop->rxCtrlBlks[tailIndx].extsnBufTail - g_ltem1->iop->rxCtrlBlks[tailIndx].extsnBufHead;
-        memcpy(recvBuf, g_ltem1->iop->rxCtrlBlks[tailIndx].primBuf, g_ltem1->iop->rxCtrlBlks[tailIndx].primSz);
-        memcpy(recvBuf + recvdBytes, g_ltem1->iop->rxCtrlBlks[tailIndx].primBuf, recvdBytes);
-        recvdBytes += g_ltem1->iop->rxCtrlBlks[tailIndx].primSz;
+        recvdBytes == g_ltem1->iop->rxCtrlBlks[tail].extsnBufTail - g_ltem1->iop->rxCtrlBlks[tail].extsnBufHead;
+        memcpy(recvBuf, g_ltem1->iop->rxCtrlBlks[tail].primBuf, g_ltem1->iop->rxCtrlBlks[tail].primSz);
+        memcpy(recvBuf + recvdBytes, g_ltem1->iop->rxCtrlBlks[tail].primBuf, recvdBytes);
+        recvdBytes += g_ltem1->iop->rxCtrlBlks[tail].primSz;
     }
     else
     {
         // offset IRD header from g_ltem1->iop->rxCtrlBlks[currIndx].primSz
-        recvdBytes = MIN(g_ltem1->iop->rxCtrlBlks[tailIndx].primSz, recvBufSz);
-        memcpy(recvBuf, g_ltem1->iop->rxCtrlBlks[tailIndx].dataStart, recvdBytes);
+        recvdBytes = MIN(g_ltem1->iop->rxCtrlBlks[tail].primSz, recvBufSz);
+        memcpy(recvBuf, g_ltem1->iop->rxCtrlBlks[tail].dataStart, recvdBytes);
     }
 
-    free(g_ltem1->iop->rxCtrlBlks[tailIndx].extsnBufHead);          // if extended buffer, free malloc'd buffer space
+    free(g_ltem1->iop->rxCtrlBlks[tail].extsnBufHead);          // if extended buffer, free malloc'd buffer space
     //iop_tailFinalize(socketNm);
     return recvdBytes;
 }
@@ -413,8 +412,6 @@ static void rxParseRecvContentPreamble(uint8_t rxIndx)
 
         rxCtrlBlock->process = sckt;
         rxCtrlBlock->isURC = true;
-        // if (g_ltem1->iop->socketTail[sckt] == IOP_EMPTY)
-        //     g_ltem1->iop->socketTail[sckt] = rxIndx;
         g_ltem1->iop->socketHead[sckt] = rxIndx;
     }
 
@@ -457,8 +454,6 @@ static void rxParseRecvContentPreamble(uint8_t rxIndx)
     // if default of command message still holds set command index pointers
     if (rxCtrlBlock->process == iop_process_command)
     {
-        if (g_ltem1->iop->cmdTail == IOP_EMPTY)
-            g_ltem1->iop->cmdTail = rxIndx;
         g_ltem1->iop->cmdHead = rxIndx;
     }
 }

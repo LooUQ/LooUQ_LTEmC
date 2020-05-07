@@ -8,7 +8,7 @@
             "name": "Cortex Debug",
             "type": "cortex-debug",
             "cwd": "${workspaceRoot}",
-            "executable": ".//.build/ltem1c-4-atcmd.ino.elf",
+            "executable": ".//.build/ltem1c-4-actions.ino.elf",
             "request": "launch",
             "servertype": "jlink",
             "device": "ATSAMD21G18",

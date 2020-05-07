@@ -51,6 +51,7 @@ gnss_location_t gnss_getLocation()
 {
     // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08
     gnss_location_t gnssResult;
+    gnssResult.statusCode = 200;
 
     #define TOKEN_BUF_SZ 12
     char tokenBuf[TOKEN_BUF_SZ];
@@ -62,7 +63,7 @@ gnss_location_t gnss_getLocation()
 
     if (cmdResult != ACTION_RESULT_SUCCESS)
     {
-        gnssResult.errcode = (uint16_t)cmdResult;
+        gnssResult.statusCode = (uint16_t)cmdResult;
         return gnssResult;
     }
 
@@ -74,14 +75,14 @@ gnss_location_t gnss_getLocation()
         
     gnssResult.lat.val = strtof(continueAt, &continueAt);
     gnssResult.lat.dir = ASCII_cSPACE;
-    gnssResult.lon.val = strtof(continueAt++, &continueAt);
+    gnssResult.lon.val = strtof(++continueAt, &continueAt);
     gnssResult.lon.dir = ASCII_cSPACE;
-    gnssResult.hdop = strtof(continueAt++, &continueAt);
-    gnssResult.altitude = strtof(continueAt++, &continueAt);
-    gnssResult.fixType = strtol(continueAt++, &continueAt, 10);
-    gnssResult.course = strtof(continueAt++, &continueAt);
-    gnssResult.speedkm = strtof(continueAt++, &continueAt);
-    gnssResult.speedkn = strtof(continueAt++, &continueAt);
+    gnssResult.hdop = strtof(++continueAt, &continueAt);
+    gnssResult.altitude = strtof(++continueAt, &continueAt);
+    gnssResult.fixType = strtol(++continueAt, &continueAt, 10);
+    gnssResult.course = strtof(++continueAt, &continueAt);
+    gnssResult.speedkm = strtof(++continueAt, &continueAt);
+    gnssResult.speedkn = strtof(++continueAt, &continueAt);
 
     continueAt = strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
     if (continueAt != NULL)

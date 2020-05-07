@@ -50,7 +50,9 @@ ip_addr_t atcmd_parseIpAddr(const char *ipStr)
 */
 void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision)
 {
-    uint32_t max = pow(10, (bufSz - precision - 3));    //remember '-', '.' and '\0'
+    // calc max: the largest possible conversion result
+    // if fval > max: conversion with overflow
+    uint32_t max = pow(10, (bufSz - precision - 3));    //need room for '-', '.' and '\0'
     if (abs(fVal) >= max)
     {
         *buf = '\0';
@@ -58,17 +60,17 @@ void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision)
     }
 
     int iVal = (int)fVal;
-    itoa(iVal, buf, 10);
+    itoa(iVal, buf, 10);            // got sign and integer
 
-    fVal = abs(fVal);
-    iVal = abs(iVal);
+    fVal = fVal > 0 ? fVal : fVal * -1;
+    iVal = iVal > 0 ? iVal : iVal * -1;
     uint8_t pos = strlen(buf);
     buf[pos++] = '.';
 
     for (size_t i = 0; i < precision; i++)
     {
-        fVal -= (float)iVal;      // hack off the whole part of the number
- 		fVal *= 10;           // move next digit over
+        fVal -= (float)iVal;        // hack off the whole part of the number
+ 		fVal *= 10;                 // move next digit over
  		iVal = (int)fVal;
         char c = (char)iVal + 0x30;
  		buf[pos++] = c;

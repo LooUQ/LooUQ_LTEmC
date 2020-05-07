@@ -45,7 +45,7 @@ typedef struct gnss_location_tag
     float speedkn;
     char date[6];
     uint16_t nsat;
-    uint16_t errcode;
+    uint16_t statusCode;
 } gnss_location_t;
 
 

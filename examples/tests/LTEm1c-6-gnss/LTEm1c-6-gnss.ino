@@ -75,7 +75,7 @@ void setup() {
     ltem1_create(&ltem1_pinConfig, ltem1_functionality_services);
 
     // turn on GNSS
-    atcmd_result_t cmdResult = gnss_on();
+    action_result_t cmdResult = gnss_on();
     PRINTF("GNSS On result=%d (504 is already on)\r", cmdResult);
 }
 
@@ -86,14 +86,20 @@ gnss_location_t location;
 void loop() {
     location = gnss_getLocation();
 
-    char cLat[14];
-    char cLon[14];
-    
-    floatToString(location.lat.val, cLat, 12, 6);
-    floatToString(location.lon.val, cLon, 12, 6);
+    if (location.statusCode == 200)
+    {
+        char cLat[14];
+        char cLon[14];
+        
 
-    PRINTF_INFO("Location Information\r");
-    PRINTF("Lat=%s, Lon=%s \r", cLat, cLon);
+        floatToString(location.lat.val, cLat, 12, 6);
+        floatToString(location.lon.val, cLon, 12, 6);
+
+        PRINTF_INFO("Location Information\r");
+        PRINTF("Lat=%s, Lon=%s \r", cLat, cLon);
+    }
+    else
+        PRINTF_WARN("Location is not available (GNSS not fixed)\r");
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -139,38 +145,38 @@ void loop() {
 
 
 
-void floatToString(float fVal, uint8_t digits, char *buf, uint8_t bufSz)
-//void floattostring(char *buf, float fVal, char digits)
-{
-    char pos;  // position in string
- 	char len;  // length of decimal part of result
- 	char* curr;  // temp holder for next digit
- 	int value;  // decimal digit(s) to convert
- 	pos = 0;  // initialize pos, just to be sure
+// void floatToString(float fVal, uint8_t digits, char *buf, uint8_t bufSz)
+// //void floattostring(char *buf, float fVal, char digits)
+// {
+//     char pos;  // position in string
+//  	char len;  // length of decimal part of result
+//  	char* curr;  // temp holder for next digit
+//  	int value;  // decimal digit(s) to convert
+//  	pos = 0;  // initialize pos, just to be sure
  
- 	value = (int)fVal;  // truncate the floating point number
- 	itoa(value, buf, 10);  // this is kinda dangerous depending on the length of str
- 	// now str array has the digits before the decimal
+//  	value = (int)fVal;  // truncate the floating point number
+//  	itoa(value, buf, 10);  // this is kinda dangerous depending on the length of str
+//  	// now str array has the digits before the decimal
  
- 	if (fVal < 0 )  // handle negative numbers
- 	{
- 		fVal *= -1;
- 		value *= -1;
- 	}
+//  	if (fVal < 0 )  // handle negative numbers
+//  	{
+//  		fVal *= -1;
+//  		value *= -1;
+//  	}
  
-    len = strlen(buf);  // find out how big the integer part was
- 	pos = len;  // position the pointer to the end of the integer part
- 	buf[pos++] = '.';  // add decimal point to string
+//     len = strlen(buf);  // find out how big the integer part was
+//  	pos = len;  // position the pointer to the end of the integer part
+//  	buf[pos++] = '.';  // add decimal point to string
  	
- 	while(pos < (digits + len + 1) )  // process remaining digits
- 	{
- 		fVal = fVal - (float)value;  // hack off the whole part of the number
- 		fVal *= 10;  // move next digit over
- 		value = (int)fVal;  // get next digit
- 		itoa(value, curr, 10); // convert digit to string
- 		buf[pos++] = *curr; // add digit to result string and increment pointer
- 	}
- }
+//  	while(pos < (digits + len + 1) )  // process remaining digits
+//  	{
+//  		fVal = fVal - (float)value;  // hack off the whole part of the number
+//  		fVal *= 10;  // move next digit over
+//  		value = (int)fVal;  // get next digit
+//  		itoa(value, curr, 10); // convert digit to string
+//  		buf[pos++] = *curr; // add digit to result string and increment pointer
+//  	}
+//  }
 
 
 
@@ -182,16 +188,14 @@ void indicateFailure(char failureMsg[])
 	PRINTF_ERR("\r\n** %s \r\n", failureMsg);
     PRINTF_ERR("** Test Assertion Failed. \r\n");
 
-    #if 1
-    PRINTF_ERR("** Halting Execution \r\n");
-    while (1)
+    bool halt = true;
+    while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_high);
         timing_delay(1000);
         gpio_writePin(LED_BUILTIN, gpio_pinValue_t::gpioValue_low);
         timing_delay(100);
     }
-    #endif
 }
 
 

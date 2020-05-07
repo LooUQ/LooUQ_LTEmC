@@ -236,7 +236,8 @@ void ltem1_faultHandler(const char * fault)
 {
     PRINTF_ERR(fault);
     // NotImplemented if custom fault handler go there
-    while(1) {};
+    bool halt = true;
+    while(halt) {};
 }
 
 

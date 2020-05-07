@@ -119,12 +119,12 @@ void loop()
         indicateLoop(loopCnt++, cycleBase + cycleRandom);
 
         //snprintf(sendBuf, 120, "--noecho %d-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890", loopCnt);      // 2 chunks
-        snprintf(sendBuf, 120, "%d-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", loopCnt);                                                     // 1 chunk
+        snprintf(sendBuf, 120, "%d-ABCDEFGHIJKLMNOPQRSTUVWXYZ", loopCnt);                                                               // 1 chunk
         result = ip_send(socketNm, sendBuf, strlen(sendBuf));
         PRINTF("Loop %d, sendRslt=%d \r", loopCnt, result);
 
         if (result != 200)
-                ltem1_faultHandler("TCPIP TEST-Repeated failures attempting send.");
+                indicateFailure("TCPIP TEST-failure on ip_send().");
 
 
         if (loopCnt % 25 == 0)                 // close/reopen socket periodically for test
