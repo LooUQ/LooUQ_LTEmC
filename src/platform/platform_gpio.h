@@ -37,7 +37,7 @@ extern "C"
 typedef enum {
     gpioValue_low = 0,
     gpioValue_high = 1
-} gpio_pinValue_t;
+} gpioPinValue_t;
 
 
 typedef enum {
@@ -45,7 +45,7 @@ typedef enum {
     gpioMode_output = 0x1,
     gpioMode_inputPullUp,
     gpioMode_inputPullDown
-} gpio_pinMode_t;
+} gpioPinMode_t;
 
 
 typedef enum {
@@ -54,7 +54,7 @@ typedef enum {
     gpioIrqTriggerOn_change =2,
     gpioIrqTriggerOn_falling = 3,
     gpioIrqTriggerOn_rising = 4
-} gpio_irqTrigger_t;
+} gpioIrqTrigger_t;
 
 
 typedef uint8_t platformGpioPin;
@@ -64,13 +64,13 @@ typedef void(*platformGpioPinIrqCallback)(void);
 
 
 
-void gpio_openPin(uint8_t pinNum, gpio_pinMode_t pinMode);
+void gpio_openPin(uint8_t pinNum, gpioPinMode_t pinMode);
 void gpio_closePin(uint8_t pinNum);
 
-gpio_pinValue_t gpio_readPin(uint8_t pinNum);
-void gpio_writePin(uint8_t pinNum, gpio_pinValue_t val);
+gpioPinValue_t gpio_readPin(uint8_t pinNum);
+void gpio_writePin(uint8_t pinNum, gpioPinValue_t val);
 
-void gpio_attachIsr(uint8_t pinNum, bool enabled, gpio_irqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback);
+void gpio_attachIsr(uint8_t pinNum, bool enabled, gpioIrqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback);
 void gpio_detachIsr(uint8_t pinNum);
 
 

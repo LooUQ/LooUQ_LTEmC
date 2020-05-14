@@ -15,25 +15,25 @@ typedef struct arduino_spi_tag
 {
     SPISettings nxpSettings;
     int8_t irqNumber;
-} ardruino_spi_t;
+} arduino_spi_t;
 
-static ardruino_spi_t arduino_spi_settings;
+static arduino_spi_t arduino_spi_settings;
 
 
 /**
  *	\brief Initialize and configure SPI resource.
  */
-spi_device_t *spi_create(uint8_t chipSelLine)
+spiDevice_t *spi_create(uint8_t chipSelLine)
 {
     //spi_settings = new SPISettings(config.dataRate, (BitOrder)config.bitOrder, config.dataMode);
 
-    spi_device_t *spi = (spi_device_t*)malloc(sizeof(spi_device_t));
+    spiDevice_t *spi = (spiDevice_t*)malloc(sizeof(spiDevice_t));
 	if (spi == NULL)
 	{
 		return NULL;
 	}	
 
-    spi->config = (spi_config_t*)malloc(sizeof(spi_config_t));
+    spi->config = (spiConfig_t*)malloc(sizeof(spiConfig_t));
 	if (spi->config == NULL)
 	{
         free(spi);
@@ -41,8 +41,8 @@ spi_device_t *spi_create(uint8_t chipSelLine)
 	}
 
     spi->config->dataRate = SPI_DATA_RATE;
-    spi->config->dataMode = spi_dataMode_0;
-    spi->config->bitOrder = spi_bitOrder_msbFirst;
+    spi->config->dataMode = spiDataMode_0;
+    spi->config->bitOrder = spiBitOrder_msbFirst;
     spi->config->csPin = chipSelLine;
 
     arduino_spi_settings.nxpSettings = SPISettings(spi->config->dataRate, (BitOrder)spi->config->bitOrder, spi->config->dataMode);
@@ -56,7 +56,7 @@ spi_device_t *spi_create(uint8_t chipSelLine)
 /**
  *	\brief Start SPI facility.
  */
-void spi_start(spi_device_t *spi)
+void spi_start(spiDevice_t *spi)
 {
     digitalWrite(spi->config->csPin, HIGH);
     pinMode(spi->config->csPin, OUTPUT);
@@ -69,7 +69,7 @@ void spi_start(spi_device_t *spi)
 /**
  *	\brief Shutdown SPI facility.
  */
-void spi_stop(spi_device_t *spi)
+void spi_stop(spiDevice_t *spi)
 {
     SPI.end();
 }
@@ -79,7 +79,7 @@ void spi_stop(spi_device_t *spi)
 /**
  *	\brief Uninitialize and deallocate memory from the SPI resource.
  */
-void spi_protectFromInterrupt(spi_device_t *spi, int8_t irqNumber)
+void spi_protectFromInterrupt(spiDevice_t *spi, int8_t irqNumber)
 {
     if (irqNumber == SPI_NO_IRQ_PROTECTION)
         SPI.notUsingInterrupt(irqNumber);
@@ -97,7 +97,7 @@ void spi_protectFromInterrupt(spi_device_t *spi, int8_t irqNumber)
  * 
  *  \returns A 16-bit word received during the transfer.
  */
-uint8_t spi_transferByte(spi_device_t *spi, uint8_t data)
+uint8_t spi_transferByte(spiDevice_t *spi, uint8_t data)
 {
     digitalWrite(spi->config->csPin, LOW);
     SPI.beginTransaction(arduino_spi_settings.nxpSettings);
@@ -119,7 +119,7 @@ uint8_t spi_transferByte(spi_device_t *spi, uint8_t data)
  * 
  *  \returns A 16-bit word received during the transfer.
  */
-uint16_t spi_transferWord(spi_device_t *spi, uint16_t data)
+uint16_t spi_transferWord(spiDevice_t *spi, uint16_t data)
 {
     union { uint16_t val; struct { uint8_t msb; uint8_t lsb; }; } t;
 
@@ -127,7 +127,7 @@ uint16_t spi_transferWord(spi_device_t *spi, uint16_t data)
     SPI.beginTransaction(arduino_spi_settings.nxpSettings);
 
     t.val = data;
-    if (spi->config->bitOrder == spi_bitOrder_msbFirst)
+    if (spi->config->bitOrder == spiBitOrder_msbFirst)
     {
         t.msb = SPI.transfer(t.msb);
         t.lsb = SPI.transfer(t.lsb);
@@ -154,7 +154,7 @@ uint16_t spi_transferWord(spi_device_t *spi, uint16_t data)
  *  \param[in\out] buf The character pointer to the buffer to transfer to/from.
  *  \param[in] xfer_len The number of characters to transfer.
  */
-void spi_transferBuffer(spi_device_t *spi, uint8_t regAddrByte, void* buf, size_t xfer_len)
+void spi_transferBuffer(spiDevice_t *spi, uint8_t regAddrByte, void* buf, size_t xfer_len)
 {
     digitalWrite(spi->config->csPin, LOW);
     SPI.beginTransaction(arduino_spi_settings.nxpSettings);

@@ -1,0 +1,8 @@
+{
+    "sketch": "LTEm1c-dynamicDns.ino",
+    "port": "COM16",
+    "board": "adafruit:samd:adafruit_feather_m0_express",
+    "output": ".//.build",
+    "configuration": "usbstack=arduino,debug=on",
+    "debugger": "jlink"
+}

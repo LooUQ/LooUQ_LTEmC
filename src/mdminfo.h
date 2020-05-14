@@ -17,10 +17,6 @@
 #define MDMINFO_MFGINFO_SZ 41
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct modemInfo_tag
 {
 	char imei[16];
@@ -30,8 +26,12 @@ typedef struct modemInfo_tag
 } modemInfo_t;
 
 
-modemInfo_t mdminfo_ltem1();
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+
+modemInfo_t mdminfo_ltem1();
 int16_t mdminfo_rssi();
 
 

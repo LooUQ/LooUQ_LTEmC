@@ -44,7 +44,8 @@ typedef enum print_color_tag {
     debug_print_color_error,    
     debug_print_color_cyan,
     debug_print_color_magenta,
-    debug_print_color_white
+    debug_print_color_white,
+    debug_print_color_gray
 } print_color_t;
 
 
@@ -53,10 +54,11 @@ typedef enum print_color_tag {
 #define PRINTF_INFO(f_, ...) _dbg_printf(debug_print_color_info, (f_), ##__VA_ARGS__)
 #define PRINTF_WARN(f_, ...) _dbg_printf(debug_print_color_warn, (f_), ##__VA_ARGS__)
 #define PRINTF_ERR(f_, ...) _dbg_printf(debug_print_color_error, (f_), ##__VA_ARGS__)
-
 #define PRINTF_DBG(f_, ...) _dbg_printf(debug_print_color_magenta, (f_), ##__VA_ARGS__)
-#define PRINTF_DBG1(f_, ...) _dbg_printf(debug_print_color_cyan, (f_), ##__VA_ARGS__)
-#define PRINTF_DBG2(f_, ...) _dbg_printf(debug_print_color_white, (f_), ##__VA_ARGS__)
+
+#define PRINTF_CYAN(f_, ...) _dbg_printf(debug_print_color_cyan, (f_), ##__VA_ARGS__)
+#define PRINTF_WHITE(f_, ...) _dbg_printf(debug_print_color_white, (f_), ##__VA_ARGS__)
+#define PRINTF_GRAY(f_, ...) _dbg_printf(debug_print_color_gray, (f_), ##__VA_ARGS__)
 
 #else
 #define DBGPRINTF(f_, ...) 

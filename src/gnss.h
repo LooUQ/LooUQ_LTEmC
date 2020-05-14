@@ -32,9 +32,9 @@ typedef struct gnss_geo_result_tag
 };
 
 
-typedef struct gnss_location_tag
+typedef struct gnssLocation_tag
 {
-    char utc[10];
+    char utc[11];
     gnss_latlon_t lat;
     gnss_latlon_t lon;
     float hdop;
@@ -43,25 +43,28 @@ typedef struct gnss_location_tag
     float course;
     float speedkm;
     float speedkn;
-    char date[6];
+    char date[7];
     uint16_t nsat;
     uint16_t statusCode;
-} gnss_location_t;
+} gnssLocation_t;
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-action_result_t gnss_on();          // AT+QGPS=1
-action_result_t gnss_off();
+actionResult_t gnss_on();          // AT+QGPS=1
+actionResult_t gnss_off();
 
-gnss_location_t gnss_getLocation();
+gnssLocation_t gnss_getLocation();
 
 // future geo-fence
 void gnss_geoAdd();
 void gnss_geoDelete();
 
+/* future geo-fence, likely separate .h/.c fileset */
+// void gnss_geoAdd();
+// void gnss_geoDelete();
 
 
 #ifdef __cplusplus

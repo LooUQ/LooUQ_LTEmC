@@ -10,7 +10,7 @@
 #include <Arduino.h>
 
 
-void gpio_openPin(uint8_t pNum, gpio_pinMode_t pMode)
+void gpio_openPin(uint8_t pNum, gpioPinMode_t pMode)
 {
     // Arduino sets pinMode to input/output with option pull up/down
     pinMode(pNum, pMode);
@@ -23,19 +23,19 @@ void gpio_closePin(uint8_t pNum)
 }
 
 
-gpio_pinValue_t gpio_readPin(uint8_t pNum)
+gpioPinValue_t gpio_readPin(uint8_t pNum)
 {
-    return (gpio_pinValue_t)digitalRead(pNum);
+    return (gpioPinValue_t)digitalRead(pNum);
 }
 
 
-void gpio_writePin(uint8_t pNum, gpio_pinValue_t val)
+void gpio_writePin(uint8_t pNum, gpioPinValue_t val)
 {
     digitalWrite(pNum, val);
 }
 
 
-void gpio_attachIsr(uint8_t pinNum, bool enabled, gpio_irqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback)
+void gpio_attachIsr(uint8_t pinNum, bool enabled, gpioIrqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback)
 {
     attachInterrupt(digitalPinToInterrupt(pinNum), isrCallback, triggerOn);
 }

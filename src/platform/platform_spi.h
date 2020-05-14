@@ -41,9 +41,9 @@ extern "C"
 
 typedef enum
 {
-    spi_bitOrder_lsbFirst = 0x0,
-    spi_bitOrder_msbFirst = 0x1
-} spi_bitOrder_t;
+    spiBitOrder_lsbFirst = 0x0,
+    spiBitOrder_msbFirst = 0x1
+} spiBitOrder_t;
 
 /* Arduino SPI
 #define SPI_MODE0 0x02
@@ -51,41 +51,42 @@ typedef enum
 #define SPI_MODE2 0x03
 #define SPI_MODE3 0x01
 */
+
 typedef enum
 {
-    spi_dataMode_0 = 0x02,
-    spi_dataMode_1 = 0x00,
-    spi_dataMode_2 = 0x03,
-    spi_dataMode_3 = 0x01
-} spi_dataMode_t;
+    spiDataMode_0 = 0x02,
+    spiDataMode_1 = 0x00,
+    spiDataMode_2 = 0x03,
+    spiDataMode_3 = 0x01
+} spiDataMode_t;
 
 
-typedef struct spi_config_tag
+typedef struct spiConfig_tag
 {
     uint32_t dataRate;
-    spi_dataMode_t dataMode;
-    spi_bitOrder_t bitOrder;
+    spiDataMode_t dataMode;
+    spiBitOrder_t bitOrder;
     uint8_t csPin;
-} spi_config_t;
+} spiConfig_t;
 
 
-typedef struct spi_device_tag
+typedef struct spiDevice_tag
 {
-	spi_config_t *config;
-} spi_device_t;
+	spiConfig_t *config;
+} spiDevice_t;
 
 //typedef spi_device_t* spi_device;
 
-spi_device_t *spi_create(uint8_t chipSelLine);
-void spi_start(spi_device_t *spi);
-void spi_stop(spi_device_t *spi);
+spiDevice_t *spi_create(uint8_t chipSelLine);
+void spi_start(spiDevice_t *spi);
+void spi_stop(spiDevice_t *spi);
 
-void spi_protectFromInterrupt(spi_device_t *spi, int8_t irqNumber);
+void spi_protectFromInterrupt(spiDevice_t *spi, int8_t irqNumber);
 
-uint8_t spi_transferByte(spi_device_t *spi, uint8_t writeVal);
-uint16_t spi_transferWord(spi_device_t *spi, uint16_t writeVal);
+uint8_t spi_transferByte(spiDevice_t *spi, uint8_t writeVal);
+uint16_t spi_transferWord(spiDevice_t *spi, uint16_t writeVal);
 
-void spi_transferBuffer(spi_device_t *spi, uint8_t regAddrByte, void* buf, size_t xfer_len);
+void spi_transferBuffer(spiDevice_t *spi, uint8_t regAddrByte, void* buf, size_t xfer_len);
 
 
 #ifdef __cplusplus

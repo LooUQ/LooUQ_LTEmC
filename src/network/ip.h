@@ -1,6 +1,6 @@
 /******************************************************************************
- *  \file platform_timing.h
- *  \author Jensen Miller, Greg Terrell
+ *  \file ip.h
+ *  \author Greg Terrell
  *  \license MIT License
  *
  *  Copyright (c) 2020 LooUQ Incorporated.
@@ -22,29 +22,32 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  *****************************************************************************/
-#ifndef __PLATFORM_TIMING_H__
-#define __PLATFORM_TIMING_H__
+
+#ifndef __IP_H__
+#define __IP_H__
+
+#include "..\ltem1c.h"
+
 
 #ifdef __cplusplus
 extern "C"
 {
-#include <cstdint>
-#else
-#include <stdint.h>
 #endif // __cplusplus
 
-#if 0
-typedef struct platformThread_tag* platform_thread;
-#endif
 
-void timing_delay(uint32_t delay_ms);
-uint32_t timing_millis();
-void timing_yield();
+socketResult_t ip_open(protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, void (*ipReceiver_func)(socket_t));
+void ip_close(uint8_t socketNum);
+
+socketResult_t ip_send(socket_t socketNum, char *sendBuf, uint16_t sendSz);
+socketResult_t ip_sendUdpReply(uint8_t socketNum, const char *rmtHost, uint16_t rmtPort,  char *sendBuf, uint8_t sendSz);
+uint16_t ip_recv(socket_t socketNum, char *recvBuf, uint16_t recvBufSz);
+
+void ip_receiverDoWork();
+
 
 #ifdef __cplusplus
 }
-#endif // __cplusplus
+#endif // !__cplusplus
 
 
-
-#endif  /* !__PLATFORM_TIMING_H__ */
+#endif  /* !__IP_H__ */

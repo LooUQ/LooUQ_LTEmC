@@ -10,7 +10,7 @@
 //#include "iop.h"
 
 
-ltem1_pinConfig_t FEATHER_BREAKOUT =
+ltem1PinConfig_t FEATHER_BREAKOUT =
 {
 	.spiCsPin = 13,
 	.irqPin = 12,
@@ -21,7 +21,7 @@ ltem1_pinConfig_t FEATHER_BREAKOUT =
     .wakePin = 0
 };
 
-ltem1_pinConfig_t RPI_BREAKOUT = 
+ltem1PinConfig_t RPI_BREAKOUT = 
 {
 	.spiCsPin = 0, 			//< J8_24
 	.irqPin = 22U,		//< J8_15
@@ -32,34 +32,14 @@ ltem1_pinConfig_t RPI_BREAKOUT =
     .wakePin = 0
 };
 
+/* ------------------------------------------------------------------------------------------------
+ * GLOBAL LTEm1 Device Object
+ * --------------------------------------------------------------------------------------------- */
+ltem1Device_t *g_ltem1;
 
-ltem1_device_t *g_ltem1;
+// private local declarations 
+static void initIO();
 
-
-#pragma region private functions
-
-/**
- *	\brief Initialize the modems IO.
- *
- *	\param[in] modem The LTE modem.
- */
-static void initIO()
-{
-	// on Arduino, ensure pin is in default "logical" state prior to opening
-	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
-	gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_low);
-	gpio_writePin(g_ltem1->gpio->spiCsPin, gpioValue_high);
-
-	gpio_openPin(g_ltem1->gpio->powerkeyPin, gpioMode_output);		// powerKey: normal low
-	gpio_openPin(g_ltem1->gpio->resetPin, gpioMode_output);			// resetPin: normal low
-	gpio_openPin(g_ltem1->gpio->spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
-
-	gpio_openPin(g_ltem1->gpio->statusPin, gpioMode_input);
-	gpio_openPin(g_ltem1->gpio->irqPin, gpioMode_inputPullUp);
-}
-
-
-#pragma endregion
 
 #pragma region public functions
 
@@ -70,12 +50,12 @@ static void initIO()
  *	\param[in] ltem1_config The LTE modem gpio pin configuration.
  *  \param[in] funcLevel Determines the LTEm1 functionality to create and start.
  */
-void ltem1_create(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t funcLevel)
+void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t funcLevel)
 {
-	g_ltem1 = calloc(1, sizeof(ltem1_device_t));
+	g_ltem1 = calloc(1, sizeof(ltem1Device_t));
 	if (g_ltem1 == NULL)
 	{
-        ltem1_faultHandler("ltem1-could not alloc ltem1 object");
+        ltem1_faultHandler(0, "ltem1-could not alloc ltem1 object");
 	}
 
 	g_ltem1->gpio = ltem1_config;
@@ -85,25 +65,25 @@ void ltem1_create(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t f
     g_ltem1->modemInfo = calloc(1, sizeof(modemInfo_t));
 	if (g_ltem1->modemInfo == NULL)
 	{
-        ltem1_faultHandler("ltem1-could not alloc ltem1 modem info object");
+        ltem1_faultHandler(0, "ltem1-could not alloc ltem1 modem info object");
 	}
 
     g_ltem1->dataContext = 1;
 
-    if (funcLevel >= ltem1_functionality_iop)
+    if (funcLevel >= ltem1Functionality_iop)
     {
         g_ltem1->iop = iop_create();
-        g_ltem1->iop->iopState = iop_state_idle;
     }
-    if (funcLevel >= ltem1_functionality_atcmd)
+    if (funcLevel >= ltem1Functionality_actions)
     {
-        g_ltem1->dAction = action_create(0);
+        g_ltem1->action = action_reset();
     }
-    if (funcLevel >= ltem1_functionality_services)
+    if (funcLevel >= ltem1Functionality_services)
     {
-        g_ltem1->network = ip_createNetwork();
-        g_ltem1->protocols = ip_createProtocols();
+        g_ltem1->network = ntwk_createNetwork();
+        g_ltem1->protocols = ntwk_createProtocols();
     }
+    g_ltem1->funcLevel = funcLevel;
 
     ltem1_start(funcLevel);
 }
@@ -112,10 +92,13 @@ void ltem1_create(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t f
 
 /**
  *	\brief Power on and start the modem (perform component init).
+ * 
+ *  \param [in] funcLevel - Enum specifying which LTEm1c subsystems should be initialized and started.
  */
-void ltem1_start(ltem1_functionality_t funcLevel)
+void ltem1_start(ltem1Functionality_t funcLevel)
 {
     initIO();   // make sure GPIO pins in correct state
+    spi_start(g_ltem1->spi);
 
 	if (!gpio_readPin(g_ltem1->gpio->statusPin))
 	{
@@ -129,7 +112,7 @@ void ltem1_start(ltem1_functionality_t funcLevel)
         g_ltem1->qbgReadyState = qbg_readyState_appReady;
 
         // power off/on if IRQ latched: previously fired and not serviced
-        gpio_pinValue_t irqState = gpio_readPin(g_ltem1->gpio->irqPin);
+        gpioPinValue_t irqState = gpio_readPin(g_ltem1->gpio->irqPin);
         if (irqState == gpioValue_low)
         {
     		PRINTF_WARN("Invalid LTEm1 IRQ state active.\r\n");
@@ -148,15 +131,14 @@ void ltem1_start(ltem1_functionality_t funcLevel)
 	}
 
     // start NXP SPI-UART bridge
-    spi_start(g_ltem1->spi);
     sc16is741a_start();
 
-    if (funcLevel >= ltem1_functionality_iop)
+    if (funcLevel >= ltem1Functionality_iop)
         iop_start();
 
-    // atcmd doesn't have a start/stop 
+    // actions doesn't have a start/stop 
 
-    if (funcLevel >= ltem1_functionality_services)
+    if (funcLevel >= ltem1Functionality_services)
         qbg_start();
 }
 
@@ -210,7 +192,7 @@ void ltem1_destroy()
 	gpio_pinClose(g_ltem1->gpio->statusPin);
 
     ip_destroy();
-    action_destroy(g_ltem1->dAction);
+    free(g_ltem1->action);
     iop_destroy();
     spi_destroy(g_ltem1->spi);
 	free(g_ltem1);
@@ -221,22 +203,25 @@ void ltem1_destroy()
 /**
  *	\brief Background work task runner. To be called in application Loop() periodically.
  */
-void ltem1_dowork()
+void ltem1_doWork()
 {
     ip_receiverDoWork();
     qbg_processUrcStateQueue();
-	// iop_classifyReadBuffers()
 }
 
 
 /**
  *	\brief Function of last resort, catestrophic failure Background work task runner. To be called in application Loop() periodically.
+ * 
+ *  \param [in] faultMsg - Message from origination about the fatal condition.
  */
-void ltem1_faultHandler(const char * fault)
+void ltem1_faultHandler(uint16_t statusCode, const char * faultMsg)
 {
-    PRINTF_ERR(fault);
+    PRINTF_ERR("\r\rStatus=%d %s\r", statusCode, faultMsg);
+
     // NotImplemented if custom fault handler go there
-    bool halt = true;
+
+    int halt = 1;               // make it possible while debugging to reset error conditions and return
     while(halt) {};
 }
 
@@ -244,9 +229,41 @@ void ltem1_faultHandler(const char * fault)
 
 /**
  *	\brief Registers the address (void*) of your application custom fault handler.
+ * 
+ *  \param [in] customFaultHandler - Pointer to application provided fault handler.
  */
 void ltem1_registerApplicationFaultHandler(void * customFaultHandler)
 {
+    // TBD
 }
+
+
+#pragma endregion
+
+/* private (static) functions
+ * --------------------------------------------------------------------------------------------- */
+#pragma region private functions
+
+
+/**
+ *	\brief Initialize the modems IO.
+ *
+ *	\param[in] modem The LTE modem.
+ */
+static void initIO()
+{
+	// on Arduino, ensure pin is in default "logical" state prior to opening
+	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
+	gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_low);
+	gpio_writePin(g_ltem1->gpio->spiCsPin, gpioValue_high);
+
+	gpio_openPin(g_ltem1->gpio->powerkeyPin, gpioMode_output);		// powerKey: normal low
+	gpio_openPin(g_ltem1->gpio->resetPin, gpioMode_output);			// resetPin: normal low
+	gpio_openPin(g_ltem1->gpio->spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+
+	gpio_openPin(g_ltem1->gpio->statusPin, gpioMode_input);
+	gpio_openPin(g_ltem1->gpio->irqPin, gpioMode_inputPullUp);
+}
+
 
 #pragma endregion

@@ -23,6 +23,8 @@ uint32_t timing_millis()
     return millis();
 }
 
-void yield()
+
+void timing_yield()
 {
+    yield();
 }

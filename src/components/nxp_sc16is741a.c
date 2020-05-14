@@ -201,13 +201,14 @@ void sc16is741a_resetFifo(resetFifo_action_t resetAction)
 void sc16is741a_flushRxFifo()
 {
     uint8_t rxFifoLvl = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-    // clear line status error, if set
     uint8_t lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
 
-    for (size_t i = 0; i < rxFifoLvl; i++)
+    for (size_t i = 0; i < SC16IS741A_FIFO_BUFFER_SZ; i++)
     {
         uint8_t rxDiscard = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
     }
+    rxFifoLvl = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
+    lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
 }
 
 

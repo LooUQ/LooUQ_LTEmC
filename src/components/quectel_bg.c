@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file quectel_bg96.c
+ *  \file quectel_bg.c
  *  \author Jensen Miller, Greg Terrell
  *  \license MIT License
  *
@@ -29,6 +29,8 @@
 //#include "quectel_bg96.h"
 
 #define BG96_INIT_COMMAND_COUNT 1
+#define BG_APPREADY_MAX 5000
+
 
 const char* const qbg_initCmds[] = 
 { 
@@ -82,13 +84,26 @@ void qbg_powerOff()
 
 void qbg_start()
 {
+    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
+    actionResult_t cmdResult = ACTION_RESULT_BUSY;
+
+    unsigned long apprdyWaitStart = timing_millis();
+    while (g_ltem1->qbgReadyState < qbg_readyState_appReady)
+    {
+        timing_yield();
+        if (apprdyWaitStart + BG_APPREADY_MAX < timing_millis())
+            ltem1_faultHandler(cmdResult, "qbg-BGx module failed to start in the allowed time");
+    }
+
     for (size_t i = 0; i < BG96_INIT_COMMAND_COUNT; i++)
     {
-        action_invoke(qbg_initCmds[i]);
-        action_result_t cmdResult = action_awaitResult(g_ltem1->dAction);
+        if (action_tryInvoke(qbg_initCmds[i], false))
+        {
+            cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL, true);
+        }
 
         if (cmdResult != ACTION_RESULT_SUCCESS)
-            ltem1_faultHandler("qbg:sendInitCmds init sequence encountered error");
+            ltem1_faultHandler(cmdResult, "qbg-sendInitCmds init sequence encountered error");
     }
 }
 
@@ -128,9 +143,11 @@ void qbg_processUrcStateQueue()
     landmarkAt = strstr(g_ltem1->iop->urcStateMsg, "pdpdeact");
     if (landmarkAt != NULL)
     {
-        uint16_t cntxt = strtol(g_ltem1->iop->urcStateMsg + 11, NULL, 10);
-        g_ltem1->network->contexts[cntxt].contextState = context_state_inactive;
-        g_ltem1->network->contexts[cntxt].ipAddress[0] = ASCII_cNULL;
+        uint16_t cntxtId = strtol(g_ltem1->iop->urcStateMsg + 11, NULL, 10);
+        g_ltem1->network->contexts[cntxtId].contextState = context_state_inactive;
+        g_ltem1->network->contexts[cntxtId].ipAddress[0] = ASCII_cNULL;
+
+        ntwk_closeContext(cntxtId);
     }
 }
 

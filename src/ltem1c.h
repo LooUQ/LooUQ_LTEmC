@@ -44,16 +44,9 @@ extern "C"
 #include "components/nxp_sc16is741a.h"
 #include "components/quectel_bg.h"
 #include "util.h"
-#include "iop.h"
-#include "actions.h"
-#include "mdminfo.h"
-#include "gnss.h"
-#include "protocols/protocols.h"
-#include "protocols/ip.h"
 
 
 #define LTEM1_SPI_DATARATE	2000000U
-
 
 #define ASCII_cCR '\r'
 #define ASCII_sCR "\r"
@@ -66,16 +59,42 @@ extern "C"
 #define ASCII_sOK "OK\r\n"
 #define ASCII_szCRLF 2
 
+#define NOT_NULL 1
+
+// to allow for BGxx error codes starting at 500 to be passed back to application
+// ltem1c uses macros and the action_result_t typedef
+
+#define ACTION_RESULT_PENDING        0
+#define ACTION_RESULT_SUCCESS      200
+#define ACTION_RESULT_BADREQUEST   400
+#define ACTION_RESULT_NOTFOUND     404
+#define ACTION_RESULT_GONE         410
+#define ACTION_RESULT_BUSY         429
+#define ACTION_RESULT_ERROR        500
+#define ACTION_RESULT_TIMEOUT      504
+
+// allow for simple test for unhappy result
+#define ACTION_RESULT__BASE_ERROR  400
+
+// action_result_t should be populated with ACTION_RESULT_x constant values or an errorCode (uint >= 400)
+typedef uint16_t actionResult_t;
+
+#include "iop.h"
+#include "actions.h"
+#include "mdminfo.h"
+#include "gnss.h"
+#include "network/network.h"
+#include "network/ip.h"
 
 
 typedef enum 
 {
-    ltem1_functionality_stop = 0,
-    ltem1_functionality_base = 1,
-    ltem1_functionality_iop = 2,
-    ltem1_functionality_atcmd = 3,
-    ltem1_functionality_services = 4
-} ltem1_functionality_t;
+    ltem1Functionality_stop = 0,
+    ltem1Functionality_base = 1,
+    ltem1Functionality_iop = 2,
+    ltem1Functionality_actions = 3,
+    ltem1Functionality_services = 4
+} ltem1Functionality_t;
 
 
 typedef struct
@@ -87,39 +106,38 @@ typedef struct
     int resetPin;
     int ringUrcPin;
     int wakePin;
-} ltem1_pinConfig_t;
+} ltem1PinConfig_t;
 
 
-typedef struct ltem1_device_tag
+typedef struct ltem1Device_tag
 {
-    ltem1_functionality_t funcLevel;
-	ltem1_pinConfig_t *gpio;
-    spi_device_t *spi;
-    qbg_readyState_t qbgReadyState;
+    ltem1Functionality_t funcLevel;
+	ltem1PinConfig_t *gpio;
+    spiDevice_t *spi;
+    qbgReadyState_t qbgReadyState;
     uint8_t dataContext;
     iop_t *iop;
-	action_t *dAction;
-    action_t *pendAction;
+    volatile action_t *action;
 	modemInfo_t *modemInfo;
     network_t *network;
 	protocols_t *protocols;
-} ltem1_device_t;
+} ltem1Device_t;
 
 
-extern ltem1_device_t *g_ltem1;
-extern ltem1_pinConfig_t FEATHER_BREAKOUT;
-extern ltem1_pinConfig_t RPI_BREAKOUT;
+extern ltem1Device_t *g_ltem1;
+extern ltem1PinConfig_t FEATHER_BREAKOUT;
+extern ltem1PinConfig_t RPI_BREAKOUT;
 
 
-void ltem1_create(const ltem1_pinConfig_t* ltem1_config, ltem1_functionality_t funcLevel);
+void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t funcLevel);
 void ltem1_destroy();
 
-void ltem1_start(ltem1_functionality_t funcLevel);
+void ltem1_start(ltem1Functionality_t funcLevel);
 void ltem1_stop();
 void ltem1_reset(bool restart);
 
-void ltem1_dowork();
-void ltem1_faultHandler(const char * fault) __attribute__ ((noreturn));
+void ltem1_doWork();
+void ltem1_faultHandler(uint16_t statusCode, const char * fault) __attribute__ ((noreturn));
 
 
 #ifdef __cplusplus

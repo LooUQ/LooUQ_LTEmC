@@ -46,7 +46,7 @@ typedef enum
     qbg_readyState_powerOff = 0,
     qbg_readyState_powerOn = 1,
     qbg_readyState_appReady = 2
-} qbg_readyState_t;
+} qbgReadyState_t;
 
 
 typedef enum

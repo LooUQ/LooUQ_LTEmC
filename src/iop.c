@@ -47,7 +47,7 @@ static void txSendNextChunk(uint8_t fifoAvailable);
 
 static uint8_t rxOpenCtrlBlock();
 static void rxParseRecvContentPreamble(uint8_t rxIndx);
-static void rxProcessSocketIrd(iop_rxCtrlBlock_t *rxCtrlStruct, socket_t socketNm);
+static void rxProcessSocketIrd(iopRxCtrlBlock_t *rxCtrlStruct, socket_t socketNm);
 static void rxResetCtrlBlock(uint8_t bufIndx);
 
 static void interruptCallbackISR();
@@ -61,24 +61,33 @@ static void interruptCallbackISR();
 /**
  *	\brief Initialize the Input/Output Process subsystem.
  */
-iop_state_t *iop_create()
+iop_t *iop_create()
 {
     iop_t *iop = calloc(1, sizeof(iop_t));
 	if (iop == NULL)
 	{
-        ltem1_faultHandler("iop-could not alloc iop status struct");
+        ltem1_faultHandler(0, "iop-could not alloc iop status struct");
 	}
-    iop->txCtrl.txBuf = calloc(IOP_TX_BUFFER_SZ + 1, sizeof(char));
-    if (iop->txCtrl.txBuf == NULL)
+
+    iop->txCtrl = calloc(1, sizeof(iopTxCtrlBlock_t));
+	if (iop->txCtrl == NULL)
+	{
+        free(iop);
+        ltem1_faultHandler(0, "iop-could not alloc iop->txCtrl status struct");
+	}
+
+    iop->txCtrl->txBuf = calloc(IOP_TX_BUFFER_SZ + 1, sizeof(char));
+    if (iop->txCtrl->txBuf == NULL)
     {
         free(iop);
-        ltem1_faultHandler("iop-could not alloc iop TX buffers");
+        free(iop->txCtrl);
+        ltem1_faultHandler(0, "iop-could not alloc iop TX buffers");
     }
 
     // init TX and RX struct values
-    iop->txCtrl.remainSz = 0;
+    iop->txCtrl->remainSz = 0;
     iop->cmdHead = iop->cmdTail = 0;
-    for (size_t i = 0; i < IOP_PROTOCOLS_COUNT; i++)
+    for (size_t i = 0; i < IOP_SOCKET_COUNT; i++)
     {
         iop->socketHead[i] = iop->socketTail[i] = 0;
     }
@@ -111,18 +120,6 @@ void iop_destroy(void *iop)
 
 
 /**
- *	\brief Determine if a send data can be initiated.
- *
- *  \return True if send is available.
- */
-bool iop_txClearToSend()
-{
-    return g_ltem1->qbgReadyState == qbg_readyState_appReady && !g_ltem1->iop->iopState == iop_state_txPending;
-}
-
-
-
-/**
  *	\brief Start a (raw) send operation.
  *
  *  \param[in] sendData Pointer to char data to send out, input buffer can be discarded following call.
@@ -130,28 +127,35 @@ bool iop_txClearToSend()
  *
  *  \return True if send is completes.
  */
-bool iop_txSend(const char *sendData, uint16_t sendSz)
+void iop_txSend(const char *sendData, uint16_t sendSz)
 {
-    if (sendSz > IOP_TX_BUFFER_SZ)
-        ltem1_faultHandler("iop-send data max size exceeded");
+    // if(IOP_TX_ACTIVE())
+    //     return iop_xfrResult_busy;
 
-    g_ltem1->iop->iopState = iop_state_txPending;
-    memcpy(g_ltem1->iop->txCtrl.txBuf, sendData, sendSz);
+    if (sendSz > IOP_TX_BUFFER_SZ)
+        ltem1_faultHandler(500, "iop-send data max size exceeded");
+
+    //g_ltem1->iop->txCtrl->txActive = true;
+    memcpy(g_ltem1->iop->txCtrl->txBuf, sendData, sendSz);
 
     uint16_t thisChunkSz = MIN(sendSz, SC16IS741A_FIFO_BUFFER_SZ);
-    sc16is741a_write(g_ltem1->iop->txCtrl.txBuf, thisChunkSz);
+    sc16is741a_write(g_ltem1->iop->txCtrl->txBuf, thisChunkSz);
+    while (g_ltem1->iop->txCtrl->remainSz)
+    {
+        timing_yield();
+    }
 
-    if (sendSz <= SC16IS741A_FIFO_BUFFER_SZ)
-    {
-        g_ltem1->iop->txCtrl.remainSz = 0;
-        return true;
-    }
-    else
-    {
-        g_ltem1->iop->txCtrl.remainSz = sendSz - thisChunkSz;
-        g_ltem1->iop->txCtrl.chunkPtr = g_ltem1->iop->txCtrl.txBuf + thisChunkSz;
-    }
-    return false;
+    // if (sendSz <= SC16IS741A_FIFO_BUFFER_SZ)
+    // {
+    //     g_ltem1->iop->txCtrl->remainSz = 0;
+    //     return iop_xfrResult_complete;
+    // }
+    // else
+    // {
+    //     g_ltem1->iop->txCtrl->remainSz = sendSz - thisChunkSz;
+    //     g_ltem1->iop->txCtrl->chunkPtr = g_ltem1->iop->txCtrl->txBuf + thisChunkSz;
+    // }
+    // return iop_xfrResult_incomplete;
 }
 
 
@@ -163,21 +167,22 @@ bool iop_txSend(const char *sendData, uint16_t sendSz)
  *   \param[in] recvBuf Pointer to the command receive buffer.
  *   \param[in] recvMaxSz The command response max length (buffer size).
  */
-iop_rxGetResult_t iop_rxGetCmdQueued(char *recvBuf, uint16_t recvBufSz)
+iopXfrResult_t iop_rxGetCmdQueued(char *recvBuf, uint16_t recvBufSz)
 {
     if ( !g_ltem1->iop->rxCtrlBlks[g_ltem1->iop->cmdHead].occupied )
-        return iop_rx_result_nodata;
+        return iopXfrResult_incomplete;
 
     uint8_t tail = g_ltem1->iop->cmdTail;
-    memset(recvBuf, 0, recvBufSz);
+    // memset(recvBuf, 0, recvBufSz);
 
     do
     {
-        if (g_ltem1->iop->rxCtrlBlks[tail].occupied && g_ltem1->iop->rxCtrlBlks[tail].process == iop_process_command)
+        if (g_ltem1->iop->rxCtrlBlks[tail].occupied && g_ltem1->iop->rxCtrlBlks[tail].process == iopProcess_command)
         {
             uint16_t copySz = MIN(recvBufSz, g_ltem1->iop->rxCtrlBlks[tail].primSz);
             strncpy(recvBuf, g_ltem1->iop->rxCtrlBlks[tail].primBuf, copySz + 1);
             rxResetCtrlBlock(tail);
+            recvBuf += copySz;
             recvBufSz -= copySz;                    // tally to check for overflow
         }
 
@@ -186,13 +191,15 @@ iop_rxGetResult_t iop_rxGetCmdQueued(char *recvBuf, uint16_t recvBufSz)
 
         tail = ADV_RXCTRLBLK_INDEX(tail);
         if (tail == g_ltem1->iop->cmdTail)
-            ltem1_faultHandler("iop-buffer underflow in iop_rxGetCmdQueued");
+            ltem1_faultHandler(500, "iop-buffer underflow in iop_rxGetCmdQueued");
 
     } while (true);
+    g_ltem1->iop->cmdTail = tail;
     
     if (recvBufSz < 0)
-        return iop_rx_result_truncated;
-    return iop_rx_result_ready;
+        return iopXfrResult_truncated;
+
+    return iopXfrResult_complete;
 }
 
 
@@ -263,7 +270,7 @@ void iop_tailFinalize(socket_t socketNm)
         }
     } while (tail != g_ltem1->iop->socketTail[socketNm]);
 
-    ltem1_faultHandler("iop-iop_tailFinalize-buffer underflow");
+    ltem1_faultHandler(500, "iop-iop_tailFinalize-buffer underflow");
 }
 
 
@@ -280,13 +287,13 @@ void iop_tailFinalize(socket_t socketNm)
  */
 static void txSendNextChunk(uint8_t fifoAvailable)
 {
-    uint8_t thisTxSz = MIN(g_ltem1->iop->txCtrl.remainSz, fifoAvailable);
-    sc16is741a_write(g_ltem1->iop->txCtrl.chunkPtr, thisTxSz);
+    uint8_t thisTxSz = MIN(g_ltem1->iop->txCtrl->remainSz, fifoAvailable);
+    sc16is741a_write(g_ltem1->iop->txCtrl->chunkPtr, thisTxSz);
 
     // update TX ctrl with remaining work to complete requested transmit
-    g_ltem1->iop->txCtrl.remainSz -= thisTxSz;
-    g_ltem1->iop->txCtrl.chunkPtr = g_ltem1->iop->txCtrl.chunkPtr + thisTxSz;
-    g_ltem1->iop->iopState = g_ltem1->iop->txCtrl.remainSz > 0 ? iop_state_txPending : iop_state_idle;
+    g_ltem1->iop->txCtrl->remainSz -= thisTxSz;
+    g_ltem1->iop->txCtrl->chunkPtr = g_ltem1->iop->txCtrl->chunkPtr + thisTxSz;
+    //g_ltem1->iop->txCtrl->txActive = g_ltem1->iop->txCtrl->remainSz > 0;
 }
 
 
@@ -304,7 +311,7 @@ static uint8_t rxOpenCtrlBlock()
         bufIndx = ADV_RXCTRLBLK_INDEX(bufIndx);
 
         if (bufIndx == g_ltem1->iop->rxRecvHead)
-            ltem1_faultHandler("iop-rxCtrlBlk overflow, none available");
+            ltem1_faultHandler(500, "iop-rxCtrlBlk overflow, none available");
     }
     while (g_ltem1->iop->rxCtrlBlks[bufIndx].occupied);
 
@@ -321,11 +328,10 @@ static uint8_t rxOpenCtrlBlock()
  */
 static void rxResetCtrlBlock(uint8_t bufIndx)
 {
-    iop_rxCtrlBlock_t *rxCtrl = &g_ltem1->iop->rxCtrlBlks[bufIndx];
+    iopRxCtrlBlock_t *rxCtrl = &g_ltem1->iop->rxCtrlBlks[bufIndx];
 
     rxCtrl->occupied = false;
-    rxCtrl->process = iop_process_void;
-    rxCtrl->isURC = false;                                        // both URC (notice) and IRD (data) in rxCtrlBlks
+    rxCtrl->process = iopProcess_void;
     memset(rxCtrl->primBuf, 0, IOP_RX_PRIMARY_BUFFER_SIZE + 1);
     if (rxCtrl->extsnBufHead != NULL)
     {
@@ -342,7 +348,7 @@ static void rxResetCtrlBlock(uint8_t bufIndx)
  *
  *   \param[in\out] rxCtrlStruct receive control/buffer structure.
  */
-static void rxProcessSocketIrd(iop_rxCtrlBlock_t *rxCtrlStruct, socket_t socketNm)
+static void rxProcessSocketIrd(iopRxCtrlBlock_t *rxCtrlStruct, socket_t socketNm)
 {
     /* note the protocol session is in invoking AT+QIRD=#, not returned in +QIRD result
     *  Example: +QIRD: 4,  where 4 is the number of chars arriving
@@ -399,8 +405,8 @@ static void rxParseRecvContentPreamble(uint8_t rxIndx)
         // default content type is command response
     */
 
-    iop_rxCtrlBlock_t *rxCtrlBlock = &g_ltem1->iop->rxCtrlBlks[rxIndx];
-    rxCtrlBlock->process = iop_process_command;    //default
+    iopRxCtrlBlock_t *rxCtrlBlock = &g_ltem1->iop->rxCtrlBlks[rxIndx];
+    rxCtrlBlock->process = iopProcess_command;    //default
 
     if (strncmp("+QIURC: \"recv", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URC_IPRECV) == 0 ||
         strncmp("+QSSLURC: \"recv", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URC_SSLRECV) == 0 )
@@ -408,51 +414,55 @@ static void rxParseRecvContentPreamble(uint8_t rxIndx)
         uint8_t hdrSz = (rxCtrlBlock->primBuf + 5 == 'I') ? RECV_HEADERSZ_URC_IPRECV : RECV_HEADERSZ_URC_SSLRECV;
         char *connIdPtr = rxCtrlBlock->primBuf + hdrSz;
         char *endPtr = NULL;
-        uint8_t sckt = (uint8_t)strtol(connIdPtr, &endPtr, 10);
+        uint8_t scktNm = (uint8_t)strtol(connIdPtr, &endPtr, 10);
 
-        rxCtrlBlock->process = sckt;
-        rxCtrlBlock->isURC = true;
-        g_ltem1->iop->socketHead[sckt] = rxIndx;
+        rxCtrlBlock->process = scktNm;
+        g_ltem1->protocols->sockets[scktNm].dataPending = true;
+        g_ltem1->iop->socketHead[scktNm] = rxIndx;
     }
 
     else if (strncmp("+QIRD", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_IRD) == 0)
     {
-        socket_t scktNm = g_ltem1->iop->irdSocket;
+        socket_t socketNm = g_ltem1->iop->irdSocket;
 
-        rxProcessSocketIrd(rxCtrlBlock, scktNm);
-        rxCtrlBlock->process = scktNm;
-        if (g_ltem1->iop->socketIrdBytes[scktNm] == 0)      // if no data, release ctrlBlk
+        rxProcessSocketIrd(rxCtrlBlock, socketNm);
+        rxCtrlBlock->process = socketNm;
+        if (g_ltem1->iop->socketIrdBytes[socketNm] == 0)
         {
-            rxCtrlBlock->occupied = false;
-            rxCtrlBlock->process = iop_process_void;
+            g_ltem1->protocols->sockets[socketNm].dataPending = false;
+            rxCtrlBlock->occupied = false;                              // special case: if no data, release ctrlBlk
+            rxCtrlBlock->process = iopProcess_void;
         }
         else
-            g_ltem1->iop->socketHead[scktNm] = rxIndx;      // data, so point head to this ctrlBlk
+            g_ltem1->iop->socketHead[socketNm] = rxIndx;                // data present, so point head to this ctrlBlk
+
         g_ltem1->iop->irdSocket = protocol_none;
+        g_ltem1->action->cmdStr[0] = NULL;                                  // IRD is an action response, close it out
     }
 
     else if (strncmp("APP RDY\r\n", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_APPRDY) == 0)
     {
         PRINTF("-appRdy ");
         g_ltem1->qbgReadyState = qbg_readyState_appReady;
-        rxCtrlBlock->occupied = false;                      // release ctrlBlk, done with it
-        rxCtrlBlock->process = iop_process_void;
+        rxCtrlBlock->occupied = false;                                  // release ctrlBlk, done with it
+        rxCtrlBlock->process = iopProcess_void;
     }
 
     // catch async unsolicited state changes here
     else if (strncmp("+QIURC: ", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URCSTATE) == 0)
     {
         // state message buffer is only 1 message
-        if (g_ltem1->iop->urcStateMsg != NULL)
-            ltem1_faultHandler("IOP-URC state msg buffer overflow.");
+        if (g_ltem1->iop->urcStateMsg[0] != NULL)
+            ltem1_faultHandler(500, "IOP-URC state msg buffer overflow.");
 
         strncpy(g_ltem1->iop->urcStateMsg + RECV_HEADERSZ_URCSTATE, rxCtrlBlock->primBuf, IOP_URC_STATEMSG_SZ);
-        rxCtrlBlock->occupied = false;                      // release ctrl/buffer, processed here
-        rxCtrlBlock->process = iop_process_void;
+
+        rxCtrlBlock->occupied = false;                                  // release ctrl/buffer, processed here
+        rxCtrlBlock->process = iopProcess_void;
     }
 
     // if default of command message still holds set command index pointers
-    if (rxCtrlBlock->process == iop_process_command)
+    if (rxCtrlBlock->process == iopProcess_command)
     {
         g_ltem1->iop->cmdHead = rxIndx;
     }
@@ -482,16 +492,22 @@ static void interruptCallbackISR()
 
     iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
     retryIsr:
-    PRINTF_INFO("ISR[");
+    PRINTF_WHITE("ISR[");
 
     do
     {
-        if (iirVal.IRQ_nPENDING == 1)
+        while(iirVal.IRQ_nPENDING == 1)
         {
-            // PRINTF_WARN("** ");
-            // IRQ fired, so re-read IIR **VERIFY** nothing to service & reset source
             iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
+            PRINTF_WARN("*");
         }
+
+        // if (iirVal.IRQ_nPENDING == 1)
+        // {
+        //     // PRINTF_WARN("** ");
+        //     // IRQ fired, so re-read IIR **VERIFY** nothing to service & reset source
+        //     iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
+        // }
 
 
         // priority 1 -- receiver line status error : clear fifo of bad char
@@ -506,21 +522,25 @@ static void interruptCallbackISR()
         // Service Action: read RXLVL, read FIFO to empty
         if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)
         {
-            PRINTF_INFO("RX=%d ", iirVal.IRQ_SOURCE);
+            PRINTF_GRAY("RX=%d ", iirVal.IRQ_SOURCE);
             rxLevel = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-            //PRINTF("-lvl=%d ", rxLevel);
+            PRINTF_GRAY("-lvl=%d ", rxLevel);
 
-            uint8_t volatile rxIndx = rxOpenCtrlBlock();
-            PRINTF("-ix=%d ", rxIndx);
+            if (rxLevel > 0)
+            {
+                uint8_t volatile rxIndx = rxOpenCtrlBlock();
+                PRINTF_GRAY("-ix=%d ", rxIndx);
 
-            // read SPI into buffer
-            sc16is741a_read(g_ltem1->iop->rxCtrlBlks[rxIndx].primBuf, rxLevel);
-            g_ltem1->iop->rxCtrlBlks[rxIndx].primSz = rxLevel;
-            // PRINTF_DBG("(%d) ", rxLevel);
-            PRINTF_DBG("(%d)\r%s\r", rxLevel, g_ltem1->iop->rxCtrlBlks[rxIndx].primBuf);
+                // read SPI into buffer
+                sc16is741a_read(g_ltem1->iop->rxCtrlBlks[rxIndx].primBuf, rxLevel);
+                g_ltem1->iop->rxCtrlBlks[rxIndx].primSz = rxLevel;
 
-            // parse and update IOP ctrl block
-            rxParseRecvContentPreamble(rxIndx);
+                // PRINTF_DBG("(%d) ", rxLevel);
+                PRINTF_DBG("(%d)\r%s\r", rxLevel, g_ltem1->iop->rxCtrlBlks[rxIndx].primBuf);
+
+                // parse and update IOP ctrl block
+                rxParseRecvContentPreamble(rxIndx);
+            }
         }
 
 
@@ -528,16 +548,16 @@ static void interruptCallbackISR()
         if (iirVal.IRQ_SOURCE == 1)                                         // TX available
         {
             uint8_t txAvailable = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
-            PRINTF_INFO("TX ");
-            // PRINTF("-lvl=%d ", txAvailable);
+            PRINTF_GRAY("TX ");
+            PRINTF_GRAY("-lvl=%d ", txAvailable);
 
-            if (g_ltem1->iop->txCtrl.remainSz > 0)
+            if (g_ltem1->iop->txCtrl->remainSz > 0)
             {
                 txSendNextChunk(txAvailable);
-                PRINTF("-chunk ");
+                PRINTF_GRAY("-chunk ");
             }
-            else
-                g_ltem1->iop->iopState = iop_state_idle;
+            // else
+            //     g_ltem1->iop->txCtrl->txActive = false;
         }
 
         /* -- NOT USED --
@@ -550,22 +570,18 @@ static void interruptCallbackISR()
 
     } while (iirVal.IRQ_nPENDING == 0);
 
-    PRINTF_INFO("]\r");
+    PRINTF_WHITE("]\r");
 
-    gpio_pinValue_t irqPin = gpio_readPin(g_ltem1->gpio->irqPin);
+    gpioPinValue_t irqPin = gpio_readPin(g_ltem1->gpio->irqPin);
     if (irqPin == gpioValue_low)
     {
         txAvailable = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
         rxLevel = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
         iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
-        // PRINTF_WARN("IRQ reset stalled. nIRQ=%d, src=%d, txLvl=%d, rxLvl=%d \r", iirVal.IRQ_nPENDING, iirVal.IRQ_SOURCE, txAvailable, rxLevel);
+        PRINTF_WARN("IRQ failed to reset!!! nIRQ=%d, iir=%d, txLvl=%d, rxLvl=%d \r", iirVal.IRQ_nPENDING, iirVal.reg, txAvailable, rxLevel);
 
-        if (iirVal.IRQ_nPENDING == 0)
-        {
-            PRINTF_WARN("+");
-            goto retryIsr;
-        }
-        ltem1_faultHandler("IRQ failed to reset.");
+        //ltem1_faultHandler(500, "IRQ failed to reset.");
+        goto retryIsr;
     }
 }
 

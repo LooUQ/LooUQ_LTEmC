@@ -5,235 +5,132 @@
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
+#define ACTIONS_RETRY_MAX 20
+#define ACTIONS_RETRY_INTERVAL 50
 
-#pragma region private functions
-/* --------------------------------------------------------------------------------------------- */
-
-
-static const char *strnend(const char *charStr, uint16_t maxSz)
-{
-    return memchr(charStr, '\0', maxSz);
-}
-
-
-#pragma endregion
-
-
-/**
- *	\brief Creates an AT command control stucture on the heap.
- *
- *  \param[in]resultSz The size (length) of the command response buffer. Pass in 0 to use default size.
- *
- *  \return AT command control structure.
- */
-action_t *action_create(uint8_t resultSz)
-{
-   	action_t *atcmd = calloc(1, sizeof(action_t));
-	if (atcmd == NULL)
-	{
-        ltem1_faultHandler("atcmd-could not alloc at command object");
-	}
-
-    if (resultSz == 0)
-        resultSz = ACTION_DEFAULT_RESULT_BUF_SZ;
-
-    atcmd->resultHead = calloc(resultSz + 1, sizeof(char));
-    if (atcmd->resultHead == NULL)
-    {
-        free(atcmd);
-        ltem1_faultHandler("atcmd-could not alloc response buffer");
-    }
-
-    action_reset(atcmd);
-    atcmd->cmdCompleteParser_func = action_okResultParser;
-
-    return atcmd;
-}
-
-
-
-/**
- *	\brief Creates an AT command object with custom properties.
- *
- *	\param[in] cmdStr The AT command string to send to the BG96 module.
- *  \param[in] timeoutMillis Command timeout period in milliseconds.
- *  \param[in] resultBuf Pointer to application buffer for AT cmds with long or URC style result.
- *  \param[in] resultBufSz Result buffer maximum chars.
- *  \param[in] cmdCompleteParser_func Function pointer to custom result completion parser.
- */
-action_t *action_build(const char* cmdStr, uint16_t resultBufSz, uint16_t timeoutMillis,  uint16_t (*cmdCompleteParser_func)(const char *response))
-{
-    action_t *atCmd = action_create(resultBufSz);
-
-    memcpy(atCmd->cmdStr, cmdStr, MIN(ACTION_INVOKE_CMDSTR_SZ, strlen(cmdStr)));
-    atCmd->resultTail = atCmd->resultHead;
-    atCmd->resultSz = resultBufSz;
-    atCmd->timeoutMillis = timeoutMillis;
-    atCmd->cmdCompleteParser_func = cmdCompleteParser_func;
-
-    atCmd->invokedAt = 0;
-    atCmd->resultCode = 0;
-    atCmd->irdPending = iop_process_void;
-}
-
-
-
-/**
- *	\brief Destroys AT command control stucture.
- */
-void action_destroy(action_t * atCmd)
-{
-    free(atCmd->resultHead);
-    free(atCmd);
-}
+// Local private declarations
+static const char *strnend(const char *charStr, uint16_t maxSz);
+static action_t *createAction(uint8_t resultSz);
+static bool tryActionLock(const char *cmdStr, bool retry);
 
 
 
 /**
  *	\brief Resets (initializes) an AT command structure.
  *
- *  \param[in] atCmd Pointer to command struct to reset
+ *  \param [in] atCmd - Pointer to command struct to reset
  */
-void action_reset(action_t *atCmd)
+action_t *action_reset()
 {
-    memset(atCmd->cmdStr, 0, ACTION_INVOKE_CMDSTR_SZ);
-    memset(atCmd->resultHead, 0, ACTION_DEFAULT_RESULT_BUF_SZ);
-    atCmd->resultTail = atCmd->resultHead;
-    atCmd->resultSz = ACTION_DEFAULT_RESULT_BUF_SZ;
-    atCmd->resultCode = ACTION_RESULT_PENDING;
-    atCmd->invokedAt = 0;
-    atCmd->timeoutMillis = ACTION_DEFAULT_TIMEOUT_MILLIS;
-    atCmd->irdPending = iop_process_void;
-    atCmd->cmdCompleteParser_func = action_okResultParser;
+    if (g_ltem1->action == NULL)
+    {
+        g_ltem1->action = calloc(1, sizeof(action_t));
+    }
+    memset(g_ltem1->action->cmdStr, 0, ACTION_INVOKE_CMDSTR_SZ);
+    g_ltem1->action->resultHead = NULL;
+    g_ltem1->action->resultTail = NULL;
+    g_ltem1->action->resultCode = ACTION_RESULT_PENDING;
+    g_ltem1->action->invokedAt = 0;
+    g_ltem1->action->irdPending = iopProcess_void;
+    return g_ltem1->action;
 }
 
 
 
 /**
- *	\brief Invokes a simple AT command to the BG96 module using the driver default atCmd object. For more complex or verbose
- *  command workflows use action_invokeAdv() with a custom atCmd object (see action_create()).
+ *	\brief Invokes a simple AT command to the BG96 module using the driver default atCmd object. 
  *
- *	\param[in] cmdStr The command string to send to the BG96 module.
+ *	\param [in] cmdStr - The command string to send to the BG96 module.
+ *  \param [in] retry - Function will retry busy module if set to true.
+ *  \param [in] customCmdCompleteParser_func - Custom command response parser to signal result is complete. NULL for std parser.
+ * 
+ *  \return True if action was invoked, false if not
  */
-void action_invoke(const char * cmdStr)
+bool action_tryInvoke(const char * cmdStr, bool retry)
 {
-    action_reset(g_ltem1->dAction);
-    strncpy(g_ltem1->dAction->cmdStr, cmdStr, ACTION_INVOKE_CMDSTR_SZ);
-    action_invokeCustom(g_ltem1->dAction);
+    if ( !tryActionLock(cmdStr, retry) )
+        return false;
+
+    action_reset(g_ltem1->action);
+    strncpy(g_ltem1->action->cmdStr, cmdStr, ACTION_INVOKE_CMDSTR_SZ);
+    
+    PRINTF("\raction=%s\r", g_ltem1->action->cmdStr);
+
+    g_ltem1->action->invokedAt = timing_millis();
+    strcat(g_ltem1->action->cmdStr, ASCII_sCR);
+    iop_txSend(g_ltem1->action->cmdStr, strlen(g_ltem1->action->cmdStr));
+    return true;
 }
 
 
 
 /**
- *	\brief Invokes a simple AT command to the BG96 module using the driver default atCmd object. For more complex or verbose
- *  command workflows use action_invokeAdv() with a custom atCmd object (see action_create()).
- *
- *	\param[in] cmdStr The command string to send to the BG96 module.
+ *	\brief Performs data transfer (send) sub-action.
+
+ *  \param [in] data - Pointer to the block of binary data to send.
+ *  \param [in] dataSz - The size of the data block. 
  */
-void action_invokeWithParser(const char * cmdStr, uint16_t (*cmdCompleteParser_func)(const char *response))
+void action_sendData(const char *data, uint16_t dataSz)
 {
-    action_reset(g_ltem1->dAction);
-    strncpy(g_ltem1->dAction->cmdStr, cmdStr, ACTION_INVOKE_CMDSTR_SZ);
-    g_ltem1->dAction->cmdCompleteParser_func = cmdCompleteParser_func;
-    action_invokeCustom(g_ltem1->dAction);
+    g_ltem1->action->cmdCompleteParser_func = action_okResultParser;
+    g_ltem1->action->invokedAt = timing_millis();
+    //g_ltem1->currentAction = g_ltem1->stdAction;
+
+    iop_txSend(data, dataSz);
 }
-
-
-
-/**
- *	\brief Invokes an AT command to the BG96 module.
- */
-void action_invokeCustom(action_t *atCmd)
-{
-    // if (atCmd->cmdCompleteParser_func == NULL)
-    // {
-    //     atCmd->cmdCompleteParser_func = action_okResultParser;
-    // }
-    atCmd->invokedAt = timing_millis();
-
-    g_ltem1->iop->iopState = iop_state_actionPending;
-    g_ltem1->pendAction = atCmd;
-
-    PRINTF("CMD=%s\r", atCmd->cmdStr);
-    strcat(atCmd->cmdStr, ASCII_sCR);
-    iop_txSend(atCmd->cmdStr, strlen(atCmd->cmdStr));
-}
-
-
-
-// /**
-//  *	\brief Invokes an AT command to the BG96 module.
-//  */
-// void action_sendData(const char *data, uint16_t dataSz)
-// {
-//     g_ltem1->dAction->cmdCompleteParser_func = action_okResultParser;
-//     g_ltem1->dAction->invokedAt = timing_millis();
-
-//     g_ltem1->iop->iopState = iop_state_actionPending;
-//     g_ltem1->pendAction = g_ltem1->dAction;
-
-//     iop_txSend(data, dataSz);
-// }
 
 
 
 /**
  *	\brief Gathers command response strings and determines if command has completed.
  *
- *  \param[in] atCmd Pointer to command struct
+ *  \param [in] actionCmd - Pointer to command struct.
+ *  \param [in] autoClose - If true, action will automatically close and release action lock on completion.
  * 
- *  \return AT command result type: completed=200, timedout=408, or (still) pending=0.
+ *  \return Command action result type. See ACTION_RESULT_* macros in LTEm1c.h.
  */
-action_result_t action_getResult(action_t *atCmd, bool autoClose)
+actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response), bool autoClose)
 {
     // return pendingAtCommand.resultCode;
     // wait for BG96 response in FIFO buffer
 
-    if (atCmd == NULL)
-        atCmd = g_ltem1->dAction;
+    if (g_ltem1->action->resultHead == NULL)
+    {
+        g_ltem1->action->resultHead = response;
+        g_ltem1->action->resultTail = response;
+        g_ltem1->action->resultSz = responseSz;
+        g_ltem1->action->timeoutMillis = timeout == 0 ? ACTION_DEFAULT_TIMEOUT_MILLIS : timeout;
+        g_ltem1->action->cmdCompleteParser_func = (customCmdCompleteParser_func == NULL) ? action_okResultParser : customCmdCompleteParser_func;
+        memchr(response, 0, responseSz);
+    }
+    
+    actionResult_t parserResult = ACTION_RESULT_PENDING;
+    iopXfrResult_t rxResult = iop_rxGetCmdQueued(g_ltem1->action->resultTail, g_ltem1->action->resultSz);
 
-    action_result_t parserResult = 0;
-    iop_rxGetResult_t rxResult = iop_rxGetCmdQueued(atCmd->resultTail, atCmd->resultSz);
-
-    if (rxResult == iop_rx_result_ready || rxResult == iop_rx_result_truncated)
+    if (rxResult == iopXfrResult_complete || rxResult == iopXfrResult_truncated)
     {
         // deplete last result from the overall command result buffer
-        uint8_t resultSz = strlen(atCmd->resultTail);
-        atCmd->resultSz -= resultSz;
-        atCmd->resultTail += resultSz;
+        uint8_t resultSz = strlen(g_ltem1->action->resultTail);
+        g_ltem1->action->resultSz -= resultSz;
+        g_ltem1->action->resultTail += resultSz;
 
         // invoke command result complete parser, true returned if complete
-        parserResult = (*atCmd->cmdCompleteParser_func)(atCmd->resultHead);
-        PRINTF_DBG1("prsr=%d \r", parserResult);
+        parserResult = (*g_ltem1->action->cmdCompleteParser_func)(g_ltem1->action->resultHead);
+        PRINTF_GRAY("prsr=%d \r", parserResult);
     }
 
-    if (parserResult >= ACTION_RESULT_SUCCESS)                       // parser signaled complete
+    if (parserResult >= ACTION_RESULT_SUCCESS)                          // parser signaled complete
     {
-        if (autoClose)
-        {
-            g_ltem1->pendAction = NULL;
-            g_ltem1->iop->iopState = iop_state_idle;
-        }
+        PRINTF_INFO("action duration=%d\r", timing_millis() - g_ltem1->action->invokedAt);
+        if (autoClose || parserResult != ACTION_RESULT_SUCCESS)         // defer close (as requested) for send data subcommand
+            g_ltem1->action->cmdStr[0] = NULL;
         return parserResult;
     }
-    bool timeout = timing_millis() - atCmd->invokedAt > atCmd->timeoutMillis;
 
-    if (timeout && atCmd->resultHead != atCmd->resultTail)          // got something but not valid completion
+    if (timing_millis() - g_ltem1->action->invokedAt > g_ltem1->action->timeoutMillis)
     {
-        if (autoClose)
-        {
-            g_ltem1->pendAction = NULL;
-            g_ltem1->iop->iopState = iop_state_idle;
-        }
-        return ACTION_RESULT_ERROR;
-    }
-    if (timeout)                                                    // got nothing and ran out of time
-    {
-        if (autoClose)
-        {
-            g_ltem1->pendAction = NULL;
-            g_ltem1->iop->iopState = iop_state_idle;
-        }
+        PRINTF_WARN("action duration=%d\r", timing_millis() - g_ltem1->action->invokedAt);
+        g_ltem1->action->cmdStr[0] = NULL;
         return ACTION_RESULT_TIMEOUT;
     }
     return ACTION_RESULT_PENDING;
@@ -244,21 +141,22 @@ action_result_t action_getResult(action_t *atCmd, bool autoClose)
 /**
  *	\brief Waits for an AT command result.
  *
- *  \param[in] atCmd Pointer to command struct. Pass in NULL to reference integrated AT command structure.
+ *  \param [in] actionCmd - Pointer to command struct. Pass in NULL to use LTEm1 integrated action structure.
  * 
- *  \return AT command result type: completed=200, timedout=408, or response error=500.
+ *  \return Command action result type. See ACTION_RESULT_* macros in LTEm1c.h.
  */
-action_result_t action_awaitResult(action_t *atCmd)
+actionResult_t action_awaitResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response), bool autoClose)
 {
-    action_result_t cmdResult;
-    PRINTF_DBG1("AwtRslt\r");
+    actionResult_t actionResult;
+    PRINTF_GRAY("awaitRslt\r");
     do
     {
-        cmdResult = action_getResult(atCmd, true);
+        actionResult = action_getResult(response, responseSz, timeout, customCmdCompleteParser_func, autoClose);
         yield();
 
-    } while (cmdResult == ACTION_RESULT_PENDING);
-    return cmdResult;
+    } while (actionResult == ACTION_RESULT_PENDING);
+
+    return actionResult;
 }
 
 
@@ -266,44 +164,48 @@ action_result_t action_awaitResult(action_t *atCmd)
 /**
  *	\brief Cancels an AT command currently underway.
  *
- *  \param[in] atCmd Pointer to command struct
+ *  \param[in] actionCmd Pointer to command struct
  */
-void action_cancel(action_t *action)
+void action_cancel()
 {
-    // if singleton g_ltem1 atCmd is being cancelled reset it, if custom this is up to the caller
-    if (action == g_ltem1->dAction)
-    {
-        action_reset(action);
-    }
-    g_ltem1->pendAction = NULL;
-    g_ltem1->iop->iopState = iop_state_idle;
-
+    action_reset();
+    g_ltem1->action = NULL;
 }
 
 
+#pragma region completionParsers
+/* --------------------------------------------------------------------------------------------------------
+ * Action command completion parsers
+ * ----------------------------------------------------------------------------------------------------- */
 
 #define OK_COMPLETED_STRING "OK\r\n"
 #define OK_COMPLETED_LENGTH 4
 #define ERROR_COMPLETED_STRING "ERROR\r\n"
 #define ERROR_VALUE_OFFSET 7
+#define FAIL_COMPLETED_STRING "FAIL\r\n"
+#define FAIL_VALUE_OFFSET 6
 #define NOCARRIER_COMPLETED_STRING "NO CARRIER\r\n"
 #define NOCARRIER_VALUE_OFFSET 12
+#define CME_PREABLE "+CME ERROR:"
+#define CME_PREABLE_SZ 11
+
 
 
 /**
  *	\brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
  *
- *  \param[in] response The string returned from the getResult function.
- *  \param[in] landmark The string to look for to signal response matches command (scans from end backwards).
- *  \param[in] landmarkReqd The landmark string is required, set to false to allow for only gap and terminator
- *  \param[in] gap The min. char count between landmark and terminator (0 is valid).
- *  \param[in] terminator The string to signal the end of the command response, chars between landmark and terminator are considered valid part of response.
+ *  \param [in] response - The string returned from the getResult function.
+ *  \param [in] landmark - The string to look for to signal response matches command (scans from end backwards).
+ *  \param [in] landmarkReqd - The landmark string is required, set to false to allow for only gap and terminator
+ *  \param [in] gap - The min. char count between landmark and terminator (0 is valid).
+ *  \param [in] terminator - The string to signal the end of the command response.
  * 
  *  \return True if the response meets the conditions in the landmark, gap and terminator values.
  */
-action_result_t action_gapResultParser(const char *response, const char *landmark, bool landmarkReqd, uint8_t gap, const char *terminator)
+actionResult_t action_gapResultParser(const char *response, const char *landmark, bool landmarkReqd, uint8_t gap, const char *terminator)
 {
     char *searchPtr = NULL;
+    char *landmarkAt = NULL;
     char *terminatorAt = NULL;
     uint8_t landmarkSz = 0;
 
@@ -317,32 +219,45 @@ action_result_t action_gapResultParser(const char *response, const char *landmar
 
         while (searchPtr != NULL)                                   // find last occurrence of landmark
         {
+            landmarkAt = searchPtr;
             searchPtr = strstr(searchPtr + landmarkSz, landmark);
         }
     }
     
-    searchPtr = searchPtr ? searchPtr + landmarkSz : response;      // landmark is NULL, adjust search details
+    searchPtr = landmarkAt ? landmarkAt + landmarkSz : response;    // if landmark is NULL, start remaing search from response start
 
-    bool completedIsSuccess = true;
     if (terminator)                                                 // explicit terminator
         terminatorAt = strstr(searchPtr, terminator);
 
-    if (!terminator)                                                // no explicit terminator, look for OK
-        terminatorAt = strstr(searchPtr, OK_COMPLETED_STRING);
-
-    if (!terminator && !terminatorAt)                               // no explicit terminator, look for ERROR
+    if (!terminator)                                                // no explicit terminator, look for standard AT responses
     {
-        completedIsSuccess = false;
-        terminatorAt = strstr(searchPtr, ERROR_COMPLETED_STRING);
+        terminatorAt = strstr(searchPtr, OK_COMPLETED_STRING);
+        if (!terminatorAt)                                              
+        {
+            terminatorAt = strstr(searchPtr, CME_PREABLE);                  // no explicit terminator, look for extended CME errors
+            if (terminatorAt)
+            {
+                // return error code, all CME >= 500
+                return (strtol(terminatorAt + CME_PREABLE_SZ, NULL, 10));
+            }
+
+            terminatorAt = strstr(searchPtr, ERROR_COMPLETED_STRING);       // no explicit terminator, look for ERROR
+            if (terminatorAt)
+                return ACTION_RESULT_ERROR;
+
+            terminatorAt = strstr(searchPtr, FAIL_COMPLETED_STRING);        // no explicit terminator, look for FAIL
+            if (terminatorAt)
+                return ACTION_RESULT_ERROR;
+        }
     }
 
     if (terminatorAt && searchPtr + gap <= terminatorAt)            // term found with sufficient gap
-        return completedIsSuccess ? ACTION_RESULT_SUCCESS : ACTION_RESULT_ERROR;
+        return ACTION_RESULT_SUCCESS;
 
     if (terminatorAt)                                               // else gap insufficient
         return ACTION_RESULT_ERROR;
 
-    return ACTION_RESULT_PENDING;                                // no term, keep looking
+    return ACTION_RESULT_PENDING;                                   // no term, keep looking
 }
 
 
@@ -350,72 +265,150 @@ action_result_t action_gapResultParser(const char *response, const char *landmar
 /**
  *	\brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
  *
- *  \param[in] response The string returned from the getResult function.
- *  \param[in] landmark The string to look for to signal response matches command (scans from end backwards).
- *  \param[in] token The token delimeter char.
- *  \param[in] tokenCnt The min number of tokens expected.
+ *  \param [in] response - The string returned from the getResult function.
+ *  \param [in] landmark - The string to look for to signal response matches command (scans from end backwards).
+ *  \param [in] delim - The token delimeter char.
+ *  \param [in] minTokens - The minimum number of tokens expected.
  * 
  *  \return True if the response meets the conditions in the landmark and token count required.
  */
-action_result_t action_tokenResultParser(const char *response, const char *landmark, char token, uint8_t tokensRequired)
+actionResult_t action_tokenResultParser(const char *response, const char *landmark, char delim, uint8_t minTokens)
 {
     char *landmarkAt;
     uint8_t delimitersFound = 0;
 
     char *next = strstr(response, landmark);
-    if (next == NULL)
-        return ACTION_RESULT_PENDING;
-
-    // find last occurrence of landmark
-    uint8_t landmarkSz = strlen(landmark);
-    while (next != NULL)
+    if (next != NULL)
     {
-        landmarkAt = next;
-        next = strstr(next + landmarkSz, landmark);
-    }
-    next = landmarkAt + landmarkSz + 1;
+        // find last occurrence of landmark
+        uint8_t landmarkSz = strlen(landmark);
+        while (next != NULL)
+        {
+            landmarkAt = next;
+            next = strstr(next + landmarkSz, landmark);
+        }
+        next = landmarkAt + landmarkSz + 1;
 
-    while (delimitersFound < (tokensRequired - 1) && *next != '\0')
-    {
-        next = strchr(next + 1, token);
-        delimitersFound++;
+        while (delimitersFound < (minTokens - 1) && *next != '\0')
+        {
+            next = strchr(next + 1, delim);
+            delimitersFound++;
+        }
+        if (delimitersFound >= (minTokens -1))
+            return ACTION_RESULT_SUCCESS;
     }
-    return (delimitersFound == (tokensRequired -1)) ? ACTION_RESULT_SUCCESS : ACTION_RESULT_PENDING;
+
+    char *cmeAt = strstr(response, CME_PREABLE); 
+    if (cmeAt)
+    {
+        // return error code, all CME >= 500
+        return (strtol(cmeAt + CME_PREABLE_SZ, NULL, 10));
+    }
+    return ACTION_RESULT_PENDING;
 }
 
 
 
-/**
- *	\brief Scans cmd response looking for a CME (extended) error code.
- *
- *	\param[in] response The command response received from the BG96.
- *
- *  \return Integer extended CME error code.
- */
-action_result_t action_cmeResultParser(const char *response)
-{
-    #define CME_PREABLE "+CME ERROR:"
-    #define CME_PREABLE_SZ 11
-
-    char *preambleAt = strstr(response, CME_PREABLE);
-
-    if (preambleAt == NULL)
-        return ACTION_RESULT_PENDING;
-
-    // return error code, all CME >= 500
-    return (strtol(preambleAt + CME_PREABLE_SZ, NULL, 10));
-}
-
-
 
 /**
- *	\brief Validate the response ends in a BG96 OK value.
+ *	\brief Validate the response ends in a BGxx OK value.
  *
- *	\param[in] response The command response received from the BG96.
+ *	\param [in] response - Pointer to the command response received from the BGxx.
  *
  *  \return bool If the response string ends in a valid OK sequence
  */
-action_result_t action_okResultParser(const char *response)
+actionResult_t action_okResultParser(const char *response)
 {
     return action_gapResultParser(response, NULL, false, 0, NULL);
 }
+
+
+#pragma endregion  // completionParsers
+
+/* private (static) fuctions
+ * --------------------------------------------------------------------------------------------- */
+#pragma region private functions
+
+
+/**
+ *	\brief Safe string length, limits search for NULL char to maxSz.
+ *
+ *  \param [in] charStr - Pointer to character string to search for its length.
+ *  \param [in] maxSz - The maximum number of characters to search.
+ *
+ *  \return AT command control structure.
+ */
+static const char *strnend(const char *charStr, uint16_t maxSz)
+{
+    return memchr(charStr, '\0', maxSz);
+}
+
+
+
+/**
+ *	\brief Creates an AT command control stucture on the heap.
+ *
+ *  \param [in] resultSz - The size (length) of the command response buffer. Pass in 0 to use default size.
+ *
+ *  \return AT command control structure.
+ */
+// static action_t *createAction(uint8_t resultSz)
+// {
+//    	action_t *action = calloc(1, sizeof(action_t));
+// 	if (action == NULL)
+// 	{
+//         ltem1_faultHandler(500, "actions-could not alloc at command object");
+// 	}
+
+//     if (resultSz == 0)
+//         resultSz = ACTION_DEFAULT_RESPONSE_SZ;
+
+//     action->resultHead = calloc(resultSz + 1, sizeof(char));
+//     if (action->resultHead == NULL)
+//     {
+//         free(action);
+//         ltem1_faultHandler(500, "actions-could not alloc response buffer");
+//     }
+
+//     action_reset(action);
+//     action->cmdCompleteParser_func = action_okResultParser;
+
+//     return action;
+// }
+
+
+/**
+ *  \brief Attempts to get exclusive access to QBG module command interface.
+ * 
+ *  \param [in] actionCmd - Pointer to action structure.
+ *  \param [in] retry - If exclusive access is not initially garnered, should retries be attempted.
+*/
+static bool tryActionLock(const char *cmdStr, bool retry)
+{
+    if (g_ltem1->action->cmdStr[0] != NULL)
+    {
+        if (retry)
+        {
+            uint8_t retryCnt = 0;
+            while(g_ltem1->action->cmdStr[0] != NULL)
+            {
+                retryCnt++;
+
+                if (retryCnt == ACTIONS_RETRY_MAX)
+                    return false;
+
+                timing_delay(ACTIONS_RETRY_INTERVAL);
+                timing_yield();
+                ip_receiverDoWork();
+            }
+        }
+        else
+            return false;
+    }
+    g_ltem1->action->cmdStr[0] = '*';
+    return true;
+}
+
+
+#pragma endregion
+
