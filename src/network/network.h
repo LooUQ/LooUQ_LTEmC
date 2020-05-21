@@ -54,6 +54,7 @@ typedef enum
     protocol_https = 0x21,
 
     protocol_mqtt = 0x30,
+    protocol_mqtts = 0x31,
 
     protocol_none = 0xFF
 } protocol_t;
@@ -101,13 +102,16 @@ typedef struct network_tag
 } network_t;
 
 
+typedef void (*receiver_func_t)(socketId_t scktId, const char * data, uint16_t dataSz, const char * rmtHost, const char * rmtPort);
+
+
 typedef volatile struct socketCtrl_tag
 {
     protocol_t protocol;
     bool dataPending;
     uint8_t contextId;
     uint16_t recvBufSz;
-    void (*ipReceiver_func)(socket_t);
+    receiver_func_t receiver_func;
 } socketCtrl_t;
 
 

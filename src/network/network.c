@@ -67,7 +67,7 @@ protocols_t *ntwk_createProtocols()
         ltem1_faultHandler(0, "ipProtocols-could not alloc IP protocol struct");
 	}
 
-    socket_t *socket = calloc(LTEM1_SOCKET_COUNT, sizeof(socketCtrl_t));
+    socketCtrl_t *socket = calloc(LTEM1_SOCKET_COUNT, sizeof(socketCtrl_t));
 	if (socket == NULL)
 	{
         ltem1_faultHandler(0, "ipProtocols-could not alloc IP protocol struct");
@@ -78,7 +78,7 @@ protocols_t *ntwk_createProtocols()
     {   
         protocols->sockets[i].protocol = protocol_none;
         protocols->sockets[i].contextId = g_ltem1->dataContext;
-        protocols->sockets[i].ipReceiver_func = NULL;
+        protocols->sockets[i].receiver_func = NULL;
     }
     return protocols;
 }

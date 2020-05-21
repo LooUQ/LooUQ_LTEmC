@@ -76,12 +76,11 @@ typedef struct iopTxCtrlBlock_tag
 typedef struct iopRxCtrlBlock_tag
 {
     bool occupied;
-    // int8_t next;
     uint8_t primSz;
     char primBuf[65];
     iopProcess_t process;
-    // bool isURC;
-    char *dataStart;
+    char *data;
+    bool rmtHostInData;
     char *extsnBufHead;
     char *extsnBufTail;
 } iopRxCtrlBlock_t;
@@ -97,7 +96,7 @@ typedef volatile struct iop_tag
     int8_t socketHead[IOP_SOCKET_COUNT];
     int8_t socketTail[IOP_SOCKET_COUNT];
     uint8_t irdSocket;
-    int16_t socketIrdBytes[IOP_SOCKET_COUNT];
+    uint16_t socketIrdBytes[IOP_SOCKET_COUNT];
     iopRxCtrlBlock_t rxCtrlBlks[IOP_RX_CTRLBLOCK_COUNT];
     iopTxCtrlBlock_t *txCtrl;
     char urcStateMsg[IOP_URC_STATEMSG_SZ];
@@ -118,9 +117,9 @@ void iop_destroy();
 void iop_txSend(const char *sendData, uint16_t sendSz);
 
 iopXfrResult_t iop_rxGetCmdQueued(char *recvData, uint16_t recvSz);
-uint16_t iop_rxGetSocketQueued(socket_t socketNm, char *recvBuf, uint16_t recvMaxSz);
+uint16_t iop_rxGetSocketQueued(socketId_t socketId, char **data, char *rmtHost, char *rmtPort);
 
-void iop_tailFinalize(socket_t socketNm);
+void iop_tailFinalize(socketId_t socketId);
 
 //void iop_closeRxCtrl(uint8_t bufIndx);
 

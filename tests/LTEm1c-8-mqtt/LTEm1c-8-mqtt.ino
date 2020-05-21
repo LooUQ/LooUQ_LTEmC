@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEm1c-DynamicDNS.ino
+ *  \file LTEm1c-7-ipProto.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -22,8 +22,8 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  ******************************************************************************
- * Demonstrate how to register your modem's data APN address with a dynamic
- * DNS service (duckDNS.org)
+ * Test MQTT protocol client send/receive. 
+ * Uses Azure IoTHub and the LooUC Cloud
  *****************************************************************************/
 
 #include <ltem1c.h>
@@ -36,7 +36,7 @@ extern "C" {
 }
 
 #define DEFAULT_NETWORK_CONTEXT 1
-#define RECV_BUF_SZ 200
+#define XFRBUFFER_SZ 201
 #define SOCKET_ALREADYOPEN 563
 
 const int APIN_RANDOMSEED = 0;
@@ -61,17 +61,24 @@ spiConfig_t ltem1_spiConfig =
 };
 
 // test setup
-#define CYCLE_RANDOM_RANGE 5000
-int loopCnt = 1;
-unsigned long cycleBase = 5000;
-unsigned long cycleRandom;
-unsigned long lastCycle;
+#define CYCLE_INTERVAL 5000
+uint16_t loopCnt = 1;
+uint32_t lastCycle;
+
+#define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
+#define MQTT_PORT 8883
+#define MQTT_IOTHUB_DEVICEID "e8fdd7df-2ca2-4b64-95de-031c6b199299"
+#define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30"
+#define MQTT_IOTHUB_PASSWORD "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=%2FEpVF6bbYubWqoDaWyfoH0S1ZADNGxqdbhB24vBS9dA%3D&se=1590173851"
+
+#define MQTT_MSG_PROPERTIES "mId=~2&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97"
+
 
 // ltem1 variables
 socketResult_t result;
-socket_t socketNm;
-char sendBuf[120 + 1] = {0};
-char recvBuf[RECV_BUF_SZ] = {0};
+socketId_t mqttConnectionId;
+char sendBuf[XFRBUFFER_SZ] = {0};
+char recvBuf[XFRBUFFER_SZ] = {0};
 
 
 void setup() {
@@ -84,10 +91,11 @@ void setup() {
         #endif
     #endif
 
-    PRINTF("\rLTEm1c DynamicDNS\r\n");
+    PRINTF("\rLTEm1c test7-TCP/IP\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
-    
+
     ltem1_create(&ltem1_pinConfig, ltem1Functionality_services);
+    mqtt_create();
 
     PRINTF("Waiting on network...");
     do
@@ -103,113 +111,56 @@ void setup() {
         ntwk_activateContext(DEFAULT_NETWORK_CONTEXT);
     }
 
-    openTcpListenerSocket();
+    mqttConnectionId = mqtt_open(MQTT_IOTHUB, MQTT_PORT, sslVersion_tls12, mqttVersion_311);
+    mqtt_connect(mqttConnectionId, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_PASSWORD);
+
+    // force send at start
+    lastCycle = timing_millis() + 2*CYCLE_INTERVAL;
 }
 
 
 void loop() 
 {
-    if (timing_millis() - lastCycle > cycleBase + cycleRandom)
+    if (timing_millis() - lastCycle >= CYCLE_INTERVAL)
     {
         lastCycle = timing_millis();
-        cycleRandom = random(CYCLE_RANDOM_RANGE);
-        PRINTF_WHITE("\r\nLoop=%i >>>>>>>>>>>>>>>>>>>>>>>>>>>>>> \r\n", loopCnt);
-
-        //snprintf(sendBuf, 120, "--noecho %d-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890", loopCnt);      // 2 chunks
-        snprintf(sendBuf, 120, "%d-%d", loopCnt, timing_millis());                                                               // 1 chunk
-                                                                
-        result = ip_send(socketNm, sendBuf, strlen(sendBuf));
-        PRINTF_CYAN("Send Loop %d, sendRslt=%d \r", loopCnt, result);
-
-        if (result != 200)
-            PRINTF_ERR("ip_send() returned error=%d\r", result);
-            // indicateFailure("TCPIP TEST-failure on ip_send().");
+        PRINTF_WHITE("\rLoop=%i>>\r", loopCnt);
 
 
+
+        loopCnt++;
+        PRINTF_INFO("\rFreeMem=%u  ", getFreeMemory());
+        PRINTF_WHITE("<<Loop=%d\r", loopCnt);
+
+        //showStats(loopCnt++, CYCLE_INTERVAL);
     }
 
     /*
-     *  NOTE: ltem1_doWork() pipeline requires up to 3 invokes for each data receive. 
-     *  DoWork has no side effects other than taking time and should be invoked liberally.
+     * NOTE: ltem1_doWork() pipeline requires up to 3 invokes for each data receive. DoWork has no side effects 
+     * other than taking time and should be invoked liberally.
      */
     ltem1_doWork();
 }
 
 
-/* DynamicDNS Registration
-========================================================================================================================= */
-
-
-/**
- *  \brief Register the IP address of a data context with the DuckDNS.org dynamic DNS service.
- * 
- *  \param [in] hostname The host name to associate with this modem/context: {hostname}\duckdns.org.
- * 
- *  \return True if the registration suceeds, false if fails.
-*/
-bool registerIpWithDns(const char *hostname, const char *authToken)
-{
-    /* 
-     * g_ltem1->dataContext is the designated data context. This is generally locked in by network operator.
-     *  Verizon=1, Hologram=1
-    */
-
-    // https://www.duckdns.org/update?domains={YOURVALUE}&token={YOURVALUE}[&ip={YOURVALUE}][&ipv6={YOURVALUE}][&verbose=true][&clear=true]
-    char requestBuf[200] = {0};
-
-    // get IP address from LTEm1c
-    pdpContext_t dataContext = ntwk_getDataContext(NTWK_DEFAULT_CONTEXT);
-
-    // open an HTTPS connection to duckDNS.org
-
-    socketId_t webResult = http_open();
-
-    // create request
-    snprintf(requestBuf, 120, "https://www.duckdns.org/update?domains=%s&token=%s&ip=%s&verbose=true", hostname, authToken, dataContext.ipAddress); 
-    socketResult_t webResult = http_get(requestBuf);
-
-    // get and parse response
-
-}
-
-
-
-/* Example helpers
-========================================================================================================================= */
-
-void openTcpListenerSocket()
-{
-    result = ip_open(protocol_udp, "97.83.32.119", 9001, 0, socketReceiver);
-    if (result == SOCKET_ALREADYOPEN)
-        socketNm = 0;
-    else if (result >= LTEM1_SOCKET_COUNT)
-    {
-        indicateFailure("Failed to open socket.");
-    }
-}
-
-
-void socketReceiver(socketId_t socketId)
-{
-    char recvBuf[RECV_BUF_SZ + 1] = {0};
-    uint16_t recvdSz;
-
-    recvdSz = ip_recv(socketId, recvBuf, RECV_BUF_SZ);
-    recvBuf[recvdSz + 1] = '\0';
-
-    PRINTF_INFO("appRcvd >>%s<<  at %d\r", recvBuf, timing_millis());
-}
-
-
-void sendWebPage()
-{
-
-}
-
-
-
 /* test helpers
 ========================================================================================================================= */
+
+
+void showStats(uint16_t loopCnt, uint32_t waitNext) 
+{
+    PRINTF_INFO("\rFreeMem=%u  ", getFreeMemory());
+    // PRINTF_WHITE("Next send to ECHO server in %d (millis)\r", waitNext);
+    PRINTF_WHITE("<<Loop=%d\r", loopCnt);
+
+    // for (int i = 0; i < 6; i++)
+    // {
+    //     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+    //     timing_delay(50);
+    //     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+    //     timing_delay(50);
+    // }
+}
 
 
 void indicateFailure(char failureMsg[])

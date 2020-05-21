@@ -42,7 +42,7 @@ bool action_tryInvoke(const char *cmdStr, bool retry);
 // bool action_tryInvokeCustom(action_t *cmdAction, bool retry);
 void action_sendData(const char *data, uint16_t dataSz);
 
-action_t *action_reset();
+void action_reset();
 
 actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response), bool autoClose);
 actionResult_t action_awaitResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response), bool autoClose);

@@ -1,5 +1,5 @@
 {
-    "sketch": "LTEm1c-7-tcpip.ino",
+    "sketch": "LTEm1c-8-mqtt.ino",
     "port": "COM12",
     "board": "adafruit:samd:adafruit_feather_m0",
     "output": ".//.build",

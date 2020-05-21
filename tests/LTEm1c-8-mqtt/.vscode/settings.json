@@ -8,6 +8,7 @@
         "bitset": "cpp",
         "cfloat": "cpp",
         "ltem1c.h": "c",
-        "iop.h": "c"
+        "iop.h": "c",
+        "chrono": "cpp"
     }
 }

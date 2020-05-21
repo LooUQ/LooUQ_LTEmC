@@ -47,7 +47,7 @@ static void txSendNextChunk(uint8_t fifoAvailable);
 
 static uint8_t rxOpenCtrlBlock();
 static void rxParseRecvContentPreamble(uint8_t rxIndx);
-static void rxProcessSocketIrd(iopRxCtrlBlock_t *rxCtrlStruct, socket_t socketNm);
+static void rxProcessSocketIrd(iopRxCtrlBlock_t *rxCtrlStruct, socketId_t socketId);
 static void rxResetCtrlBlock(uint8_t bufIndx);
 
 static void interruptCallbackISR();
@@ -129,17 +129,14 @@ void iop_destroy(void *iop)
  */
 void iop_txSend(const char *sendData, uint16_t sendSz)
 {
-    // if(IOP_TX_ACTIVE())
-    //     return iop_xfrResult_busy;
-
     if (sendSz > IOP_TX_BUFFER_SZ)
         ltem1_faultHandler(500, "iop-send data max size exceeded");
 
-    //g_ltem1->iop->txCtrl->txActive = true;
     memcpy(g_ltem1->iop->txCtrl->txBuf, sendData, sendSz);
 
     uint16_t thisChunkSz = MIN(sendSz, SC16IS741A_FIFO_BUFFER_SZ);
     sc16is741a_write(g_ltem1->iop->txCtrl->txBuf, thisChunkSz);
+
     while (g_ltem1->iop->txCtrl->remainSz)
     {
         timing_yield();
@@ -173,8 +170,6 @@ iopXfrResult_t iop_rxGetCmdQueued(char *recvBuf, uint16_t recvBufSz)
         return iopXfrResult_incomplete;
 
     uint8_t tail = g_ltem1->iop->cmdTail;
-    // memset(recvBuf, 0, recvBufSz);
-
     do
     {
         if (g_ltem1->iop->rxCtrlBlks[tail].occupied && g_ltem1->iop->rxCtrlBlks[tail].process == iopProcess_command)
@@ -211,33 +206,43 @@ iopXfrResult_t iop_rxGetCmdQueued(char *recvBuf, uint16_t recvBufSz)
  * 
  *   \return The number of bytes received (since previous call).
 */
-uint16_t iop_rxGetSocketQueued(socket_t socketNm, char *recvBuf, uint16_t recvBufSz)
+uint16_t iop_rxGetSocketQueued(socketId_t socketId, char **data, char *rmtHost, char *rmtPort)
 {
-    uint16_t recvdBytes;
-    int8_t tail = g_ltem1->iop->socketTail[socketNm];
+    int8_t tail = g_ltem1->iop->socketTail[socketId];
+    *rmtHost = NULL;
+    *rmtPort = NULL;
 
     if ( !g_ltem1->iop->rxCtrlBlks[tail].occupied )
         return 0;
 
-    // if extended buffer in use, copy primary to start of extended buffer
-    // determine which buffer (prim, aux) to return pointer to
+    if (g_ltem1->iop->rxCtrlBlks[tail].rmtHostInData)
+    {
+        /* FUTURE - Incoming UDP/TCP sockets are minimally supported by network operators, 
+         * Verizon and Sprint Curiosity require static IP ($$), Hologram requires a custom proxy 
+         * that really isn't even a UDP/TCP socket receiver approach. 
+         **/
+        // receive data is prefixed by rmt host IP address, then port number (as strings)
+    }
+
+    // determine which buffer (primary, extension) to return pointer to
     if (g_ltem1->iop->rxCtrlBlks[tail].extsnBufHead)
     {
-        recvdBytes == g_ltem1->iop->rxCtrlBlks[tail].extsnBufTail - g_ltem1->iop->rxCtrlBlks[tail].extsnBufHead;
-        memcpy(recvBuf, g_ltem1->iop->rxCtrlBlks[tail].primBuf, g_ltem1->iop->rxCtrlBlks[tail].primSz);
-        memcpy(recvBuf + recvdBytes, g_ltem1->iop->rxCtrlBlks[tail].primBuf, recvdBytes);
-        recvdBytes += g_ltem1->iop->rxCtrlBlks[tail].primSz;
+        uint16_t dataSz = g_ltem1->iop->rxCtrlBlks[tail].extsnBufTail - g_ltem1->iop->rxCtrlBlks[tail].extsnBufHead;
+        // extended buffer in use, combine parts: copy primary to start of extended buffer
+        memcpy(g_ltem1->iop->rxCtrlBlks[tail].extsnBufHead, g_ltem1->iop->rxCtrlBlks[tail].primBuf, g_ltem1->iop->rxCtrlBlks[tail].primSz);
+
+        *data = &g_ltem1->iop->rxCtrlBlks[tail].extsnBufHead;
+        return dataSz;
     }
     else
     {
-        // offset IRD header from g_ltem1->iop->rxCtrlBlks[currIndx].primSz
-        recvdBytes = MIN(g_ltem1->iop->rxCtrlBlks[tail].primSz, recvBufSz);
-        memcpy(recvBuf, g_ltem1->iop->rxCtrlBlks[tail].dataStart, recvdBytes);
+        *data = g_ltem1->iop->rxCtrlBlks[tail].data;
+        return g_ltem1->iop->socketIrdBytes[socketId];
     }
 
-    free(g_ltem1->iop->rxCtrlBlks[tail].extsnBufHead);          // if extended buffer, free malloc'd buffer space
+    //free(g_ltem1->iop->rxCtrlBlks[tail].extsnBufHead);          // if extended buffer, free malloc'd buffer space
     //iop_tailFinalize(socketNm);
-    return recvdBytes;
+    //return recvdBytes;
 }
 
 
@@ -247,28 +252,28 @@ uint16_t iop_rxGetSocketQueued(socket_t socketNm, char *recvBuf, uint16_t recvBu
  * 
  *   \param[in] The socket number to close tail buffer and update controls.
 */
-void iop_tailFinalize(socket_t socketNm)
+void iop_tailFinalize(socketId_t socketId)
 {
-    uint8_t tail = g_ltem1->iop->socketTail[socketNm];
+    uint8_t tail = g_ltem1->iop->socketTail[socketId];
 
     if (g_ltem1->iop->rxCtrlBlks[tail].occupied)
         rxResetCtrlBlock(tail);
 
     do                                                          // advance tail, next available message or head
     {
-        if (tail == g_ltem1->iop->socketHead[socketNm])
+        if (tail == g_ltem1->iop->socketHead[socketId])
         {
             return;
         }
 
         tail = ADV_RXCTRLBLK_INDEX(tail);
 
-        if (g_ltem1->iop->rxCtrlBlks[tail].occupied && g_ltem1->iop->rxCtrlBlks[tail].process == socketNm)  // at next socket rxCtrlBlk
+        if (g_ltem1->iop->rxCtrlBlks[tail].occupied && g_ltem1->iop->rxCtrlBlks[tail].process == socketId)  // at next socket rxCtrlBlk
         {
-            g_ltem1->iop->socketTail[socketNm] = tail;
+            g_ltem1->iop->socketTail[socketId] = tail;
             return;
         }
-    } while (tail != g_ltem1->iop->socketTail[socketNm]);
+    } while (tail != g_ltem1->iop->socketTail[socketId]);
 
     ltem1_faultHandler(500, "iop-iop_tailFinalize-buffer underflow");
 }
@@ -348,7 +353,7 @@ static void rxResetCtrlBlock(uint8_t bufIndx)
  *
  *   \param[in\out] rxCtrlStruct receive control/buffer structure.
  */
-static void rxProcessSocketIrd(iopRxCtrlBlock_t *rxCtrlStruct, socket_t socketNm)
+static void rxProcessSocketIrd(iopRxCtrlBlock_t *rxCtrlStruct, socketId_t socketNm)
 {
     /* note the protocol session is in invoking AT+QIRD=#, not returned in +QIRD result
     *  Example: +QIRD: 4,  where 4 is the number of chars arriving
@@ -357,17 +362,20 @@ static void rxProcessSocketIrd(iopRxCtrlBlock_t *rxCtrlStruct, socket_t socketNm
     */
 
     char *lenPtr = rxCtrlStruct->primBuf + RECV_HEADERSZ_IRD + 4;
-    uint16_t irdLen = strtol(lenPtr, &rxCtrlStruct->dataStart, 10);
-    rxCtrlStruct->dataStart += 2;
+    uint16_t irdLen = strtol(lenPtr, &rxCtrlStruct->data, 10);
     rxCtrlStruct->primSz = irdLen;
     g_ltem1->iop->socketIrdBytes[socketNm] = irdLen;
 
+    // setup extended buffer if required
     if (irdLen > IOP_RX_PRIMARY_BUFFER_SIZE)
     {
         uint8_t primLen = strlen(rxCtrlStruct->primBuf);
         rxCtrlStruct->extsnBufHead = calloc(irdLen, sizeof(uint8_t));
         rxCtrlStruct->extsnBufTail = rxCtrlStruct->extsnBufHead + primLen;
     }
+    // grab remote IP info, if socket opened as UDP service
+    rxCtrlStruct->rmtHostInData = (*rxCtrlStruct->data == ASCII_cCOMMA);
+    rxCtrlStruct->data += 2;
     return irdLen;
 }
 
@@ -423,18 +431,18 @@ static void rxParseRecvContentPreamble(uint8_t rxIndx)
 
     else if (strncmp("+QIRD", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_IRD) == 0)
     {
-        socket_t socketNm = g_ltem1->iop->irdSocket;
+        socketId_t socketId = g_ltem1->iop->irdSocket;
 
-        rxProcessSocketIrd(rxCtrlBlock, socketNm);
-        rxCtrlBlock->process = socketNm;
-        if (g_ltem1->iop->socketIrdBytes[socketNm] == 0)
+        rxProcessSocketIrd(rxCtrlBlock, socketId);
+        rxCtrlBlock->process = socketId;
+        if (g_ltem1->iop->socketIrdBytes[socketId] == 0)
         {
-            g_ltem1->protocols->sockets[socketNm].dataPending = false;
+            g_ltem1->protocols->sockets[socketId].dataPending = false;
             rxCtrlBlock->occupied = false;                              // special case: if no data, release ctrlBlk
             rxCtrlBlock->process = iopProcess_void;
         }
         else
-            g_ltem1->iop->socketHead[socketNm] = rxIndx;                // data present, so point head to this ctrlBlk
+            g_ltem1->iop->socketHead[socketId] = rxIndx;                // data present, so point head to this ctrlBlk
 
         g_ltem1->iop->irdSocket = protocol_none;
         g_ltem1->action->cmdStr[0] = NULL;                                  // IRD is an action response, close it out

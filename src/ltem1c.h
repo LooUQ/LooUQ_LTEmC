@@ -55,6 +55,7 @@ extern "C"
 #define ASCII_cDBLQUOTE '\"'
 #define ASCII_cHYPHEN '-'
 #define ASCII_cSPACE ' '
+#define ASCII_cCTRLZ (char)0x1A
 #define ASCII_sCRLF "\r\n"
 #define ASCII_sOK "OK\r\n"
 #define ASCII_szCRLF 2
@@ -85,6 +86,7 @@ typedef uint16_t actionResult_t;
 #include "gnss.h"
 #include "network/network.h"
 #include "network/ip.h"
+#include "network/mqtt.h"
 
 
 typedef enum 
@@ -121,6 +123,7 @@ typedef struct ltem1Device_tag
 	modemInfo_t *modemInfo;
     network_t *network;
 	protocols_t *protocols;
+    mqtt_t *mqtt;
 } ltem1Device_t;
 
 

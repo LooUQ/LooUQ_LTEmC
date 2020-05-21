@@ -1,0 +1,45 @@
+
+
+
+SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net/devices/e8fdd7df-2ca2-4b64-95de-031c6b199299&sig=Z7wUYDeNk4aJwGE%2bK7piUtkv05tDialfAdvfjaAt8SU%3d&se=1589891441&skn=
+
+
+expiry 1589891507 (3600 sec from Tue AM)
+
+
+
+new SAS from IoT Explorer (5/19 for 80640 minutes)
+
+HostName=iothub-dev-pelogical.azure-devices.net;DeviceId=e8fdd7df-2ca2-4b64-95de-031c6b199299;SharedAccessSignature=SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=Fdmw8eD%2BaR1doaatKaEgZvAL7FUFhDhxJFPiQkFMYt8%3D&se=1594735159
+
+
+
+
+
+
+
+iothub-dev-pelogical.azure-devices.net = (ipAddr hex: ff-36-3d-a8 = 168.61.54.255)
+
+
+
+Test Sequence
+
+AT+QSSLCFG="sslversion",0,3
+AT+QMTCFG="version",0,4
+AT+QMTCFG="ssl",0,1,0
+
+AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
+
+AT+QMTCONN=0,"e8fdd7df-2ca2-4b64-95de-031c6b199299","iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30","SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=%2FEpVF6bbYubWqoDaWyfoH0S1ZADNGxqdbhB24vBS9dA%3D&se=1590173851"
+
+
+
+
+
+
+AT+QMTPUB=0,0,0,0,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/"
+AT+QMTPUB=0,1,0,0,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/mId=~0&mV=1.0&mTyp=alrt&evC=cloud&evN=dvStart&evV=e8fdd7df-2ca2-4b64-95de-031c6b199299"
+
+AT+QMTSUB=0,10,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#",0
+
+AT+QMTPUB=0,0,0,0,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/mId=~0&mV=1.0&mTyp=alrt&evC=cloud&evN=dvStart&evV=e8fdd7df-2ca2-4b64-95de-031c6b199299"

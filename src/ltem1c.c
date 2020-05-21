@@ -76,7 +76,8 @@ void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t fun
     }
     if (funcLevel >= ltem1Functionality_actions)
     {
-        g_ltem1->action = action_reset();
+        g_ltem1->action = calloc(1, sizeof(action_t));
+        action_reset();
     }
     if (funcLevel >= ltem1Functionality_services)
     {
@@ -206,7 +207,7 @@ void ltem1_destroy()
 void ltem1_doWork()
 {
     ip_receiverDoWork();
-    qbg_processUrcStateQueue();
+    //qbg_processUrcStateQueue();
 }
 
 

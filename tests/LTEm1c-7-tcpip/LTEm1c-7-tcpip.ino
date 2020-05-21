@@ -35,7 +35,7 @@ extern "C" {
 }
 
 #define DEFAULT_NETWORK_CONTEXT 1
-#define RECV_BUF_SZ 200
+#define XFRBUFFER_SZ 201
 #define SOCKET_ALREADYOPEN 563
 
 const int APIN_RANDOMSEED = 0;
@@ -60,17 +60,15 @@ spiConfig_t ltem1_spiConfig =
 };
 
 // test setup
-#define CYCLE_RANDOM_RANGE 5000
-int loopCnt = 1;
-unsigned long cycleBase = 5000;
-unsigned long cycleRandom;
-unsigned long lastCycle;
+#define CYCLE_INTERVAL 5000
+uint16_t loopCnt = 1;
+uint32_t lastCycle;
 
 // ltem1 variables
 socketResult_t result;
-socketId_t socketNm;
-char sendBuf[120 + 1] = {0};
-char recvBuf[RECV_BUF_SZ] = {0};
+socketId_t socketId;
+char sendBuf[XFRBUFFER_SZ] = {0};
+char recvBuf[XFRBUFFER_SZ] = {0};
 
 
 void setup() {
@@ -85,10 +83,6 @@ void setup() {
 
     PRINTF("\rLTEm1c test7-TCP/IP\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
-    
-    randomSeed(analogRead(APIN_RANDOMSEED));
-    lastCycle = timing_millis();
-    cycleRandom = random(CYCLE_RANDOM_RANGE);
 
     ltem1_create(&ltem1_pinConfig, ltem1Functionality_services);
 
@@ -109,35 +103,40 @@ void setup() {
     test_openSocket();
 
     // force send at start
-    lastCycle = timing_millis() + 2*CYCLE_RANDOM_RANGE;
+    lastCycle = timing_millis() + 2*CYCLE_INTERVAL;
 }
 
 
 void loop() 
 {
-    if (timing_millis() - lastCycle > cycleBase + cycleRandom)
+    if (timing_millis() - lastCycle >= CYCLE_INTERVAL)
     {
         lastCycle = timing_millis();
-        cycleRandom = random(CYCLE_RANDOM_RANGE);
-        PRINTF_WHITE("\r\nLoop=%i >>>>>>>>>>>>>>>>>>>>>>>>>>>>>> \r\n", loopCnt);
+        PRINTF_WHITE("\rLoop=%i>>\r", loopCnt);
 
         //snprintf(sendBuf, 120, "--noecho %d-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890", loopCnt);      // 2 chunks
-        snprintf(sendBuf, 120, "%d-%d", loopCnt, timing_millis());                                                               // 1 chunk
-                                                                
-        result = ip_send(socketNm, sendBuf, strlen(sendBuf));
+        snprintf(sendBuf, 120, "%d-%lu", loopCnt, timing_millis());                                                                      // 1 chunk
+        PRINTF("sendBuf=%s\r", sendBuf);
+
+        // PRINTF_INFO("\rRSSI=%d\r", mdminfo_rssi());
+
+        result = ip_send(socketId, sendBuf, strlen(sendBuf), NULL, NULL);
         PRINTF_CYAN("Send Loop %d, sendRslt=%d \r", loopCnt, result);
 
         if (result != 200)
             PRINTF_ERR("ip_send() returned error=%d\r", result);
             // indicateFailure("TCPIP TEST-failure on ip_send().");
 
-
         // if (loopCnt % 25 == 0)                 // close/reopen socket periodically for test
         // {
         //     ip_close(socketNm);
         //     test_openSocket();
         // }
-        showStats(loopCnt++, cycleBase + cycleRandom);
+        loopCnt++;
+        PRINTF_INFO("\rFreeMem=%u  ", getFreeMemory());
+        PRINTF_WHITE("<<Loop=%d\r", loopCnt);
+
+        //showStats(loopCnt++, CYCLE_INTERVAL);
     }
 
     /*
@@ -154,9 +153,9 @@ void loop()
 
 void test_openSocket()
 {
-    result = ip_open(protocol_udp, "97.83.32.119", 9001, 0, udpReceiver);
+    result = ip_open(protocol_udp, "97.83.32.119", 9001, 0, ipReceiver);
     if (result == SOCKET_ALREADYOPEN)
-        socketNm = 0;
+        socketId = 0;
     else if (result >= LTEM1_SOCKET_COUNT)
     {
         indicateFailure("Failed to open socket.");
@@ -164,15 +163,20 @@ void test_openSocket()
 }
 
 
-void udpReceiver(socketId_t socketId)
+void ipReceiver(socketId_t socketId, const char *data, uint16_t dataSz, const char *rmtHost, const char *rmtPort)
 {
-    char recvBuf[RECV_BUF_SZ + 1] = {0};
-    uint16_t recvdSz;
+    // char recvBuf[XFRBUFFER_SZ] = {0};
+    // uint16_t recvdSz;
 
-    recvdSz = ip_recv(socketId, recvBuf, RECV_BUF_SZ);
-    recvBuf[recvdSz + 1] = '\0';
+    // recvdSz = ip_recv(socketId, recvBuf, XFRBUFFER_SZ);
+    // recvBuf[recvdSz + 1] = '\0';
+    
+    char temp[dataSz + 1];
+    
+    strncpy(temp, data, dataSz);
+    temp[dataSz] = '\0';
 
-    PRINTF_INFO("appRcvd >>%s<<  at %d\r", recvBuf, timing_millis());
+    PRINTF_INFO("appRcvd <%s> at %d\r", temp, timing_millis());
 }
 
 
@@ -182,19 +186,19 @@ void udpReceiver(socketId_t socketId)
 ========================================================================================================================= */
 
 
-void showStats(int loopCnt, int waitNext) 
+void showStats(uint16_t loopCnt, uint32_t waitNext) 
 {
-    PRINTF_CYAN("FreeMem=%u\r\n", getFreeMemory());
-    PRINTF_WHITE("Next send to ECHO server in %i (millis)\r\r", waitNext);
-    PRINTF_WHITE("\rendLoop=%i <<<<<<<<<<<<<<<<<<<<<<<< \r", loopCnt);
+    PRINTF_INFO("\rFreeMem=%u  ", getFreeMemory());
+    // PRINTF_WHITE("Next send to ECHO server in %d (millis)\r", waitNext);
+    PRINTF_WHITE("<<Loop=%d\r", loopCnt);
 
-    for (int i = 0; i < 6; i++)
-    {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(50);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(50);
-    }
+    // for (int i = 0; i < 6; i++)
+    // {
+    //     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+    //     timing_delay(50);
+    //     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+    //     timing_delay(50);
+    // }
 }
 
 

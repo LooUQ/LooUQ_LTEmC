@@ -20,19 +20,14 @@ static bool tryActionLock(const char *cmdStr, bool retry);
  *
  *  \param [in] atCmd - Pointer to command struct to reset
  */
-action_t *action_reset()
+void action_reset()
 {
-    if (g_ltem1->action == NULL)
-    {
-        g_ltem1->action = calloc(1, sizeof(action_t));
-    }
     memset(g_ltem1->action->cmdStr, 0, ACTION_INVOKE_CMDSTR_SZ);
     g_ltem1->action->resultHead = NULL;
     g_ltem1->action->resultTail = NULL;
     g_ltem1->action->resultCode = ACTION_RESULT_PENDING;
-    g_ltem1->action->invokedAt = 0;
+    g_ltem1->action->invokedAt = timing_millis();
     g_ltem1->action->irdPending = iopProcess_void;
-    return g_ltem1->action;
 }
 
 
@@ -46,17 +41,16 @@ action_t *action_reset()
  * 
  *  \return True if action was invoked, false if not
  */
-bool action_tryInvoke(const char * cmdStr, bool retry)
+bool action_tryInvoke(const char *cmdStr, bool retry)
 {
     if ( !tryActionLock(cmdStr, retry) )
         return false;
 
-    action_reset(g_ltem1->action);
-    strncpy(g_ltem1->action->cmdStr, cmdStr, ACTION_INVOKE_CMDSTR_SZ);
-    
-    PRINTF("\raction=%s\r", g_ltem1->action->cmdStr);
+    PRINTF("\raction> %s\r", cmdStr);
 
-    g_ltem1->action->invokedAt = timing_millis();
+    action_reset();
+    strncpy(g_ltem1->action->cmdStr, cmdStr, ACTION_INVOKE_CMDSTR_SZ);
+
     strcat(g_ltem1->action->cmdStr, ASCII_sCR);
     iop_txSend(g_ltem1->action->cmdStr, strlen(g_ltem1->action->cmdStr));
     return true;
@@ -72,11 +66,15 @@ bool action_tryInvoke(const char * cmdStr, bool retry)
  */
 void action_sendData(const char *data, uint16_t dataSz)
 {
-    g_ltem1->action->cmdCompleteParser_func = action_okResultParser;
-    g_ltem1->action->invokedAt = timing_millis();
-    //g_ltem1->currentAction = g_ltem1->stdAction;
-
-    iop_txSend(data, dataSz);
+    action_reset();
+    // strncpy(g_ltem1->action->cmdStr, "sendData", 9);
+    if (dataSz == 0)
+    {
+        iop_txSend(data, strlen(data));
+        iop_txSend(ASCII_cCTRLZ, 1);
+    }
+    else
+        iop_txSend(data, dataSz);
 }
 
 
@@ -96,12 +94,13 @@ actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t ti
 
     if (g_ltem1->action->resultHead == NULL)
     {
+        memset(response, 0, responseSz);
         g_ltem1->action->resultHead = response;
         g_ltem1->action->resultTail = response;
         g_ltem1->action->resultSz = responseSz;
-        g_ltem1->action->timeoutMillis = timeout == 0 ? ACTION_DEFAULT_TIMEOUT_MILLIS : timeout;
+
+        g_ltem1->action->timeoutMillis = (timeout == 0) ? ACTION_DEFAULT_TIMEOUT_MILLIS : timeout;
         g_ltem1->action->cmdCompleteParser_func = (customCmdCompleteParser_func == NULL) ? action_okResultParser : customCmdCompleteParser_func;
-        memchr(response, 0, responseSz);
     }
     
     actionResult_t parserResult = ACTION_RESULT_PENDING;

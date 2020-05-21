@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file ip.h
+ *  \file mqtt.h
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -23,10 +23,45 @@
  *
  *****************************************************************************/
 
-#ifndef __IP_H__
-#define __IP_H__
+#ifndef __MQTT_H__
+#define __MQTT_H__
 
 #include "..\ltem1c.h"
+#include "network.h"
+
+#define MQTT_PUBMSG_MAXSZ 1549
+
+
+typedef struct mqtt_tag
+{
+    uint16_t msgId[LTEM1_SOCKET_COUNT];
+} mqtt_t;
+
+
+typedef enum mqttResult_tag
+{
+    mqttResult_success = 0,
+    mqttResult_retransmission = 1,
+    mqttResult_failed = 2
+} mqttResult_t;
+
+
+typedef enum sslVersion_tag
+{
+    sslVersion_none = 255,
+    sslVersion_ssl30 = 0,
+    sslVersion_tls10 = 1,
+    sslVersion_tls11 = 2,
+    sslVersion_tls12 = 3,
+    sslVersion_any = 4
+} sslVersion_t;
+
+
+typedef enum mqttVersion_tag
+{
+    mqttVersion_3 = 3,
+    mqttVersion_311 = 4
+} mqttVersion_t;
 
 
 #ifdef __cplusplus
@@ -35,23 +70,21 @@ extern "C"
 #endif // __cplusplus
 
 
-socketResult_t ip_open(protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, receiver_func_t rcvr_func);
-// socketResult_t ip_open(protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, void (*ipReceiver_func)(socketId_t));
-void ip_close(uint8_t socketNum);
+void mqtt_create();
+void mqtt_destroy();
 
-socketResult_t ip_send(socketId_t socketId, const char *data, uint16_t dataSz, const char *rmtHost, const char *rmtPort);
+socketId_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion);
+socketResult_t mqtt_connect(socketId_t socketId, const char *clientId, const char *username, const char *password);
+void mqtt_close(socketId_t socketId);
 
-//socketResult_t ip_sendUdpReply(uint8_t socketNum, const char *rmtHost, uint16_t rmtPort,  const char *sendBuf, uint8_t sendSz);
+socketResult_t mqtt_subscribe(socketId_t socketId, const char *topic, uint8_t qos);
+socketResult_t mqtt_unsubscribe(socketId_t socketId);
+socketResult_t mqtt_publish(socketId_t socketId, const char *topic, const char *message);
 
-//uint16_t ip_recv(socketId_t socketId, char *recvBuf, uint16_t recvBufSz);
-
-void ip_receiverDoWork();
-
-actionResult_t sendDataPromptParser(const char *response);
 
 #ifdef __cplusplus
 }
 #endif // !__cplusplus
 
 
-#endif  /* !__IP_H__ */
+#endif  /* !__MQTT_H__ */
