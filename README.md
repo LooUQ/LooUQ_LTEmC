@@ -10,7 +10,7 @@ The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LT
 [LTEm1 Modem Specifications](https://drive.google.com/uc?id=1amRN84WPJqlxu36hTU_9TU1F0aX2Kv86)
 
 ----
-![LTEm1c](https://drive.google.com/uc?id=1PMFjFoy0ToDR7PuwlXjVdbManJMVNh15)
+![LTEm1c](https://drive.google.com/open?id=1PMFjFoy0ToDR7PuwlXjVdbManJMVNh15)
 
 Blue subsystems are functional, FOTA/MQTT are partially implemented, grey boxes indicate future feature areas. Boxes with wide borders are option items that can be built into application or omitted to reduced code size.
 
