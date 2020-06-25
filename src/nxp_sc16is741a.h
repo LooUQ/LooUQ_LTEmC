@@ -37,7 +37,7 @@ extern "C"
 #include <stdbool.h>
 #endif // __cplusplus
 
-#include "../platform/platform_spi.h"
+#include "platform/platform_spi.h"
 
 #pragma region structures
 
@@ -347,8 +347,8 @@ typedef enum
 void sc16is741a_start();
 void sc16is741a_enableIrqMode();
 
-void sc16is741a_write(const void * src, size_t src_len);
-void sc16is741a_read(void* dest, size_t dest_len);
+void sc16is741a_write(const void * src, uint8_t src_len);
+void sc16is741a_read(void* dest, uint8_t dest_len);
 
 void sc16is741a_writeReg(uint8_t reg_addr, uint8_t reg_data);
 uint8_t sc16is741a_readReg(uint8_t reg_addr);

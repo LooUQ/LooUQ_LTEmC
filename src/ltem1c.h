@@ -39,10 +39,10 @@ extern "C"
 
 #include "platform/platform_gpio.h"
 #include "platform/platform_timing.h"
-#include "platform/platform_stdio.h"
+//#include "platform/platform_stdio.h"
 #include "platform/platform_spi.h"
-#include "components/nxp_sc16is741a.h"
-#include "components/quectel_bg.h"
+#include "nxp_sc16is741a.h"
+#include "quectel_bg.h"
 #include "util.h"
 
 
@@ -55,9 +55,10 @@ extern "C"
 #define ASCII_cDBLQUOTE '\"'
 #define ASCII_cHYPHEN '-'
 #define ASCII_cSPACE ' '
-#define ASCII_cCTRLZ (char)0x1A
+#define ASCII_sCTRLZ "\x1a"
 #define ASCII_sCRLF "\r\n"
 #define ASCII_sOK "OK\r\n"
+#define ASCII_sMQTTTERM "\"\r\n"
 #define ASCII_szCRLF 2
 
 #define NOT_NULL 1
@@ -69,10 +70,9 @@ extern "C"
 #define ACTION_RESULT_SUCCESS      200
 #define ACTION_RESULT_BADREQUEST   400
 #define ACTION_RESULT_NOTFOUND     404
-#define ACTION_RESULT_GONE         410
-#define ACTION_RESULT_BUSY         429
+#define ACTION_RESULT_TIMEOUT      408
+#define ACTION_RESULT_CONFLICT     409
 #define ACTION_RESULT_ERROR        500
-#define ACTION_RESULT_TIMEOUT      504
 
 // allow for simple test for unhappy result
 #define ACTION_RESULT__BASE_ERROR  400
@@ -84,9 +84,9 @@ typedef uint16_t actionResult_t;
 #include "actions.h"
 #include "mdminfo.h"
 #include "gnss.h"
-#include "network/network.h"
-#include "network/ip.h"
-#include "network/mqtt.h"
+#include "network.h"
+#include "ip.h"
+#include "mqtt.h"
 
 
 typedef enum 
@@ -118,7 +118,7 @@ typedef struct ltem1Device_tag
     spiDevice_t *spi;
     qbgReadyState_t qbgReadyState;
     uint8_t dataContext;
-    iop_t *iop;
+    volatile iop_t *iop;
     volatile action_t *action;
 	modemInfo_t *modemInfo;
     network_t *network;
@@ -135,9 +135,9 @@ extern ltem1PinConfig_t RPI_BREAKOUT;
 void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t funcLevel);
 void ltem1_destroy();
 
-void ltem1_start(ltem1Functionality_t funcLevel);
+void ltem1_start();
 void ltem1_stop();
-void ltem1_reset(bool restart);
+void ltem1_reset();
 
 void ltem1_doWork();
 void ltem1_faultHandler(uint16_t statusCode, const char * fault) __attribute__ ((noreturn));

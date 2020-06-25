@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEm1-test4-atcmd.ino
+ *  \file LTEm1c-4-actions.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -28,13 +28,8 @@
 
 #include <ltem1c.h>
 
-
-//#define USE_SERIAL 0
-
-extern "C" {
-#include <SEGGER_RTT.h>
-}
-
+#define _DEBUG
+#include "platform/platform_stdio.h"
 
 const int APIN_RANDOMSEED = 0;
 
@@ -70,15 +65,12 @@ void setup() {
         #endif
     #endif
 
-    PRINTF("LTEm1c test4-actions\r\n");
+    PRINTF(0, "LTEm1c test4-actions\r");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
     ltem1_create(&ltem1_pinConfig, ltem1Functionality_actions);
-
-    // install test version override of okCompleteParser(), verbose AT result codes
-    // g_ltem1->atcmd->cmdCompleteParser_func = okCompletedParser;
 }
 
 
@@ -99,19 +91,19 @@ void loop() {
     uint8_t regValue = 0;
     char cmdStr[] = "ATI\r\0";
     char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
-    PRINTF("Invoking cmd: %s \r\n", cmdStr);
+    PRINTF(dbgColor_none, "Invoking cmd: %s \r\n", cmdStr);
 
     action_tryInvoke(cmdStr, false);
 
-    actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL, true);
+    actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
     
     if (atResult == ACTION_RESULT_SUCCESS)    // statusCode == 200
     {
-        PRINTF("Got %d chars\r", strlen(response));
-        PRINTF("Resp: %s\r", response);  
+        PRINTF(dbgColor_info, "Got %d chars\r", strlen(response));
+        PRINTF(dbgColor_cyan, "Resp: %s\r", response);  
 
         // test response v. expected 
-        char* validResponse = "ATI\r\r\nQuectel";
+        char* validResponse = "\r\nQuectel";
         uint8_t responseTest = strncmp(validResponse, response, strlen(validResponse)); 
 
         if (responseTest != 0)
@@ -119,7 +111,7 @@ void loop() {
     }
     else
     {
-        PRINTF_ERR("atResult=%d \r", atResult);
+        PRINTF(dbgColor_error, "atResult=%d \r", atResult);
         // indicateFailure("Unexpected command response... failed."); 
     }
 
@@ -151,11 +143,11 @@ void recvResponse(char *response)
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF_ERR("\r\n** %s \r\n", failureMsg);
-    PRINTF_ERR("** Test Assertion Failed. \r\n");
+	PRINTF(dbgColor_error, "\r\n** %s \r", failureMsg);
+    PRINTF(dbgColor_error, "** Test Assertion Failed. \r");
 
     #if 1
-    PRINTF_ERR("** Halting Execution \r\n");
+    PRINTF(dbgColor_error, "** Halting Execution \r\n");
     bool halt = true;
     while (halt)
     {
@@ -170,7 +162,7 @@ void indicateFailure(char failureMsg[])
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF_DBG("\r\nLoop=%i \r\n", loopCnt);
+    PRINTF(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -180,8 +172,8 @@ void indicateLoop(int loopCnt, int waitNext)
         timing_delay(50);
     }
 
-    PRINTF("FreeMem=%u\r\n", getFreeMemory());
-    PRINTF("NextTest (millis)=%i\r\r", waitNext);
+    PRINTF(dbgColor_magenta, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTF(dbgColor_none, "NextTest (millis)=%i\r\r", waitNext);
     timing_delay(waitNext);
 }
 

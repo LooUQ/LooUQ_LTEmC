@@ -1,0 +1,34 @@
+
+ltem1PinConfig_t feather_pinConfig =
+{
+  spiCsPin : 13,
+  irqPin : 12,
+  statusPin : 6,
+  powerkeyPin : 11,
+  resetPin : 19,
+  ringUrcPin : 5,
+  wakePin : 10
+};
+
+
+ltem1PinConfig_t rasppi_pinConfig =
+{
+	chip_sel_line :	0,		    /*< J8_24 */
+	irq_line : 22U,	            /*< J8_15 */
+	status_pin : 13U,	        /*< J8_22 */
+	power_key : 24U,	        /*< J8_18 */
+	reset_pin : 23U,	        /*< J8_16 */
+	connected_pin : 12U		    /*< J8_32 */
+};
+
+
+ltem1PinConfig_t uxplor_pinConfig =
+{
+  spiCsPin : 13,
+  irqPin : 12,
+  powerkeyPin : 11,
+  resetPin : 10,
+  statusPin : 6,
+};
+
+

@@ -3,6 +3,9 @@
 
 #include "ltem1c.h"
 
+//#define _DEBUG
+#include "platform/platform_stdio.h"
+
 #define IMEI_OFFSET 2
 #define IMEI_SIZE 15
 #define ICCID_OFFSET 10
@@ -30,7 +33,7 @@ modemInfo_t mdminfo_ltem1()
     if (*g_ltem1->modemInfo->imei == NULL)
     {
         action_tryInvoke("AT+GSN", true);
-        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL, true);
+        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
 
         if (atResult == ACTION_RESULT_SUCCESS)
         {
@@ -42,7 +45,7 @@ modemInfo_t mdminfo_ltem1()
     {
         //action_t *iccidCmd = action_build("AT+ICCID\r", 41, 500, iccidCompleteParser);
         action_tryInvoke("AT+ICCID", true);
-        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, iccidCompleteParser, true);
+        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, iccidCompleteParser);
 
         if (atResult == ACTION_RESULT_SUCCESS)
         {
@@ -53,7 +56,7 @@ modemInfo_t mdminfo_ltem1()
     if (*g_ltem1->modemInfo->fwver == NULL)
     {
         action_tryInvoke("AT+QGMR", true);
-        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL, true);
+        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
 
         if (atResult == ACTION_RESULT_SUCCESS)
         {
@@ -69,7 +72,7 @@ modemInfo_t mdminfo_ltem1()
     if (*g_ltem1->modemInfo->mfgmodel == NULL)
     {
         action_tryInvoke("ATI", true);
-        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL, true);
+        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
 
         if (atResult == ACTION_RESULT_SUCCESS)
         {
@@ -98,7 +101,7 @@ int16_t mdminfo_rssi()
     int16_t result;
 
     action_tryInvoke("AT+CSQ", true);
-    actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL, true);
+    actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
 
     if (atResult == ACTION_RESULT_SUCCESS)
     {

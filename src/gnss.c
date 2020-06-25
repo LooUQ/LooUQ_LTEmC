@@ -29,7 +29,7 @@ actionResult_t gnss_on()
 {
     char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
     action_tryInvoke("AT+QGPS=1", true);
-    return action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 800, NULL, true);
+    return action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 800, NULL);
 }
 
 
@@ -38,7 +38,7 @@ actionResult_t gnss_off()
 {
     char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
     action_tryInvoke("AT+QGPSEND", true);
-    return action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 800, NULL, true);
+    return action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 800, NULL);
 }
 
 
@@ -57,7 +57,7 @@ gnssLocation_t gnss_getLocation()
     //action_t *gnssCmd = action_build("AT+QGPSLOC=2", GNSS_CMD_RESULTBUF_SZ, 500, gnssLocCompleteParser);
 
     action_tryInvoke("AT+QGPSLOC=2", true);
-    actionResult_t cmdResult = action_awaitResult(response, GNSS_CMD_RESULTBUF_SZ, 0, gnssLocCompleteParser, true);
+    actionResult_t cmdResult = action_awaitResult(response, GNSS_CMD_RESULTBUF_SZ, 0, gnssLocCompleteParser);
 
     gnssResult.statusCode = (uint16_t)cmdResult;
     if (cmdResult != ACTION_RESULT_SUCCESS)

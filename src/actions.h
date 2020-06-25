@@ -9,14 +9,15 @@
 #include <stdint.h>
 
 
-#define ACTION_INVOKE_CMDSTR_SZ 64
+#define ACTION_CMDSTR_BRIEFSZ 64
 #define ACTION_DEFAULT_RESPONSE_SZ 64
 #define ACTION_DEFAULT_TIMEOUT_MILLIS 600
 
 
 typedef struct action_tag
 {
-    char cmdStr[ACTION_INVOKE_CMDSTR_SZ];
+    char cmdBrief[ACTION_CMDSTR_BRIEFSZ + 1];
+    bool autoClose;
     char *resultHead;
     char *resultTail;
     uint8_t resultSz;
@@ -24,7 +25,6 @@ typedef struct action_tag
     unsigned long invokedAt;
     uint16_t timeoutMillis;
     uint16_t (*cmdCompleteParser_func)(const char *response);
-    iopProcess_t irdPending;          // iopProcess_void not pending, otherwise proto pending on
 } action_t;
 
 
@@ -43,14 +43,16 @@ bool action_tryInvoke(const char *cmdStr, bool retry);
 void action_sendData(const char *data, uint16_t dataSz);
 
 void action_reset();
+void action_setAutoClose(bool autoClose);
 
-actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response), bool autoClose);
-actionResult_t action_awaitResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response), bool autoClose);
+actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response));
+actionResult_t action_awaitResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response));
 void action_cancel();
 
 actionResult_t action_okResultParser(const char *response);
 actionResult_t action_gapResultParser(const char *response, const char *landmark, bool landmarkReqd, uint8_t gap, const char *terminator);
 actionResult_t action_tokenResultParser(const char *response, const char *landmark, char token, uint8_t tokenCnt);
+actionResult_t action_serviceResponseParser(const char *response, const char *landmark);
 actionResult_t action_cmeResultParser(const char *response);
 
 

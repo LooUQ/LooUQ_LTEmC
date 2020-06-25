@@ -26,7 +26,7 @@
 #ifndef __PROTOCOLS_H__
 #define __PROTOCOLS_H__
 
-#include "..\ltem1c.h"
+#include "ltem1c.h"
 
 // #define PROTOCOL_RESULT_SUCCESS         200
 // #define PROTOCOL_RESULT_ERROR           500
@@ -56,7 +56,7 @@ typedef enum
     protocol_mqtt = 0x30,
     protocol_mqtts = 0x31,
 
-    protocol_none = 0xFF
+    protocol_void = 0xFF
 } protocol_t;
 
 
@@ -108,7 +108,7 @@ typedef void (*receiver_func_t)(socketId_t scktId, const char * data, uint16_t d
 typedef volatile struct socketCtrl_tag
 {
     protocol_t protocol;
-    bool dataPending;
+    bool hasData;
     uint8_t contextId;
     uint16_t recvBufSz;
     receiver_func_t receiver_func;

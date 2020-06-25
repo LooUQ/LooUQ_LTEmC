@@ -27,13 +27,8 @@
 
 #include <ltem1c.h>
 
-
-//#define USE_SERIAL 0
-
-extern "C" {
-#include <SEGGER_RTT.h>
-}
-
+#define _DEBUG
+#include "platform/platform_stdio.h"
 
 const int APIN_RANDOMSEED = 0;
 
@@ -69,17 +64,12 @@ void setup() {
         #endif
     #endif
 
-    PRINTF("LTEm1c test5-modemInfo\r\n");
+    PRINTF(dbgColor_none, "LTEm1c test5-modemInfo\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
     ltem1_create(&ltem1_pinConfig, ltem1Functionality_actions);
-
-    // set ltem1 to no cmd string echo (required for mdminfo_ parsers)
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
-    action_tryInvoke("ATE0\r", false);
-    actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL, true);
 }
 
 
@@ -90,15 +80,13 @@ modemInfo_t modemInfo;
 void loop() {
     modemInfo = mdminfo_ltem1();
 
-    PRINTF_INFO("\rModem Information\r");
-    PRINTF("IMEI = %s \r", modemInfo.imei);
-    PRINTF("ICCID = %s \r", modemInfo.iccid);
-    PRINTF("Firmware = %s \r", modemInfo.fwver);
-    PRINTF("Mfg/Model = %s \r", modemInfo.mfgmodel);
+    PRINTF(dbgColor_none, "\rModem Information\r");
+    PRINTF(dbgColor_none, "IMEI = %s \r", modemInfo.imei);
+    PRINTF(dbgColor_none, "ICCID = %s \r", modemInfo.iccid);
+    PRINTF(dbgColor_none, "Firmware = %s \r", modemInfo.fwver);
+    PRINTF(dbgColor_none, "Mfg/Model = %s \r", modemInfo.mfgmodel);
 
-    PRINTF("\rRSSI = %d dBm \r",mdminfo_rssi());
-
-    PRINTF_CYAN("Alt IMEI = %s \r", mdminfo_ltem1().imei);
+    PRINTF(dbgColor_white, "\rRSSI = %d dBm \r",mdminfo_rssi());
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -115,8 +103,8 @@ void loop() {
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF_ERR("\r\n** %s \r\n", failureMsg);
-    PRINTF_ERR("** Test Assertion Failed. \r\n");
+	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+    PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
 
     uint8_t halt = 1;
     while (halt)
@@ -131,7 +119,7 @@ void indicateFailure(char failureMsg[])
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF_DBG("\r\nLoop=%i \r\n", loopCnt);
+    PRINTF(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -141,8 +129,8 @@ void indicateLoop(int loopCnt, int waitNext)
         timing_delay(50);
     }
 
-    PRINTF("FreeMem=%u\r\n", getFreeMemory());
-    PRINTF("NextTest (millis)=%i\r\r", waitNext);
+    PRINTF(dbgColor_blue, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTF(dbgColor_blue, "NextTest (millis)=%i\r\r", waitNext);
     timing_delay(waitNext);
 }
 

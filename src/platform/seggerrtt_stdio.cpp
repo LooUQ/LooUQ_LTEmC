@@ -5,49 +5,56 @@ extern "C" {
 #include <SEGGER_RTT.h>
 }
 
-#ifdef __SEGGER_RTT
 
-//int SEGGER_RTT_vprintf(unsigned BufferIndex, const char * sFormat, va_list * paramList);
-
-void _dbg_printf(print_color_t color, const char *fmt, ...)
+void dbg_printf(uint8_t color, const char *fmt, ...)
 {
-    // va_list paramList;
-
-    // va_start(paramList, fmt);
-    // SEGGER_RTT_vprintf(0, fmt, &paramList);
-
-    char buf[120] = {0};
+    char buf[180] = {0};
     va_list args;
     va_start(args, fmt);
 
     vsnprintf(buf, sizeof(buf), fmt, args);
 
+    //int SEGGER_RTT_vprintf(unsigned BufferIndex, const char * sFormat, va_list * paramList);
+
     switch (color)
     {
-        case debug_print_color_none:
+        case dbgColor_none:
             SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_WHITE);
             break;
-        case debug_print_color_info:
+        case dbgColor_info:
             SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_GREEN);
             break;
-        case debug_print_color_warn:
+        case dbgColor_warn:
             SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_YELLOW);
             break;
-        case debug_print_color_error:
+        case dbgColor_error:
             SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_RED);
             break;
 
-        case debug_print_color_cyan:
+        case dbgColor_cyan:
             SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_CYAN);
             break;
-        case debug_print_color_magenta:
+        case dbgColor_magenta:
             SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_MAGENTA);
             break;
-        case debug_print_color_white:
+        case dbgColor_white:
             SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_WHITE);
             break;
-        case debug_print_color_gray:
+        case dbgColor_gray:
             SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_BLACK);
+            break;
+        case dbgColor_blue:
+            SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_BRIGHT_BLUE);
+            break;
+            
+        case dbgColor_dCyan:
+            SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_CYAN);
+            break;
+        case dbgColor_dMagenta:
+            SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_MAGENTA);
+            break;
+        case dbgColor_dGreen:
+            SEGGER_RTT_WriteString(0, RTT_CTRL_TEXT_GREEN);
             break;
 
         default:
@@ -60,5 +67,3 @@ void _dbg_printf(print_color_t color, const char *fmt, ...)
 
     va_end(args);
 }
-
-#endif

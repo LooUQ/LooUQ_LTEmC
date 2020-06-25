@@ -25,11 +25,13 @@
  * Manages module genaral and non-protocol cellular radio functions,
  *****************************************************************************/
 
-#include "..\ltem1c.h"
+#include "ltem1c.h"
 //#include "quectel_bg96.h"
 
+#define _DEBUG
+#include "platform\platform_stdio.h"
+
 #define BG96_INIT_COMMAND_COUNT 1
-#define BG_APPREADY_MAX 5000
 
 
 const char* const qbg_initCmds[] = 
@@ -50,11 +52,11 @@ const char* const qbg_initCmds[] =
 
 
 /**
- *	\brief Power BG96 module on.
+ *	\brief Power on the BGx module.
  */
 void qbg_powerOn()
 {
-    PRINTF("Powering LTEm1 On...");
+    PRINTF(dbgColor_none, "Powering LTEm1 On...");
     gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
     timing_delay(QBG_POWERON_DELAY);
     gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
@@ -64,17 +66,17 @@ void qbg_powerOn()
     {
         timing_delay(500);
     }
-    PRINTF("DONE\r");
+    PRINTF(dbgColor_none, "DONE\r");
 }
 
 
 
 /**
- *	\brief Powers off the BG96 module.
+ *	\brief Powers off the BGx module.
  */
 void qbg_powerOff()
 {
-    PRINTF("Powering LTEm1 Off\r");
+    PRINTF(dbgColor_none, "Powering LTEm1 Off\r");
 	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
 	timing_delay(QBG_POWEROFF_DELAY);
 	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
@@ -84,43 +86,97 @@ void qbg_powerOff()
 
 void qbg_start()
 {
+    uint8_t attempts = 0;
     char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
-    actionResult_t cmdResult = ACTION_RESULT_BUSY;
+    actionResult_t cmdResult = ACTION_RESULT_TIMEOUT;
 
-    unsigned long apprdyWaitStart = timing_millis();
-    while (g_ltem1->qbgReadyState < qbg_readyState_appReady)
-    {
-        timing_yield();
-        if (apprdyWaitStart + BG_APPREADY_MAX < timing_millis())
-            ltem1_faultHandler(cmdResult, "qbg-BGx module failed to start in the allowed time");
-    }
+    qbg_startRetry:
+
+    // toss out an empty AT command to flush any debris in the command channel
+    action_tryInvoke("AT", false);
+    (void)action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
 
     for (size_t i = 0; i < BG96_INIT_COMMAND_COUNT; i++)
     {
+
         if (action_tryInvoke(qbg_initCmds[i], false))
         {
-            cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL, true);
+            cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
         }
 
         if (cmdResult != ACTION_RESULT_SUCCESS)
-            ltem1_faultHandler(cmdResult, "qbg-sendInitCmds init sequence encountered error");
+        {
+            if (attempts == 0)
+            {
+                attempts++;
+                PRINTF(dbgColor_warn, "BGx reseting: init failed!");
+                qbg_powerOff();
+                timing_millis(100);
+                qbg_powerOn();
+                goto qbg_startRetry;
+            }
+            ltem1_faultHandler(cmdResult, "qbg-start() init sequence failed");
+        }
     }
 }
 
 
 
+/**
+ *  \brief Configure RAT searching sequence
+*/
+/*
+    AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
+
+    <scanseq> Number format. RAT search sequence.
+    (e.g.: 020301 stands for LTE Cat M1  LTE Cat NB1  GSM))
+        00 Automatic (LTE Cat M1  LTE Cat NB1  GSM)
+        01 GSM
+        02 LTE Cat M1
+        03 LTE Cat NB1
+    <effect> Number format. When to take effect.
+        0 Take effect after UE reboots
+        1 Take effect immediately
+*/
 void qbg_setNwScanSeq(const char* sequence)
 {
 }
 
 
+/** 
+ *  \brief Configure RAT(s) allowed to be searched
+*/
+/*
+    AT+QCFG="nwscanmode"[,<scanmode>[,<effect>]]
 
+    <scanmode> Number format. RAT(s) to be searched.
+        0 Automatic
+        1 GSM only
+        3 LTE only
+    <effect> Number format. When to take effect.
+        0 Take effect after UE reboots
+        1 Take effect immediately
+*/
 void qbg_setNwScanMode(qbg_nw_scan_mode_t mode)
 {
 }
 
 
 
+/** 
+ *  \brief Configure the network category to be searched under LTE RAT.
+*/
+/*
+    AT+QCFG="iotopmode"[,<mode>[,<effect>]]
+
+    <mode> Number format. Network category to be searched under LTE RAT.
+        0 LTE Cat M1
+        1 LTE Cat NB1
+        2 LTE Cat M1 and Cat NB1
+    <effect> Number format. When to take effect.
+        0 Take effect after UE reboots
+        1 Take effect immediately
+*/
 void qbg_setIotOpMode(qbg_nw_iot_mode_t mode)
 {
 }
@@ -132,7 +188,7 @@ void qbg_setIotOpMode(qbg_nw_iot_mode_t mode)
 // }
 
 
-void qbg_processUrcStateQueue()
+void qbg_monitorState()
 {
     if (g_ltem1->iop->urcStateMsg[0] == ASCII_cNULL)
         return;
@@ -147,6 +203,7 @@ void qbg_processUrcStateQueue()
         g_ltem1->network->contexts[cntxtId].contextState = context_state_inactive;
         g_ltem1->network->contexts[cntxtId].ipAddress[0] = ASCII_cNULL;
 
+        PRINTF(dbgColor_warn, "*** PDP Context %d Deactivated", cntxtId);
         ntwk_closeContext(cntxtId);
     }
 }

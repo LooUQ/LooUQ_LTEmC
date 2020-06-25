@@ -148,7 +148,7 @@ void sendCommand(const char* cmd)
     {
         sc16is741a_writeReg(SC16IS741A_FIFO_ADDR, cmd[i]);
     }
-    timing_delay(300);                                        // max response time per-Quectel
+    delay(300);                                        // max response time per-Quectel
 }
 
 
@@ -201,9 +201,9 @@ void indicateFailure(char failureMsg[])
     while (1)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(1000);
+        delay(1000);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(100);
+        delay(100);
     }
     #endif
 }
@@ -216,14 +216,14 @@ void indicateLoop(int loopCnt, int waitNext)
     for (int i = 0; i < 6; i++)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(50);
+        delay(50);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(50);
+        delay(50);
     }
 
     PRINTF("Free memory: %u \r\n", getFreeMemory());
     PRINTF("Next test in (millis): %i\r\n\r\n", waitNext);
-    timing_delay(waitNext);
+    delay(waitNext);
 }
 
 

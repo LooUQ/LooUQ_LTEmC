@@ -3,6 +3,10 @@
 
 #include "ltem1c.h"
 
+#define _DEBUG
+#include "platform/platform_stdio.h"
+
+
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 #define ACTIONS_RETRY_MAX 20
@@ -20,14 +24,29 @@ static bool tryActionLock(const char *cmdStr, bool retry);
  *
  *  \param [in] atCmd - Pointer to command struct to reset
  */
-void action_reset()
+void action_reset(const char *cmdStr)
 {
-    memset(g_ltem1->action->cmdStr, 0, ACTION_INVOKE_CMDSTR_SZ);
+    if (cmdStr == NULL)
+        g_ltem1->action->cmdBrief[0] = ASCII_cNULL;
+    else
+        strncpy(g_ltem1->action->cmdBrief, cmdStr, ACTION_CMDSTR_BRIEFSZ);
+
     g_ltem1->action->resultHead = NULL;
     g_ltem1->action->resultTail = NULL;
     g_ltem1->action->resultCode = ACTION_RESULT_PENDING;
     g_ltem1->action->invokedAt = timing_millis();
-    g_ltem1->action->irdPending = iopProcess_void;
+}
+
+
+
+/**
+ *	\brief Sets/resets the action subsystem autoclose on action complete behavior.
+ *
+ *  \param [in] autoClose - New state of the action global autoClose behavior
+ */
+void action_setAutoClose(bool autoClose)
+{
+    g_ltem1->action->autoClose = autoClose;
 }
 
 
@@ -46,13 +65,14 @@ bool action_tryInvoke(const char *cmdStr, bool retry)
     if ( !tryActionLock(cmdStr, retry) )
         return false;
 
-    PRINTF("\raction> %s\r", cmdStr);
+    // // debugging
+    // char dbg[80] = {0};
+    // strncpy(dbg, cmdStr, 79);
+    // PRINTF(0, "\raction> %s~\r", dbg);
+    // // debugging
 
-    action_reset();
-    strncpy(g_ltem1->action->cmdStr, cmdStr, ACTION_INVOKE_CMDSTR_SZ);
-
-    strcat(g_ltem1->action->cmdStr, ASCII_sCR);
-    iop_txSend(g_ltem1->action->cmdStr, strlen(g_ltem1->action->cmdStr));
+    iop_txSend(cmdStr, strlen(cmdStr), true);
+    iop_txSend(ASCII_sCR, 1, false);
     return true;
 }
 
@@ -66,15 +86,14 @@ bool action_tryInvoke(const char *cmdStr, bool retry)
  */
 void action_sendData(const char *data, uint16_t dataSz)
 {
-    action_reset();
-    // strncpy(g_ltem1->action->cmdStr, "sendData", 9);
+    action_reset("sendData");
     if (dataSz == 0)
     {
-        iop_txSend(data, strlen(data));
-        iop_txSend(ASCII_cCTRLZ, 1);
+        iop_txSend(data, strlen(data), true);
+        iop_txSend(ASCII_sCTRLZ, 1, false);
     }
     else
-        iop_txSend(data, dataSz);
+        iop_txSend(data, dataSz, false);
 }
 
 
@@ -87,7 +106,7 @@ void action_sendData(const char *data, uint16_t dataSz)
  * 
  *  \return Command action result type. See ACTION_RESULT_* macros in LTEm1c.h.
  */
-actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response), bool autoClose)
+actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response))
 {
     // return pendingAtCommand.resultCode;
     // wait for BG96 response in FIFO buffer
@@ -115,21 +134,20 @@ actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t ti
 
         // invoke command result complete parser, true returned if complete
         parserResult = (*g_ltem1->action->cmdCompleteParser_func)(g_ltem1->action->resultHead);
-        PRINTF_GRAY("prsr=%d \r", parserResult);
+        //PRINTF(dbgColor_gray, "prsr=%d \r", parserResult);
     }
 
-    if (parserResult >= ACTION_RESULT_SUCCESS)                          // parser signaled complete
+    if (parserResult >= ACTION_RESULT_SUCCESS)                          // parser signaled complete, maybe error though
     {
-        PRINTF_INFO("action duration=%d\r", timing_millis() - g_ltem1->action->invokedAt);
-        if (autoClose || parserResult != ACTION_RESULT_SUCCESS)         // defer close (as requested) for send data subcommand
-            g_ltem1->action->cmdStr[0] = NULL;
+        //PRINTF(dbgColor_none, "action duration=%d\r", timing_millis() - g_ltem1->action->invokedAt);
+        if (g_ltem1->action->autoClose)                                                  // defer close if not autoclose requested
+            g_ltem1->action->cmdBrief[0] = NULL;
         return parserResult;
     }
 
     if (timing_millis() - g_ltem1->action->invokedAt > g_ltem1->action->timeoutMillis)
     {
-        PRINTF_WARN("action duration=%d\r", timing_millis() - g_ltem1->action->invokedAt);
-        g_ltem1->action->cmdStr[0] = NULL;
+        g_ltem1->action->cmdBrief[0] = NULL;
         return ACTION_RESULT_TIMEOUT;
     }
     return ACTION_RESULT_PENDING;
@@ -140,17 +158,21 @@ actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t ti
 /**
  *	\brief Waits for an AT command result.
  *
- *  \param [in] actionCmd - Pointer to command struct. Pass in NULL to use LTEm1 integrated action structure.
+ *  \param [in] response - Pointer to command response string buffer.
+ *  \param [in] responseSz - Size of action response buffer.
+ *  \param [in] timeout - Timeout in millis for the command, timeout will only be returned when results are queried.
+ *  \param [in] customCmdCompleteParser_func - Function to determine if the command results signal a completed response, NULL for default parser.
+ *  \param [in] autoClose - True to automatically close the action on parser complete.
  * 
  *  \return Command action result type. See ACTION_RESULT_* macros in LTEm1c.h.
  */
-actionResult_t action_awaitResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response), bool autoClose)
+actionResult_t action_awaitResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response))
 {
     actionResult_t actionResult;
-    PRINTF_GRAY("awaitRslt\r");
+    PRINTF(dbgColor_gray, "awaiting result\r");
     do
     {
-        actionResult = action_getResult(response, responseSz, timeout, customCmdCompleteParser_func, autoClose);
+        actionResult = action_getResult(response, responseSz, timeout, customCmdCompleteParser_func);
         yield();
 
     } while (actionResult == ACTION_RESULT_PENDING);
@@ -167,7 +189,7 @@ actionResult_t action_awaitResult(char *response, uint16_t responseSz, uint16_t 
  */
 void action_cancel()
 {
-    action_reset();
+    action_reset(NULL);
     g_ltem1->action = NULL;
 }
 
@@ -322,6 +344,24 @@ actionResult_t action_okResultParser(const char *response)
 }
 
 
+
+/**
+ *	\brief [private] Parser for open connection response, shared by UDP/TCP/SSL.
+ */
+actionResult_t action_serviceResponseParser(const char *response, const char *landmark) 
+{
+    char *next = strstr(response, landmark);
+
+    if (next == NULL)
+        return ACTION_RESULT_PENDING;
+    
+    //uint16_t connection = strtol(next + strlen(landmark), &next, 10);
+    next = strchr(next + strlen(landmark), ASCII_cCOMMA);
+    uint16_t resultVal = strtol(next + 1, NULL, 10);
+    return  resultVal == 0 ? ACTION_RESULT_SUCCESS : resultVal;
+}
+
+
 #pragma endregion  // completionParsers
 
 /* private (static) fuctions
@@ -384,12 +424,12 @@ static const char *strnend(const char *charStr, uint16_t maxSz)
 */
 static bool tryActionLock(const char *cmdStr, bool retry)
 {
-    if (g_ltem1->action->cmdStr[0] != NULL)
+    if (g_ltem1->action->cmdBrief[0] != NULL)
     {
         if (retry)
         {
             uint8_t retryCnt = 0;
-            while(g_ltem1->action->cmdStr[0] != NULL)
+            while(g_ltem1->action->cmdBrief[0] != NULL)
             {
                 retryCnt++;
 
@@ -397,14 +437,13 @@ static bool tryActionLock(const char *cmdStr, bool retry)
                     return false;
 
                 timing_delay(ACTIONS_RETRY_INTERVAL);
-                timing_yield();
-                ip_receiverDoWork();
+                ip_recvDoWork();
             }
         }
         else
             return false;
     }
-    g_ltem1->action->cmdStr[0] = '*';
+    action_reset(cmdStr);
     return true;
 }
 

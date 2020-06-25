@@ -26,7 +26,7 @@
 #ifndef __IP_H__
 #define __IP_H__
 
-#include "..\ltem1c.h"
+#include "ltem1c.h"
 
 
 #ifdef __cplusplus
@@ -35,19 +35,13 @@ extern "C"
 #endif // __cplusplus
 
 
-socketResult_t ip_open(protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, receiver_func_t rcvr_func);
-// socketResult_t ip_open(protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, void (*ipReceiver_func)(socketId_t));
+socketResult_t ip_open(socketId_t socketId, protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, receiver_func_t rcvr_func);
 void ip_close(uint8_t socketNum);
 
 socketResult_t ip_send(socketId_t socketId, const char *data, uint16_t dataSz, const char *rmtHost, const char *rmtPort);
 
-//socketResult_t ip_sendUdpReply(uint8_t socketNum, const char *rmtHost, uint16_t rmtPort,  const char *sendBuf, uint8_t sendSz);
+void ip_recvDoWork();
 
-//uint16_t ip_recv(socketId_t socketId, char *recvBuf, uint16_t recvBufSz);
-
-void ip_receiverDoWork();
-
-actionResult_t sendDataPromptParser(const char *response);
 
 #ifdef __cplusplus
 }

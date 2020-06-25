@@ -11,12 +11,9 @@ CTestTestfile.cmake
 _deps
 
 ##	Visual Studio temporary files
-<<<<<<< HEAD
 .vs/
+##  LooUQ project files
+.project/
 
 ## VSCode build
-build/
 .build/
-=======
-.vs/**
->>>>>>> 89220cd6364070e9d74bc132f9a0b1784f35c759

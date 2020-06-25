@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEm1c-7-ipProto.ino
+ *  \file LTEm1c-8-mqtt.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -23,17 +23,14 @@
  *
  ******************************************************************************
  * Test MQTT protocol client send/receive. 
- * Uses Azure IoTHub and the LooUC Cloud
+ * Uses Azure IoTHub and the LooUQ Cloud as server side
  *****************************************************************************/
 
 #include <ltem1c.h>
 #include <stdio.h>
 
-//#define USE_SERIAL 0
-
-extern "C" {
-#include <SEGGER_RTT.h>
-}
+#define _DEBUG
+#include "platform/platform_stdio.h"
 
 #define DEFAULT_NETWORK_CONTEXT 1
 #define XFRBUFFER_SZ 201
@@ -60,25 +57,29 @@ spiConfig_t ltem1_spiConfig =
   csPin : ltem1_pinConfig.spiCsPin
 };
 
+
+#define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
+#define MQTT_PORT 8883
+
+#define MQTT_IOTHUB_DEVICEID "e8fdd7df-2ca2-4b64-95de-031c6b199299"
+#define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30"
+#define MQTT_IOTHUB_PASSWORD "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=6hTmu6e11E9CCKo1Ppeg8qxTfSRIfFwaau0crXeF9kQ%3D&se=2058955139"
+
+#define MQTT_IOTHUB_D2C_TOPIC "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/"
+#define MQTT_IOTHUB_C2D_TOPIC "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#"
+#define MQTT_MSG_PROPERTIES "mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97"
+
+
 // test setup
 #define CYCLE_INTERVAL 5000
 uint16_t loopCnt = 1;
 uint32_t lastCycle;
 
-#define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
-#define MQTT_PORT 8883
-#define MQTT_IOTHUB_DEVICEID "e8fdd7df-2ca2-4b64-95de-031c6b199299"
-#define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30"
-#define MQTT_IOTHUB_PASSWORD "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=%2FEpVF6bbYubWqoDaWyfoH0S1ZADNGxqdbhB24vBS9dA%3D&se=1590173851"
-
-#define MQTT_MSG_PROPERTIES "mId=~2&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97"
-
-
 // ltem1 variables
 socketResult_t result;
-socketId_t mqttConnectionId;
-char sendBuf[XFRBUFFER_SZ] = {0};
-char recvBuf[XFRBUFFER_SZ] = {0};
+socketId_t mqttConnectionId = 1;
+char mqttTopic[200];
+char mqttMessage[200];
 
 
 void setup() {
@@ -91,19 +92,20 @@ void setup() {
         #endif
     #endif
 
-    PRINTF("\rLTEm1c test7-TCP/IP\r\n");
+    PRINTF(dbgColor_white, "\rLTEm1c test8-MQTT\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
 
     ltem1_create(&ltem1_pinConfig, ltem1Functionality_services);
     mqtt_create();
 
-    PRINTF("Waiting on network...");
+    PRINTF(dbgColor_none, "Waiting on network...");
     do
     {
         if (ntwk_getOperator().operName[0] == NULL)
             timing_delay(1000);
+            
     } while (g_ltem1->network->networkOperator->operName[0] == NULL);
-    PRINTF("Operator is %s\r", g_ltem1->network->networkOperator->operName);
+    PRINTF(dbgColor_info, "Operator is %s\r", g_ltem1->network->networkOperator->operName);
 
     socketResult_t result = ntwk_fetchDataContexts();
     if (result == ACTION_RESULT_NOTFOUND)
@@ -111,12 +113,19 @@ void setup() {
         ntwk_activateContext(DEFAULT_NETWORK_CONTEXT);
     }
 
-    mqttConnectionId = mqtt_open(MQTT_IOTHUB, MQTT_PORT, sslVersion_tls12, mqttVersion_311);
-    mqtt_connect(mqttConnectionId, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_PASSWORD);
+    /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
+    */
+
+
+    result = mqtt_open(mqttConnectionId, MQTT_IOTHUB, MQTT_PORT, sslVersion_tls12, mqttVersion_311);
+    result = mqtt_connect(mqttConnectionId, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_PASSWORD);
+
+    result = mqtt_subscribe(mqttConnectionId, MQTT_IOTHUB_C2D_TOPIC, mqttQos_0, mqttReceiver);
 
     // force send at start
     lastCycle = timing_millis() + 2*CYCLE_INTERVAL;
 }
+
 
 
 void loop() 
@@ -124,15 +133,15 @@ void loop()
     if (timing_millis() - lastCycle >= CYCLE_INTERVAL)
     {
         lastCycle = timing_millis();
-        PRINTF_WHITE("\rLoop=%i>>\r", loopCnt);
+        PRINTF(dbgColor_white, "\rLoop=%i>>\r", loopCnt);
 
-
+        snprintf(mqttTopic, 200, "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97", loopCnt);
+        snprintf(mqttMessage, 200, "MQTT message for loop=%d", loopCnt);
+        mqtt_publish(mqttConnectionId, mqttTopic, mqttQos_0, mqttMessage);
 
         loopCnt++;
-        PRINTF_INFO("\rFreeMem=%u  ", getFreeMemory());
-        PRINTF_WHITE("<<Loop=%d\r", loopCnt);
-
-        //showStats(loopCnt++, CYCLE_INTERVAL);
+        PRINTF(dbgColor_dMagenta, "\rFreeMem=%u  ", getFreeMemory());
+        PRINTF(dbgColor_dMagenta, "<<Loop=%d\r", loopCnt);
     }
 
     /*
@@ -143,38 +152,30 @@ void loop()
 }
 
 
+void mqttReceiver(socketId_t socketId, const char * topic, const char * message)
+{
+    PRINTF(dbgColor_info, "mqttMsg for topic: %s, is:%s @tick=%d\r", topic, message, timing_millis());
+}
+
+
+
+
+
 /* test helpers
 ========================================================================================================================= */
 
 
-void showStats(uint16_t loopCnt, uint32_t waitNext) 
-{
-    PRINTF_INFO("\rFreeMem=%u  ", getFreeMemory());
-    // PRINTF_WHITE("Next send to ECHO server in %d (millis)\r", waitNext);
-    PRINTF_WHITE("<<Loop=%d\r", loopCnt);
-
-    // for (int i = 0; i < 6; i++)
-    // {
-    //     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-    //     timing_delay(50);
-    //     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-    //     timing_delay(50);
-    // }
-}
 
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF_ERR("\r\n** %s \r\n", failureMsg);
-    PRINTF_ERR("** Test Assertion Failed. \r\n");
+	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+    PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
 
     int halt = 1;
     while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(1000);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(100);
     }
 }
 

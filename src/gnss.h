@@ -11,25 +11,12 @@ typedef enum
     gnss_format_dcmDegrees = 2
 } gnss_format_t;
 
-typedef enum
-{
-    gnss_geo_position_unknown = 0,
-    gnss_geo_position_inside = 1,
-    gnss_geo_position_outside = 2
-} gnss_geo_position_t;
-
 
 typedef struct gnss_latlon_tag
 {
     float val;
     char dir;
 } gnss_latlon_t;
-
-typedef struct gnss_geo_result_tag
-{
-    uint8_t geoId;
-    gnss_geo_position_t position;
-};
 
 
 typedef struct gnssLocation_tag

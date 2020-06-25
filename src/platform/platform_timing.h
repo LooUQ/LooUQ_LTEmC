@@ -37,9 +37,11 @@ extern "C"
 typedef struct platformThread_tag* platform_thread;
 #endif
 
-void timing_delay(uint32_t delay_ms);
 uint32_t timing_millis();
 void timing_yield();
+
+// platform implementation should support task switching here
+void timing_delay(uint32_t delay_ms);
 
 #ifdef __cplusplus
 }

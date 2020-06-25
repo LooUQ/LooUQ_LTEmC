@@ -26,15 +26,11 @@
  * subsystem in the driver which multiplexes the command and protocol streams.
  *****************************************************************************/
 
+
 #include <ltem1c.h>
 
-
-//#define USE_SERIAL 0
-
-extern "C" {
-#include <SEGGER_RTT.h>
-}
-
+#define _DEBUG
+#include "platform/platform_stdio.h"
 
 const int APIN_RANDOMSEED = 0;
 
@@ -70,7 +66,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF("LTEm1c test3-iop\r\n");
+    PRINTF(dbgColor_none, "LTEm1c test3-iop\r\n");          // same as color=0
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
     randomSeed(analogRead(APIN_RANDOMSEED));
@@ -80,6 +76,7 @@ void setup() {
 
 
 int loopCnt = 0;
+#define RESPONSE_BUF_SZ 80                                  // set to < 91 to test truncated warning for long response
 
 void loop() {
     /* BG96 test pattern: get IMEI
@@ -92,24 +89,24 @@ void loop() {
     */
 
     uint8_t regValue = 0;
-    char cmd[] = "AT+GSN\r\0";
-    //char cmd[] = "AT+QPOWD\r\0";
-    //char cmd[] = "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
-    PRINTF("Invoking cmd: %s \r\n", cmd);
+    //char cmd[] = "AT+GSN\r\0";                            // short response (contained in 1 rxCtrlBlock)
+    char cmd[] = "at+cgpaddr\r\0";                          // long response (contained in 2 rxCtrlBlocks)
+    //char cmd[] = "AT+QPOWD\r\0";                          // something is wrong! Is is rx or tx (tx works if BG power down)
+    PRINTF(0, "Invoking cmd: %s \r\n", cmd);
 
     sendCommand(cmd);
     //timing_delay(300);      // BG reference says 300mS cmd response time
 
     // wait for BG96 response in FIFO buffer
-    char cmdResponse[65] = {0};
-    recvResponse(cmdResponse);
+    char cmdResponse[RESPONSE_BUF_SZ + 1] = {0};
+    recvResponse(cmdResponse, RESPONSE_BUF_SZ);
 
     // // test response v. expected 
     // char* validResponse = "AT+GSN\r\r\n86450";
     // uint8_t imeiPrefixTest = strncmp(validResponse, cmdResponse, strlen(validResponse)); 
 
-    PRINTF("Got %d chars\r", strlen(cmdResponse));
-    PRINTF("Resp: %s\r", cmdResponse);  
+    PRINTF(0, "Got %d chars\r", strlen(cmdResponse));
+    PRINTF(0, "Resp: %s\r", cmdResponse);  
 
     // if (strlen(cmdResponse) == 11)
     //     PRINTF_INFO("BG started\r");
@@ -131,22 +128,26 @@ void loop() {
 
 void sendCommand(const char* cmd)
 {
-    iop_txSend(cmd, strlen(cmd));
-    PRINTF("CmdSent\r\n");
+    iop_txSend(cmd, strlen(cmd), false);
+    
+    PRINTF(0, "CmdSent\r\n");
 }
 
 
 
-void recvResponse(char *response)
+void recvResponse(char *response, uint16_t responseBufSz)
 {
     iopXfrResult_t rxResult;
     uint8_t retries;
     do
     {
-        rxResult = iop_rxGetCmdQueued(response, 65);
+        rxResult = iop_rxGetCmdQueued(response, responseBufSz);
         timing_delay(5);
         retries++;
     } while (rxResult == iopXfrResult_incomplete && retries < 100);
+
+    if (rxResult == iopXfrResult_truncated)
+        PRINTF(dbgColor_warn, "Command response truncated!\r");
 }
 
 
@@ -157,18 +158,18 @@ void recvResponse(char *response)
  *	\param[in] response The command response received from the BG96.
  *  \return bool If the response string ends in a valid OK sequence
  */
-bool validOkResponse(const char *response)
-{
-    #define BUFF_SZ 64
-    #define EXPECTED_TERMINATOR_STR "OK\r\n"
-    #define EXPECTED_TERMINATOR_LEN 4
+// bool validOkResponse(const char *response)
+// {
+//     #define BUFF_SZ 64
+//     #define EXPECTED_TERMINATOR_STR "OK\r\n"
+//     #define EXPECTED_TERMINATOR_LEN 4
 
-    const char * end = (const char *)memchr(response, '\0', BUFF_SZ);
-    if (end == NULL)
-        end = response + BUFF_SZ;
+//     const char * end = (const char *)memchr(response, '\0', BUFF_SZ);
+//     if (end == NULL)
+//         end = response + BUFF_SZ;
 
-    return strncmp(EXPECTED_TERMINATOR_STR, end - EXPECTED_TERMINATOR_LEN, EXPECTED_TERMINATOR_LEN) == 0;
-}
+//     return strncmp(EXPECTED_TERMINATOR_STR, end - EXPECTED_TERMINATOR_LEN, EXPECTED_TERMINATOR_LEN) == 0;
+// }
 
 
 /* test helpers
@@ -176,11 +177,11 @@ bool validOkResponse(const char *response)
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF_ERR("\r\n** %s \r\n", failureMsg);
-    PRINTF_ERR("** Test Assertion Failed. \r\n");
+	PRINTF(dbgColor_error, "\r\n** %s \r", failureMsg);
+    PRINTF(dbgColor_error, "** Test Assertion Failed. \r");
 
     #if 1
-    PRINTF_ERR("** Halting Execution \r\n");
+    PRINTF(dbgColor_error, "** Halting Execution \r");
     while (1)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
@@ -194,7 +195,7 @@ void indicateFailure(char failureMsg[])
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF_INFO("\r\nLoop=%i \r\n", loopCnt);
+    PRINTF(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -204,8 +205,8 @@ void indicateLoop(int loopCnt, int waitNext)
         timing_delay(50);
     }
 
-    PRINTF("FreeMem=%u\r\n", getFreeMemory());
-    PRINTF("NextTest (millis)=%i\r\r", waitNext);
+    PRINTF(0, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTF(0, "NextTest (millis)=%i\r\r", waitNext);
     timing_delay(waitNext);
 }
 

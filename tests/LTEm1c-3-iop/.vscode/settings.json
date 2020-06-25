@@ -5,6 +5,7 @@
         "cstddef": "c",
         "limits": "c",
         "type_traits": "c",
-        "bitset": "cpp"
+        "bitset": "cpp",
+        "platform_stdio.h": "c"
     }
 }

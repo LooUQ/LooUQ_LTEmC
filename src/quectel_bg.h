@@ -79,6 +79,7 @@ void qbg_setNwScanMode(qbg_nw_scan_mode_t mode);
 void qbg_setIotOpMode(qbg_nw_iot_mode_t mode);
 
 //void qbg_queueUrcStateMsg(const char *message);
-void qbg_processUrcStateQueue();
+void qbg_monitorState();
+
 
 #endif  /* !__QUECTEL_QBG_H__ */

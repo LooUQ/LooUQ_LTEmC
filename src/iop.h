@@ -27,17 +27,25 @@
 #define __IOP_H__
 
 #include <stdint.h>
-#include "network/network.h"
+#include "network.h"
+#include "cbuf.h"
 #include "ltem1c.h"
 
 #define IOP_SOCKET_COUNT 6
 #define IOP_ERROR -1
 
-#define IOP_RX_CTRLBLOCK_COUNT 8
-#define IOP_RX_PRIMARY_BUFFER_SIZE 64
+#define IOP_RXCTRLBLK_COUNT 8
+#define IOP_RXCTRLBLK_VOID 255
+#define IOP_RXCTRLBLK_PRIMBUF_SIZE 64
+#define IOP_RXCTRLBLK_PRIMBUF_IRDCAP 43
+// up to 20 bytes, depends on data size reported from 1-1460 bytes:: \r\n+QIRD: ####\r\n<data>\r\nOK\r
+#define IOP RX_IRD_OVRHD_SZ 21
+#define IOP RX_IRD_TRAILER_SZ 8
 
 #define IOP_TX_BUFFER_SZ 1460
-#define IOP_URC_STATEMSG_SZ 20
+#define IOP_URC_STATEMSG_SZ 80
+
+#define IOP_RXCTRLBLK_ISOCCUPIED(INDX) (g_ltem1->iop->rxCtrlBlks[INDX].process != iopProcess_void)
 
 
 typedef enum
@@ -48,7 +56,9 @@ typedef enum
     iopProcess_socket_3 = 3,
     iopProcess_socket_4 = 4,
     iopProcess_socket_5 = 5,
+    iopProcess_socketMax = 5,
     iopProcess_command = 9,
+    iopProcess_allocated = 254,
     iopProcess_void = 255
 } iopProcess_t; 
 
@@ -73,35 +83,46 @@ typedef struct iopTxCtrlBlock_tag
 
 #define IOP_TX_ACTIVE() g_ltem1->iop->txCtrl->remainSz > 0
 
+typedef enum iopRdsMode_tag
+{
+    iopRdsMode_idle = 0,
+    iopRdsMode_irdBytes = 1,
+    iopRdsMode_eotPhrase = 2
+} iopRdsMode_t;
+
+
 typedef struct iopRxCtrlBlock_tag
 {
-    bool occupied;
-    uint8_t primSz;
-    char primBuf[65];
     iopProcess_t process;
-    char *data;
+    char primBuf[65];
+    char *primBufData;
+    uint8_t primDataSz;
     bool rmtHostInData;
     char *extsnBufHead;
     char *extsnBufTail;
+    bool dataReady;
 } iopRxCtrlBlock_t;
 
 
 
-typedef volatile struct iop_tag
+typedef struct iop_tag
 {
-    //iop_state_t iopState;
-    int8_t rxRecvHead;
-    int8_t cmdHead;
-    int8_t cmdTail;
-    int8_t socketHead[IOP_SOCKET_COUNT];
-    int8_t socketTail[IOP_SOCKET_COUNT];
-    uint8_t irdSocket;
-    uint16_t socketIrdBytes[IOP_SOCKET_COUNT];
-    iopRxCtrlBlock_t rxCtrlBlks[IOP_RX_CTRLBLOCK_COUNT];
-    iopTxCtrlBlock_t *txCtrl;
+    uint8_t rxHead;
+    uint8_t rxTail;
+    uint8_t cmdHead;
+    uint8_t cmdTail;
+    uint8_t socketHead[IOP_SOCKET_COUNT];
+    uint8_t socketTail[IOP_SOCKET_COUNT];
+    cbuf_t *txBuf;
+    iopRdsMode_t rdsMode;
+    uint8_t rdsSocket;
+    uint8_t rdsRxCtrlBlk;
+    uint16_t rdsBytes;
+    char rdsEotPhrase[5];
+    uint8_t rdsEotSz;
+    iopRxCtrlBlock_t rxCtrlBlks[IOP_RXCTRLBLK_COUNT];
     char urcStateMsg[IOP_URC_STATEMSG_SZ];
 } iop_t;
-
 
 
 #ifdef __cplusplus
@@ -111,17 +132,18 @@ extern "C"
 
 
 iop_t *iop_create();
-void iop_start();
 void iop_destroy();
 
-void iop_txSend(const char *sendData, uint16_t sendSz);
+void iop_start();
+void iop_awaitAppReady();
+
+void iop_txSend(const char *sendData, uint16_t sendSz, bool deferTx);
+actionResult_t iop_txDataPromptParser(const char *response);
 
 iopXfrResult_t iop_rxGetCmdQueued(char *recvData, uint16_t recvSz);
 uint16_t iop_rxGetSocketQueued(socketId_t socketId, char **data, char *rmtHost, char *rmtPort);
-
 void iop_tailFinalize(socketId_t socketId);
-
-//void iop_closeRxCtrl(uint8_t bufIndx);
+void iop_recvDoWork();
 
 
 #ifdef __cplusplus

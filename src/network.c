@@ -6,7 +6,11 @@
  *  Copyright (c) 2020 LooUQ Incorporated.
  *****************************************************************************/
 
-#include "..\ltem1c.h"
+#include "ltem1c.h"
+
+//#define _DEBUG
+#include "platform\platform_stdio.h"
+
 
 #define PROTOCOLS_CMD_BUFFER_SZ 80
 
@@ -76,7 +80,7 @@ protocols_t *ntwk_createProtocols()
 
     for (size_t i = 0; i < IOP_SOCKET_COUNT; i++)
     {   
-        protocols->sockets[i].protocol = protocol_none;
+        protocols->sockets[i].protocol = protocol_void;
         protocols->sockets[i].contextId = g_ltem1->dataContext;
         protocols->sockets[i].receiver_func = NULL;
     }
@@ -106,7 +110,7 @@ networkOperator_t ntwk_getOperator()
     if (*g_ltem1->network->networkOperator->operName == NULL)
     {
         action_tryInvoke("AT+COPS?", true);
-        actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL, true);
+        actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
 
         char *continueAt;
         uint8_t ntwkMode;
@@ -148,7 +152,7 @@ socketResult_t ntwk_fetchDataContexts()
     char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
 
     action_tryInvoke("AT+QIACT?", true);
-    actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, contextStatusCompleteParser, true);
+    actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, contextStatusCompleteParser);
 
     if (cmdResult == ACTION_RESULT_SUCCESS)
     {
@@ -217,10 +221,10 @@ socketResult_t ntwk_activateContext(uint8_t contextNum)
     snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIACT=%d\r", contextNum);
     if (action_tryInvoke(atCmd, true))
     {
-        actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, contextStatusCompleteParser, true);
+        actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, contextStatusCompleteParser);
         return cmdResult;
     }
-    return ACTION_RESULT_BUSY;
+    return ACTION_RESULT_CONFLICT;
 }
 
 
@@ -243,7 +247,7 @@ socketResult_t ntwk_deactivateContext(uint8_t contxtId)
     g_ltem1->network->contexts[contxtId].contextState = context_state_inactive;
     g_ltem1->network->contexts[contxtId].ipAddress[0] = ASCII_cNULL;
 
-    actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, contextStatusCompleteParser, true);
+    actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, contextStatusCompleteParser);
     return cmdResult;
 }
 

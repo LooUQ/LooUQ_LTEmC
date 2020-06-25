@@ -152,7 +152,7 @@ void sc16is741a_writeReg(uint8_t reg_addr, uint8_t reg_data)
  *	\param[in/out] read_in The amount of bytes read into the destination.
  *	\returns The success of the operation.
  */
-void sc16is741a_read(void* dest, size_t dest_len)
+void sc16is741a_read(void* dest, uint8_t dest_len)
 {
     union __sc16is741a_reg_addr_byte__ reg_addr = { 0 };
     reg_addr.A = SC16IS741A_FIFO_ADDR;
@@ -171,7 +171,7 @@ void sc16is741a_read(void* dest, size_t dest_len)
  *	\param[in] src_len The length of the source.
  *	\returns The success of the operation.
  */
-void sc16is741a_write(const void* src, size_t src_len)
+void sc16is741a_write(const void* src, uint8_t src_len)
 {
     union __sc16is741a_reg_addr_byte__ reg_addr = { 0 };
     reg_addr.A = SC16IS741A_FIFO_ADDR;

@@ -2,6 +2,11 @@
     "files.associations": {
         "ltem1.h": "c",
         "iop.h": "c",
-        "ltem1c.h": "c"
+        "ltem1c.h": "c",
+        "nxp_sc16is741a.h": "c",
+        "network.h": "c",
+        "gnss.h": "c",
+        "ip.h": "c",
+        "mqtt.h": "c"
     }
 }

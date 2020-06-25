@@ -28,12 +28,8 @@
 #include <ltem1c.h>
 #include <stdio.h>
 
-//#define USE_SERIAL 0
-
-extern "C" {
-#include <SEGGER_RTT.h>
-}
-
+#define _DEBUG
+#include "platform/platform_stdio.h"
 
 const int APIN_RANDOMSEED = 0;
 
@@ -67,7 +63,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF("\rLTEm1c test5-modemInfo\r\n");
+    PRINTF(dbgColor_white, "\rLTEm1c test6-gnss\r");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
     randomSeed(analogRead(APIN_RANDOMSEED));
@@ -76,7 +72,7 @@ void setup() {
 
     // turn on GNSS
     actionResult_t cmdResult = gnss_on();
-    PRINTF("GNSS On result=%d (504 is already on)\r", cmdResult);
+    PRINTF(dbgColor_info, "GNSS On result=%d (504 is already on)\r", cmdResult);
 }
 
 
@@ -94,11 +90,11 @@ void loop() {
         floatToString(location.lat.val, cLat, 12, 6);
         floatToString(location.lon.val, cLon, 12, 6);
 
-        PRINTF_INFO("Location Information\r");
-        PRINTF("Lat=%s, Lon=%s \r", cLat, cLon);
+        PRINTF(dbgColor_none, "Location Information\r");
+        PRINTF(dbgColor_cyan, "Lat=%s, Lon=%s \r", cLat, cLon);
     }
     else
-        PRINTF_WARN("Location is not available (GNSS not fixed)\r");
+        PRINTF(dbgColor_warn, "Location is not available (GNSS not fixed)\r");
 
     if (location.statusCode == ACTION_RESULT_TIMEOUT)
     {
@@ -124,8 +120,8 @@ void loop() {
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF_ERR("\r\n** %s \r\n", failureMsg);
-    PRINTF_ERR("** Test Assertion Failed. \r\n");
+	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+    PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
 
     bool halt = true;
     while (halt)
@@ -140,7 +136,7 @@ void indicateFailure(char failureMsg[])
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF_DBG("\r\nLoop=%i \r\n", loopCnt);
+    PRINTF(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -150,8 +146,8 @@ void indicateLoop(int loopCnt, int waitNext)
         timing_delay(50);
     }
 
-    PRINTF("FreeMem=%u\r\n", getFreeMemory());
-    PRINTF("NextTest (millis)=%i\r\r", waitNext);
+    PRINTF(dbgColor_dMagenta, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTF(dbgColor_dMagenta, "NextTest (millis)=%i\r\r", waitNext);
     timing_delay(waitNext);
 }
 

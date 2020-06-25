@@ -1,0 +1,72 @@
+
++QMTRECV: 1,0,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/%24.mid=60aca24c-465d-4328-b45f-b0952a6f71ea&%24.to=%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299%2Fmessages%2Fdevicebound","test c2d msg1"
+
+
+
+
+
+
+       +QMTRECV: 1,0,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/%24.mid=d279e3c0-59b0-4b3c-8897-ac7b324ceafc&%24.to=%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299%2Fmessages%2Fdevicebound","test c2d msg2"
+0D 0A 2B 51 4D 54 52 45 43 56 3A 20 31 2C 30 2C 22 64 65 76 69 63 65 73 2F 65 38 66 64 64 37 64 66 2D 32 63 61 32 2D 34 62 36 34 2D 39 35 64 65 2D 30 33 31 63 36 62 31 39 39 32 39 39 2F 6D 65 73 73 61 67 65 73 2F 64 65 76 69 63 65 62 6F 75 6E 64 2F 25 32 34 2E 6D 69 64 3D 64 32 37 39 65 33 63 30 2D 35 39 62 30 2D 34 62 33 63 2D 38 38 39 37 2D 61 63 37 62 33 32 34 63 65 61 66 63 26 25 32 34 2E 74 6F 3D 25 32 46 64 65 76 69 63 65 73 25 32 46 65 38 66 64 64 37 64 66 2D 32 63 61 32 2D 34 62 36 34 2D 39 35 64 65 2D 30 33 31 63 36 62 31 39 39 32 39 39 25 32 46 6D 65 73 73 61 67 65 73 25 32 46 64 65 76 69 63 65 62 6F 75 6E 64 22 2C 22 74 65 73 74 20 63 32 64 20 6D 73 67 32 22 0D 0A 
+
+
++QMTRECV: 1,65999,"",""
+
+
+AT+QMTPUB=1,0,0,0,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/"
+
+AT+QMTPUB=1,0,0,0,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/mId=1234567&mTyp=alrt"
+
+{"dVal":"wind speed=12.4"}
+
+
+
+
+10:30:34 AM, June 17, 2020:
+{
+  "body": {
+    "dVal": "wind=12.4"
+  },
+  "enqueuedTime": "2020-06-17T14:30:34.184Z",
+  "properties": {
+    "mId": "1234567",
+    "mTyp": "alrt"
+  }
+}
+10:29:43 AM, June 17, 2020:
+{
+  "enqueuedTime": "2020-06-17T14:29:43.643Z",
+  "properties": {
+    "mId": "1234567",
+    "mTyp": "alrt"
+  }
+}
+10:29:43 AM, June 17, 2020:
+{
+  "enqueuedTime": "2020-06-17T14:29:43.643Z",
+  "properties": {
+    "mId": "1234567",
+    "mTyp": "alrt"
+  }
+}
+10:24:38 AM, June 17, 2020:
+{
+  "body": "messsage",
+  "enqueuedTime": "2020-06-17T14:24:38.118Z",
+  "properties": {
+    "mId": "1234567",
+    "mTyp": "alrt"
+  }
+}
+10:22:08 AM, June 17, 2020:
+{
+  "body": 123,
+  "enqueuedTime": "2020-06-17T14:22:08.198Z",
+  "properties": {}
+}
+10:21:54 AM, June 17, 2020:
+{
+  "body": "d2cd2cd",
+  "enqueuedTime": "2020-06-17T14:21:54.103Z",
+  "properties": {}
+}

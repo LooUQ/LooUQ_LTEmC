@@ -10,12 +10,6 @@
 #include <Arduino.h>
 
 
-void timing_delay(uint32_t intervalMillis)
-{
-    delay(intervalMillis);
-}
-
-
 uint32_t timing_millis()
 {
     return millis();
@@ -25,4 +19,10 @@ uint32_t timing_millis()
 void timing_yield()
 {
     yield();
+}
+
+
+void timing_delay(uint32_t delay_ms)
+{
+    delay(delay_ms);
 }

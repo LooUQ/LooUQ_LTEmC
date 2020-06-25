@@ -9,6 +9,9 @@
 // #include "platform/platform_timing.h"
 //#include "iop.h"
 
+#define _DEBUG
+#include "platform/platform_stdio.h"
+
 
 ltem1PinConfig_t FEATHER_BREAKOUT =
 {
@@ -65,7 +68,7 @@ void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t fun
     g_ltem1->modemInfo = calloc(1, sizeof(modemInfo_t));
 	if (g_ltem1->modemInfo == NULL)
 	{
-        ltem1_faultHandler(0, "ltem1-could not alloc ltem1 modem info object");
+        ltem1_faultHandler(500, "ltem1-could not alloc ltem1 modem info object");
 	}
 
     g_ltem1->dataContext = 1;
@@ -77,6 +80,7 @@ void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t fun
     if (funcLevel >= ltem1Functionality_actions)
     {
         g_ltem1->action = calloc(1, sizeof(action_t));
+        g_ltem1->action->autoClose = true;
         action_reset();
     }
     if (funcLevel >= ltem1Functionality_services)
@@ -86,7 +90,7 @@ void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t fun
     }
     g_ltem1->funcLevel = funcLevel;
 
-    ltem1_start(funcLevel);
+    ltem1_start();
 }
 
 
@@ -96,7 +100,7 @@ void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t fun
  * 
  *  \param [in] funcLevel - Enum specifying which LTEm1c subsystems should be initialized and started.
  */
-void ltem1_start(ltem1Functionality_t funcLevel)
+void ltem1_start()
 {
     initIO();   // make sure GPIO pins in correct state
     spi_start(g_ltem1->spi);
@@ -105,41 +109,31 @@ void ltem1_start(ltem1Functionality_t funcLevel)
 	{
         qbg_powerOn();
         g_ltem1->qbgReadyState = qbg_readyState_powerOn;
-        g_ltem1->funcLevel = funcLevel;
 	}
 	else
 	{
-		PRINTF_INFO("LTEm1 found powered on.\r\n");
+		PRINTF(dbgColor_info, "LTEm1 found powered on.\r\n");
         g_ltem1->qbgReadyState = qbg_readyState_appReady;
 
         // power off/on if IRQ latched: previously fired and not serviced
         gpioPinValue_t irqState = gpio_readPin(g_ltem1->gpio->irqPin);
         if (irqState == gpioValue_low)
         {
-    		PRINTF_WARN("Invalid LTEm1 IRQ state active.\r\n");
+    		PRINTF(dbgColor_warn, "Warning: LTEm1 IRQ invalid, reseting!\r\n");
             sc16is741a_writeReg(SC16IS741A_UARTRST_ADDR, SC16IS741A_SW_RESET_MASK);
-
-            // bg96_powerOff();
-            // timing_delay(1000);
-            // bg96_powerOn();
         }
-
-        /* future HW rev, reset bridge v. BG */
-        // // reset IRQ if latched: previous fired and not serviced
-        // gpio_pinValue_t irqState = gpio_readPin(g_ltem1->gpio->irqPin);
-        // if (irqState == gpioValue_low)
-        //     ltem1_reset(false);
 	}
 
     // start NXP SPI-UART bridge
     sc16is741a_start();
 
-    if (funcLevel >= ltem1Functionality_iop)
+    if (g_ltem1->funcLevel >= ltem1Functionality_iop)
+    {
         iop_start();
+        iop_awaitAppReady();
+    }
 
-    // actions doesn't have a start/stop 
-
-    if (funcLevel >= ltem1Functionality_services)
+    if (g_ltem1->funcLevel >= ltem1Functionality_actions)
         qbg_start();
 }
 
@@ -148,21 +142,12 @@ void ltem1_start(ltem1Functionality_t funcLevel)
 /**
  *	\brief Performs a HW reset of LTEm1 and optionally executes start sequence.
  */
-void ltem1_reset(bool restart)
+void ltem1_reset()
 {
-	// gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_low);
-	// timing_delay(BG96_RESET_DELAY);
-	// gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_high);
-
-    // if (restart)
-    // {
-    //     sc16is741a_start();
-    //     if (g_ltem1->funcLevel == ltem1_functionality_iop)
-    //     {
-    //         iop_start();
-    //     }
-    //     bg96_start();
-    // }
+    qbg_powerOff();
+    timing_delay(500);
+    qbg_powerOn();
+    ltem1_start();
 }
 
 
@@ -206,8 +191,9 @@ void ltem1_destroy()
  */
 void ltem1_doWork()
 {
-    ip_receiverDoWork();
-    //qbg_processUrcStateQueue();
+    qbg_monitorState();
+    iop_recvDoWork();
+    ip_recvDoWork();
 }
 
 
@@ -218,7 +204,7 @@ void ltem1_doWork()
  */
 void ltem1_faultHandler(uint16_t statusCode, const char * faultMsg)
 {
-    PRINTF_ERR("\r\rStatus=%d %s\r", statusCode, faultMsg);
+    PRINTF(dbgColor_error, "\r\rStatus=%d %s\r", statusCode, faultMsg);
 
     // NotImplemented if custom fault handler go there
 
