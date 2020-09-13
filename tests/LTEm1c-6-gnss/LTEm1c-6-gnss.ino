@@ -68,7 +68,7 @@ void setup() {
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
-    ltem1_create(&ltem1_pinConfig, ltem1Functionality_services);
+    ltem1_create(&ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
 
     // turn on GNSS
     actionResult_t cmdResult = gnss_on();
@@ -87,11 +87,8 @@ void loop() {
         char cLat[14];
         char cLon[14];
         
-        floatToString(location.lat.val, cLat, 12, 6);
-        floatToString(location.lon.val, cLon, 12, 6);
-
         PRINTF(dbgColor_none, "Location Information\r");
-        PRINTF(dbgColor_cyan, "Lat=%s, Lon=%s \r", cLat, cLon);
+        PRINTF(dbgColor_cyan, "Lat=%4.4f, Lon=%4.4f \r", location.lat.val, location.lon.val);
     }
     else
         PRINTF(dbgColor_warn, "Location is not available (GNSS not fixed)\r");

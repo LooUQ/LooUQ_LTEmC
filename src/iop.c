@@ -29,8 +29,9 @@
 #include "ltem1c.h"
 //#include "components\nxp_sc16is741a.h"
 
+
 #define _DEBUG
-#include "platform/platform_stdio.h"
+#include "dbgprint.h"
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
@@ -277,6 +278,9 @@ void iop_tailFinalize(socketId_t socketId)
  */
 void iop_recvDoWork()
 {
+    //__disable_irq();
+    __asm__ ("cpsid i");
+
     while (g_ltem1->iop->rxTail != g_ltem1->iop->rxHead)                        // spin through rxCtrlBlks to parse any outstanding recv'd messages
     {
         g_ltem1->iop->rxTail = IOP_RXCTRLBLK_ADVINDEX(g_ltem1->iop->rxTail);
@@ -290,6 +294,10 @@ void iop_recvDoWork()
             g_ltem1->protocols->sockets[g_ltem1->iop->rxCtrlBlks[g_ltem1->iop->rxTail].process].hasData = true;
         }
     }
+
+    //__enable_irq();
+    __asm__ ("cpsie i");
+
 }
 
 

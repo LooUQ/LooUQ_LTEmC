@@ -52,7 +52,7 @@ void action_cancel();
 actionResult_t action_okResultParser(const char *response);
 actionResult_t action_gapResultParser(const char *response, const char *landmark, bool landmarkReqd, uint8_t gap, const char *terminator);
 actionResult_t action_tokenResultParser(const char *response, const char *landmark, char token, uint8_t tokenCnt);
-actionResult_t action_serviceResponseParser(const char *response, const char *landmark);
+actionResult_t action_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx);
 actionResult_t action_cmeResultParser(const char *response);
 
 

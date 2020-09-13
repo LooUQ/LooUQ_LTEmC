@@ -49,8 +49,7 @@ extern "C"
 #endif // __cplusplus
 
 ip_addr_t atcmd_parseIpAddr(const char *ipStr);
-
-void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision);
+//void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision);
 char *strToken(char *source, int delimiter, char *token, uint8_t tokenMax);
 
 

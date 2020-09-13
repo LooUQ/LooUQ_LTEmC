@@ -70,7 +70,7 @@ void setup() {
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
-    ltem1_create(&ltem1_pinConfig, ltem1Functionality_actions);
+    ltem1_create(&ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_actions);
 }
 
 

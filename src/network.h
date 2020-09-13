@@ -132,7 +132,8 @@ void ntwk_destroyNetwork();
 protocols_t *ntwk_createProtocols();
 void ntwk_destroyProtocols();
 
-networkOperator_t ntwk_getOperator();
+//networkOperator_t ntwk_getOperator();                     // replaced: use ntwk_awaitOperator, with waitDuration = 0 for same behavior
+networkOperator_t ntwk_awaitNetworkOperator(uint16_t waitDuration);
 
 socketResult_t ntwk_fetchDataContexts();
 socketResult_t ntwk_activateContext(uint8_t contxtId);

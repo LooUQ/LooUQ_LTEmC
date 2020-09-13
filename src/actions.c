@@ -4,7 +4,7 @@
 #include "ltem1c.h"
 
 #define _DEBUG
-#include "platform/platform_stdio.h"
+#include "dbgprint.h"
 
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -169,7 +169,7 @@ actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t ti
 actionResult_t action_awaitResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response))
 {
     actionResult_t actionResult;
-    PRINTF(dbgColor_gray, "awaiting result\r");
+    //PRINTF(dbgColor_gray, "!");
     do
     {
         actionResult = action_getResult(response, responseSz, timeout, customCmdCompleteParser_func);
@@ -348,17 +348,23 @@ actionResult_t action_okResultParser(const char *response)
 /**
  *	\brief [private] Parser for open connection response, shared by UDP/TCP/SSL.
  */
-actionResult_t action_serviceResponseParser(const char *response, const char *landmark) 
+actionResult_t action_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx) 
 {
     char *next = strstr(response, landmark);
-
     if (next == NULL)
         return ACTION_RESULT_PENDING;
+    next += strlen(landmark);
+
+    // expected form: +<LANDMARK>: <CONNECTION_ID>,<RESULT_CODE>
+    // return resultCode
+    for (size_t i = 0; i < resultIndx; i++)
+    {
+        next = strchr(next, ASCII_cCOMMA);
+        next++;         // point past comma
+    }
+    uint16_t resultVal = strtol(next, NULL, 10);
     
-    //uint16_t connection = strtol(next + strlen(landmark), &next, 10);
-    next = strchr(next + strlen(landmark), ASCII_cCOMMA);
-    uint16_t resultVal = strtol(next + 1, NULL, 10);
-    return  resultVal == 0 ? ACTION_RESULT_SUCCESS : resultVal;
+    return  resultVal == 0 ? ACTION_RESULT_SUCCESS : ACTION_RESULT_BGERRORS_BASE + resultVal;
 }
 
 

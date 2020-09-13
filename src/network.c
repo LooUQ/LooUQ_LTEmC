@@ -9,12 +9,14 @@
 #include "ltem1c.h"
 
 //#define _DEBUG
-#include "platform\platform_stdio.h"
+#include "dbgprint.h"
 
 
 #define PROTOCOLS_CMD_BUFFER_SZ 80
 
 static actionResult_t contextStatusCompleteParser(const char *response);
+static networkOperator_t getNetworkOperator();
+
 
 /* public tcpip functions
  * --------------------------------------------------------------------------------------------- */
@@ -99,42 +101,29 @@ void ntwk_destroyProtocols(void *ipProtocols)
 
 
 /**
- *   \brief Get the network operator name and network mode.
+ *   \brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem1->cancellationRequest.
+ * 
+ *   \param waitDuration [in] Number of seconds to wait for a network. Supply 0 for no wait.
  * 
  *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-networkOperator_t ntwk_getOperator()
+networkOperator_t ntwk_awaitNetworkOperator(uint16_t waitDuration)
 {
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
+    networkOperator_t ntwk;
+    unsigned long startMillis, endMillis;
 
-    if (*g_ltem1->network->networkOperator->operName == NULL)
+    startMillis = timing_millis();
+    waitDuration = waitDuration * 1000;
+    do 
     {
-        action_tryInvoke("AT+COPS?", true);
-        actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
-
-        char *continueAt;
-        uint8_t ntwkMode;
-
-        if (cmdResult == ACTION_RESULT_SUCCESS)
-        {
-            continueAt = strchr(response, ASCII_cDBLQUOTE);
-            if (continueAt != NULL)
-            {
-                continueAt = strToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem1->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
-                ntwkMode = (uint8_t)strtol(continueAt + 1, &continueAt, 10);
-                if (ntwkMode == 8)
-                    strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-M1");
-                else
-                    strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-NB1");
-            }
-            else
-            {
-                g_ltem1->network->networkOperator->operName[0] = NULL;
-                g_ltem1->network->networkOperator->ntwkMode[0] = NULL;
-            }
-        }
-    }
-    return *g_ltem1->network->networkOperator;
+        ntwk = getNetworkOperator();
+        if (ntwk.operName[0] != '\0')
+            break;
+        timing_delay(1000);
+        endMillis = timing_millis();
+    } while (endMillis - startMillis < waitDuration || g_ltem1->cancellationRequest);
+    //       timed out waiting                      || global cancellation
+    return ntwk;
 }
 
 
@@ -277,9 +266,55 @@ void ntwk_closeContext(uint8_t contxtId)
 #pragma region private functions
 
 
+/**
+ *   \brief Tests for the completion of a network APN context activate action.
+ * 
+ *   \return standard action result integer (http result).
+*/
 static actionResult_t contextStatusCompleteParser(const char *response)
 {
     return action_gapResultParser(response, "+QIACT: ", false, 2, ASCII_sOK);
+}
+
+
+
+/**
+ *   \brief Get the network operator name and network mode.
+ * 
+ *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
+*/
+static networkOperator_t getNetworkOperator()
+{
+    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
+
+    if (*g_ltem1->network->networkOperator->operName == NULL)
+    {
+        action_tryInvoke("AT+COPS?", true);
+        actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
+
+        char *continueAt;
+        uint8_t ntwkMode;
+
+        if (cmdResult == ACTION_RESULT_SUCCESS)
+        {
+            continueAt = strchr(response, ASCII_cDBLQUOTE);
+            if (continueAt != NULL)
+            {
+                continueAt = strToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem1->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
+                ntwkMode = (uint8_t)strtol(continueAt + 1, &continueAt, 10);
+                if (ntwkMode == 8)
+                    strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-M1");
+                else
+                    strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-NB1");
+            }
+            else
+            {
+                g_ltem1->network->networkOperator->operName[0] = NULL;
+                g_ltem1->network->networkOperator->ntwkMode[0] = NULL;
+            }
+        }
+    }
+    return *g_ltem1->network->networkOperator;
 }
 
 

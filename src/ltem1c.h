@@ -66,16 +66,18 @@ extern "C"
 // to allow for BGxx error codes starting at 500 to be passed back to application
 // ltem1c uses macros and the action_result_t typedef
 
-#define ACTION_RESULT_PENDING        0
-#define ACTION_RESULT_SUCCESS      200
-#define ACTION_RESULT_BADREQUEST   400
-#define ACTION_RESULT_NOTFOUND     404
-#define ACTION_RESULT_TIMEOUT      408
-#define ACTION_RESULT_CONFLICT     409
-#define ACTION_RESULT_ERROR        500
+#define ACTION_RESULT_PENDING         0
+#define ACTION_RESULT_SUCCESS       200
 
-// allow for simple test for unhappy result
-#define ACTION_RESULT__BASE_ERROR  400
+#define ACTION_RESULT_ERRORS_BASE   400
+#define ACTION_RESULT_BADREQUEST    400
+#define ACTION_RESULT_NOTFOUND      404
+#define ACTION_RESULT_TIMEOUT       408
+#define ACTION_RESULT_CONFLICT      409
+#define ACTION_RESULT_ERROR         500
+
+#define ACTION_RESULT_BGERRORS_BASE 600
+
 
 // action_result_t should be populated with ACTION_RESULT_x constant values or an errorCode (uint >= 400)
 typedef uint16_t actionResult_t;
@@ -99,6 +101,13 @@ typedef enum
 } ltem1Functionality_t;
 
 
+typedef enum
+{
+    ltem1Start_powerOff = 0,
+    ltem1Start_powerOn = 1
+} ltem1Start_t;
+
+
 typedef struct
 {
     int spiCsPin;
@@ -118,6 +127,7 @@ typedef struct ltem1Device_tag
     spiDevice_t *spi;
     qbgReadyState_t qbgReadyState;
     uint8_t dataContext;
+    bool cancellationRequest;
     volatile iop_t *iop;
     volatile action_t *action;
 	modemInfo_t *modemInfo;
@@ -132,7 +142,7 @@ extern ltem1PinConfig_t FEATHER_BREAKOUT;
 extern ltem1PinConfig_t RPI_BREAKOUT;
 
 
-void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t funcLevel);
+void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Start_t ltem1Start, ltem1Functionality_t funcLevel);
 void ltem1_destroy();
 
 void ltem1_start();

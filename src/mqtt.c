@@ -10,10 +10,16 @@
 #include "ltem1c.h"
 
 //#define _DEBUG
-#include "platform\platform_stdio.h"
+#include "dbgprint.h"
+
+#define WAIT_SECONDS(timeout) (timeout * 1000)
+
 
 /* private function declarations */
 static actionResult_t mqttOpenCompleteParser(const char *response);
+static actionResult_t mqttConnectCompleteParser(const char *response);
+static actionResult_t mqttSubscribeCompleteParser(const char *response);
+static actionResult_t mqttPublishCompleteParser(const char *response);
 
 
 
@@ -75,8 +81,11 @@ socketResult_t mqtt_open(socketId_t socketId, const char *host, uint16_t port, s
     // AT+QMTCFG="version",0,4
     // AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
 
-    char actionCmd[81] = {0};
-    char actionResponse[81] = {0};
+    #define ACTION_CMD_SZ 81
+    #define ACTION_RSP_SZ 81
+
+    char actionCmd[ACTION_CMD_SZ] = {0};
+    char actionResponse[ACTION_RSP_SZ] = {0};
     actionResult_t result;
 
     if (socketId >= IOP_SOCKET_COUNT)
@@ -86,26 +95,29 @@ socketResult_t mqtt_open(socketId_t socketId, const char *host, uint16_t port, s
 
     if (useSslVersion != sslVersion_none)
     {
-        snprintf(actionCmd, 80, "AT+QSSLCFG=\"sslversion\",%d,%d", socketId, (uint8_t)useSslVersion);
-        if ( !action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, 80, 0, NULL) != ACTION_RESULT_SUCCESS)
-            return ACTION_RESULT_ERROR;
+        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QSSLCFG=\"sslversion\",%d,%d", socketId, (uint8_t)useSslVersion);
+        if ( !action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, ACTION_RSP_SZ, 0, NULL) != ACTION_RESULT_SUCCESS)
+            result = 600;
 
-        snprintf(actionCmd, 80, "AT+QMTCFG=\"ssl\",%d,1,%d", socketId, socketId);
-        if ( !action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, 80, 0, NULL) != ACTION_RESULT_SUCCESS)
+        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTCFG=\"ssl\",%d,1,%d", socketId, socketId);
+        if ( !action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, ACTION_RSP_SZ, 0, NULL) != ACTION_RESULT_SUCCESS)
             return ACTION_RESULT_ERROR;
     }
 
     if (useMqttVersion == mqttVersion_311)
     {
-        snprintf(actionCmd, 80, "AT+QMTCFG=\"version\",%d,4", socketId);
-        if ( !action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, 80, 0, NULL) != ACTION_RESULT_SUCCESS)
+        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTCFG=\"version\",%d,4", socketId);
+        if ( !action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, ACTION_RSP_SZ, 0, NULL) != ACTION_RESULT_SUCCESS)
             return ACTION_RESULT_ERROR;
     }
 
     // AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
-    snprintf(actionCmd, 80, "AT+QMTOPEN=%d,\"%s\",%d", socketId, host, port);
-    if ( !action_tryInvoke(actionCmd, true) || (result = action_awaitResult(actionResponse, 80, 30000, mqttOpenCompleteParser)) != ACTION_RESULT_SUCCESS)
-        return result;
+    snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTOPEN=%d,\"%s\",%d", socketId, host, port);
+    //if ( !action_tryInvoke(actionCmd, true) || (result = action_awaitResult(actionResponse, ACTION_RSP_SZ, WAIT_SECONDS(45), mqttOpenCompleteParser)) != ACTION_RESULT_SUCCESS)
+    //    return result;
+
+    result = !action_tryInvoke(actionCmd, true);
+    result = action_awaitResult(actionResponse, ACTION_RSP_SZ, WAIT_SECONDS(45), mqttOpenCompleteParser);
 
     g_ltem1->protocols->sockets[socketId].protocol = (useSslVersion == sslVersion_none) ? protocol_mqtt : protocol_mqtts;
     return ACTION_RESULT_SUCCESS;
@@ -152,25 +164,24 @@ void mqtt_close(socketId_t socketId)
 socketResult_t mqtt_connect(socketId_t socketId, const char *clientId, const char *username, const char *password)
 {
     #define MQTT_CONNECT_CMDSZ 540
+    #define MQTT_CONNECT_RSPSZ 81
 
     char actionCmd[MQTT_CONNECT_CMDSZ] = {0};
-    char actionResponse[81] = {0};
+    char actionResponse[MQTT_CONNECT_RSPSZ] = {0};
     socketResult_t result;
 
     //char actionCmd[] = "at+qmtconn=1,\"e8fdd7df-2ca2-4b64-95de-031c6b199299\",\"iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30\",\"SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=6hTmu6e11E9CCKo1Ppeg8qxTfSRIfFwaau0crXeF9kQ%3D&se=2058955139\"";
 
-    snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", socketId, clientId, username, password);
+    snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTCONN=%d,\"%s\",\"%s\",\"SharedAccessSignature %s\"", socketId, clientId, username, password);
     if (action_tryInvoke(actionCmd, true))
     {
-        result = action_awaitResult(actionResponse, 80, 0, NULL);
+        result = action_awaitResult(actionResponse, MQTT_CONNECT_RSPSZ, WAIT_SECONDS(30), mqttConnectCompleteParser);
         return result;
     }
     return ACTION_RESULT_BADREQUEST;
 }
 
 
-
-#define MQTT_PUBSUB_CMDSZ 140
 
 /**
  *  \brief Subscribe to a topic on the MQTT server.
@@ -185,9 +196,12 @@ socketResult_t mqtt_connect(socketId_t socketId, const char *clientId, const cha
 socketResult_t mqtt_subscribe(socketId_t socketId, const char *topic, mqttQos_t qos, mqttRecv_func_t recv_func)
 {
     // AT+QMTSUB=1,99,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#",0
+    #define MQTT_PUBSUB_CMDSZ 140
+    #define MQTT_PUBSUB_RSPSZ 81
+
 
     char actionCmd[MQTT_PUBSUB_CMDSZ] = {0};
-    char actionResponse[81] = {0};
+    char actionResponse[MQTT_PUBSUB_RSPSZ] = {0};
 
     if (recv_func == NULL)
         return ACTION_RESULT_BADREQUEST;
@@ -208,7 +222,7 @@ socketResult_t mqtt_subscribe(socketId_t socketId, const char *topic, mqttQos_t 
     snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTSUB=%d,%d,\"%s\",%d", socketId, ++g_ltem1->mqtt->msgId[socketId], topic, qos);
     if (action_tryInvoke(actionCmd, true))
     {
-        return action_awaitResult(actionResponse, 80, 0, NULL);
+        return action_awaitResult(actionResponse, 80, WAIT_SECONDS(10), mqttSubscribeCompleteParser);
     }
     return ACTION_RESULT_BADREQUEST;
 }
@@ -264,7 +278,7 @@ socketResult_t mqtt_publish(socketId_t socketId, const char *topic, mqttQos_t qo
     uint16_t msgId = ((uint8_t)qos == 0) ? 0 : ++g_ltem1->mqtt->msgId[socketId];
     snprintf(publishCmd, 160, "AT+QMTPUB=%d,%d,%d,0,\"%s\"", socketId, msgId, qos, topic);
     result = action_tryInvoke(publishCmd, true) ? ACTION_RESULT_SUCCESS : ACTION_RESULT_BADREQUEST;
-    if (result >= ACTION_RESULT__BASE_ERROR)
+    if (result >= ACTION_RESULT_ERRORS_BASE)
         return result;
     
     result = action_awaitResult(actionResponse, 80, 0, iop_txDataPromptParser);
@@ -277,7 +291,7 @@ socketResult_t mqtt_publish(socketId_t socketId, const char *topic, mqttQos_t qo
         action_sendData(message, 0);
         do
         {
-            result = action_getResult(actionResponse, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
+            result = action_getResult(actionResponse, ACTION_DEFAULT_RESPONSE_SZ, 2000, mqttPublishCompleteParser);
         } while (result == ACTION_RESULT_PENDING);
     }
     return result;
@@ -291,14 +305,39 @@ socketResult_t mqtt_publish(socketId_t socketId, const char *topic, mqttQos_t qo
 #pragma region private functions
 
 /**
- *	\brief [private] MQTT open connection parser.
+ *	\brief [private] MQTT open connection response parser.
  */
 static actionResult_t mqttOpenCompleteParser(const char *response) 
 {
-    return protoOpenCompleteParser(response, "+QMTOPEN: ");
+    return action_serviceResponseParser(response, "+QMTOPEN: ", 1);
 }
 
 
+/**
+ *	\brief [private] MQTT connect to server response parser.
+ */
+static actionResult_t mqttConnectCompleteParser(const char *response) 
+{
+    return action_serviceResponseParser(response, "+QMTCONN: ", 2);
+}
+
+
+/**
+ *	\brief [private] MQTT subscribe to topic response parser.
+ */
+static actionResult_t mqttSubscribeCompleteParser(const char *response) 
+{
+    return action_serviceResponseParser(response, "+QMTSUB: ", 3);
+}
+
+
+/**
+ *	\brief [private] MQTT publish message to topic response parser.
+ */
+static actionResult_t mqttPublishCompleteParser(const char *response) 
+{
+    return action_serviceResponseParser(response, "+QMTPUB: ", 2);
+}
 
 
 #pragma endregion

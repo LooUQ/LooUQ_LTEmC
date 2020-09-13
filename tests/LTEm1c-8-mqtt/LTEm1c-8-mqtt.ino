@@ -4,6 +4,7 @@
  *  \license MIT License
  *
  *  Copyright (c) 2020 LooUQ Incorporated.
+ *  www.loouq.com
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -30,11 +31,15 @@
 #include <stdio.h>
 
 #define _DEBUG
-#include "platform/platform_stdio.h"
+#include "dbgprint.h"
 
 #define DEFAULT_NETWORK_CONTEXT 1
 #define XFRBUFFER_SZ 201
 #define SOCKET_ALREADYOPEN 563
+
+
+#define ASSERT(expected_true, failMsg)  if(!(expected_true))  indicateFailure(failMsg)
+#define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') indicateFailure(failMsg)
 
 const int APIN_RANDOMSEED = 0;
 
@@ -63,11 +68,12 @@ spiConfig_t ltem1_spiConfig =
 
 #define MQTT_IOTHUB_DEVICEID "e8fdd7df-2ca2-4b64-95de-031c6b199299"
 #define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30"
-#define MQTT_IOTHUB_PASSWORD "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=6hTmu6e11E9CCKo1Ppeg8qxTfSRIfFwaau0crXeF9kQ%3D&se=2058955139"
+#define MQTT_IOTHUB_SASTOKEN "sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=emdhUPTjoiV93FrjE5DaYn%2FObaOcK6yvDsMNrr4xidc%3D&se=3157437672"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#"
 #define MQTT_MSG_PROPERTIES "mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97"
+
 
 
 // test setup
@@ -80,7 +86,6 @@ socketResult_t result;
 socketId_t mqttConnectionId = 1;
 char mqttTopic[200];
 char mqttMessage[200];
-
 
 void setup() {
     #ifdef USE_SERIAL
@@ -95,17 +100,13 @@ void setup() {
     PRINTF(dbgColor_white, "\rLTEm1c test8-MQTT\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
 
-    ltem1_create(&ltem1_pinConfig, ltem1Functionality_services);
+    ltem1_create(&ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
     mqtt_create();
 
-    PRINTF(dbgColor_none, "Waiting on network...");
-    do
-    {
-        if (ntwk_getOperator().operName[0] == NULL)
-            timing_delay(1000);
-            
-    } while (g_ltem1->network->networkOperator->operName[0] == NULL);
-    PRINTF(dbgColor_info, "Operator is %s\r", g_ltem1->network->networkOperator->operName);
+    PRINTF(dbgColor_none, "Waiting on network...\r");
+    networkOperator_t networkOp = ntwk_awaitNetworkOperator(30000);
+    ASSERT_NOTEMPTY(networkOp.operName, "Get operator failed.");
+    PRINTF(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     socketResult_t result = ntwk_fetchDataContexts();
     if (result == ACTION_RESULT_NOTFOUND)
@@ -116,11 +117,9 @@ void setup() {
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
     */
 
-
-    result = mqtt_open(mqttConnectionId, MQTT_IOTHUB, MQTT_PORT, sslVersion_tls12, mqttVersion_311);
-    result = mqtt_connect(mqttConnectionId, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_PASSWORD);
-
-    result = mqtt_subscribe(mqttConnectionId, MQTT_IOTHUB_C2D_TOPIC, mqttQos_0, mqttReceiver);
+    ASSERT(mqtt_open(mqttConnectionId, MQTT_IOTHUB, MQTT_PORT, sslVersion_tls12, mqttVersion_311) == ACTION_RESULT_SUCCESS, "MQTT open failed.");
+    ASSERT(mqtt_connect(mqttConnectionId, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN) == ACTION_RESULT_SUCCESS,"MQTT connect failed.");
+    ASSERT(mqtt_subscribe(mqttConnectionId, MQTT_IOTHUB_C2D_TOPIC, mqttQos_0, mqttReceiver) == ACTION_RESULT_SUCCESS, "MQTT subscribe to IoTHub C2D messages failed.");
 
     // force send at start
     lastCycle = timing_millis() + 2*CYCLE_INTERVAL;
@@ -171,12 +170,10 @@ void indicateFailure(char failureMsg[])
 {
 	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
     PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
+    gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
 
     int halt = 1;
-    while (halt)
-    {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-    }
+    while (halt) {}
 }
 
 

@@ -10,7 +10,8 @@
 //#include "iop.h"
 
 #define _DEBUG
-#include "platform/platform_stdio.h"
+//#include "platform/platform_stdio.h"
+#include "dbgprint.h"
 
 
 ltem1PinConfig_t FEATHER_BREAKOUT =
@@ -53,7 +54,7 @@ static void initIO();
  *	\param[in] ltem1_config The LTE modem gpio pin configuration.
  *  \param[in] funcLevel Determines the LTEm1 functionality to create and start.
  */
-void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t funcLevel)
+void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Start_t ltem1Start, ltem1Functionality_t funcLevel)
 {
 	g_ltem1 = calloc(1, sizeof(ltem1Device_t));
 	if (g_ltem1 == NULL)
@@ -89,8 +90,10 @@ void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Functionality_t fun
         g_ltem1->protocols = ntwk_createProtocols();
     }
     g_ltem1->funcLevel = funcLevel;
+    g_ltem1->cancellationRequest = false;
 
-    ltem1_start();
+    if (ltem1Start)
+        ltem1_start();
 }
 
 

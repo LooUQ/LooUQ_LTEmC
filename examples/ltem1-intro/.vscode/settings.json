@@ -9,7 +9,6 @@
         "cfloat": "cpp",
         "ltem1c.h": "c",
         "iop.h": "c",
-        "chrono": "cpp",
-        "stdlib.h": "c"
+        "chrono": "cpp"
     }
 }

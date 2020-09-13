@@ -1,6 +1,8 @@
 // Copyright (c) 2020 LooUQ Incorporated.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+#include <stdlib.h>
+
 #include "ltem1c.h"
 #include "gnss.h"
 #include "geo.h"
@@ -16,9 +18,9 @@ static actionResult_t geoQueryResponseParser(const char *response);
 
 actionResult_t geo_add(uint8_t geoId, geo_mode_t mode, geo_shape_t shape, double lat1, double lon1, double lat2, double lon2, double lat3, double lon3, double lat4, double lon4)
 {
-    #define CMDSZ 32+8*12
-    #define COORD_PRECISION 6
-    #define COORD_OFFSET 11
+    #define COORD_SZ 12
+    #define COORD_P 6
+    #define CMDSZ 32+8*COORD_SZ
 
     char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
     char cmdStr[CMDSZ] = {0};
@@ -27,7 +29,7 @@ actionResult_t geo_add(uint8_t geoId, geo_mode_t mode, geo_shape_t shape, double
         return ACTION_RESULT_BADREQUEST;
 
     //void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision)
-    snprintf(cmdStr, 40, "AT+QCFGEXT=\"addgeo\",%d,0,%d", geoId, shape);
+    snprintf(cmdStr, CMDSZ, "AT+QCFGEXT=\"addgeo\",%d,0,%d,%4.6f,%4.6f,%4.6f", geoId, shape, lat1, lon1, lat2);
 
     if (shape == geo_shape_circlerad && (lon2 != 0 || lat3 != 0 || lon3 != 0 || lat4 != 0 || lon4 != 0) ||
         shape == geo_shape_circlept &&  (lat3 != 0 || lon3 != 0 || lat4 != 0 || lon4 != 0) ||
@@ -36,30 +38,23 @@ actionResult_t geo_add(uint8_t geoId, geo_mode_t mode, geo_shape_t shape, double
         return ACTION_RESULT_BADREQUEST;
     }
 
-    floatToString(lat1, cmdStr, CMDSZ, COORD_PRECISION);
-    strcat(cmdStr, ",");
-    floatToString(lon1, cmdStr + COORD_OFFSET, CMDSZ, COORD_PRECISION);
-    strcat(cmdStr, ",");
-    floatToString(lat2, cmdStr + COORD_OFFSET * 2, CMDSZ, COORD_PRECISION);
-
     if (shape >= geo_shape_circlept)
     {
-        strcat(cmdStr, ",");
-        floatToString(lon2, cmdStr, CMDSZ, COORD_PRECISION);
+        char cmdChunk[COORD_SZ];
+        snprintf(cmdChunk, COORD_SZ, ",%4.6f", lon2);
+        strcat(cmdStr, cmdChunk);
     }
     if (shape >= geo_shape_triangle)
     {
-        strcat(cmdStr, ",");
-        floatToString(lat3, cmdStr, CMDSZ, COORD_PRECISION);
-        strcat(cmdStr, ",");
-        floatToString(lon3, cmdStr, CMDSZ, COORD_PRECISION);
+        char cmdChunk[2*COORD_SZ];
+        snprintf(cmdChunk, 2*COORD_SZ, ",%4.6f,%4.6f", lat3, lon3);
+        strcat(cmdStr, cmdChunk);
     }
     if (shape == geo_shape_quadrangle)
     {
-        strcat(cmdStr, ",");
-        floatToString(lat4, cmdStr, CMDSZ, COORD_PRECISION);
-        strcat(cmdStr, ",");
-        floatToString(lat4, cmdStr, CMDSZ, COORD_PRECISION);
+        char cmdChunk[2*COORD_SZ];
+        snprintf(cmdChunk, 2*COORD_SZ, ",%4.6f,%4.6f", lat4, lon4);
+        strcat(cmdStr, cmdChunk);
     }
 
     action_tryInvoke(cmdStr, true);

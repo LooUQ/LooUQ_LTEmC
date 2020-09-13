@@ -29,7 +29,7 @@
 //#include "quectel_bg96.h"
 
 #define _DEBUG
-#include "platform\platform_stdio.h"
+#include "dbgprint.h"
 
 #define BG96_INIT_COMMAND_COUNT 1
 

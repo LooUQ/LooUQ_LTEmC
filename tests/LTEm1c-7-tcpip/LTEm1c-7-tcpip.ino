@@ -29,7 +29,7 @@
 #include <stdio.h>
 
 #define _DEBUG
-#include "platform/platform_stdio.h"
+#include "dbgprint.h"
 
 #define DEFAULT_NETWORK_CONTEXT 1
 #define BUFFER_SZ 201
@@ -82,15 +82,11 @@ void setup() {
     PRINTF(dbgColor_white, "\rLTEm1c test7-TCP/IP\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
 
-    ltem1_create(&ltem1_pinConfig, ltem1Functionality_services);
+    ltem1_create(&ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
 
     PRINTF(dbgColor_none, "Waiting on network...");
-    do
-    {
-        if (ntwk_getOperator().operName[0] == NULL)
-            timing_delay(1000);
-    } while (g_ltem1->network->networkOperator->operName[0] == NULL);
-    PRINTF(dbgColor_info, "Operator is %s\r", g_ltem1->network->networkOperator->operName);
+    networkOperator_t networkOp = ntwk_awaitOperator(30000);
+    PRINTF(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     socketResult_t result = ntwk_fetchDataContexts();
     if (result == ACTION_RESULT_NOTFOUND)

@@ -4,7 +4,7 @@
 #include "ltem1c.h"
 
 //#define _DEBUG
-#include "platform/platform_stdio.h"
+#include "dbgprint.h"
 
 #define IMEI_OFFSET 2
 #define IMEI_SIZE 15

@@ -8,11 +8,9 @@
             "name": "Cortex Debug",
             "type": "cortex-debug",
             "cwd": "${workspaceRoot}",
-            "executable": ".//.build/ltem1c-8-mqtt.ino.elf",
+            "executable": ".//.build/ltem1-intro.ino.elf",
             "request": "launch",
             "servertype": "jlink",
-            "serverpath": "jlinkgdbserver.exe",
-            "interface": "swd",
             "device": "ATSAMD21G18",
             "runToMain": true
         }

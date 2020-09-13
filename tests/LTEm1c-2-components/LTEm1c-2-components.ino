@@ -74,7 +74,7 @@ void setup() {
     randomSeed(analogRead(APIN_RANDOMSEED));
 
     // create ltem1 and start it, wait for it to ready itself
-    ltem1_create(&ltem1_pinConfig, ltem1Functionality_base);
+    ltem1_create(&ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_base);
 }
 
 

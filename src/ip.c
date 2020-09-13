@@ -9,7 +9,7 @@
 #include "ltem1c.h"
 
 #define _DEBUG
-#include "platform\platform_stdio.h"
+#include "dbgprint.h"
 
 #define PROTOCOLS_CMD_BUFFER_SZ 80
 
@@ -36,14 +36,12 @@ socketResult_t ip_open(socketId_t socketId, protocol_t protocol, const char *hos
     char openCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
     char protoName[13] = {0};
 
-    if (socketId >= IOP_SOCKET_COUNT)
+    if (socketId >= IOP_SOCKET_COUNT ||
+        g_ltem1->protocols->sockets[socketId].protocol != protocol_void ||
+        protocol > protocol_AnyIP ||
+        rcvr_func == NULL
+        )
         return ACTION_RESULT_BADREQUEST;
-    if (g_ltem1->protocols->sockets[socketId].protocol != protocol_void)
-        return ACTION_RESULT_BADREQUEST;
-    if (protocol > protocol_AnyIP)
-        return ACTION_RESULT_BADREQUEST;
-    if (rcvr_func == NULL)
-        return ACTION_RESULT_ERROR;
 
     g_ltem1->protocols->sockets[socketId].protocol = protocol;
     g_ltem1->protocols->sockets[socketId].receiver_func = rcvr_func;
@@ -217,7 +215,7 @@ void ip_recvDoWork()
  */
 static actionResult_t ipOpenCompleteParser(const char *response) 
 {
-    return action_serviceResponseParser(response, "+QIOPEN: ");
+    return action_serviceResponseParser(response, "+QIOPEN: ", 1);
 }
 
 
@@ -226,7 +224,7 @@ static actionResult_t ipOpenCompleteParser(const char *response)
  */
 static actionResult_t sslOpenCompleteParser(const char *response) 
 {
-    return action_serviceResponseParser(response, "+QSSLOPEN: ");
+    return action_serviceResponseParser(response, "+QSSLOPEN: ", 1);
 }
 
 
