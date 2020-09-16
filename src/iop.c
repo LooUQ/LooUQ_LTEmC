@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file iop.h
+ *  \file iop.c
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -27,14 +27,11 @@
  *****************************************************************************/
 
 #include "ltem1c.h"
-//#include "components\nxp_sc16is741a.h"
-
 
 #define _DEBUG
 #include "dbgprint.h"
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
-
 #define IOP_RXCTRLBLK_ADVINDEX(INDX) INDX = (++INDX == IOP_RXCTRLBLK_COUNT) ? 0 : INDX
 
 #define QBG_APPREADY_MILLISMAX 5000
@@ -42,15 +39,14 @@
 
 // private function declarations
 static cbuf_t *txCreate();
-static void txDestroy();
 static uint16_t txPut(const char *data, uint16_t dataSz);
 static uint16_t txTake(char *data, uint16_t dataSz);
 static void txSendChunk();
 
 static uint8_t rxOpenCtrlBlock();
-static void requestIrd(socketId_t socketId);
 static void rxParseImmediate(uint8_t rxIndx);
-static void rxParseDeferred(uint8_t rxIndx);
+static void rxParseExtended(uint8_t rxIndx);
+static void reqProtoData(socketId_t socketId);
 static uint16_t rxAllocateBuffer(iopRxCtrlBlock_t *rxCtrlStruct, uint8_t prefixSz);
 static void rxResetCtrlBlock(uint8_t bufIndx);
 
@@ -73,9 +69,9 @@ iop_t *iop_create()
         ltem1_faultHandler(0, "iop-could not alloc iop status struct");
 	}
     iop->txBuf = txCreate();
-    iop->rdsMode = iopRdsMode_idle;
-    iop->rdsSocket = iopProcess_void;
-    iop->rdsRxCtrlBlk = IOP_RXCTRLBLK_VOID;
+    iop->protoDataMode = iopProtoDataMode_idle;
+    iop->protoDataSocket = iopProcess_void;
+    iop->protoDataRxCtrlBlk = IOP_RXCTRLBLK_VOID;
 
     for (size_t i = 0; i < IOP_RXCTRLBLK_COUNT; i++)
     {
@@ -87,24 +83,13 @@ iop_t *iop_create()
 
 
 /**
- *	\brief Tear down IOP (Input/Output Process) subsystem.
- */
-void iop_destroy(void *iop)
-{
-    txDestroy();
-	free(iop);
-}
-
-
-
-/**
  *	\brief Complete initialization and start running iop processes.
  */
 void iop_start()
 {
     // attach ISR and enable NXP interrupt mode
-    gpio_attachIsr(g_ltem1->gpio->irqPin, true, gpioIrqTriggerOn_falling, interruptCallbackISR);
-    spi_protectFromInterrupt(g_ltem1->spi, g_ltem1->gpio->irqPin);
+    gpio_attachIsr(g_ltem1->pinConfig.irqPin, true, gpioIrqTriggerOn_falling, interruptCallbackISR);
+    spi_protectFromInterrupt(g_ltem1->spi, g_ltem1->pinConfig.irqPin);
     sc16is741a_enableIrqMode();
 }
 
@@ -278,26 +263,26 @@ void iop_tailFinalize(socketId_t socketId)
  */
 void iop_recvDoWork()
 {
-    //__disable_irq();
-    __asm__ ("cpsid i");
+    /* //__disable_irq();
+    __asm__ ("cpsid i"); */
 
-    while (g_ltem1->iop->rxTail != g_ltem1->iop->rxHead)                        // spin through rxCtrlBlks to parse any outstanding recv'd messages
+    while (g_ltem1->iop->rxTail != g_ltem1->iop->rxHead)                        // spin through rxCtrlBlks to finalize recv'd messages
     {
         g_ltem1->iop->rxTail = IOP_RXCTRLBLK_ADVINDEX(g_ltem1->iop->rxTail);
 
-        if (g_ltem1->iop->rxCtrlBlks[g_ltem1->iop->rxTail].process == iopProcess_allocated)
-        {
-            rxParseDeferred(g_ltem1->iop->rxTail);
-        }
+        // if (g_ltem1->iop->rxCtrlBlks[g_ltem1->iop->rxTail].process == iopProcess_allocated)
+        // {
+        //     rxParseExtended(g_ltem1->iop->rxTail);
+        // }
+
         if (g_ltem1->iop->rxCtrlBlks[g_ltem1->iop->rxTail].dataReady && g_ltem1->iop->rxCtrlBlks[g_ltem1->iop->rxTail].process <= iopProcess_socketMax)
         {
             g_ltem1->protocols->sockets[g_ltem1->iop->rxCtrlBlks[g_ltem1->iop->rxTail].process].hasData = true;
         }
     }
 
-    //__enable_irq();
-    __asm__ ("cpsie i");
-
+    /* //__enable_irq();
+    __asm__ ("cpsie i"); */
 }
 
 
@@ -323,14 +308,6 @@ static cbuf_t *txCreate()
     }
     txBuf->maxlen = IOP_TX_BUFFER_SZ;
     return txBuf;
-}
-
-
-
-static void txDestroy()
-{
-    free(g_ltem1->iop->txBuf->buffer);
-    free(g_ltem1->iop->txBuf);
 }
 
 
@@ -500,9 +477,9 @@ static uint16_t rxConfigureIrdBuffer(iopRxCtrlBlock_t *rxCtrlBlk, uint8_t dataSz
 /**
  *  \brief Invoke IRD command to request BGx for socket (read) data
 */
-static void requestIrd(socketId_t socketId)
+static void requestProtoData(socketId_t socketId)
 {
-    g_ltem1->iop->rdsSocket = socketId;
+    g_ltem1->iop->protoDataSocket = socketId;
     
     char irdCmd[12] = {0};
     snprintf(irdCmd, 12, "AT+QIRD=%d", socketId);
@@ -562,8 +539,8 @@ static void rxParseImmediate(uint8_t rxIndx)
         uint16_t irdBytes = rxConfigureIrdBuffer(rxCtrlBlk, ((rxCtrlBlk->primBuf[4] == 'I') ? IRDRECV_HDRSZ : SSLRECV_HDRSZ) + 2);
         if (irdBytes == 0)                                                      // special IRD response: empty IRD signals end of data
         {
-            g_ltem1->iop->rdsMode = iopRdsMode_idle;
-            g_ltem1->iop->rdsSocket = iopProcess_void;
+            g_ltem1->iop->protoDataMode = iopProtoDataMode_idle;
+            g_ltem1->iop->protoDataSocket = iopProcess_void;
             rxCtrlBlk->process = iopProcess_void;
             return;
         }
@@ -571,21 +548,21 @@ static void rxParseImmediate(uint8_t rxIndx)
         rxCtrlBlk->rmtHostInData = (*rxCtrlBlk->primBufData == ASCII_cCOMMA);   // signal remote IP addr available, if socket opened as UDP service
 
         rxCtrlBlk->primBufData += 2;                                            // skip CrLf 
-        rxCtrlBlk->process = g_ltem1->iop->rdsSocket;
+        rxCtrlBlk->process = g_ltem1->iop->protoDataSocket;
 
         if (rxCtrlBlk->extsnBufHead == NULL)
         {
             rxCtrlBlk->dataReady = true;
-            g_ltem1->iop->rdsMode = iopRdsMode_idle;
+            g_ltem1->iop->protoDataMode = iopProtoDataMode_idle;
         }
         else                                                                    // extended buffer opened, setup continuation properties
         {
             rxCtrlBlk->dataReady = false;
-            g_ltem1->iop->rdsMode = iopRdsMode_irdBytes;
-            g_ltem1->iop->rdsBytes = irdBytes;
-            g_ltem1->iop->rdsRxCtrlBlk = rxIndx;
+            g_ltem1->iop->protoDataMode = iopProtoDataMode_irdBytes;
+            g_ltem1->iop->protoDataBytes = irdBytes;
+            g_ltem1->iop->protoDataRxCtrlBlk = rxIndx;
         }
-        g_ltem1->iop->socketHead[g_ltem1->iop->rdsSocket] = rxIndx;             // data present, so point head to this ctrlBlk
+        g_ltem1->iop->socketHead[g_ltem1->iop->protoDataSocket] = rxIndx;             // data present, so point head to this ctrlBlk
     }
 
     /* mqtt >> +QMTRECV: <tcpconnectID>,<msgID>,<topic>,<payload>
@@ -597,16 +574,19 @@ static void rxParseImmediate(uint8_t rxIndx)
         rxCtrlBlk->extsnBufTail = rxCtrlBlk->extsnBufHead + rxCtrlBlk->primDataSz;
         rxCtrlBlk->dataReady = false;
 
-        g_ltem1->iop->rdsMode = iopRdsMode_eotPhrase;
-        strcpy(g_ltem1->iop->rdsEotPhrase, ASCII_sMQTTTERM);
-        g_ltem1->iop->rdsEotSz = 3;
-        char* termTestAt = rxCtrlBlk->primBuf + rxCtrlBlk->primDataSz - g_ltem1->iop->rdsEotSz;
-        if (strncmp(g_ltem1->iop->rdsEotPhrase, termTestAt, g_ltem1->iop->rdsEotSz))
+        g_ltem1->iop->protoDataMode = iopProtoDataMode_eotPhrase;
+        strcpy(g_ltem1->iop->protoDataEOTPhrase, ASCII_sMQTTTERM);
+        g_ltem1->iop->protoDataEOTSz = 3;
+        char* termTestAt = rxCtrlBlk->primBuf + rxCtrlBlk->primDataSz - g_ltem1->iop->protoDataEOTSz;
+        if (strncmp(g_ltem1->iop->protoDataEOTPhrase, termTestAt, g_ltem1->iop->protoDataEOTSz))
         {
             rxCtrlBlk->dataReady = true;
-            g_ltem1->iop->rdsMode = iopRdsMode_idle;
+            g_ltem1->iop->protoDataMode = iopProtoDataMode_idle;
         }
     }
+
+    // possible future change is to defer outside of ISR sequence
+    rxParseExtended(rxIndx);
 }
 
 
@@ -614,40 +594,45 @@ static void rxParseImmediate(uint8_t rxIndx)
 /**
  *  \brief Complete parsing of RX control blocks that was deferred from ISR. 
 */
-static void rxParseDeferred(uint8_t rxIndx)
+static void rxParseExtended(uint8_t rxIndx)
 {
     #define RECV_HEADERSZ_URC_IPRECV 13
     #define RECV_HEADERSZ_URC_SSLRECV 15
     #define QIURC_HDRSZ 8
 
     iopRxCtrlBlock_t *rxCtrlBlock = &g_ltem1->iop->rxCtrlBlks[rxIndx];
-    // preserve comparison for dbg
-    uint8_t ipCmp, sslCmp;
+    uint8_t isTCPUDP = 0, isSSL = 0;        // for diagnostics
 
-    if ((ipCmp = memcmp("+QIURC: \"recv", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URC_IPRECV)) == 0)
+    /* incoming TCP/UDP protocol data signaled
+    */
+    if ((isTCPUDP = memcmp("+QIURC: \"recv", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URC_IPRECV)) == 0)
     {
         char *connIdPtr = rxCtrlBlock->primBuf + RECV_HEADERSZ_URC_IPRECV;
         char *endPtr = NULL;
         uint8_t socketId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
 
-        requestIrd(socketId);
+        requestProtoData(socketId);
         g_ltem1->iop->socketTail[socketId] = rxIndx;
         rxResetCtrlBlock(rxIndx);
     }
 
-    else if ((sslCmp  = memcmp("+QSSLURC: \"recv", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URC_SSLRECV)) == 0)
+    /* incoming SSL protocol data signaled
+    */
+    else if ((isSSL  = memcmp("+QSSLURC: \"recv", rxCtrlBlock->primBuf + 2, RECV_HEADERSZ_URC_SSLRECV)) == 0)
     {
         char *connIdPtr = rxCtrlBlock->primBuf + RECV_HEADERSZ_URC_SSLRECV;
         char *endPtr = NULL;
         uint8_t socketId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
 
-        requestIrd(socketId);
+        requestProtoData(socketId);
         g_ltem1->iop->socketTail[socketId] = rxIndx;
         rxResetCtrlBlock(rxIndx);
     }
 
-    // catch async unsolicited state changes here
-    //  +QIURC: "pdpdeact",<contextID>
+    // catch async unsolicited state changes BELOW
+
+    /* incoming network PDP deactivated signaled (+QIURC: "pdpdeact",<contextID>)
+    */
     else if (memcmp("+QIURC: ", rxCtrlBlock->primBuf + 2, QIURC_HDRSZ) == 0)
     {
         // state message buffer is only 1 message
@@ -657,14 +642,18 @@ static void rxParseDeferred(uint8_t rxIndx)
         rxCtrlBlock->process = iopProcess_void;                         // release ctrl/buffer, processed here
     }
 
-    else if (g_ltem1->qbgReadyState != qbg_readyState_appReady && memcmp("APP RDY\r\n", rxCtrlBlock->primBuf + 2, 9) == 0)
+    /* incoming BGx application ready signaled
+    */
+    else if (g_ltem1->qbgReadyState != qbg_readyState_appReady && 
+             memcmp("APP RDY\r\n", rxCtrlBlock->primBuf + 2, 9) == 0)
     {
         PRINTF(dbgColor_white, "\rQBG-AppRdy\r");
         g_ltem1->qbgReadyState = qbg_readyState_appReady;
         rxCtrlBlock->process = iopProcess_void;                         // release ctrlBlk, done with it
     }
 
-    // if rx process still unassigned, set as command
+    /* otherwise set as command 
+    */
     else
     {
         g_ltem1->iop->cmdHead = rxIndx;
@@ -700,65 +689,56 @@ static void interruptCallbackISR()
 
     do
     {
-        while(iirVal.IRQ_nPENDING == 1)
+        while(iirVal.IRQ_nPENDING == 1)                             // wait for register, IRQ was signaled
         {
             iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
             PRINTF(dbgColor_warn, "*");
         }
 
-        // if (iirVal.IRQ_nPENDING == 1)
-        // {
-        //     // PRINTF_WARN("** ");
-        //     // IRQ fired, so re-read IIR **VERIFY** nothing to service & reset source
-        //     iirVal.reg = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
-        // }
 
-
-        // priority 1 -- receiver line status error : clear fifo of bad char
-        if (iirVal.IRQ_SOURCE == 3)
+        if (iirVal.IRQ_SOURCE == 3)                                 // priority 1 -- receiver line status error : clear fifo of bad char
         {
             PRINTF(dbgColor_error, "RXErr ");
             sc16is741a_flushRxFifo();
         }
 
 
-        // priority 2 -- receiver RHR full (src=2), receiver time-out (src=6)
-        // Service Action: read RXLVL, read FIFO to empty
-        if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)
-        {
+        
+        if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)       // priority 2 -- receiver RHR full (src=2), receiver time-out (src=6)
+        {                                                           // Service Action: read RXLVL, read FIFO to empty
             PRINTF(dbgColor_gray, "RX=%d ", iirVal.IRQ_SOURCE);
             rxLevel = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
             PRINTF(dbgColor_gray, "-lvl=%d ", rxLevel);
 
             if (rxLevel > 0)
             {
-                uint8_t rxIndx = (g_ltem1->iop->rdsMode == iopRdsMode_idle) ? rxOpenCtrlBlock() : g_ltem1->iop->rdsRxCtrlBlk;
+                uint8_t rxIndx = (g_ltem1->iop->protoDataMode == iopProtoDataMode_idle) ? rxOpenCtrlBlock() : g_ltem1->iop->protoDataRxCtrlBlk;
                 PRINTF(dbgColor_gray, "-ix=%d ", rxIndx);
 
-                if (g_ltem1->iop->rdsMode == iopRdsMode_idle)           // if rdsMode is idle, 1st rx chunk: primary buffer
+                if (g_ltem1->iop->protoDataMode == iopProtoDataMode_idle)           // if rdsMode is idle, 1st rx chunk: primary buffer
                 {
                     sc16is741a_read(g_ltem1->iop->rxCtrlBlks[rxIndx].primBuf, rxLevel);
                     g_ltem1->iop->rxCtrlBlks[rxIndx].primDataSz = rxLevel;
                     g_ltem1->iop->rxCtrlBlks[rxIndx].dataReady = true;
                 }
-                else                                                    // else, extended buffer
+                else                                                                // else, extended buffer
                 {
                     sc16is741a_read(g_ltem1->iop->rxCtrlBlks[rxIndx].extsnBufTail, rxLevel);
                     g_ltem1->iop->rxCtrlBlks[rxIndx].extsnBufTail += rxLevel;
 
-                    if (g_ltem1->iop->rdsMode == iopRdsMode_irdBytes)
+                    if (g_ltem1->iop->protoDataMode == iopProtoDataMode_irdBytes)
                     {
-                        g_ltem1->iop->rdsBytes -= rxLevel;
-                        g_ltem1->iop->rxCtrlBlks[rxIndx].dataReady = (g_ltem1->iop->rdsBytes == 0);         // dataReady if all bytes read
-                        g_ltem1->iop->rdsMode = iopRdsMode_idle;
+                        g_ltem1->iop->protoDataBytes -= rxLevel;
+                        g_ltem1->iop->rxCtrlBlks[rxIndx].dataReady = (g_ltem1->iop->protoDataBytes == 0);         // dataReady if all bytes read
+                        g_ltem1->iop->protoDataMode = iopProtoDataMode_idle;
                     }
                     else
                     {
-                        char* termTestAt = g_ltem1->iop->rxCtrlBlks[rxIndx].primBuf - g_ltem1->iop->rdsEotSz;
-                        if (strncmp(g_ltem1->iop->rdsEotPhrase, termTestAt, g_ltem1->iop->rdsEotSz))
+                        char* termTestAt = g_ltem1->iop->rxCtrlBlks[rxIndx].primBuf - g_ltem1->iop->protoDataEOTSz;
+                        if (strncmp(g_ltem1->iop->protoDataEOTPhrase, termTestAt, g_ltem1->iop->protoDataEOTSz))
                         {
                             g_ltem1->iop->rxCtrlBlks[rxIndx].dataReady = true;
-                            g_ltem1->iop->rdsMode = iopRdsMode_idle;
+                            g_ltem1->iop->protoDataMode = iopProtoDataMode_idle;
                         }
                     }
                     
@@ -770,15 +750,13 @@ static void interruptCallbackISR()
 
                 if (g_ltem1->iop->rxCtrlBlks[rxIndx].dataReady)
                 {
-                    g_ltem1->iop->rdsMode = iopRdsMode_idle;
-                    g_ltem1->action->cmdBrief[0] = NULL;                              // close IRD action (regardless of RDS mode)
+                    g_ltem1->iop->protoDataMode = iopProtoDataMode_idle;
                 }
             }
         }
 
 
-        // priority 3 -- transmit THR (threshold) : TX ready for more data
-        if (iirVal.IRQ_SOURCE == 1)                                         // TX available
+        if (iirVal.IRQ_SOURCE == 1)                                 // priority 3 -- transmit THR (threshold) : TX ready for more data
         {
             uint8_t buf[65] = {0};
             uint8_t thisTxSz;
@@ -812,7 +790,7 @@ static void interruptCallbackISR()
 
     PRINTF(dbgColor_white, "]\r");
 
-    gpioPinValue_t irqPin = gpio_readPin(g_ltem1->gpio->irqPin);
+    gpioPinValue_t irqPin = gpio_readPin(g_ltem1->pinConfig.irqPin);
     if (irqPin == gpioValue_low)
     {
         txAvailable = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);

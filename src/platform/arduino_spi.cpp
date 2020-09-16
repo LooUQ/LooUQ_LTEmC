@@ -40,7 +40,7 @@ spiDevice_t *spi_create(uint8_t chipSelLine)
 		return NULL;
 	}
 
-    spi->config->dataRate = SPI_DATA_RATE;
+    spi->config->dataRate = 2000000U;
     spi->config->dataMode = spiDataMode_0;
     spi->config->bitOrder = spiBitOrder_msbFirst;
     spi->config->csPin = chipSelLine;

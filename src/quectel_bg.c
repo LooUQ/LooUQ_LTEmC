@@ -57,12 +57,12 @@ const char* const qbg_initCmds[] =
 void qbg_powerOn()
 {
     PRINTF(dbgColor_none, "Powering LTEm1 On...");
-    gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
+    gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_high);
     timing_delay(QBG_POWERON_DELAY);
-    gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
+    gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_low);
 
     // wait for status=ready
-    while (!gpio_readPin(g_ltem1->gpio->statusPin))
+    while (!gpio_readPin(g_ltem1->pinConfig.statusPin))
     {
         timing_delay(500);
     }
@@ -77,9 +77,9 @@ void qbg_powerOn()
 void qbg_powerOff()
 {
     PRINTF(dbgColor_none, "Powering LTEm1 Off\r");
-	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_high);
+	gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_high);
 	timing_delay(QBG_POWEROFF_DELAY);
-	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
+	gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_low);
 }
 
 

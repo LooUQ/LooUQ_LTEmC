@@ -28,8 +28,10 @@
 
 #include <stdint.h>
 #include "network.h"
-#include "cbuf.h"
 #include "ltem1c.h"
+
+#define CBUF_SZ  1749       // cmd 
+#include "cbuf.h"
 
 #define IOP_SOCKET_COUNT 6
 #define IOP_ERROR -1
@@ -83,12 +85,13 @@ typedef struct iopTxCtrlBlock_tag
 
 #define IOP_TX_ACTIVE() g_ltem1->iop->txCtrl->remainSz > 0
 
+
 typedef enum iopRdsMode_tag
 {
-    iopRdsMode_idle = 0,
-    iopRdsMode_irdBytes = 1,
-    iopRdsMode_eotPhrase = 2
-} iopRdsMode_t;
+    iopProtoDataMode_idle = 0,
+    iopProtoDataMode_irdBytes = 1,
+    iopProtoDataMode_eotPhrase = 2
+} iopProtoDataMode_t;
 
 
 typedef struct iopRxCtrlBlock_tag
@@ -104,24 +107,26 @@ typedef struct iopRxCtrlBlock_tag
 } iopRxCtrlBlock_t;
 
 
-
+/* head and tail reference incoming (head) and outgoing (tail). 
+ * IOP loads head, consumers read from tail
+*/
 typedef struct iop_tag
 {
-    uint8_t rxHead;
+    uint8_t rxHead;                                     // rxCtrlBlk recv Head (queue in)
     uint8_t rxTail;
-    uint8_t cmdHead;
-    uint8_t cmdTail;
-    uint8_t socketHead[IOP_SOCKET_COUNT];
+    uint8_t cmdHead;                                    // cmd processor Head (queue in)
+    uint8_t cmdTail;                                    // cmd processor consumer (queue out)
+    uint8_t socketHead[IOP_SOCKET_COUNT];   
     uint8_t socketTail[IOP_SOCKET_COUNT];
-    cbuf_t *txBuf;
-    iopRdsMode_t rdsMode;
-    uint8_t rdsSocket;
-    uint8_t rdsRxCtrlBlk;
-    uint16_t rdsBytes;
-    char rdsEotPhrase[5];
-    uint8_t rdsEotSz;
-    iopRxCtrlBlock_t rxCtrlBlks[IOP_RXCTRLBLK_COUNT];
-    char urcStateMsg[IOP_URC_STATEMSG_SZ];
+    cbuf_t *txBuf;                                      // transmit buffer (there is just one)
+    iopProtoDataMode_t protoDataMode;                   // data complete: bytes or EOT phrase (end-of-transmission)
+    uint8_t protoDataSocket;                            // socket number receiving data
+    uint8_t protoDataRxCtrlBlk;                         // control blk managing receive 
+    uint16_t protoDataBytes;                            // remaining bytes (if mode is bytes)
+    char protoDataEOTPhrase[5];                         // end of transmission signal phrase
+    uint8_t protoDataEOTSz;                             // characters expected in EOT phrase
+    iopRxCtrlBlock_t rxCtrlBlks[IOP_RXCTRLBLK_COUNT];   // receive control blocks, structured buffers
+    char urcStateMsg[IOP_URC_STATEMSG_SZ];              // unsolicited response condition, asynch state change
 } iop_t;
 
 
@@ -132,8 +137,6 @@ extern "C"
 
 
 iop_t *iop_create();
-void iop_destroy();
-
 void iop_start();
 void iop_awaitAppReady();
 

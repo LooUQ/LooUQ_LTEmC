@@ -2,39 +2,10 @@
 //	Licensed under The MIT License. See LICENSE in the root directory.
 
 #include "ltem1c.h"
-// #include "components/nxp_sc16is741a.h"
-// #include "components/quectel_bg96.h"
-// #include "platform/platform_stdio.h"
-// #include "platform/platform_gpio.h"
-// #include "platform/platform_timing.h"
-//#include "iop.h"
 
 #define _DEBUG
-//#include "platform/platform_stdio.h"
 #include "dbgprint.h"
 
-
-ltem1PinConfig_t FEATHER_BREAKOUT =
-{
-	.spiCsPin = 13,
-	.irqPin = 12,
-	.statusPin = 06,
-	.powerkeyPin = 11,
-	.resetPin = 19,
-	.ringUrcPin = 0,
-    .wakePin = 0
-};
-
-ltem1PinConfig_t RPI_BREAKOUT = 
-{
-	.spiCsPin = 0, 			//< J8_24
-	.irqPin = 22U,		//< J8_15
-	.statusPin = 13U,		//< J8_22
-	.powerkeyPin = 24U,		//< J8_18
-	.resetPin = 23U,		//< J8_16
-	.ringUrcPin = 0,
-    .wakePin = 0
-};
 
 /* ------------------------------------------------------------------------------------------------
  * GLOBAL LTEm1 Device Object
@@ -54,7 +25,7 @@ static void initIO();
  *	\param[in] ltem1_config The LTE modem gpio pin configuration.
  *  \param[in] funcLevel Determines the LTEm1 functionality to create and start.
  */
-void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Start_t ltem1Start, ltem1Functionality_t funcLevel)
+void ltem1_create(const ltem1PinConfig_t ltem1_config, ltem1Start_t ltem1Start, ltem1Functionality_t funcLevel)
 {
 	g_ltem1 = calloc(1, sizeof(ltem1Device_t));
 	if (g_ltem1 == NULL)
@@ -62,8 +33,8 @@ void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Start_t ltem1Start,
         ltem1_faultHandler(0, "ltem1-could not alloc ltem1 object");
 	}
 
-	g_ltem1->gpio = ltem1_config;
-    g_ltem1->spi = spi_create(g_ltem1->gpio->spiCsPin);
+	g_ltem1->pinConfig = ltem1_config;
+    g_ltem1->spi = spi_create(g_ltem1->pinConfig.spiCsPin);
     //g_ltem1->spi = createSpiConfig(g_ltem1->gpio->spiCsPin, LTEM1_SPI_DATARATE, BG96_BAUDRATE_DEFAULT);
 
     g_ltem1->modemInfo = calloc(1, sizeof(modemInfo_t));
@@ -108,7 +79,7 @@ void ltem1_start()
     initIO();   // make sure GPIO pins in correct state
     spi_start(g_ltem1->spi);
 
-	if (!gpio_readPin(g_ltem1->gpio->statusPin))
+	if (!gpio_readPin(g_ltem1->pinConfig.statusPin))
 	{
         qbg_powerOn();
         g_ltem1->qbgReadyState = qbg_readyState_powerOn;
@@ -119,7 +90,7 @@ void ltem1_start()
         g_ltem1->qbgReadyState = qbg_readyState_appReady;
 
         // power off/on if IRQ latched: previously fired and not serviced
-        gpioPinValue_t irqState = gpio_readPin(g_ltem1->gpio->irqPin);
+        gpioPinValue_t irqState = gpio_readPin(g_ltem1->pinConfig.irqPin);
         if (irqState == gpioValue_low)
         {
     		PRINTF(dbgColor_warn, "Warning: LTEm1 IRQ invalid, reseting!\r\n");
@@ -175,10 +146,10 @@ void ltem1_destroy()
 {
 	ltem1_stop();
 
-	gpio_pinClose(g_ltem1->gpio->irqPin);
-	gpio_pinClose(g_ltem1->gpio->powerkeyPin);
-	gpio_pinClose(g_ltem1->gpio->resetPin);
-	gpio_pinClose(g_ltem1->gpio->statusPin);
+	gpio_pinClose(g_ltem1->pinConfig.irqPin);
+	gpio_pinClose(g_ltem1->pinConfig.powerkeyPin);
+	gpio_pinClose(g_ltem1->pinConfig.resetPin);
+	gpio_pinClose(g_ltem1->pinConfig.statusPin);
 
     ip_destroy();
     free(g_ltem1->action);
@@ -243,16 +214,16 @@ void ltem1_registerApplicationFaultHandler(void * customFaultHandler)
 static void initIO()
 {
 	// on Arduino, ensure pin is in default "logical" state prior to opening
-	gpio_writePin(g_ltem1->gpio->powerkeyPin, gpioValue_low);
-	gpio_writePin(g_ltem1->gpio->resetPin, gpioValue_low);
-	gpio_writePin(g_ltem1->gpio->spiCsPin, gpioValue_high);
+	gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_low);
+	gpio_writePin(g_ltem1->pinConfig.resetPin, gpioValue_low);
+	gpio_writePin(g_ltem1->pinConfig.spiCsPin, gpioValue_high);
 
-	gpio_openPin(g_ltem1->gpio->powerkeyPin, gpioMode_output);		// powerKey: normal low
-	gpio_openPin(g_ltem1->gpio->resetPin, gpioMode_output);			// resetPin: normal low
-	gpio_openPin(g_ltem1->gpio->spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	gpio_openPin(g_ltem1->pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	gpio_openPin(g_ltem1->pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	gpio_openPin(g_ltem1->pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
 
-	gpio_openPin(g_ltem1->gpio->statusPin, gpioMode_input);
-	gpio_openPin(g_ltem1->gpio->irqPin, gpioMode_inputPullUp);
+	gpio_openPin(g_ltem1->pinConfig.statusPin, gpioMode_input);
+	gpio_openPin(g_ltem1->pinConfig.irqPin, gpioMode_inputPullUp);
 }
 
 

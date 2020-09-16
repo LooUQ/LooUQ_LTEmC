@@ -30,31 +30,19 @@
  * output.
  *****************************************************************************/
 
+#define HOST_FEATHER_UXPLOR
+#include <platform_pins.h>
 #include <ltem1c.h>
 
+#define _DEBUG
+#include "dbgprint.h"
 //#define USE_SERIAL 0
 
-extern "C" {
-#include <SEGGER_RTT.h>
-}
 
-
+// test environment
 const int APIN_RANDOMSEED = 7;
-
-ltem1PinConfig_t ltem1_pinConfig =
-{
-  spiCsPin : 13,
-  irqPin : 12,
-  statusPin : 6,
-  powerkeyPin : 11,
-  resetPin : 19,
-  ringUrcPin : 5,
-  wakePin : 10
-};
-
-
+// no reference to driver global g_ltem1, need a surrogate spi here to test without
 spiDevice_t *spi; 
-
 
 void setup() {
     #ifdef USE_SERIAL
@@ -66,9 +54,9 @@ void setup() {
         #endif
     #endif
 
-    PRINTF("LTEm1 C Test1: platformBasic \r\n");
+    PRINTF(0, "LTEm1 C Test1: platformBasic \r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
-    PRINTF("LED pin = %i \r\n", LED_BUILTIN);
+    PRINTF(0, "LED pin = %i \r\n", LED_BUILTIN);
 
     randomSeed(analogRead(APIN_RANDOMSEED));
 
@@ -106,7 +94,7 @@ void loop() {
     spi_transferWord(spi, txBuffer.val);
     rxBuffer.val = spi_transferWord(spi, rxBuffer.val);
 
-    PRINTF("Writing scratchpad regiser with transferWord...");
+    PRINTF(0, "Writing scratchpad regiser with transferWord...");
     if (testPattern != rxBuffer.lsb)
         indicateFailure("Scratchpad write/read failed (transferWord)."); 
 
@@ -134,7 +122,7 @@ void powerModemOn()
 {
 	if (!gpio_readPin(ltem1_pinConfig.statusPin))
 	{
-		PRINTF("Powering LTEm1 On...");
+		PRINTF(0, "Powering LTEm1 On...");
 		gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_high);
 		timing_delay(QBG_POWERON_DELAY);
 		gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_low);
@@ -142,11 +130,11 @@ void powerModemOn()
 		{
 			timing_delay(500);
 		}
-		PRINTF("DONE.\r\n");
+		PRINTF(0, "DONE.\r\n");
 	}
 	else
 	{
-		PRINTF("LTEm1 is already powered on.\r\n");
+		PRINTF(0, "LTEm1 is already powered on.\r\n");
 	}
 }
 
@@ -155,29 +143,11 @@ void powerModemOn()
 /* test helpers
 ========================================================================================================================= */
 
-void indicateFailure(char failureMsg[])
-{
-	PRINTF_ERR("\r\n** %s \r\n", failureMsg);
-    PRINTF_ERR("** Test Assertion Failed. \r\n");
-
-    #if 1
-    PRINTF_ERR("** Halting Execution \r\n");
-    while (1)
-    {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(1000);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(100);
-    }
-    #endif
-}
-
-
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF("Loop: %i \r\n", loopCnt);
-    PRINTF("      Tx: %i \r\n", testPattern);
-    PRINTF("      Rx: %i \r\n", rxBuffer.lsb);
+    PRINTF(dbgColor_info, "Loop: %i \r\n", loopCnt);
+    PRINTF(dbgColor_info, "      Tx: %i \r\n", testPattern);
+    PRINTF(dbgColor_info, "      Rx: %i \r\n", rxBuffer.lsb);
 
     for (int i = 0; i < 6; i++)
     {
@@ -187,9 +157,26 @@ void indicateLoop(int loopCnt, int waitNext)
         timing_delay(50);
     }
 
-    PRINTF("Free memory: %u \r\n", getFreeMemory());
-    PRINTF("Next test in (millis): %i\r\n\r\n", waitNext);
+    PRINTF(dbgColor_magenta, "Free memory: %u \r\n", getFreeMemory());
+    PRINTF(0, "Next test in (millis): %i\r\n\r\n", waitNext);
     timing_delay(waitNext);
+}
+
+
+void indicateFailure(char failureMsg[])
+{
+	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+    PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
+
+    int halt = 1;
+    PRINTF(dbgColor_error, "** Halting Execution \r\n");
+    while (halt)
+    {
+        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        timing_delay(1000);
+        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        timing_delay(100);
+    }
 }
 
 

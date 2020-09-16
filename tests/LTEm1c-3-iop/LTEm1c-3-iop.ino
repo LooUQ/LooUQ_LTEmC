@@ -22,37 +22,23 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  ******************************************************************************
- * The test3-iop.ino tests the LTEm1 interrupt driven Input-Ouput processing
- * subsystem in the driver which multiplexes the command and protocol streams.
+ * Tests the LTEm1 interrupt driven Input-Ouput processing subsystem in the 
+ * driver which multiplexes the command and protocol streams.
+ * Does not required carrier network (SIM and activation).
  *****************************************************************************/
 
-
+#define HOST_FEATHER_UXPLOR
+#include <platform_pins.h>
 #include <ltem1c.h>
 
 #define _DEBUG
-#include "platform/platform_stdio.h"
+#include "dbgprint.h"
+//#define USE_SERIAL 0
 
-const int APIN_RANDOMSEED = 0;
 
-ltem1PinConfig_t ltem1_pinConfig =
-{
-  spiCsPin : 13,
-  irqPin : 12,
-  statusPin : 6,
-  powerkeyPin : 11,
-  resetPin : 19,
-  ringUrcPin : 5,
-  wakePin : 10
-};
-
-spiConfig_t ltem1_spiConfig = 
-{
-  dataRate : 2000000U,
-  dataMode : spiDataMode_0,
-  bitOrder : spiBitOrder_msbFirst,
-  csPin : ltem1_pinConfig.spiCsPin
-};
-
+// test environment
+const int APIN_RANDOMSEED = 7;
+// no reference to driver global g_ltem1, need a surrogate here to test without
 ltem1Device_t *ltem1;
 
 
@@ -71,7 +57,9 @@ void setup() {
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
-    ltem1_create(&ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_iop);
+    PRINTF(dbgColor_info, "Base: FreeMem=%u\r\n", getFreeMemory());
+    ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_iop);
+    PRINTF(dbgColor_info, "LTEm1 Initialized: FreeMem=%u\r\n", getFreeMemory());
 }
 
 
@@ -79,46 +67,23 @@ int loopCnt = 0;
 #define RESPONSE_BUF_SZ 80                                  // set to < 91 to test truncated warning for long response
 
 void loop() {
-    /* BG96 test pattern: get IMEI
-    *
-    *  AT+GSN
-    *         
-    *  <IMEI value (20 char)>
-    *
-    *  OK
-    */
-
     uint8_t regValue = 0;
     //char cmd[] = "AT+GSN\r\0";                            // short response (contained in 1 rxCtrlBlock)
-    char cmd[] = "at+cgpaddr\r\0";                          // long response (contained in 2 rxCtrlBlocks)
-    //char cmd[] = "AT+QPOWD\r\0";                          // something is wrong! Is is rx or tx (tx works if BG power down)
+    char cmd[] = "at+cgpaddr\r\0";                        // long response (requires multiple rxCtrlBlocks)
+    //char cmd[] = "AT+QPOWD\r\0";                          // something is wrong! Is is rx or tx (tx works if BG powers down)
     PRINTF(0, "Invoking cmd: %s \r\n", cmd);
 
     sendCommand(cmd);
-    //timing_delay(300);      // BG reference says 300mS cmd response time
 
     // wait for BG96 response in FIFO buffer
     char cmdResponse[RESPONSE_BUF_SZ + 1] = {0};
     recvResponse(cmdResponse, RESPONSE_BUF_SZ);
 
-    // // test response v. expected 
-    // char* validResponse = "AT+GSN\r\r\n86450";
-    // uint8_t imeiPrefixTest = strncmp(validResponse, cmdResponse, strlen(validResponse)); 
-
     PRINTF(0, "Got %d chars\r", strlen(cmdResponse));
     PRINTF(0, "Resp: %s\r", cmdResponse);  
 
-    // if (strlen(cmdResponse) == 11)
-    //     PRINTF_INFO("BG started\r");
-    // else if (cmdResponse[0] == '\0')
-    //     PRINTF_WARN("No cmd response\r");
-    // else if (imeiPrefixTest != 0 || strlen(cmdResponse) != 32)
-    //     indicateFailure("Unexpected IMEI value response... failed."); 
-
-    //delay(1000);
-
     loopCnt ++;
-    indicateLoop(loopCnt, random(1000));
+    indicateLoop(loopCnt, 1000);      // BG reference says 300mS cmd response time, we will wait 1000
 }
 
 
@@ -142,7 +107,7 @@ void recvResponse(char *response, uint16_t responseBufSz)
     do
     {
         rxResult = iop_rxGetCmdQueued(response, responseBufSz);
-        timing_delay(5);
+        timing_delay(25);
         retries++;
     } while (rxResult == iopXfrResult_incomplete && retries < 100);
 
@@ -152,28 +117,17 @@ void recvResponse(char *response, uint16_t responseBufSz)
 
 
 
-/**
- *	\brief Validate the response ends in a BG96 OK value.
- *
- *	\param[in] response The command response received from the BG96.
- *  \return bool If the response string ends in a valid OK sequence
- */
-// bool validOkResponse(const char *response)
-// {
-//     #define BUFF_SZ 64
-//     #define EXPECTED_TERMINATOR_STR "OK\r\n"
-//     #define EXPECTED_TERMINATOR_LEN 4
-
-//     const char * end = (const char *)memchr(response, '\0', BUFF_SZ);
-//     if (end == NULL)
-//         end = response + BUFF_SZ;
-
-//     return strncmp(EXPECTED_TERMINATOR_STR, end - EXPECTED_TERMINATOR_LEN, EXPECTED_TERMINATOR_LEN) == 0;
-// }
-
-
 /* test helpers
 ========================================================================================================================= */
+
+void indicateLoop(int loopCnt, int waitNext) 
+{
+    PRINTF(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
+    PRINTF(0, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTF(0, "NextTest (millis)=%i\r\r", waitNext);
+    timing_delay(waitNext);
+}
+
 
 void indicateFailure(char failureMsg[])
 {
@@ -190,24 +144,6 @@ void indicateFailure(char failureMsg[])
         timing_delay(100);
     }
     #endif
-}
-
-
-void indicateLoop(int loopCnt, int waitNext) 
-{
-    PRINTF(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
-
-    for (int i = 0; i < 6; i++)
-    {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(50);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(50);
-    }
-
-    PRINTF(0, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(0, "NextTest (millis)=%i\r\r", waitNext);
-    timing_delay(waitNext);
 }
 
 

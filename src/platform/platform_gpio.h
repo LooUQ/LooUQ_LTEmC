@@ -33,6 +33,17 @@ extern "C"
 #include <stdint.h>
 #endif // __cplusplus
 
+typedef struct ltem1PinConfig_tag
+{
+    int spiCsPin;
+    int irqPin;
+    int statusPin;
+    int powerkeyPin;
+    int resetPin;
+    int ringUrcPin;
+    int wakePin;
+} ltem1PinConfig_t;
+
 
 typedef enum {
     gpioValue_low = 0,

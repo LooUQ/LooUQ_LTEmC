@@ -35,7 +35,7 @@ extern "C"
 #include <stddef.h>
 #endif // __cplusplus
 
-#define SPI_DATA_RATE 2000000U
+
 #define SPI_NO_IRQ_PROTECTION -1
 
 
@@ -44,6 +44,7 @@ typedef enum
     spiBitOrder_lsbFirst = 0x0,
     spiBitOrder_msbFirst = 0x1
 } spiBitOrder_t;
+
 
 /* Arduino SPI
 #define SPI_MODE0 0x02

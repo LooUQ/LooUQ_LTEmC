@@ -1,6 +1,6 @@
 /******************************************************************************
  *  \file ltem1.h
- *  \author Jensen Miller, Greg Terrell
+ *  \author Greg Terrell, Jensen Miller
  *  \license MIT License
  *
  *  Copyright (c) 2020 LooUQ Incorporated.
@@ -39,7 +39,6 @@ extern "C"
 
 #include "platform/platform_gpio.h"
 #include "platform/platform_timing.h"
-//#include "platform/platform_stdio.h"
 #include "platform/platform_spi.h"
 #include "nxp_sc16is741a.h"
 #include "quectel_bg.h"
@@ -108,22 +107,10 @@ typedef enum
 } ltem1Start_t;
 
 
-typedef struct
-{
-    int spiCsPin;
-    int irqPin;
-    int statusPin;
-    int powerkeyPin;
-    int resetPin;
-    int ringUrcPin;
-    int wakePin;
-} ltem1PinConfig_t;
-
-
 typedef struct ltem1Device_tag
 {
     ltem1Functionality_t funcLevel;
-	ltem1PinConfig_t *gpio;
+	ltem1PinConfig_t pinConfig;
     spiDevice_t *spi;
     qbgReadyState_t qbgReadyState;
     uint8_t dataContext;
@@ -142,7 +129,7 @@ extern ltem1PinConfig_t FEATHER_BREAKOUT;
 extern ltem1PinConfig_t RPI_BREAKOUT;
 
 
-void ltem1_create(const ltem1PinConfig_t* ltem1_config, ltem1Start_t ltem1Start, ltem1Functionality_t funcLevel);
+void ltem1_create(const ltem1PinConfig_t ltem1_config, ltem1Start_t ltem1Start, ltem1Functionality_t funcLevel);
 void ltem1_destroy();
 
 void ltem1_start();
