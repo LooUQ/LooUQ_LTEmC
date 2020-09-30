@@ -11,3 +11,6 @@
 
 **What are the physical characteristics of the LTEm1?**
 > The LTEm1 measures 40mm x 48mm and under 9mm in height. The device requires standard LiPo (battery) power source of 3.7 volts. For hosts with ample surge capacity the LTEm1 can run directly from the regulated supply. For most hosts, LooUQ recommends incorporating a small 3.7v LiPo for instantaneous current demands (like turn on), but also to power the LTEm1 in a power failure for a period. This allows alerts on the power condition to be sent out to the devices owner. Connections to the LTE and GNSS antennas are via standard U.FL/IPEX connectors.
+
+**Seems like LTEm1 has many features, but what if I don't need all of them?**
+> No Problem. The source code of the LTEm1c library allows you to not include optional LTEm1 feature subsystems and save host memory. Optional modules include: GNSS (aka GPS), Geo-Fencing (geo-fencing depends on GNSS), MQTT, HTTP, FTP, FOTA, and File System. The easiest way to see all the options is to look at the readme.md file in the respository root. There is a diagram there showing the optional subsystems segregated with a wide-white border.
