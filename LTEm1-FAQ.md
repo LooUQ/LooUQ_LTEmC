@@ -14,3 +14,7 @@
 
 **Seems like LTEm1 has many features, but what if I don't need all of them?**
 > No Problem. The source code of the LTEm1c library allows you to not include optional LTEm1 feature subsystems and save host memory. Optional modules include: GNSS (aka GPS), Geo-Fencing (geo-fencing depends on GNSS), MQTT, HTTP, FTP, FOTA, and File System. The easiest way to see all the options is to look at the readme.md file in the respository root. There is a diagram there showing the optional subsystems segregated with a wide-white border.
+
+**How much memory does the LTEm1c code take?**
+> On a SAMD21 system (Adafruit Feather M0) the code occupies about 40K of flash and uses approximately 10K of RAM. These values are based on a system built with Sockets, MQTT, and GNSS with one external peer server. More info on this with version 2 (available in early October 2020).
+
