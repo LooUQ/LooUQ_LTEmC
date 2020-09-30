@@ -8,3 +8,6 @@
 
 **Is there software for the LTEm1?**
 > Yes indeed. The LTEm1c library, aka this repository, is LooUQ's open-source driver written in C99 to support the LTEm1 hardware with POSIX style functionality.
+
+**What are the physical characteristics of the LTEm1?**
+> The LTEm1 measures 40mm x 48mm and under 9mm in height. The device requires standard LiPo (battery) power source of 3.7 volts. For hosts with ample surge capacity the LTEm1 can run directly from the regulated supply. For most hosts, LooUQ recommends incorporating a small 3.7v LiPo for instantaneous current demands (like turn on), but also to power the LTEm1 in a power failure for a period. This allows alerts on the power condition to be sent out to the devices owner. Connections to the LTE and GNSS antennas are via standard U.FL/IPEX connectors.
