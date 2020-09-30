@@ -10,6 +10,8 @@ The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LT
 
 [LTEm1 Modem Specifications](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/LTEm1c%20Stack.png)
 
+[LTEm1/LTEm1c FAQ](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/LTEm1-FAQ.md)
+
 ----
 ![LTEm1c](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/LTEm1c%20Stack.png)
 
