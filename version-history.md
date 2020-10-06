@@ -3,7 +3,7 @@
 ## v0.2 - IOP Redesign
 Overhaul of the IOP buffering system. 
 * Simplified receive buffer management and eliminated copies from receive pipeline
- * Small copy < 60chars remains (required) for MQTT receives
+  * Small copy < 60chars remains (required) for MQTT receives
 * Finishing MQTT support
   * Publish to topic
   * Subscribe\unsubscribe to topics
