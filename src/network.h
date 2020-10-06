@@ -28,27 +28,18 @@
 
 #include "ltem1c.h"
 
-// #define PROTOCOL_RESULT_SUCCESS         200
-// #define PROTOCOL_RESULT_ERROR           500
-// #define PROTOCOL_RESULT_UNAVAILABLE     503
 
-#define LTEM1_SOCKET_COUNT 6
-#define LTEM1_CONTEXT_COUNT 3
-#define SOCKET_CLOSED 255
+#define NTWK_CONTEXT_COUNT 3
 #define NTWK_DEFAULT_CONTEXT 255
-
-typedef uint8_t socketId_t; 
-typedef uint16_t socketResult_t;
-
 
 typedef enum 
 {
     protocol_tcp = 0x00,
     protocol_udp = 0x01,
-    protocol_tcpListener = 0x02,
-    protocol_udpService = 0x03,
-    protocol_ssl = 0x05,
-    protocol_AnyIP = 0x05,
+    //protocol_tcpListener = 0x02,
+    //protocol_udpService = 0x03,
+    protocol_ssl = 0x02,
+    protocol_AnyIP = 0x02,
 
     protocol_http = 0x20,
     protocol_https = 0x21,
@@ -98,27 +89,8 @@ typedef struct pdpContext_tag
 typedef struct network_tag
 {
     networkOperator_t *networkOperator;
-    pdpContext_t contexts[LTEM1_CONTEXT_COUNT];
+    pdpContext_t contexts[NTWK_CONTEXT_COUNT];
 } network_t;
-
-
-typedef void (*receiver_func_t)(socketId_t scktId, const char * data, uint16_t dataSz, const char * rmtHost, const char * rmtPort);
-
-
-typedef volatile struct socketCtrl_tag
-{
-    protocol_t protocol;
-    bool hasData;
-    uint8_t contextId;
-    uint16_t recvBufSz;
-    receiver_func_t receiver_func;
-} socketCtrl_t;
-
-
-typedef struct protocols_tag
-{
-    socketCtrl_t sockets[LTEM1_SOCKET_COUNT];
-} protocols_t;
 
 
 #ifdef __cplusplus
@@ -127,25 +99,19 @@ extern "C"
 #endif // __cplusplus
 
 
-network_t *ntwk_createNetwork();
-void ntwk_destroyNetwork();
-protocols_t *ntwk_createProtocols();
-void ntwk_destroyProtocols();
+network_t *ntwk_create();
 
-//networkOperator_t ntwk_getOperator();                     // replaced: use ntwk_awaitOperator, with waitDuration = 0 for same behavior
-networkOperator_t ntwk_awaitNetworkOperator(uint16_t waitDuration);
+networkOperator_t ntwk_awaitOperator(uint16_t waitDuration);
 
-socketResult_t ntwk_fetchDataContexts();
-socketResult_t ntwk_activateContext(uint8_t contxtId);
-socketResult_t ntwk_deactivateContext(uint8_t contxtId);
+resultCode_t ntwk_fetchDataContexts();
+resultCode_t ntwk_activateContext(uint8_t contxtId);
+resultCode_t ntwk_deactivateContext(uint8_t contxtId);
 pdpContext_t ntwk_getDataContext(uint8_t contxtId);
-
 void ntwk_closeContext(uint8_t contxtId);
+
 
 #ifdef __cplusplus
 }
 #endif // !__cplusplus
-
-
 
 #endif  /* !__PROTOCOLS_H__ */

@@ -24,35 +24,15 @@
  ******************************************************************************
  * Test a collection of canned cmds that return modem information.
  *****************************************************************************/
-
+#define HOST_FEATHER_UXPLOR
+#include <platform_pins.h>
 #include <ltem1c.h>
 
 #define _DEBUG
-#include "platform/platform_stdio.h"
+#include "dbgprint.h"
+//#define USE_SERIAL 0
 
 const int APIN_RANDOMSEED = 0;
-
-ltem1PinConfig_t ltem1_pinConfig =
-{
-  spiCsPin : 13,
-  irqPin : 12,
-  statusPin : 6,
-  powerkeyPin : 11,
-  resetPin : 19,
-  ringUrcPin : 5,
-  wakePin : 10
-};
-
-spiConfig_t ltem1_spiConfig = 
-{
-  dataRate : 2000000U,
-  dataMode : spiDataMode_0,
-  bitOrder : spiBitOrder_msbFirst,
-  csPin : ltem1_pinConfig.spiCsPin
-};
-
-ltem1Device_t *ltem1;
-
 
 void setup() {
     #ifdef USE_SERIAL
@@ -69,7 +49,7 @@ void setup() {
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
-    ltem1_create(&ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_actions);
+    ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_actions);
 }
 
 
@@ -80,26 +60,41 @@ modemInfo_t modemInfo;
 void loop() {
     modemInfo = mdminfo_ltem1();
 
-    PRINTF(dbgColor_none, "\rModem Information\r");
-    PRINTF(dbgColor_none, "IMEI = %s \r", modemInfo.imei);
-    PRINTF(dbgColor_none, "ICCID = %s \r", modemInfo.iccid);
-    PRINTF(dbgColor_none, "Firmware = %s \r", modemInfo.fwver);
-    PRINTF(dbgColor_none, "Mfg/Model = %s \r", modemInfo.mfgmodel);
+    PRINTF(dbgColor_cyan, "\rModem Information\r");
+    PRINTF(dbgColor_cyan, "IMEI = %s \r", modemInfo.imei);
+    PRINTF(dbgColor_cyan, "ICCID = %s \r", modemInfo.iccid);
+    PRINTF(dbgColor_cyan, "Firmware = %s \r", modemInfo.fwver);
+    PRINTF(dbgColor_cyan, "Mfg/Model = %s \r", modemInfo.mfgmodel);
 
-    PRINTF(dbgColor_white, "\rRSSI = %d dBm \r",mdminfo_rssi());
+    PRINTF(dbgColor_info, "\rRSSI = %d dBm \r",mdminfo_rssi());
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
 }
 
 
-/*
-========================================================================================================================= */
-
-
 
 /* test helpers
 ========================================================================================================================= */
+
+
+void indicateLoop(int loopCnt, int waitNext) 
+{
+    PRINTF(dbgColor_magenta, "\r\nLoop=%i \r\n", loopCnt);
+
+    for (int i = 0; i < 6; i++)
+    {
+        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        timing_delay(50);
+        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        timing_delay(50);
+    }
+
+    PRINTF(dbgColor_gray, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTF(dbgColor_gray, "NextTest (millis)=%i\r\r", waitNext);
+    timing_delay(waitNext);
+}
+
 
 void indicateFailure(char failureMsg[])
 {
@@ -114,24 +109,6 @@ void indicateFailure(char failureMsg[])
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         timing_delay(100);
     }
-}
-
-
-void indicateLoop(int loopCnt, int waitNext) 
-{
-    PRINTF(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
-
-    for (int i = 0; i < 6; i++)
-    {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(50);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(50);
-    }
-
-    PRINTF(dbgColor_blue, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(dbgColor_blue, "NextTest (millis)=%i\r\r", waitNext);
-    timing_delay(waitNext);
 }
 
 

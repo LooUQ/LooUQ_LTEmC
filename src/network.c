@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file ip.c
+ *  \file network.c
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -14,7 +14,7 @@
 
 #define PROTOCOLS_CMD_BUFFER_SZ 80
 
-static actionResult_t contextStatusCompleteParser(const char *response);
+static resultCode_t contextStatusCompleteParser(const char *response, char **endptr);
 static networkOperator_t getNetworkOperator();
 
 
@@ -25,9 +25,9 @@ static networkOperator_t getNetworkOperator();
 /**
  *	\brief Initialize the IP network contexts structure.
  */
-network_t *ntwk_createNetwork()
+network_t *ntwk_create()
 {
-    network_t *network = calloc(LTEM1_SOCKET_COUNT, sizeof(network_t));
+    network_t *network = calloc(1, sizeof(network_t));
 	if (network == NULL)
 	{
         ltem1_faultHandler(0, "ipProtocols-could not alloc IP protocol struct");
@@ -35,7 +35,7 @@ network_t *ntwk_createNetwork()
 
     network->networkOperator = calloc(1, sizeof(networkOperator_t));
 
-    pdpContext_t *context = calloc(LTEM1_SOCKET_COUNT, sizeof(pdpContext_t));
+    pdpContext_t *context = calloc(NTWK_CONTEXT_COUNT, sizeof(pdpContext_t));
 	if (context == NULL)
 	{
         ltem1_faultHandler(0, "ipProtocols-could not alloc IP protocol struct");
@@ -52,53 +52,6 @@ network_t *ntwk_createNetwork()
 }
 
 
-/**
- *	\brief Tear down IP protocols (TCP/UDP/SSL).
- */
-void ntwk_destroyNetwork(void *network)
-{
-	free(network);
-}
-
-
-
-/**
- *	\brief Initialize the IP protocols structure.
- */
-protocols_t *ntwk_createProtocols()
-{
-    protocols_t *protocols = calloc(LTEM1_SOCKET_COUNT, sizeof(protocols_t));
-	if (protocols == NULL)
-	{
-        ltem1_faultHandler(0, "ipProtocols-could not alloc IP protocol struct");
-	}
-
-    socketCtrl_t *socket = calloc(LTEM1_SOCKET_COUNT, sizeof(socketCtrl_t));
-	if (socket == NULL)
-	{
-        ltem1_faultHandler(0, "ipProtocols-could not alloc IP protocol struct");
-        free(protocols);
-	}
-
-    for (size_t i = 0; i < IOP_SOCKET_COUNT; i++)
-    {   
-        protocols->sockets[i].protocol = protocol_void;
-        protocols->sockets[i].contextId = g_ltem1->dataContext;
-        protocols->sockets[i].receiver_func = NULL;
-    }
-    return protocols;
-}
-
-
-/**
- *	\brief Tear down IP protocols (TCP/UDP/SSL).
- */
-void ntwk_destroyProtocols(void *ipProtocols)
-{
-	free(ipProtocols);
-}
-
-
 
 /**
  *   \brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem1->cancellationRequest.
@@ -107,7 +60,7 @@ void ntwk_destroyProtocols(void *ipProtocols)
  * 
  *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-networkOperator_t ntwk_awaitNetworkOperator(uint16_t waitDuration)
+networkOperator_t ntwk_awaitOperator(uint16_t waitDuration)
 {
     networkOperator_t ntwk;
     unsigned long startMillis, endMillis;
@@ -134,18 +87,16 @@ networkOperator_t ntwk_awaitNetworkOperator(uint16_t waitDuration)
  *  \param[in] contextNum The APN to operate on. Typically 0 or 1
  *  \param[in] activate Attempt to activate the APN if found not active.
  */
-socketResult_t ntwk_fetchDataContexts()
+resultCode_t ntwk_fetchDataContexts()
 {
     #define IP_QIACT_SZ 8
 
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
+    action_tryInvokeAdv("AT+QIACT?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, contextStatusCompleteParser);
+    actionResult_t atResult = action_awaitResult(false);
 
-    action_tryInvoke("AT+QIACT?", true);
-    actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, contextStatusCompleteParser);
-
-    if (cmdResult == ACTION_RESULT_SUCCESS)
+    if (atResult.statusCode == RESULT_CODE_SUCCESS)
     {
-        if (strlen(response) > IP_QIACT_SZ)
+        if (strlen(atResult.response) > IP_QIACT_SZ)
         {
             #define TOKEN_BUF_SZ 16
             char *nextContext;
@@ -154,12 +105,12 @@ socketResult_t ntwk_fetchDataContexts()
             uint8_t landmarkSz = IP_QIACT_SZ;
             char tokenBuf[TOKEN_BUF_SZ];
 
-            nextContext = strstr(response, "+QIACT: ");
+            nextContext = strstr(atResult.response, "+QIACT: ");
 
             // no contexts returned = none active (only active contexts are returned)
             if (nextContext == NULL)
             {
-                for (size_t i = 0; i < LTEM1_CONTEXT_COUNT; i++)
+                for (size_t i = 0; i < NTWK_CONTEXT_COUNT; i++)
                 {
                     g_ltem1->network->contexts[i].contextState = context_state_inactive;
                 }
@@ -180,19 +131,20 @@ socketResult_t ntwk_fetchDataContexts()
                 }
                 nextContext = strstr(nextContext + landmarkSz, "+QIACT: ");
             }
-            return ACTION_RESULT_SUCCESS;
+            atResult.statusCode = RESULT_CODE_SUCCESS;
         }
         else
         {
-            for (size_t i = 0; i < LTEM1_CONTEXT_COUNT; i++)
+            for (size_t i = 0; i < NTWK_CONTEXT_COUNT; i++)
             {
                 g_ltem1->network->contexts[i].contextState = context_state_inactive;
                 g_ltem1->network->contexts[i].ipAddress[0] = ASCII_cNULL;
             }
-            return ACTION_RESULT_ERROR;
+            atResult.statusCode = RESULT_CODE_NOTFOUND;
         }
     }
-    return cmdResult;                           // return parser error
+    action_close();
+    return atResult.statusCode;
 }
 
 
@@ -202,18 +154,16 @@ socketResult_t ntwk_fetchDataContexts()
  * 
  *  \param[in] contextNum The APN to operate on. Typically 0 or 1
  */
-socketResult_t ntwk_activateContext(uint8_t contextNum)
+resultCode_t ntwk_activateContext(uint8_t contextNum)
 {
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
     char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
 
     snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIACT=%d\r", contextNum);
-    if (action_tryInvoke(atCmd, true))
+    if (action_tryInvokeAdv(atCmd, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, contextStatusCompleteParser))
     {
-        actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, contextStatusCompleteParser);
-        return cmdResult;
+        return action_awaitResult(true).statusCode;
     }
-    return ACTION_RESULT_CONFLICT;
+    return RESULT_CODE_CONFLICT;
 }
 
 
@@ -223,21 +173,20 @@ socketResult_t ntwk_activateContext(uint8_t contextNum)
  * 
  *  \param[in] contextNum The APN to operate on. Typically 0 or 1
  */
-socketResult_t ntwk_deactivateContext(uint8_t contxtId)
+resultCode_t ntwk_deactivateContext(uint8_t contxtId)
 {
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
-
     ntwk_closeContext(contxtId);
 
     char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
     snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIDEACT=%d\r", contxtId);
-    action_tryInvoke(atCmd, true);
 
-    g_ltem1->network->contexts[contxtId].contextState = context_state_inactive;
-    g_ltem1->network->contexts[contxtId].ipAddress[0] = ASCII_cNULL;
-
-    actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, contextStatusCompleteParser);
-    return cmdResult;
+    if (action_tryInvokeAdv(atCmd, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, contextStatusCompleteParser))
+    {
+        g_ltem1->network->contexts[contxtId].contextState = context_state_inactive;
+        g_ltem1->network->contexts[contxtId].ipAddress[0] = ASCII_cNULL;
+        return action_awaitResult(true).statusCode;
+    }
+    return RESULT_CODE_CONFLICT;
 }
 
 
@@ -249,7 +198,7 @@ void ntwk_closeContext(uint8_t contxtId)
 {
     for (size_t i = 0; i < IOP_SOCKET_COUNT; i++)
     {
-        if (g_ltem1->protocols->sockets[i].contextId == contxtId)
+        if (g_ltem1->sockets->socketCtrls[i].pdpContextId == contxtId)
         {
             ip_close(i);
         }
@@ -271,9 +220,9 @@ void ntwk_closeContext(uint8_t contxtId)
  * 
  *   \return standard action result integer (http result).
 */
-static actionResult_t contextStatusCompleteParser(const char *response)
+static resultCode_t contextStatusCompleteParser(const char *response, char **endptr)
 {
-    return action_gapResultParser(response, "+QIACT: ", false, 2, ASCII_sOK);
+    return action_defaultResultParser(response, "+QIACT: ", false, 2, ASCII_sOK, endptr);
 }
 
 
@@ -285,33 +234,32 @@ static actionResult_t contextStatusCompleteParser(const char *response)
 */
 static networkOperator_t getNetworkOperator()
 {
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
-
     if (*g_ltem1->network->networkOperator->operName == NULL)
     {
-        action_tryInvoke("AT+COPS?", true);
-        actionResult_t cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
-
-        char *continueAt;
-        uint8_t ntwkMode;
-
-        if (cmdResult == ACTION_RESULT_SUCCESS)
+        if (action_tryInvoke("AT+COPS?"))
         {
-            continueAt = strchr(response, ASCII_cDBLQUOTE);
-            if (continueAt != NULL)
+            actionResult_t atResult = action_awaitResult(false);
+            if (atResult.statusCode == RESULT_CODE_SUCCESS)
             {
-                continueAt = strToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem1->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
-                ntwkMode = (uint8_t)strtol(continueAt + 1, &continueAt, 10);
-                if (ntwkMode == 8)
-                    strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-M1");
+                char *continueAt;
+                uint8_t ntwkMode;
+                continueAt = strchr(atResult.response, ASCII_cDBLQUOTE);
+                if (continueAt != NULL)
+                {
+                    continueAt = strToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem1->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
+                    ntwkMode = (uint8_t)strtol(continueAt + 1, &continueAt, 10);
+                    if (ntwkMode == 8)
+                        strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-M1");
+                    else
+                        strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-NB1");
+                }
                 else
-                    strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-NB1");
+                {
+                    g_ltem1->network->networkOperator->operName[0] = NULL;
+                    g_ltem1->network->networkOperator->ntwkMode[0] = NULL;
+                }
             }
-            else
-            {
-                g_ltem1->network->networkOperator->operName[0] = NULL;
-                g_ltem1->network->networkOperator->ntwkMode[0] = NULL;
-            }
+            action_close();
         }
     }
     return *g_ltem1->network->networkOperator;

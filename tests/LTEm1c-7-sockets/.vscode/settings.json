@@ -9,6 +9,8 @@
         "cfloat": "cpp",
         "ltem1c.h": "c",
         "iop.h": "c",
-        "chrono": "cpp"
+        "chrono": "cpp",
+        "network.h": "c",
+        "cstring": "c"
     }
 }

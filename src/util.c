@@ -8,75 +8,68 @@
 /**
 *	\brief Simple string to packed numeric IP address parser.
 */
-ip_addr_t atcmd_parseIpAddr(const char *ipStr)
-{
-    char *nextOct;
-    bool ipValid = false;
-    ip_addr_t result;
-
-    for (uint8_t i = 0; i < 4; i++)
-    {
-        result.octet[i] = (uint8_t)strtol(ipStr, &nextOct, 10);
-        if (i == 0 && result.octet[i] == 0)
-            break;
-        if (i < 3 && *nextOct != '.' )
-            break;
-        if (i == 3)
-            ipValid = true;
-    }
-
-    if (!ipValid) 
-        result.packed = 0;
-    return result;
-}
-
-
-
-// void atcmd_displayIpAddr(ip_addr_t ipAddr, char *ipDisplay)
+// ip_addr_t util_parseIpAddr(const char *ipStr)
 // {
-//     char ipDisplay[16];
-//     sprintf(str, "%d.%d.%d.%d", ip_addr.octet[0], ip_addr.octet[1], ip_addr.octet[2], ip_addr.octet[3]);
+//     char *nextOct;
+//     bool ipValid = false;
+//     ip_addr_t result;
+
+//     for (uint8_t i = 0; i < 4; i++)
+//     {
+//         result.octet[i] = (uint8_t)strtol(ipStr, &nextOct, 10);
+//         if (i == 0 && result.octet[i] == 0)
+//             break;
+//         if (i < 3 && *nextOct != '.' )
+//             break;
+//         if (i == 3)
+//             ipValid = true;
+//     }
+
+//     if (!ipValid) 
+//         result.packed = 0;
+//     return result;
 // }
 
 
 
-/**
-*  \brief C99 implementation of float to c-string formatter.
-*
-*  \param[in] fVal The float value to convert.
-*  \param[in/out] buf The character buffer to place formatted number in.
-*  \param[in] bufSz The size of the passed char buffer.
-*  \param[in] precision The number of digits to the right of the decimal.
-*/
-void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision)
-{
-    // calc max: the largest possible conversion result
-    // if fval > max: conversion with overflow
-    uint32_t max = pow(10, (bufSz - precision - 3));    //need room for '-', '.' and '\0'
-    if (abs(fVal) >= max)
-    {
-        *buf = '\0';
-        return;
-    }
+// /**
+// *  \brief C99 implementation of float to c-string formatter.
+// *
+// *  \param[in] fVal The float value to convert.
+// *  \param[in/out] buf The character buffer to place formatted number in.
+// *  \param[in] bufSz The size of the passed char buffer.
+// *  \param[in] precision The number of digits to the right of the decimal.
+// */
+// void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision)
+// {
+//     // calc max: the largest possible conversion result
+//     // if fval > max: conversion with overflow
+//     uint32_t max = pow(10, (bufSz - precision - 3));    //need room for '-', '.' and '\0'
+//     if (abs(fVal) >= max)
+//     {
+//         *buf = '\0';
+//         return;
+//     }
 
-    int iVal = (int)fVal;
-    itoa(iVal, buf, 10);            // got sign and integer
+//     int iVal = (int)fVal;
+//     itoa(iVal, buf, 10);            // got sign and integer
 
-    fVal = fVal > 0 ? fVal : fVal * -1;
-    iVal = iVal > 0 ? iVal : iVal * -1;
-    uint8_t pos = strlen(buf);
-    buf[pos++] = '.';
+//     fVal = fVal > 0 ? fVal : fVal * -1;
+//     iVal = iVal > 0 ? iVal : iVal * -1;
+//     uint8_t pos = strlen(buf);
+//     buf[pos++] = '.';
 
-    for (size_t i = 0; i < precision; i++)
-    {
-        fVal -= (float)iVal;        // hack off the whole part of the number
- 		fVal *= 10;                 // move next digit over
- 		iVal = (int)fVal;
-        char c = (char)iVal + 0x30;
- 		buf[pos++] = c;
-    }
-    buf[pos++] = '\0';
-}
+//     for (size_t i = 0; i < precision; i++)
+//     {
+//         fVal -= (float)iVal;        // hack off the whole part of the number
+//  		fVal *= 10;                 // move next digit over
+//  		iVal = (int)fVal;
+//         char c = (char)iVal + 0x30;
+//  		buf[pos++] = c;
+//     }
+//     buf[pos++] = '\0';
+// }
+
 
 
 /**
@@ -104,6 +97,21 @@ char *strToken(char *source, int delimiter, char *token, uint8_t tokenMax)
     strncpy(token, source, MIN(tokenSz, tokenMax-1));
     return delimAt + 1;
 }
+
+// /**
+//  *	\brief Safe string length, limits search for NULL char to maxSz.
+//  *
+//  *  \param [in] charStr - Pointer to character string to search for its length.
+//  *  \param [in] maxSz - The maximum number of characters to search.
+//  *
+//  *  \return AT command control structure.
+//  */
+// const char *strlenSafe(const char *charStr, uint16_t maxSz)
+// {
+//     return memchr(charStr, '\0', maxSz);
+// }
+
+
 
 
 

@@ -64,7 +64,7 @@ void qbg_powerOn()
     // wait for status=ready
     while (!gpio_readPin(g_ltem1->pinConfig.statusPin))
     {
-        timing_delay(500);
+        timing_delay(500);          // allow background tasks to operate
     }
     PRINTF(dbgColor_none, "DONE\r");
 }
@@ -80,6 +80,28 @@ void qbg_powerOff()
 	gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_high);
 	timing_delay(QBG_POWEROFF_DELAY);
 	gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_low);
+
+    while (gpio_readPin(g_ltem1->pinConfig.statusPin))
+    {
+        timing_delay(500);          // allow background tasks to operate
+    }
+}
+
+
+
+/**
+ *	\brief Powers off the BGx module.
+ */
+void qbg_reset()
+{
+    PRINTF(dbgColor_none, "Reseting LTEm1\r");
+    g_ltem1->qbgReadyState = qbg_readyState_powerOn;
+    iop_txSend("AT\r", 3, true);
+    iop_txSend("AT+CFUN=1,1\r", 11, true);
+    while (!gpio_readPin(g_ltem1->pinConfig.statusPin))
+    {
+        timing_delay(500);          // allow background tasks to operate
+    }
 }
 
 
@@ -87,35 +109,33 @@ void qbg_powerOff()
 void qbg_start()
 {
     uint8_t attempts = 0;
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
-    actionResult_t cmdResult = ACTION_RESULT_TIMEOUT;
+    actionResult_t atResult = {.statusCode = RESULT_CODE_TIMEOUT};
 
     qbg_startRetry:
 
     // toss out an empty AT command to flush any debris in the command channel
-    action_tryInvoke("AT", false);
-    (void)action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
+    action_tryInvoke("AT");
+    (void)action_awaitResult(true);
 
+    // init BGx state
     for (size_t i = 0; i < BG96_INIT_COMMAND_COUNT; i++)
     {
 
-        if (action_tryInvoke(qbg_initCmds[i], false))
+        if (action_tryInvoke(qbg_initCmds[i]))
         {
-            cmdResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
-        }
-
-        if (cmdResult != ACTION_RESULT_SUCCESS)
-        {
-            if (attempts == 0)
+            if (action_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
             {
-                attempts++;
-                PRINTF(dbgColor_warn, "BGx reseting: init failed!");
-                qbg_powerOff();
-                timing_millis(100);
-                qbg_powerOn();
-                goto qbg_startRetry;
+                if (attempts == 0)
+                {
+                    attempts++;
+                    PRINTF(dbgColor_warn, "BGx reseting: init failed!\r");
+                    qbg_powerOff();
+                    qbg_powerOn();
+                    iop_awaitAppReady();
+                    goto qbg_startRetry;
+                }
+                ltem1_faultHandler(atResult.statusCode, "qbg-start() init sequence failed");
             }
-            ltem1_faultHandler(cmdResult, "qbg-start() init sequence failed");
         }
     }
 }
@@ -180,33 +200,5 @@ void qbg_setNwScanMode(qbg_nw_scan_mode_t mode)
 void qbg_setIotOpMode(qbg_nw_iot_mode_t mode)
 {
 }
-
-
-
-// void qbg_queueUrcStateMsg(const char *message)
-// {
-// }
-
-
-void qbg_monitorState()
-{
-    if (g_ltem1->iop->urcStateMsg[0] == ASCII_cNULL)
-        return;
-
-    char *landmarkAt;
-
-    // pdp context deactivated (timeout)
-    landmarkAt = strstr(g_ltem1->iop->urcStateMsg, "pdpdeact");
-    if (landmarkAt != NULL)
-    {
-        uint16_t cntxtId = strtol(g_ltem1->iop->urcStateMsg + 11, NULL, 10);
-        g_ltem1->network->contexts[cntxtId].contextState = context_state_inactive;
-        g_ltem1->network->contexts[cntxtId].ipAddress[0] = ASCII_cNULL;
-
-        PRINTF(dbgColor_warn, "*** PDP Context %d Deactivated", cntxtId);
-        ntwk_closeContext(cntxtId);
-    }
-}
-
 
 #pragma endregion

@@ -9,51 +9,50 @@
 #include <stdint.h>
 
 
-#define ACTION_CMDSTR_BRIEFSZ 64
-#define ACTION_DEFAULT_RESPONSE_SZ 64
-#define ACTION_DEFAULT_TIMEOUT_MILLIS 600
-
+#define ACTION_RETRIES_DEFAULT 10
+#define ACTION_RETRY_INTERVALmillis 100
+#define ACTION_TIMEOUT_DEFAULTmillis 500
 
 typedef struct action_tag
 {
-    char cmdBrief[ACTION_CMDSTR_BRIEFSZ + 1];
-    bool autoClose;
-    char *resultHead;
-    char *resultTail;
-    uint8_t resultSz;
-    uint16_t resultCode;                    // 0 is pending, otherwise ACTION_RESULT_* codes
+    char cmdStr[IOP_TX_BUFFER_SZ];
+    bool isOpen;
     unsigned long invokedAt;
+    // char *resultHead;
+    // char *resultTail;
+    // uint8_t resultSz;
+    uint16_t resultCode;                    // 0 is pending, otherwise ACTION_RESULT_* codes
+    char *response;
     uint16_t timeoutMillis;
-    uint16_t (*cmdCompleteParser_func)(const char *response);
+    uint16_t (*taskCompleteParser_func)(const char *response, char **endptr);
 } action_t;
+
+
+typedef struct actionResult_tag
+{
+    resultCode_t statusCode;
+    char *response;
+} actionResult_t;
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+bool action_tryInvoke(const char *cmdStr);
+bool action_tryInvokeAdv(const char *cmdStr, uint8_t retries, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr));
+void action_sendRaw(const char *data, uint16_t dataSz, uint16_t timeoutMillis, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr));
+void action_sendRawWithEOTs(const char *data, uint16_t dataSz, const char* eotPhrase, uint16_t timeoutMillis, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr));
 
-// action_t *action_build(const char* cmdStr, uint16_t resultBufSz, uint16_t timeoutMillis, actionResult_t (*cmdCompleteParser_func)(const char *response));
-// void action_destroy(action_t * atCmd);
+actionResult_t action_awaitResult(bool closeAction);
+actionResult_t action_getResult(bool closeAction);
+bool actn_acquireLock(const char *cmdStr, uint8_t retries);
+void action_close();
 
-//bool action_clearToInvoke();
-//void action_invoke(const char *cmdStr);
-bool action_tryInvoke(const char *cmdStr, bool retry);
-// bool action_tryInvokeCustom(action_t *cmdAction, bool retry);
-void action_sendData(const char *data, uint16_t dataSz);
-
-void action_reset();
-void action_setAutoClose(bool autoClose);
-
-actionResult_t action_getResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response));
-actionResult_t action_awaitResult(char *response, uint16_t responseSz, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response));
-void action_cancel();
-
-actionResult_t action_okResultParser(const char *response);
-actionResult_t action_gapResultParser(const char *response, const char *landmark, bool landmarkReqd, uint8_t gap, const char *terminator);
-actionResult_t action_tokenResultParser(const char *response, const char *landmark, char token, uint8_t tokenCnt);
-actionResult_t action_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx);
-actionResult_t action_cmeResultParser(const char *response);
+resultCode_t action_okResultParser(const char *response, char** endptr);
+resultCode_t action_defaultResultParser(const char *response, const char *landmark, bool landmarkReqd, uint8_t gap, const char *terminator, char** endptr);
+resultCode_t action_tokenResultParser(const char *response, const char *landmark, char token, uint8_t reqdTokens, const char *terminator, char** endptr);
+resultCode_t action_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx, char** endptr);
 
 
 #ifdef __cplusplus

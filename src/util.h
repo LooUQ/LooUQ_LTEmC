@@ -48,10 +48,12 @@ extern "C"
 {
 #endif // __cplusplus
 
-ip_addr_t atcmd_parseIpAddr(const char *ipStr);
+/* seems like the only survivor is strToken which is referenced in gnss and network modules, likely move to ltem1c.c and drop util.c */
+
+//ip_addr_t util_parseIpAddr(const char *ipStr);
 //void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision);
 char *strToken(char *source, int delimiter, char *token, uint8_t tokenMax);
-
+//const char *strlenSafe(const char *charStr, uint16_t maxSz);
 
 #ifdef __cplusplus
 }

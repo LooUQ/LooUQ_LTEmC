@@ -37,15 +37,30 @@ extern "C"
 #include <stdbool.h>
 #endif // __cplusplus
 
-#include "platform/platform_gpio.h"
-#include "platform/platform_timing.h"
-#include "platform/platform_spi.h"
-#include "nxp_sc16is741a.h"
-#include "quectel_bg.h"
-#include "util.h"
+// #include "platform/platform_gpio.h"
+// #include "platform/platform_timing.h"
+// #include "platform/platform_spi.h"
+// #include "nxp_sc16is741a.h"
+// #include "quectel_bg.h"
+// #include "util.h"
 
 
-#define LTEM1_SPI_DATARATE	2000000U
+/* Capabilities for build defined here globally */
+
+// Comment out any function not utilized in your applications
+
+#define LTEM1_SOCKETS
+#define LTEM1_MQTT
+//#define LTEM1_HTTP
+//#define LTEM1_FTP
+#define LTEM1_GNSS
+#define LTEM1_GEOFENCE
+//#define LTEM1_FILES
+//#define LTEM1_FOTA
+
+#define LTEM1_SOCKET_COUNT 6
+#define LTEM1_SPI_DATARATE 2000000U
+
 
 #define ASCII_cCR '\r'
 #define ASCII_sCR "\r"
@@ -54,7 +69,7 @@ extern "C"
 #define ASCII_cDBLQUOTE '\"'
 #define ASCII_cHYPHEN '-'
 #define ASCII_cSPACE ' '
-#define ASCII_sCTRLZ "\x1a"
+#define ASCII_sCTRLZ "\032"
 #define ASCII_sCRLF "\r\n"
 #define ASCII_sOK "OK\r\n"
 #define ASCII_sMQTTTERM "\"\r\n"
@@ -65,28 +80,33 @@ extern "C"
 // to allow for BGxx error codes starting at 500 to be passed back to application
 // ltem1c uses macros and the action_result_t typedef
 
-#define ACTION_RESULT_PENDING         0
-#define ACTION_RESULT_SUCCESS       200
+#define RESULT_CODE_PENDING         0
+#define RESULT_CODE_SUCCESS       200
 
-#define ACTION_RESULT_ERRORS_BASE   400
-#define ACTION_RESULT_BADREQUEST    400
-#define ACTION_RESULT_NOTFOUND      404
-#define ACTION_RESULT_TIMEOUT       408
-#define ACTION_RESULT_CONFLICT      409
-#define ACTION_RESULT_ERROR         500
+#define RESULT_CODE_ERRORS_BASE   400
+#define RESULT_CODE_BADREQUEST    400
+#define RESULT_CODE_NOTFOUND      404
+#define RESULT_CODE_TIMEOUT       408
+#define RESULT_CODE_CONFLICT      409
+#define RESULT_CODE_ERROR         500
 
-#define ACTION_RESULT_BGERRORS_BASE 600
+// action_result_t should be populated with RESULT_CODE_x constant values or an errorCode (uint >= 400)
+typedef uint16_t resultCode_t;
 
 
-// action_result_t should be populated with ACTION_RESULT_x constant values or an errorCode (uint >= 400)
-typedef uint16_t actionResult_t;
+#include "platform/platform_gpio.h"
+#include "platform/platform_timing.h"
+#include "platform/platform_spi.h"
+#include "nxp_sc16is741a.h"
+#include "quectel_bg.h"
+#include "util.h"
 
 #include "iop.h"
 #include "actions.h"
 #include "mdminfo.h"
 #include "gnss.h"
 #include "network.h"
-#include "ip.h"
+#include "sockets.h"
 #include "mqtt.h"
 
 
@@ -116,10 +136,10 @@ typedef struct ltem1Device_tag
     uint8_t dataContext;
     bool cancellationRequest;
     volatile iop_t *iop;
-    volatile action_t *action;
+    action_t *action;
 	modemInfo_t *modemInfo;
     network_t *network;
-	protocols_t *protocols;
+	volatile sockets_t *sockets;
     mqtt_t *mqtt;
 } ltem1Device_t;
 

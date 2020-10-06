@@ -13,7 +13,7 @@
 
 
 // private local declarations
-static actionResult_t iccidCompleteParser(const char *response);
+static resultCode_t iccidCompleteParser(const char *response, char **endptr);
 
 
 /* Public functions
@@ -28,62 +28,68 @@ static actionResult_t iccidCompleteParser(const char *response);
 */
 modemInfo_t mdminfo_ltem1()
 {
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
-
     if (*g_ltem1->modemInfo->imei == NULL)
     {
-        action_tryInvoke("AT+GSN", true);
-        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
-
-        if (atResult == ACTION_RESULT_SUCCESS)
+        if (action_tryInvoke("AT+GSN"))
         {
-            strncpy(g_ltem1->modemInfo->imei, response + ASCII_szCRLF, IMEI_SIZE);
+            actionResult_t atResult = action_awaitResult(false);
+            if (atResult.statusCode == RESULT_CODE_SUCCESS)
+            {
+                strncpy(g_ltem1->modemInfo->imei, atResult.response + ASCII_szCRLF, IMEI_SIZE);
+            }
+            action_close();
         }
     }
 
     if (*g_ltem1->modemInfo->iccid == NULL)                             // uses custom cmd str
     {
         //action_t *iccidCmd = action_build("AT+ICCID\r", 41, 500, iccidCompleteParser);
-        action_tryInvoke("AT+ICCID", true);
-        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, iccidCompleteParser);
-
-        if (atResult == ACTION_RESULT_SUCCESS)
+        if (action_tryInvokeAdv("AT+ICCID", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, iccidCompleteParser))
         {
-            strncpy(g_ltem1->modemInfo->iccid, response + ICCID_OFFSET, ICCID_SIZE);
+            actionResult_t atResult = action_awaitResult(false);
+            if (atResult.statusCode == RESULT_CODE_SUCCESS)
+            {
+                strncpy(g_ltem1->modemInfo->iccid, atResult.response + ICCID_OFFSET, ICCID_SIZE);
+            }
+            action_close();
         }
     }
 
     if (*g_ltem1->modemInfo->fwver == NULL)
     {
-        action_tryInvoke("AT+QGMR", true);
-        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
-
-        if (atResult == ACTION_RESULT_SUCCESS)
+        if (action_tryInvoke("AT+QGMR"))
         {
-            char *term;
-            term = strstr(response + ASCII_szCRLF, ASCII_sCRLF);
-            *term = '\0';
-            strcpy(g_ltem1->modemInfo->fwver, response + ASCII_szCRLF);
-            term = strchr(g_ltem1->modemInfo->fwver, '_');
-            *term = ' ';
+            actionResult_t atResult = action_awaitResult(false);
+            if (atResult.statusCode == RESULT_CODE_SUCCESS)
+            {
+                char *term;
+                term = strstr(atResult.response + ASCII_szCRLF, ASCII_sCRLF);
+                *term = '\0';
+                strcpy(g_ltem1->modemInfo->fwver, atResult.response + ASCII_szCRLF);
+                term = strchr(g_ltem1->modemInfo->fwver, '_');
+                *term = ' ';
+            }
+            action_close();
         }
     }
 
     if (*g_ltem1->modemInfo->mfgmodel == NULL)
     {
-        action_tryInvoke("ATI", true);
-        actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
-
-        if (atResult == ACTION_RESULT_SUCCESS)
+        if (action_tryInvoke("ATI"))
         {
-            char *term;
-            term = strstr(response + ASCII_szCRLF, "\r\nRev");
-            *term = '\0';
-            strcpy(g_ltem1->modemInfo->mfgmodel, response + ASCII_szCRLF);
-            term = strchr(g_ltem1->modemInfo->mfgmodel, '\r');
-            *term = ':';
-            term = strchr(g_ltem1->modemInfo->mfgmodel, '\n');
-            *term = ' ';
+            actionResult_t atResult = action_awaitResult(false);
+            if (atResult.statusCode == RESULT_CODE_SUCCESS)
+            {
+                char *term;
+                term = strstr(atResult.response + ASCII_szCRLF, "\r\nRev");
+                *term = '\0';
+                strcpy(g_ltem1->modemInfo->mfgmodel, atResult.response + ASCII_szCRLF);
+                term = strchr(g_ltem1->modemInfo->mfgmodel, '\r');
+                *term = ':';
+                term = strchr(g_ltem1->modemInfo->mfgmodel, '\n');
+                *term = ' ';
+            }
+            action_close();
         }
     }
     return *g_ltem1->modemInfo;
@@ -97,20 +103,21 @@ modemInfo_t mdminfo_ltem1()
 */
 int16_t mdminfo_rssi()
 {
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
-    int16_t result;
+    int16_t rssi = -999;
 
-    action_tryInvoke("AT+CSQ", true);
-    actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
-
-    if (atResult == ACTION_RESULT_SUCCESS)
+    if (action_tryInvoke("AT+CSQ"))
     {
-        char *term;
-        term = strstr(response + ASCII_szCRLF, "+CSQ");
-        result = strtol(term + 5, NULL, 10);
+        actionResult_t atResult = action_awaitResult(false);
+        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+        {
+            char *term;
+            term = strstr(atResult.response + ASCII_szCRLF, "+CSQ");
+            rssi = strtol(term + 5, NULL, 10);
+        }
+        rssi = (rssi == 99) ? rssi = -999 : -113 + 2 * rssi;
+        action_close();
     }
-    result = (result == 99) ? result = -999 : -113 + 2 * result;
-    return result;
+    return rssi;
 }
 
 
@@ -121,9 +128,9 @@ int16_t mdminfo_rssi()
 #pragma region private functions
 
 
-static actionResult_t iccidCompleteParser(const char *response)
+static resultCode_t iccidCompleteParser(const char *response, char **endptr)
 {
-    return action_gapResultParser(response, "+ICCID: ", true, 20, ASCII_sOK);
+    return action_gapResultParser(response, "+ICCID: ", true, 20, ASCII_sOK, endptr);
 }
 
 

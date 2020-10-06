@@ -29,23 +29,58 @@
 #include "ltem1c.h"
 
 
+/* future may support incoming connections, network carriers do not support this without premium plans or VPNs
+ * today LooUQ Cloud supports this via an alternate pattern. 
+ * typedef void (*receiver_func_t)(socketId_t scktId, const char * data, uint16_t dataSz, const char * rmtHost, const char * rmtPort);
+*/
+
+#define SOCKET_COUNT 6
+#define SOCKET_CLOSED 255
+#define SOCKET_RESULT_PREVOPEN 563
+
+typedef uint8_t socketId_t; 
+typedef uint16_t socketResult_t;
+
+typedef void (*receiver_func_t)(socketId_t scktId, void *data, uint16_t dataSz);
+
+
+typedef struct socketCtrl_tag
+{
+    protocol_t protocol;            // application public protocol: UDP/TCP/SSL/HTTP/MQTT etc.
+    socketId_t socketId;            // socket number
+    bool open;                      // has the application opened this socket
+    bool dataPending;               // BGx reported data pending
+    uint8_t dataBufferIndx;         // buffer indx holding data 
+    uint8_t pdpContextId;
+    receiver_func_t receiver_func;
+} socketCtrl_t;
+
+
+typedef struct sockets_tag
+{
+    socketCtrl_t socketCtrls[LTEM1_SOCKET_COUNT];
+
+} sockets_t;
+
+
 #ifdef __cplusplus
 extern "C"
 {
 #endif // __cplusplus
 
 
-socketResult_t ip_open(socketId_t socketId, protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, receiver_func_t rcvr_func);
-void ip_close(uint8_t socketNum);
+sockets_t *sckt_create();
 
-socketResult_t ip_send(socketId_t socketId, const char *data, uint16_t dataSz, const char *rmtHost, const char *rmtPort);
+socketResult_t sckt_open(socketId_t socketId, protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, receiver_func_t rcvr_func);
+void sckt_close(uint8_t socketNum);
+void sckt_reset(uint8_t socketNum);
 
-void ip_recvDoWork();
+socketResult_t sckt_send(socketId_t socketId, const char *data, uint16_t dataSz);
+void sckt_doWork();
 
 
 #ifdef __cplusplus
 }
 #endif // !__cplusplus
-
 
 #endif  /* !__IP_H__ */

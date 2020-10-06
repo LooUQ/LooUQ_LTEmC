@@ -13,13 +13,16 @@
 #include "dbgprint.h"
 
 #define WAIT_SECONDS(timeout) (timeout * 1000)
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 
 /* private function declarations */
-static actionResult_t mqttOpenCompleteParser(const char *response);
-static actionResult_t mqttConnectCompleteParser(const char *response);
-static actionResult_t mqttSubscribeCompleteParser(const char *response);
-static actionResult_t mqttPublishCompleteParser(const char *response);
+static resultCode_t mqttOpenStatusParser(const char *response, char **endptr);
+static resultCode_t mqttOpenCompleteParser(const char *response, char **endptr);
+static resultCode_t mqttConnectStatusParser(const char *response, char **endptr);
+static resultCode_t mqttConnectCompleteParser(const char *response, char **endptr);
+static resultCode_t mqttSubscribeCompleteParser(const char *response, char **endptr);
+static resultCode_t mqttPublishCompleteParser(const char *response, char **endptr);
 
 
 
@@ -33,31 +36,57 @@ static actionResult_t mqttPublishCompleteParser(const char *response);
  */
 void mqtt_create()
 {
-    g_ltem1->mqtt = calloc(LTEM1_SOCKET_COUNT, sizeof(mqtt_t));
+    g_ltem1->mqtt = calloc(1, sizeof(mqtt_t));
 	if (g_ltem1->mqtt == NULL)
 	{
         ltem1_faultHandler(0, "mqtt-could not alloc mqtt service struct");
 	}
-
-    for (size_t i = 0; i < LTEM1_SOCKET_COUNT; i++)
-    {   
-        g_ltem1->mqtt->msgId[i] = 1;
-    }
-    for (size_t i = 0; i < MQTT_TOPIC_MAXCNT; i++)
-    {
-        g_ltem1->mqtt->subscriptions[i].topicName[0] = NULL;
-        g_ltem1->mqtt->subscriptions[i].recv_func = NULL;
-    }
-    
+    //g_ltem1->mqtt->state = mqttStatus_idle;           calloc takes care of this & subscription table
+    g_ltem1->mqtt->msgId = 1;
+    g_ltem1->mqtt->dataBufferIndx = IOP_NO_BUFFER;
 }
 
 
+
 /**
- *	\brief Tear down MQTT service.
- */
-void mqtt_destroy(void *mqtt)
+ *  \brief Query the status of the MQTT server state.
+ * 
+ *  \param [in] host (optional) A char string to match with the currently connected server. Host is not checked if null string passed.
+ * 
+ *  \returns A mqttStatus_t value indicating the state of the MQTT connection.
+*/
+mqttStatus_t mqtt_status(const char *host)
 {
-	free(mqtt);
+    // AT+QMTOPEN?
+    // AT+QMTCONN?
+    #define MQTT_OPENED_STATUS 505
+    #define MQTT_CONNECTED_STATUS 503
+
+    mqttStatus_t mqttStatus = mqttStatus_idle;
+
+    if (action_tryInvokeAdv("AT+QMTOPEN?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, mqttOpenStatusParser))
+    {
+        actionResult_t atResult = action_awaitResult(true);
+        if (atResult.statusCode != MQTT_OPENED_STATUS)              // special case, 500 (error base) + 5 expected socket
+            return mqttStatus;
+
+        if (host[0] == '\0')
+            mqttStatus = mqttStatus_open;
+        else
+        {
+            char *hostNameAt = strchr(atResult.response, ASCII_cDBLQUOTE);
+            mqttStatus = (hostNameAt != NULL && strncmp(hostNameAt + 1, host, strlen(host)) == 0) ? mqttStatus_open : mqttStatus_idle;
+        }
+
+        // if open, test for connected
+        if (mqttStatus == mqttStatus_open && action_tryInvokeAdv("AT+QMTCONN?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, mqttConnectStatusParser))
+        {
+            actionResult_t atResult = action_awaitResult(true);
+            if (atResult.statusCode == MQTT_CONNECTED_STATUS)       // special case, 500 (error base) + 3 expected BGx MQTT state value
+                mqttStatus = mqttStatus_conn;
+        }
+    }
+    return mqttStatus;
 }
 
 
@@ -73,54 +102,63 @@ void mqtt_destroy(void *mqtt)
  * 
  *  \returns A socketResult_t value indicating the success or type of failure.
 */
-socketResult_t mqtt_open(socketId_t socketId, const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion)
+socketResult_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion)
 {
-    // AT+QSSLCFG="sslversion",0,3
-    // AT+QMTCFG="ssl",0,1,0
+    // AT+QSSLCFG="sslversion",5,3
+    // AT+QMTCFG="ssl",5,1,0
 
-    // AT+QMTCFG="version",0,4
-    // AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
+    // AT+QMTCFG="version",5,4
+    // AT+QMTOPEN=5,"iothub-dev-pelogical.azure-devices.net",8883
 
     #define ACTION_CMD_SZ 81
     #define ACTION_RSP_SZ 81
-
     char actionCmd[ACTION_CMD_SZ] = {0};
     char actionResponse[ACTION_RSP_SZ] = {0};
-    actionResult_t result;
+    actionResult_t atResult;
 
-    if (socketId >= IOP_SOCKET_COUNT)
-        return ACTION_RESULT_BADREQUEST;
-    if (g_ltem1->protocols->sockets[socketId].protocol != protocol_void)
-        return ACTION_RESULT_BADREQUEST;
+    g_ltem1->mqtt->state = mqtt_status(host);           // refresh state, adjust mqtt start process as needed 
+    if (g_ltem1->mqtt->state >= mqttStatus_open)           // already open with server "host", maybe connected
+        return RESULT_CODE_SUCCESS;
 
     if (useSslVersion != sslVersion_none)
     {
-        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QSSLCFG=\"sslversion\",%d,%d", socketId, (uint8_t)useSslVersion);
-        if ( !action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, ACTION_RSP_SZ, 0, NULL) != ACTION_RESULT_SUCCESS)
-            result = 600;
+        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QSSLCFG=\"sslversion\",%d,%d", MQTT_SOCKET_ID, (uint8_t)useSslVersion);
+        if (action_tryInvoke(actionCmd))
+        {
+            if (action_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
+                return RESULT_CODE_ERROR;
+        }
 
-        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTCFG=\"ssl\",%d,1,%d", socketId, socketId);
-        if ( !action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, ACTION_RSP_SZ, 0, NULL) != ACTION_RESULT_SUCCESS)
-            return ACTION_RESULT_ERROR;
+        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTCFG=\"ssl\",%d,1,%d", MQTT_SOCKET_ID, MQTT_SOCKET_ID);
+        if (action_tryInvoke(actionCmd))
+        {
+            if (action_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
+                return RESULT_CODE_ERROR;
+        }
     }
 
     if (useMqttVersion == mqttVersion_311)
     {
-        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTCFG=\"version\",%d,4", socketId);
-        if ( !action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, ACTION_RSP_SZ, 0, NULL) != ACTION_RESULT_SUCCESS)
-            return ACTION_RESULT_ERROR;
+        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTCFG=\"version\",%d,4", MQTT_SOCKET_ID);
+        if (action_tryInvoke(actionCmd))
+        {
+            if (action_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
+                return RESULT_CODE_ERROR;
+        }
     }
 
-    // AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
-    snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTOPEN=%d,\"%s\",%d", socketId, host, port);
-    //if ( !action_tryInvoke(actionCmd, true) || (result = action_awaitResult(actionResponse, ACTION_RSP_SZ, WAIT_SECONDS(45), mqttOpenCompleteParser)) != ACTION_RESULT_SUCCESS)
-    //    return result;
-
-    result = !action_tryInvoke(actionCmd, true);
-    result = action_awaitResult(actionResponse, ACTION_RSP_SZ, WAIT_SECONDS(45), mqttOpenCompleteParser);
-
-    g_ltem1->protocols->sockets[socketId].protocol = (useSslVersion == sslVersion_none) ? protocol_mqtt : protocol_mqtts;
-    return ACTION_RESULT_SUCCESS;
+    // TYPICAL: AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
+    snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTOPEN=%d,\"%s\",%d", MQTT_SOCKET_ID, host, port);
+    if (action_tryInvokeAdv(actionCmd, ACTION_RETRIES_DEFAULT, WAIT_SECONDS(45), mqttOpenCompleteParser))
+    {
+        actionResult_t atResult = action_awaitResult(true);
+        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+            g_ltem1->iop->peerTypeMap.mqttConnection = 1;
+        else
+            return RESULT_CODE_ERROR;
+    }
+    //g_ltem1->sockets->socketCtrls[MQTT_SOCKET_ID].protocol = (useSslVersion == sslVersion_none) ? protocol_mqtt : protocol_mqtts;
+    return RESULT_CODE_SUCCESS;
 }
 
 
@@ -130,25 +168,47 @@ socketResult_t mqtt_open(socketId_t socketId, const char *host, uint16_t port, s
 "iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30"
 */
 
-
 /**
  *  \brief Disconnect and close a connection to a MQTT server
  * 
  *  \param [in] socketId The socket based identifier for the connection to close
 */
-void mqtt_close(socketId_t socketId)
+void mqtt_close()
 {
     char actionCmd[81] = {0};
     char actionResponse[81] = {0};
 
-    snprintf(actionCmd, 80, "AT+QMTCLOSE=%d", socketId);
-    if (action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, 80, 0, NULL) != ACTION_RESULT_SUCCESS)
-        return;
+    g_ltem1->mqtt->state = mqtt_status("");                 // refresh state, adjust mqtt start process as needed 
 
-    snprintf(actionCmd, 80, "AT+QMTDISC=%d", socketId);
-    if ( !action_tryInvoke(actionCmd, true) || action_awaitResult(actionResponse, 80, 0, NULL) != ACTION_RESULT_SUCCESS)
-        return;
+    g_ltem1->iop->peerTypeMap.mqttConnection = 0;
+    for (size_t i = 0; i < IOP_RX_DATABUFFERS_MAX; i++)         // release any iop buffers assigned
+    {
+        if (g_ltem1->iop->rxDataBufs[i]->dataPeer == iopDataPeer_MQTT)
+            g_ltem1->iop->rxDataBufs[i]->dataPeer = iopDataPeer__NONE;
+    }
+    for (size_t i = 0; i < MQTT_TOPIC_MAXCNT; i++)          // clear subscriptions table
+    {
+        g_ltem1->mqtt->subscriptions[i].topicName[0] = '0';
+        g_ltem1->mqtt->subscriptions[i].receiver_func = NULL;
+    }
+
+    if (g_ltem1->mqtt->state == mqttStatus_conn)
+    {
+        snprintf(actionCmd, 80, "AT+QMTDISC=%d", MQTT_SOCKET_ID);
+        if (action_tryInvoke(actionCmd))
+            action_awaitResult(true);
+    }
+    else if (g_ltem1->mqtt->state == mqttStatus_open)
+    {
+        snprintf(actionCmd, 80, "AT+QMTCLOSE=%d", MQTT_SOCKET_ID);
+        if (action_tryInvoke(actionCmd))
+            action_awaitResult(true);
+    }
+
+    g_ltem1->mqtt->state == mqttStatus_idle;
+    return RESULT_CODE_SUCCESS;
 }
+
 
 
 /**
@@ -161,24 +221,33 @@ void mqtt_close(socketId_t socketId)
  * 
  *  \returns A socketResult_t value indicating the success or type of failure.
 */
-socketResult_t mqtt_connect(socketId_t socketId, const char *clientId, const char *username, const char *password)
+socketResult_t mqtt_connect(const char *clientId, const char *username, const char *password, mqttSession_t sessionClean)
 {
     #define MQTT_CONNECT_CMDSZ 540
     #define MQTT_CONNECT_RSPSZ 81
 
     char actionCmd[MQTT_CONNECT_CMDSZ] = {0};
-    char actionResponse[MQTT_CONNECT_RSPSZ] = {0};
-    socketResult_t result;
+    actionResult_t atResult;
 
-    //char actionCmd[] = "at+qmtconn=1,\"e8fdd7df-2ca2-4b64-95de-031c6b199299\",\"iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30\",\"SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=6hTmu6e11E9CCKo1Ppeg8qxTfSRIfFwaau0crXeF9kQ%3D&se=2058955139\"";
+    if (g_ltem1->mqtt->state == mqttStatus_conn)      // already connected
+        return RESULT_CODE_SUCCESS;
 
-    snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTCONN=%d,\"%s\",\"%s\",\"SharedAccessSignature %s\"", socketId, clientId, username, password);
-    if (action_tryInvoke(actionCmd, true))
+    snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTCFG=\"session\",%d,%d", MQTT_SOCKET_ID, (uint8_t)sessionClean);
+    if (action_tryInvoke(actionCmd))
     {
-        result = action_awaitResult(actionResponse, MQTT_CONNECT_RSPSZ, WAIT_SECONDS(30), mqttConnectCompleteParser);
-        return result;
+        if (action_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
+            return RESULT_CODE_ERROR;
     }
-    return ACTION_RESULT_BADREQUEST;
+
+    snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTCONN=%d,\"%s\",\"%s\",\"SharedAccessSignature %s\"", MQTT_SOCKET_ID, clientId, username, password);
+    if (action_tryInvokeAdv(actionCmd, ACTION_RETRIES_DEFAULT, WAIT_SECONDS(30), mqttConnectCompleteParser))
+    {
+        atResult = action_awaitResult(true);
+        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+            g_ltem1->iop->peerTypeMap.mqttConnection = 2;
+        return atResult.statusCode;
+    }
+    return RESULT_CODE_BADREQUEST;
 }
 
 
@@ -193,7 +262,7 @@ socketResult_t mqtt_connect(socketId_t socketId, const char *clientId, const cha
  * 
  *  \returns A socketResult_t value indicating the success or type of failure.
 */
-socketResult_t mqtt_subscribe(socketId_t socketId, const char *topic, mqttQos_t qos, mqttRecv_func_t recv_func)
+socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqttRecv_func_t recv_func)
 {
     // AT+QMTSUB=1,99,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#",0
     #define MQTT_PUBSUB_CMDSZ 140
@@ -202,29 +271,43 @@ socketResult_t mqtt_subscribe(socketId_t socketId, const char *topic, mqttQos_t 
 
     char actionCmd[MQTT_PUBSUB_CMDSZ] = {0};
     char actionResponse[MQTT_PUBSUB_RSPSZ] = {0};
+    uint8_t subscriptionSlot = 255;
 
-    if (recv_func == NULL)
-        return ACTION_RESULT_BADREQUEST;
+    if (recv_func == NULL || strlen(topic) > MQTT_TOPIC_NAME_SZ - 1)
+        return RESULT_CODE_BADREQUEST;
+
+    uint16_t topicSz = strlen(topic);               // test for MQTT multilevel wildcard, store separately for future topic parsing on recv
+    bool wildcard = *(topic + topicSz - 1) == '#';
 
     for (size_t i = 0; i < MQTT_TOPIC_MAXCNT; i++)
     {
         if (g_ltem1->mqtt->subscriptions[i].topicName[0] == ASCII_cNULL)
         {
-            strncpy(g_ltem1->mqtt->subscriptions[i].topicName, topic, MQTT_TOPICNAME_MAXSZ - 1);
-            g_ltem1->mqtt->subscriptions[i].recv_func = recv_func;
+            if (wildcard)                    
+            {
+                g_ltem1->mqtt->subscriptions[i].wildcard = '#';
+                topicSz--;
+            }
+            strncpy(g_ltem1->mqtt->subscriptions[i].topicName, topic, MIN(topicSz, MQTT_TOPIC_NAME_SZ));
+            g_ltem1->mqtt->subscriptions[i].topicName[topicSz] = ASCII_cNULL;                               // null out the wildcard char
+            g_ltem1->mqtt->subscriptions[i].receiver_func = recv_func;
             recv_func = NULL;
+            subscriptionSlot = i;
             break;
         }
     }
-    if (recv_func != NULL)                          // recv_func ptr moved to g_ltem1 global if success
-        return ACTION_RESULT_CONFLICT;
+    if (subscriptionSlot == 255)
+        return RESULT_CODE_CONFLICT;
 
-    snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTSUB=%d,%d,\"%s\",%d", socketId, ++g_ltem1->mqtt->msgId[socketId], topic, qos);
-    if (action_tryInvoke(actionCmd, true))
+    snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTSUB=%d,%d,\"%s\",%d", MQTT_SOCKET_ID, ++g_ltem1->mqtt->msgId, topic, qos);
+    if (action_tryInvokeAdv(actionCmd, ACTION_RETRIES_DEFAULT, WAIT_SECONDS(15), mqttSubscribeCompleteParser))
     {
-        return action_awaitResult(actionResponse, 80, WAIT_SECONDS(10), mqttSubscribeCompleteParser);
+        actionResult_t atResult = action_awaitResult(true);
+        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+            g_ltem1->iop->peerTypeMap.mqttSubscribe = g_ltem1->iop->peerTypeMap.mqttSubscribe | (1 << subscriptionSlot);
+        return atResult.statusCode;
     }
-    return ACTION_RESULT_BADREQUEST;
+    return RESULT_CODE_BADREQUEST;
 }
 
 
@@ -237,65 +320,217 @@ socketResult_t mqtt_subscribe(socketId_t socketId, const char *topic, mqttQos_t 
  * 
  *  \returns A socketResult_t value indicating the success or type of failure.
 */
-socketResult_t mqtt_unsubscribe(socketId_t socketId, const char *topic)
+socketResult_t mqtt_unsubscribe(const char *topic)
 {
     // AT+QMTUNS=<tcpconnectID>,<msgID>,"<topic1>"
 
     char actionCmd[MQTT_PUBSUB_CMDSZ] = {0};
     char actionResponse[81] = {0};
+    uint8_t subscriptionSlot = 255;
+
+    uint16_t topicSz = strlen(topic);                   // adjust topic if multilevel wildcard, remove prior to subscriptions scan
+    if (*(topic + topicSz) == "#")
+        topicSz--;
 
     for (size_t i = 0; i < MQTT_TOPIC_MAXCNT; i++)
     {
-        if (strcmp(g_ltem1->mqtt->subscriptions[i].topicName, topic) == 0)
+        if (strncmp(g_ltem1->mqtt->subscriptions[i].topicName, topic, topicSz) == 0)
         {
             g_ltem1->mqtt->subscriptions[i].topicName[0] = ASCII_cNULL;
-            g_ltem1->mqtt->subscriptions[i].recv_func = NULL;
+            g_ltem1->mqtt->subscriptions[i].receiver_func = NULL;
+            subscriptionSlot = i;
             break;
         }
     }
     
-    snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTUNS=%d,%d,\"<topic1>\"", socketId, ++g_ltem1->mqtt->msgId[socketId], topic);
-    if (action_tryInvoke(actionCmd, true))
+    snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTUNS=%d,%d,\"<topic1>\"", MQTT_SOCKET_ID, ++g_ltem1->mqtt->msgId, topic);
+    if (action_tryInvoke(actionCmd))
     {
-        return action_awaitResult(actionResponse, 80, 0, NULL);
+        actionResult_t atResult = action_awaitResult(true);
+        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+            g_ltem1->iop->peerTypeMap.mqttSubscribe = g_ltem1->iop->peerTypeMap.mqttSubscribe & (~(1 << subscriptionSlot));
+        return atResult.statusCode;
     }
-    return ACTION_RESULT_BADREQUEST;
+    return RESULT_CODE_BADREQUEST;
 }
 
 
 
-socketResult_t mqtt_publish(socketId_t socketId, const char *topic, mqttQos_t qos, const char *message)
+/**
+ *  \brief Publish a message to server.
+ * 
+ *  \param [in] *topic  The topic to receive the message on the server.
+ *  \param [in] qos  The MQTT QOS to be assigned to sent message.
+ *  \param [in] *message Pointer to message to be sent.
+ * 
+ *  \returns A socketResult_t value indicating the success or type of failure.
+*/
+socketResult_t mqtt_publish(const char *topic, mqttQos_t qos, const char *message)
 {
     // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
 
-    char publishCmd[MQTT_PUBTOPIC_MAXSZ + MQTT_URC_OVRHDSZ] = {0};
-    char msgText[MQTT_MESSAGE_MAXSZ];
+    char publishCmd[MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PUBOVRHD_SZ] = {0};
+    char msgText[MQTT_MESSAGE_SZ];
     char actionResponse[81] = {0};
-    socketResult_t result;
+    actionResult_t atResult;
 
     // register the pending publish action
-    action_setAutoClose(false);
-    uint16_t msgId = ((uint8_t)qos == 0) ? 0 : ++g_ltem1->mqtt->msgId[socketId];
-    snprintf(publishCmd, 160, "AT+QMTPUB=%d,%d,%d,0,\"%s\"", socketId, msgId, qos, topic);
-    result = action_tryInvoke(publishCmd, true) ? ACTION_RESULT_SUCCESS : ACTION_RESULT_BADREQUEST;
-    if (result >= ACTION_RESULT_ERRORS_BASE)
+    uint16_t msgId = ((uint8_t)qos == 0) ? 0 : ++g_ltem1->mqtt->msgId;
+    snprintf(publishCmd, 160, "AT+QMTPUB=%d,%d,%d,0,\"%s\"", MQTT_SOCKET_ID, msgId, qos, topic);
+    
+    if (action_tryInvokeAdv(publishCmd, ACTION_RETRIES_DEFAULT, ACTION_RETRY_INTERVALmillis, iop_txDataPromptParser))
+    {
+        atResult = action_awaitResult(false);
+
+        // wait for data prompt for data, now complete sub-command to actually transfer data
+        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+        {
+            action_sendRawWithEOTs(message, strlen(message), ASCII_sCTRLZ, 2000, mqttPublishCompleteParser);
+            atResult = action_awaitResult(true);
+        }
+    }
+    else 
+        return RESULT_CODE_BADREQUEST;
+
+    return atResult.statusCode;
+}
+
+
+/**
+ *  \brief Performs URL escape removal for special char (%20-%2F) without malloc.
+*/
+static void util_urlDecode(char *src, int len)
+{
+    char subTable[] = " !\"#$%&'()*+,-./";
+    uint8_t srcChar;
+    uint8_t subKey;
+    uint16_t dest = 0;
+
+    for (size_t i = 0; i < len; i++)
+    {
+        if (src[i] == '%')
+        {
+            srcChar = src[i + 2];
+            subKey = (srcChar >= 0x30 && srcChar <= 0x39) ? srcChar - 0x30 : \
+                     ((srcChar >= 0x41 && srcChar <= 0x46) ? srcChar - 0x37 : \
+                     ((srcChar >= 0x61 && srcChar <= 0x66) ? srcChar - 0x57: 255));
+            if (subKey != 255)
+            {
+                src[dest] = subTable[subKey];
+                i += 2;
+            }
+        }
+        else
+            src[dest] = src[i];
+        
+        dest++;
+    }
+    src[dest + 1] = '\0';
+}
+
+
+/**
+ *  \brief Performs background tasks to advance MQTT dataflows.
+*/
+void mqtt_doWork()
+{
+    // rdyMap not empty and rdyMapTail points to iopDataBuffer
+    if (g_ltem1->mqtt->dataBufferIndx != IOP_NO_BUFFER)
+    {
+        uint8_t iopBufIndx = g_ltem1->mqtt->dataBufferIndx;
+
+        // parse received MQTT message into topic and message
+        // Example: +QMTRECV: 0,0, "topic/example", "This is the payload related to topic"
+        // char topic[MQTT_TOPIC_NAME_SZ];
+        // char message[MQTT_MESSAGE_SZ];
+        char *topic;
+        char *message;
+        uint16_t start, end;
+        char *eot;
+
+        util_urlDecode(g_ltem1->iop->rxDataBufs[iopBufIndx]->buffer, IOP_RX_DATABUF_SZ);
+
+        topic = memchr(g_ltem1->iop->rxDataBufs[iopBufIndx]->buffer, ASCII_cDBLQUOTE, MQTT_TOPIC_OFFSET_MAX);
+        if (topic == NULL)                                                      // malformed
+            goto discardBuffer;
+        topic++;
+
+        eot = memchr(topic, ASCII_cDBLQUOTE, g_ltem1->iop->rxDataBufs[iopBufIndx]->head - eot);
+        if (eot == NULL)                                                        // malformed, overflowed somehow
+            goto discardBuffer;
+        *eot  = '\0';                                                           // null term the topic
+
+        message = eot + 3;                                                      // set the message start
+        eot = memchr(message, ASCII_cDBLQUOTE, g_ltem1->iop->rxDataBufs[iopBufIndx]->head - eot);
+        if (eot == NULL)                                                        // malformed, overflowed somehow
+            goto discardBuffer;
+        *eot  = '\0';                                                           // null term the message
+
+        // find topic in subscriptions array & invoke application receiver
+        for (size_t i = 0; i < MQTT_TOPIC_MAXCNT; i++)
+        {
+            uint16_t topicSz = strlen(g_ltem1->mqtt->subscriptions[i].topicName);
+            if (strncmp(g_ltem1->mqtt->subscriptions[i].topicName, topic, topicSz) == 0)
+            {
+                topic += topicSz;
+                //                                           (topic name,                              , props, message)
+                g_ltem1->mqtt->subscriptions[i].receiver_func(g_ltem1->mqtt->subscriptions[i].topicName, topic, message);
+                break;
+            }
+        }
+
+        discardBuffer:
+        g_ltem1->mqtt->dataBufferIndx = IOP_NO_BUFFER;
+        iop_resetDataBuffer(iopBufIndx);           // delivered, clear IOP data buffer
+    }
+}
+
+
+
+/**
+ *  \brief Parses the topic properties string into a mqttProperties structure (MUTATES, NO COPY).
+ * 
+ *  \param topicProps [in] Char pointer to the c-string containing message properties passed in topic 
+ * 
+ *  \return Struct with pointer arrays to the properties (name/value)
+*/
+mqttMsgProps_t mqtt_parseTopicProperties(char *topicProps)
+{
+    mqttMsgProps_t result = {0, {0}, {0}};
+
+    if (strlen(topicProps) == 0)
         return result;
     
-    result = action_awaitResult(actionResponse, 80, 0, iop_txDataPromptParser);
-    action_setAutoClose(true);
+    char *next = topicProps;
+    char *delimAt;
+    char *endAt = topicProps + strlen(topicProps);
 
-    // now send the data
-    // after prompt for data, now complete sub-command to actually transfer data
-    if (result == ACTION_RESULT_SUCCESS)
+    // 1st pass; get names + values
+    for (size_t i = 0; i < MQTT_PROPERTIES_CNT; i++)
     {
-        action_sendData(message, 0);
-        do
-        {
-            result = action_getResult(actionResponse, ACTION_DEFAULT_RESPONSE_SZ, 2000, mqttPublishCompleteParser);
-        } while (result == ACTION_RESULT_PENDING);
+        delimAt = strchr(topicProps, '&');
+        delimAt = (delimAt == NULL) ? endAt : delimAt;
+
+        result.names[i] = topicProps;
+        *delimAt = ASCII_cNULL;
+        topicProps = delimAt + 1;
+        result.count = i;
+        if (delimAt == endAt)
+            break;
+    }
+    result.count++;
+    // 2nd pass; split names/values
+    for (size_t i = 0; i < result.count; i++)
+    {
+        delimAt = strchr(result.names[i], '=');
+        *delimAt = ASCII_cNULL;
+        result.values[i] = delimAt + 1;
+        // (result.names[i])[delimAt] = ASCII_cNULL;
+        // result.values[i] = result.names[i] + delimAt + 1;
     }
     return result;
 }
+
 
 
 #pragma endregion
@@ -305,38 +540,86 @@ socketResult_t mqtt_publish(socketId_t socketId, const char *topic, mqttQos_t qo
 #pragma region private functions
 
 /**
- *	\brief [private] MQTT open connection response parser.
+ *	\brief [private] MQTT open status response parser.
+ *
+ *  \param response [in] Character data recv'd from BGx to parse for task complete
+ *  \param endptr [out] Char pointer to the char following parsed text
+ * 
+ *  \return HTTP style result code, 0 = not complete
  */
-static actionResult_t mqttOpenCompleteParser(const char *response) 
+static resultCode_t mqttOpenStatusParser(const char *response, char **endptr) 
 {
-    return action_serviceResponseParser(response, "+QMTOPEN: ", 1);
+    return action_serviceResponseParser(response, "+QMTOPEN: ", 0, endptr);
+}
+
+
+/**
+ *	\brief [private] MQTT open connection response parser.
+ *
+ *  \param response [in] Character data recv'd from BGx to parse for task complete
+ *  \param endptr [out] Char pointer to the char following parsed text
+ * 
+ *  \return HTTP style result code, 0 = not complete
+ */
+static resultCode_t mqttOpenCompleteParser(const char *response, char **endptr) 
+{
+    return action_serviceResponseParser(response, "+QMTOPEN: ", 1, endptr);
 }
 
 
 /**
  *	\brief [private] MQTT connect to server response parser.
+ *
+ *  \param response [in] Character data recv'd from BGx to parse for task complete
+ *  \param endptr [out] Char pointer to the char following parsed text
+ * 
+ *  \return HTTP style result code, 0 = not complete
  */
-static actionResult_t mqttConnectCompleteParser(const char *response) 
+static resultCode_t mqttConnectStatusParser(const char *response, char **endptr) 
 {
-    return action_serviceResponseParser(response, "+QMTCONN: ", 2);
+    return action_serviceResponseParser(response, "+QMTCONN: ", 1, endptr);
+}
+
+
+/**
+ *	\brief [private] MQTT connect to server response parser.
+ *
+ *  \param response [in] Character data recv'd from BGx to parse for task complete
+ *  \param endptr [out] Char pointer to the char following parsed text
+ * 
+ *  \return HTTP style result code, 0 = not complete
+ */
+static resultCode_t mqttConnectCompleteParser(const char *response, char **endptr) 
+{
+    return action_serviceResponseParser(response, "+QMTCONN: ", 2, endptr);
 }
 
 
 /**
  *	\brief [private] MQTT subscribe to topic response parser.
+ *
+ *  \param response [in] Character data recv'd from BGx to parse for task complete
+ *  \param endptr [out] Char pointer to the char following parsed text
+ * 
+ *  \return HTTP style result code, 0 = not complete
  */
-static actionResult_t mqttSubscribeCompleteParser(const char *response) 
+static resultCode_t mqttSubscribeCompleteParser(const char *response, char **endptr) 
 {
-    return action_serviceResponseParser(response, "+QMTSUB: ", 3);
+    return action_serviceResponseParser(response, "+QMTSUB: ", 2, endptr);
 }
 
 
 /**
  *	\brief [private] MQTT publish message to topic response parser.
+ *
+ *  \param response [in] Character data recv'd from BGx to parse for task complete
+ *  \param endptr [out] Char pointer to the char following parsed text
+ * 
+ *  \return HTTP style result code, 0 = not complete
  */
-static actionResult_t mqttPublishCompleteParser(const char *response) 
+static resultCode_t mqttPublishCompleteParser(const char *response, char **endptr) 
 {
-    return action_serviceResponseParser(response, "+QMTPUB: ", 2);
+    return action_serviceResponseParser(response, "+QMTPUB: ", 2, endptr);
 }
 
 
