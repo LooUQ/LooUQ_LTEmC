@@ -12,21 +12,9 @@ The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LT
 
 [LTEm1/LTEm1c FAQ](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/LTEm1-FAQ.md)
 
-[LTEm1c Ver History](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/version-history.md)
+[Version History](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/version-history.md)
 
 ----
 ![LTEm1c](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/LTEm1c%20Stack.png)
 
 All of the core (blue) subsystems are functional. Extension subsystems (copper, with wide-borders) are optional and can be built into the application, or omitted to reduced code size. Grey boxes indicate future feature areas. 
-
-## Version History ##
-* v0.1 Initial publish
-  * Network (cellular) connectivity, GNSS, and AT command support
-  * Initial TCP/UDP send/recv (very small packets)
-  * Tests (Arduino) for above
-* v0.2 (June 25) TCP/UDP large packets (<=1460 bytes), MQTT(s) functional, Geo-Fence support
-  * Improved performance in interrupt servicing
-  * Some memory optimizations
-  * Background tasks alignment for RTOS and Arduino Scheduler compatibility
-  * Geo-Fence support 
-  * FOTA partial support for DFOTA via HTTPS 
