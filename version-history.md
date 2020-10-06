@@ -3,6 +3,7 @@
 ## v0.2 - IOP Redesign
 Overhaul of the IOP buffering system. 
 * Simplified receive buffer management and eliminated copies from receive pipeline
+ * Small copy < 60chars remains (required) for MQTT receives
 * Finishing MQTT support
   * Publish to topic
   * Subscribe\unsubscribe to topics
@@ -15,6 +16,7 @@ First release of a functional LTEm1 driver. Supported sockets (TCP\UDP\SSL) and 
 * Pure C99
 * Hardware/platform abstraction. Tested on SAMD21 and Arduino foundation but adaptable to RTOS 
 * Abstraction of AT commands workflow, simple methods allow for invoke and await pattern
+* Minimal copy design
 * Central IOP (input\output processor) to handle BGx communications and buffer management
 * Implements TCP\UDP\SSL clients using a Sockets pattern with receiver events
 * Started MQTT support
