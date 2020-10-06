@@ -25,32 +25,15 @@
  * Test the GNSS/GPS receiver basic functionality (on/off/get location).
  *****************************************************************************/
 
+#define HOST_FEATHER_UXPLOR
+#include <platform_pins.h>
 #include <ltem1c.h>
-#include <stdio.h>
 
 #define _DEBUG
-#include "platform/platform_stdio.h"
+#include "dbgprint.h"
+//#define USE_SERIAL 0
 
 const int APIN_RANDOMSEED = 0;
-
-ltem1PinConfig_t ltem1_pinConfig =
-{
-  spiCsPin : 13,
-  irqPin : 12,
-  statusPin : 6,
-  powerkeyPin : 11,
-  resetPin : 19,
-  ringUrcPin : 5,
-  wakePin : 10
-};
-
-spiConfig_t ltem1_spiConfig = 
-{
-  dataRate : 2000000U,
-  dataMode : spiDataMode_0,
-  bitOrder : spiBitOrder_msbFirst,
-  csPin : ltem1_pinConfig.spiCsPin
-};
 
 
 void setup() {
@@ -68,10 +51,10 @@ void setup() {
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
-    ltem1_create(&ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
+    ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
 
     // turn on GNSS
-    actionResult_t cmdResult = gnss_on();
+    resultCode_t cmdResult = gnss_on();
     PRINTF(dbgColor_info, "GNSS On result=%d (504 is already on)\r", cmdResult);
 }
 
@@ -93,17 +76,17 @@ void loop() {
     else
         PRINTF(dbgColor_warn, "Location is not available (GNSS not fixed)\r");
 
-    if (location.statusCode == ACTION_RESULT_TIMEOUT)
-    {
-        uint8_t txAvailable = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
-        uint8_t rxLevel = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-        uint8_t iirVal = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
-        uint8_t fifoVal = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
+    // if (location.statusCode == RESULT_CODE_TIMEOUT)
+    // {
+    //     uint8_t txAvailable = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
+    //     uint8_t rxLevel = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
+    //     uint8_t iirVal = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
+    //     uint8_t fifoVal = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
  
-        //iop_txSend("AT+QPOWD\r", 9);
-        int halt = 1;
-        while(halt){};
-    }
+    //     //iop_txSend("AT+QPOWD\r", 9);
+    //     int halt = 1;
+    //     while(halt){};
+    // }
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));

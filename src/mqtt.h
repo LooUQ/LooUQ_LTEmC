@@ -28,14 +28,16 @@
 
 #include "ltem1c.h"
 
-#define MQTT_MESSAGE_MAXSZ 1548
-#define MQTT_TOPICNAME_MAXSZ 120
-#define MQTT_PUBTOPIC_MAXSZ 120
-#define MQTT_PUBTOPIC_OVRHDSZ 27
-#define MQTT_SUBTOPIC_MAXSZ 200
+
+#define MQTT_MESSAGE_SZ 1548
+#define MQTT_TOPIC_OFFSET_MAX 24
+#define MQTT_TOPIC_NAME_SZ 120
+#define MQTT_TOPIC_PROPS_SZ 120
+#define MQTT_TOPIC_TOTAL_SZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ)
+#define MQTT_TOPIC_PUBOVRHD_SZ 27
 #define MQTT_TOPIC_MAXCNT 3
-#define MQTT_URC_PREFIXSZ 20
-#define MQTT_URC_OVRHDSZ 27
+#define MQTT_SOCKET_ID 5
+#define MQTT_PROPERTIES_CNT 8
 
 
 /* Example connection strings key/SAS token
@@ -47,24 +49,6 @@
     devices/{device_id}/messages/devicebound/#  
     Example: devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#
 */
-
-
-typedef void (*mqttRecv_func_t)(socketId_t socketId, const char * topic, const char * message);
-
-
-typedef struct mqttSubscription_tag
-{
-    char topicName[MQTT_TOPICNAME_MAXSZ + 1];
-    mqttRecv_func_t recv_func;
-} mqttSubscription_t;
-
-
-typedef struct mqtt_tag
-{
-    uint16_t msgId[LTEM1_SOCKET_COUNT];
-    mqttSubscription_t subscriptions[MQTT_TOPIC_MAXCNT];
-} mqtt_t;
-
 
 
 typedef enum mqttResult_tag
@@ -101,6 +85,55 @@ typedef enum mqttQos_tag
 } mqttQos_t;
 
 
+typedef enum mqttSession_tag
+{
+    mqttSession_preserve = 0,
+    mqttSession_cleanStart = 1,
+} mqttSession_t;
+
+
+typedef enum mqttStatus_tag
+{
+    mqttStatus_idle = 0,
+    mqttStatus_open = 1,
+    mqttStatus_conn = 2
+} mqttStatus_t;
+
+
+typedef struct mqttMsgProps_tag
+{
+    uint8_t count;
+    char *names[MQTT_PROPERTIES_CNT];
+    char *values[MQTT_PROPERTIES_CNT];
+} mqttMsgProps_t;
+
+
+
+typedef void (*mqttRecv_func_t)(char *topic, char *props, char *message);
+
+
+typedef struct mqttSubscription_tag
+{
+    char topicName[MQTT_TOPIC_NAME_SZ];
+    char wildcard;
+    mqttRecv_func_t receiver_func;
+} mqttSubscription_t;
+
+
+typedef struct mqtt_tag
+{
+    mqttStatus_t state;
+    uint16_t msgId;
+    mqttSubscription_t subscriptions[MQTT_TOPIC_MAXCNT];
+    char *firstChunkBegin;                  // BGx MQTT sends data in notification, 1st chunk (~64 chars) will land in cmd buffer (all URCs go there)
+    uint8_t firstChunkSz;                   // at recv complete, this chunk needs copied to the start of the data buffer and removed from cmd buffer (IMMEDIATELY)
+                                            // struct below is populated when recv buffer is complete and ready
+    // bool recvComplete;                      // set within ISR to signal that EOT phrase recv'd and doWork can process into topic/message and deliv to application
+    uint8_t dataBufferIndx;                 // index to IOP data buffer holding last completed message (set to IOP_NO_BUF if no recv ready)
+} mqtt_t;
+
+
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -108,15 +141,20 @@ extern "C"
 
 
 void mqtt_create();
-void mqtt_destroy();
 
-socketResult_t mqtt_open(socketId_t socketId, const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion);
-socketResult_t mqtt_connect(socketId_t socketId, const char *clientId, const char *username, const char *password);
-void mqtt_close(socketId_t socketId);
+mqttStatus_t mqtt_status(const char *host);
+socketResult_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion);
+socketResult_t mqtt_connect(const char *clientId, const char *username, const char *password, mqttSession_t clean);
+void mqtt_close();
 
-socketResult_t mqtt_subscribe(socketId_t socketId, const char *topic, mqttQos_t qos, mqttRecv_func_t rcvr_func);
-socketResult_t mqtt_unsubscribe(socketId_t socketId, const char *topic);
-socketResult_t mqtt_publish(socketId_t socketId, const char *topic, mqttQos_t qos, const char *message);
+
+socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqttRecv_func_t rcvr_func);
+socketResult_t mqtt_unsubscribe(const char *topic);
+socketResult_t mqtt_publish(const char *topic, mqttQos_t qos, const char *message);
+
+void mqtt_doWork();
+
+mqttMsgProps_t mqtt_parseTopicProperties(char *topicProps);
 
 
 #ifdef __cplusplus

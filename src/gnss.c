@@ -11,7 +11,7 @@
 
 
 // private local declarations
-static actionResult_t gnssLocCompleteParser(const char *response);
+static resultCode_t gnssLocCompleteParser(const char *response, char **endptr);
 
 
 /*
@@ -25,20 +25,24 @@ static actionResult_t gnssLocCompleteParser(const char *response);
 #pragma region public functions
 
 
-actionResult_t gnss_on()
+resultCode_t gnss_on()
 {
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
-    action_tryInvoke("AT+QGPS=1", true);
-    return action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 800, NULL);
+    if (action_tryInvokeAdv("AT+QGPS=1", ACTION_RETRIES_DEFAULT, 800, NULL))
+    {
+        return action_awaitResult(true).statusCode;
+    }
+    return RESULT_CODE_CONFLICT;
 }
 
 
 
-actionResult_t gnss_off()
+resultCode_t gnss_off()
 {
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
-    action_tryInvoke("AT+QGPSEND", true);
-    return action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 800, NULL);
+    if (action_tryInvokeAdv("AT+QGPSEND", ACTION_RETRIES_DEFAULT, 800, NULL))
+    {
+        return action_awaitResult(true).statusCode;
+    }
+    return RESULT_CODE_CONFLICT;
 }
 
 
@@ -49,40 +53,42 @@ gnssLocation_t gnss_getLocation()
 
     #define TOKEN_BUF_SZ 12
 
-    char response[GNSS_CMD_RESULTBUF_SZ] = {0};
     char tokenBuf[TOKEN_BUF_SZ] = {0};
     char *continueAt;
     gnssLocation_t gnssResult;
 
     //action_t *gnssCmd = action_build("AT+QGPSLOC=2", GNSS_CMD_RESULTBUF_SZ, 500, gnssLocCompleteParser);
 
-    action_tryInvoke("AT+QGPSLOC=2", true);
-    actionResult_t cmdResult = action_awaitResult(response, GNSS_CMD_RESULTBUF_SZ, 0, gnssLocCompleteParser);
-
-    gnssResult.statusCode = (uint16_t)cmdResult;
-    if (cmdResult != ACTION_RESULT_SUCCESS)
+    if (action_tryInvokeAdv("AT+QGPSLOC=2", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, gnssLocCompleteParser))
     {
-        return gnssResult;
-    }
+        actionResult_t atResult = action_awaitResult(false);
 
-    continueAt = response + GNSS_LOC_DATAOFFSET;
-    continueAt = strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
-    if (continueAt != NULL)
-        strncpy(gnssResult.utc, tokenBuf, 11);
-    gnssResult.lat.val = strtof(continueAt, &continueAt);
-    gnssResult.lat.dir = ASCII_cSPACE;
-    gnssResult.lon.val = strtof(++continueAt, &continueAt);
-    gnssResult.lon.dir = ASCII_cSPACE;
-    gnssResult.hdop = strtof(++continueAt, &continueAt);
-    gnssResult.altitude = strtof(++continueAt, &continueAt);
-    gnssResult.fixType = strtol(++continueAt, &continueAt, 10);
-    gnssResult.course = strtof(++continueAt, &continueAt);
-    gnssResult.speedkm = strtof(++continueAt, &continueAt);
-    gnssResult.speedkn = strtof(++continueAt, &continueAt);
-    continueAt = strToken(continueAt + 1, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
-    if (continueAt != NULL)
-        strncpy(gnssResult.date, tokenBuf, 7);
-    gnssResult.nsat = strtol(continueAt, &continueAt, 10);
+        gnssResult.statusCode = atResult.statusCode;
+        if (atResult.statusCode != RESULT_CODE_SUCCESS)
+        {
+            action_close();
+            return gnssResult;
+        }
+        continueAt = atResult.response + GNSS_LOC_DATAOFFSET;
+        continueAt = strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
+        if (continueAt != NULL)
+            strncpy(gnssResult.utc, tokenBuf, 11);
+        gnssResult.lat.val = strtof(continueAt, &continueAt);
+        gnssResult.lat.dir = ASCII_cSPACE;
+        gnssResult.lon.val = strtof(++continueAt, &continueAt);
+        gnssResult.lon.dir = ASCII_cSPACE;
+        gnssResult.hdop = strtof(++continueAt, &continueAt);
+        gnssResult.altitude = strtof(++continueAt, &continueAt);
+        gnssResult.fixType = strtol(++continueAt, &continueAt, 10);
+        gnssResult.course = strtof(++continueAt, &continueAt);
+        gnssResult.speedkm = strtof(++continueAt, &continueAt);
+        gnssResult.speedkn = strtof(++continueAt, &continueAt);
+        continueAt = strToken(continueAt + 1, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
+        if (continueAt != NULL)
+            strncpy(gnssResult.date, tokenBuf, 7);
+        gnssResult.nsat = strtol(continueAt, &continueAt, 10);
+        action_close();
+    }
 
     return gnssResult;
 }
@@ -95,13 +101,10 @@ gnssLocation_t gnss_getLocation()
 #pragma region private functions
 
 
-static actionResult_t gnssLocCompleteParser(const char *response)
+static resultCode_t gnssLocCompleteParser(const char *response, char **endptr)
 {
-    actionResult_t result = action_tokenResultParser(response, "+QGPSLOC:", ASCII_cCOMMA, GNSS_LOC_EXPECTED_TOKENCOUNT);
-
-    // if (result != ACTION_RESULT_PENDING)
-    //     return result;
-    // return action_cmeResultParser(response);
+    //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr
+    return action_tokenResultParser(response, "+QGPSLOC:", ASCII_cCOMMA, GNSS_LOC_EXPECTED_TOKENCOUNT, ASCII_sOK, endptr);
 }
 
 

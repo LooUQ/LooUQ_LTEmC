@@ -52,13 +52,12 @@ void ltem1_create(const ltem1PinConfig_t ltem1_config, ltem1Start_t ltem1Start, 
     if (funcLevel >= ltem1Functionality_actions)
     {
         g_ltem1->action = calloc(1, sizeof(action_t));
-        g_ltem1->action->autoClose = true;
-        action_reset();
+        g_ltem1->action->isOpen = false;
     }
     if (funcLevel >= ltem1Functionality_services)
     {
-        g_ltem1->network = ntwk_createNetwork();
-        g_ltem1->protocols = ntwk_createProtocols();
+        g_ltem1->network = ntwk_create();
+        g_ltem1->sockets = sckt_create();
     }
     g_ltem1->funcLevel = funcLevel;
     g_ltem1->cancellationRequest = false;
@@ -118,9 +117,7 @@ void ltem1_start()
  */
 void ltem1_reset()
 {
-    qbg_powerOff();
-    timing_delay(500);
-    qbg_powerOn();
+    qbg_reset();
     ltem1_start();
 }
 
@@ -165,9 +162,11 @@ void ltem1_destroy()
  */
 void ltem1_doWork()
 {
-    qbg_monitorState();
-    iop_recvDoWork();
-    ip_recvDoWork();
+    sckt_doWork();
+    
+    #ifdef LTEM1_MQTT
+    mqtt_doWork();
+    #endif
 }
 
 

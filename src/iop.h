@@ -28,6 +28,7 @@
 
 #include <stdint.h>
 #include "network.h"
+#include "sockets.h"
 #include "ltem1c.h"
 
 #define CBUF_SZ  1749       // cmd 
@@ -36,10 +37,6 @@
 #define IOP_SOCKET_COUNT 6
 #define IOP_ERROR -1
 
-#define IOP_RXCTRLBLK_COUNT 8
-#define IOP_RXCTRLBLK_VOID 255
-#define IOP_RXCTRLBLK_PRIMBUF_SIZE 64
-#define IOP_RXCTRLBLK_PRIMBUF_IRDCAP 43
 // up to 20 bytes, depends on data size reported from 1-1460 bytes:: \r\n+QIRD: ####\r\n<data>\r\nOK\r
 #define IOP RX_IRD_OVRHD_SZ 21
 #define IOP RX_IRD_TRAILER_SZ 8
@@ -50,34 +47,61 @@
 #define IOP_RXCTRLBLK_ISOCCUPIED(INDX) (g_ltem1->iop->rxCtrlBlks[INDX].process != iopProcess_void)
 
 
-typedef enum
+/* IOPv2 new objects
+-------------------------------------------------------------------------------------- */
+
+#define IOP_RX_DATABUFFERS_MAX 3
+#define IOP_RX_CMDBUF_SZ 256
+#define IOP_RX_DATABUF_SZ 2048
+#define IOP_NO_BUFFER 255
+
+
+typedef enum iopDataPeer_tag
 {
-    iopProcess_socket_0 = 0,
-    iopProcess_socket_1 = 1,
-    iopProcess_socket_2 = 2,
-    iopProcess_socket_3 = 3,
-    iopProcess_socket_4 = 4,
-    iopProcess_socket_5 = 5,
-    iopProcess_socketMax = 5,
-    iopProcess_command = 9,
-    iopProcess_allocated = 254,
-    iopProcess_void = 255
-} iopProcess_t; 
+    iopDataPeer_SOCKET_0 = 0,
+    iopDataPeer_SOCKET_1 = 1,
+    iopDataPeer_SOCKET_2 = 2,
+    iopDataPeer_SOCKET_3 = 3,
+    iopDataPeer_SOCKET_4 = 4,
+    iopDataPeer_SOCKET_5 = 5,
+
+    iopDataPeer_MQTT = 6,
+    iopDataPeer_HTTP = 7,
+    iopDataPeer_FTP = 8,
+
+    iopDataPeer__SOCKET = 0,
+    iopDataPeer__SOCKET_CNT = 6,
+    iopDataPeer__TABLESZ = iopDataPeer_FTP + 1,
+
+    iopDataPeer__NONE = 255
+} iopDataPeer_t;
 
 
-typedef enum
+typedef struct peerTypeMap_tag       // remote data sources, 1 indicates active session (could source URC event)
 {
-    iopXfrResult_complete = 1,
-    iopXfrResult_incomplete = 0,
-    iopXfrResult_busy = -1,
-    iopXfrResult_truncated = -2
-} iopXfrResult_t;
+    uint8_t pdpContext;             // network pdp context open (cellular network)
+    uint8_t tcpudpSocket;           // TCP or UDP
+    uint8_t sslSocket;              // SSL 
+    uint8_t mqttConnection;         // MQTT server connection
+    uint8_t mqttSubscribe;          // MQTT topic subscription, incoming message
+} peerTypeMap_t;    
 
+
+typedef struct iopBuffer_tag
+{
+    char *buffer;               // data buffer, does not change while used
+    char *bufferEnd;            // end of physical buffer
+    char *head;                 // fill (in)
+    char *prevHead;             // if the last chunk is copied or consumed immediately used to restore head
+    char *tail;                 // consumer (out)
+    iopDataPeer_t dataPeer;     // data owner, peer sourcing this data
+    uint16_t irdSz;             // the number of expected bytes (sockets: reported by BGx IRD message)
+    bool dataReady;             // EOT (End-Of-Transmission) reached, either # of expected bytes received or EOT char sequence detected
+} iopBuffer_t;
 
 
 typedef struct iopTxCtrlBlock_tag
 {
-    //bool txActive;
     char *txBuf;
     char *chunkPtr;
     size_t remainSz;
@@ -86,48 +110,19 @@ typedef struct iopTxCtrlBlock_tag
 #define IOP_TX_ACTIVE() g_ltem1->iop->txCtrl->remainSz > 0
 
 
-typedef enum iopRdsMode_tag
-{
-    iopProtoDataMode_idle = 0,
-    iopProtoDataMode_irdBytes = 1,
-    iopProtoDataMode_eotPhrase = 2
-} iopProtoDataMode_t;
-
-
-typedef struct iopRxCtrlBlock_tag
-{
-    iopProcess_t process;
-    char primBuf[65];
-    char *primBufData;
-    uint8_t primDataSz;
-    bool rmtHostInData;
-    char *extsnBufHead;
-    char *extsnBufTail;
-    bool dataReady;
-} iopRxCtrlBlock_t;
-
-
 /* head and tail reference incoming (head) and outgoing (tail). 
  * IOP loads head, consumers read from tail
 */
 typedef struct iop_tag
 {
-    uint8_t rxHead;                                     // rxCtrlBlk recv Head (queue in)
-    uint8_t rxTail;
-    uint8_t cmdHead;                                    // cmd processor Head (queue in)
-    uint8_t cmdTail;                                    // cmd processor consumer (queue out)
-    uint8_t socketHead[IOP_SOCKET_COUNT];   
-    uint8_t socketTail[IOP_SOCKET_COUNT];
     cbuf_t *txBuf;                                      // transmit buffer (there is just one)
-    iopProtoDataMode_t protoDataMode;                   // data complete: bytes or EOT phrase (end-of-transmission)
-    uint8_t protoDataSocket;                            // socket number receiving data
-    uint8_t protoDataRxCtrlBlk;                         // control blk managing receive 
-    uint16_t protoDataBytes;                            // remaining bytes (if mode is bytes)
-    char protoDataEOTPhrase[5];                         // end of transmission signal phrase
-    uint8_t protoDataEOTSz;                             // characters expected in EOT phrase
-    iopRxCtrlBlock_t rxCtrlBlks[IOP_RXCTRLBLK_COUNT];   // receive control blocks, structured buffers
-    char urcStateMsg[IOP_URC_STATEMSG_SZ];              // unsolicited response condition, asynch state change
+    iopBuffer_t *rxCmdBuf;                              // command receive buffer, this is the default RX buffer
+    iopDataPeer_t rxDataPeer;                           // protocol data source: if no peer, IOP is in command mode
+    uint8_t rxDataBufIndx;                              // data goes into this slot rxDataBufs
+    iopBuffer_t *rxDataBufs[IOP_RX_DATABUFFERS_MAX];    // the data buffers (smart buffer structs)
+    peerTypeMap_t peerTypeMap;                          // map of possible IOP peers, used to optimise ISR string scanning
 } iop_t;
+
 
 
 #ifdef __cplusplus
@@ -137,17 +132,19 @@ extern "C"
 
 
 iop_t *iop_create();
+
 void iop_start();
 void iop_awaitAppReady();
 
-void iop_txSend(const char *sendData, uint16_t sendSz, bool deferTx);
-actionResult_t iop_txDataPromptParser(const char *response);
+void iop_txSend(const char *sendData, uint16_t sendSz, bool sendImmediate);
+void iop_rxParseImmediate();
+void iop_resetCmdBuffer();
 
-iopXfrResult_t iop_rxGetCmdQueued(char *recvData, uint16_t recvSz);
-uint16_t iop_rxGetSocketQueued(socketId_t socketId, char **data, char *rmtHost, char *rmtPort);
-void iop_tailFinalize(socketId_t socketId);
-void iop_recvDoWork();
+resultCode_t iop_txDataPromptParser(const char *response, char **endptr);
 
+// iopXfrResult_t iop_rxGetCmdQueued(char *recvData, uint16_t recvSz);
+// uint16_t iop_rxGetSocketQueued(socketId_t socketId, char **data, char *rmtHost, char *rmtPort);
+// void iop_tailFinalize(socketId_t socketId);
 
 #ifdef __cplusplus
 }

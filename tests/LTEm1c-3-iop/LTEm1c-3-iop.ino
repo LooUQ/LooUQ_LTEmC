@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEm1-test3-iop.ino
+ *  \file LTEm1c-3-iop.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -38,8 +38,6 @@
 
 // test environment
 const int APIN_RANDOMSEED = 7;
-// no reference to driver global g_ltem1, need a surrogate here to test without
-ltem1Device_t *ltem1;
 
 
 void setup() {
@@ -52,7 +50,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor_none, "LTEm1c test3-iop\r\n");          // same as color=0
+    PRINTF(dbgColor_none, "LTEm1c Test: 3-iop\r\n");          // same as color=0
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
     randomSeed(analogRead(APIN_RANDOMSEED));
@@ -62,57 +60,31 @@ void setup() {
     PRINTF(dbgColor_info, "LTEm1 Initialized: FreeMem=%u\r\n", getFreeMemory());
 }
 
-
 int loopCnt = 0;
-#define RESPONSE_BUF_SZ 80                                  // set to < 91 to test truncated warning for long response
 
-void loop() {
+void loop() 
+{
     uint8_t regValue = 0;
-    //char cmd[] = "AT+GSN\r\0";                            // short response (contained in 1 rxCtrlBlock)
-    char cmd[] = "at+cgpaddr\r\0";                        // long response (requires multiple rxCtrlBlocks)
-    //char cmd[] = "AT+QPOWD\r\0";                          // something is wrong! Is is rx or tx (tx works if BG powers down)
+    // char cmd[] = "AT+GSN\r\0";                           // short response (contained in 1 rxCtrlBlock)
+    char cmd[] = "AT+GSN;+QCCID;+GSN;+QCCID\r\0";           // long response (requires multiple rxCtrlBlocks)
+    // char cmd[] = "at+cgpaddr\r\0";                       // long response (requires multiple rxCtrlBlocks)
+    // char cmd[] = "AT+QIDNSGIP=1,\"www.loouq.com\"\r\0";
+    // char cmd[] = "AT+QPOWD\r\0";                         // something is wrong! Is is rx or tx (tx works if BG powers down)
     PRINTF(0, "Invoking cmd: %s \r\n", cmd);
 
-    sendCommand(cmd);
+    iop_resetCmdRespBuffer();                               // send command
+    iop_txSend(cmd, strlen(cmd), false);
+    PRINTF(0, "CmdSent\r\n");
 
-    // wait for BG96 response in FIFO buffer
-    char cmdResponse[RESPONSE_BUF_SZ + 1] = {0};
-    recvResponse(cmdResponse, RESPONSE_BUF_SZ);
+    timing_delay(100);                                      // give BGx time to respond
+    // timing_delay(5000);                                  // give BGx time to respond, longer for network
 
-    PRINTF(0, "Got %d chars\r", strlen(cmdResponse));
-    PRINTF(0, "Resp: %s\r", cmdResponse);  
+    int len = strlen(g_ltem1->iop->rxCmdBuf->buffer);
+    PRINTF(dbgColor_green, "Got %d chars (so far)\r", len);
+    PRINTF(dbgColor_cyan, "Resp: %s\r", g_ltem1->iop->rxCmdBuf->buffer);  
 
     loopCnt ++;
     indicateLoop(loopCnt, 1000);      // BG reference says 300mS cmd response time, we will wait 1000
-}
-
-
-/*
-========================================================================================================================= */
-
-
-void sendCommand(const char* cmd)
-{
-    iop_txSend(cmd, strlen(cmd), false);
-    
-    PRINTF(0, "CmdSent\r\n");
-}
-
-
-
-void recvResponse(char *response, uint16_t responseBufSz)
-{
-    iopXfrResult_t rxResult;
-    uint8_t retries;
-    do
-    {
-        rxResult = iop_rxGetCmdQueued(response, responseBufSz);
-        timing_delay(25);
-        retries++;
-    } while (rxResult == iopXfrResult_incomplete && retries < 100);
-
-    if (rxResult == iopXfrResult_truncated)
-        PRINTF(dbgColor_warn, "Command response truncated!\r");
 }
 
 

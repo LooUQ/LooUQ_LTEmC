@@ -62,18 +62,19 @@ spiConfig_t ltem1_spiConfig =
   csPin : ltem1_pinConfig.spiCsPin
 };
 
-
+// replace with actual Azure IOTHUB device values  (changed before push)
 #define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
 #define MQTT_PORT 8883
 
+//"HostName=iothub-dev-pelogical.azure-devices.net;DeviceId=e8fdd7df-2ca2-4b64-95de-031c6b199299;SharedAccessSignature=SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=XbjrqvX4kQXOTefJIaw86jRhfkv1UMJwK%2FFDiWmfqFU%3D&se=1759244275"
+
 #define MQTT_IOTHUB_DEVICEID "e8fdd7df-2ca2-4b64-95de-031c6b199299"
 #define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30"
-#define MQTT_IOTHUB_SASTOKEN "sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=emdhUPTjoiV93FrjE5DaYn%2FObaOcK6yvDsMNrr4xidc%3D&se=3157437672"
+#define MQTT_IOTHUB_SASTOKEN "sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=XbjrqvX4kQXOTefJIaw86jRhfkv1UMJwK%2FFDiWmfqFU%3D&se=1759244275"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#"
 #define MQTT_MSG_PROPERTIES "mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97"
-
 
 
 // test setup
@@ -100,16 +101,19 @@ void setup() {
     PRINTF(dbgColor_white, "\rLTEm1c test8-MQTT\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
 
-    ltem1_create(&ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
+    ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
+
+    // mqtt is optional and not created with base ltem1 device
     mqtt_create();
 
     PRINTF(dbgColor_none, "Waiting on network...\r");
-    networkOperator_t networkOp = ntwk_awaitNetworkOperator(30000);
-    ASSERT_NOTEMPTY(networkOp.operName, "Get operator failed.");
+    networkOperator_t networkOp = ntwk_awaitOperator(30000);
+    if (strlen(networkOp.operName) == 0)
+        indicateFailure("Timout (30s) waiting for cellular network.");
     PRINTF(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     socketResult_t result = ntwk_fetchDataContexts();
-    if (result == ACTION_RESULT_NOTFOUND)
+    if (result == RESULT_CODE_NOTFOUND)
     {
         ntwk_activateContext(DEFAULT_NETWORK_CONTEXT);
     }
@@ -117,43 +121,53 @@ void setup() {
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
     */
 
-    ASSERT(mqtt_open(mqttConnectionId, MQTT_IOTHUB, MQTT_PORT, sslVersion_tls12, mqttVersion_311) == ACTION_RESULT_SUCCESS, "MQTT open failed.");
-    ASSERT(mqtt_connect(mqttConnectionId, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN) == ACTION_RESULT_SUCCESS,"MQTT connect failed.");
-    ASSERT(mqtt_subscribe(mqttConnectionId, MQTT_IOTHUB_C2D_TOPIC, mqttQos_0, mqttReceiver) == ACTION_RESULT_SUCCESS, "MQTT subscribe to IoTHub C2D messages failed.");
-
-    // force send at start
-    lastCycle = timing_millis() + 2*CYCLE_INTERVAL;
+    ASSERT(mqtt_open(MQTT_IOTHUB, MQTT_PORT, sslVersion_tls12, mqttVersion_311) == RESULT_CODE_SUCCESS, "MQTT open failed.");
+    ASSERT(mqtt_connect(MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN, mqttSession_cleanStart) == RESULT_CODE_SUCCESS,"MQTT connect failed.");
+    ASSERT(mqtt_subscribe(MQTT_IOTHUB_C2D_TOPIC, mqttQos_1, mqttReceiver) == RESULT_CODE_SUCCESS, "MQTT subscribe to IoTHub C2D messages failed.");
 }
 
 
+bool testPublish = true;
 
 void loop() 
 {
     if (timing_millis() - lastCycle >= CYCLE_INTERVAL)
     {
         lastCycle = timing_millis();
-        PRINTF(dbgColor_white, "\rLoop=%i>>\r", loopCnt);
 
-        snprintf(mqttTopic, 200, "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97", loopCnt);
-        snprintf(mqttMessage, 200, "MQTT message for loop=%d", loopCnt);
-        mqtt_publish(mqttConnectionId, mqttTopic, mqttQos_0, mqttMessage);
+        if (testPublish)
+        {
+            snprintf(mqttTopic, 200, "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97", loopCnt);
+            snprintf(mqttMessage, 200, "MQTT message for loop=%d", loopCnt);
+            mqtt_publish(mqttTopic, mqttQos_1, mqttMessage);
+        }
+        else
+            PRINTF(dbgColor_info, "Publish skipped, disabled\r");
 
         loopCnt++;
-        PRINTF(dbgColor_dMagenta, "\rFreeMem=%u  ", getFreeMemory());
-        PRINTF(dbgColor_dMagenta, "<<Loop=%d\r", loopCnt);
+        PRINTF(dbgColor_magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
     }
 
-    /*
-     * NOTE: ltem1_doWork() pipeline requires up to 3 invokes for each data receive. DoWork has no side effects 
-     * other than taking time and should be invoked liberally.
-     */
+    /* NOTE: ltem1_doWork() pipeline requires up to 3 invokes for each data receive. DoWork has no side effects 
+     * other than taking time and should be invoked liberally. */
     ltem1_doWork();
 }
 
 
-void mqttReceiver(socketId_t socketId, const char * topic, const char * message)
+void mqttReceiver(char *topic, char *topicProps, char *message)
 {
-    PRINTF(dbgColor_info, "mqttMsg for topic: %s, is:%s @tick=%d\r", topic, message, timing_millis());
+    PRINTF(dbgColor_info, "\r**MQTT--MSG** @tick=%d\r", timing_millis());
+    PRINTF(dbgColor_cyan, "t(%d): %s\r", strlen(topic), topic);
+    PRINTF(dbgColor_cyan, "p(%d): %s\r", strlen(topicProps), topicProps);
+    PRINTF(dbgColor_cyan, "m(%d): %s\r", strlen(message), message);
+
+    mqttMsgProps_t mqttProps = mqtt_parseTopicProperties(topicProps);
+    PRINTF(dbgColor_info, "Props(%d)\r", mqttProps.count);
+    for (size_t i = 0; i < mqttProps.count; i++)
+    {
+        PRINTF(dbgColor_cyan, "%s=%s\r", mqttProps.names[i], mqttProps.values[i]);
+    }
+    PRINTF(0, "\r");
 }
 
 

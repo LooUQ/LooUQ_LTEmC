@@ -26,36 +26,18 @@
  * subsystem in the driver which multiplexes the command and protocol streams.
  *****************************************************************************/
 
+#define HOST_FEATHER_UXPLOR
+#include <platform_pins.h>
 #include <ltem1c.h>
 
 #define _DEBUG
-#include "platform/platform_stdio.h"
+#include "dbgprint.h"
+//#define USE_SERIAL 0
 
 const int APIN_RANDOMSEED = 0;
 
-ltem1PinConfig_t ltem1_pinConfig =
+void setup() 
 {
-  spiCsPin : 13,
-  irqPin : 12,
-  statusPin : 6,
-  powerkeyPin : 11,
-  resetPin : 19,
-  ringUrcPin : 5,
-  wakePin : 10
-};
-
-spiConfig_t ltem1_spiConfig = 
-{
-  dataRate : 2000000U,
-  dataMode : spiDataMode_0,
-  bitOrder : spiBitOrder_msbFirst,
-  csPin : ltem1_pinConfig.spiCsPin
-};
-
-ltem1Device_t *ltem1;
-
-
-void setup() {
     #ifdef USE_SERIAL
         Serial.begin(115200);
         #if (USE_SERIAL)
@@ -70,13 +52,14 @@ void setup() {
     
     randomSeed(analogRead(APIN_RANDOMSEED));
 
-    ltem1_create(&ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_actions);
+    ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_actions);
 }
 
 
 int loopCnt = 0;
 
-void loop() {
+void loop() 
+{
     /* BG96 test pattern: get mfg\model
     *
     *  ATI
@@ -90,30 +73,33 @@ void loop() {
 
     uint8_t regValue = 0;
     char cmdStr[] = "ATI\r\0";
-    char response[ACTION_DEFAULT_RESPONSE_SZ] = {0};
     PRINTF(dbgColor_none, "Invoking cmd: %s \r\n", cmdStr);
 
-    action_tryInvoke(cmdStr, false);
-
-    actionResult_t atResult = action_awaitResult(response, ACTION_DEFAULT_RESPONSE_SZ, 0, NULL);
-    
-    if (atResult == ACTION_RESULT_SUCCESS)    // statusCode == 200
+    if (action_tryInvoke(cmdStr))
     {
-        PRINTF(dbgColor_info, "Got %d chars\r", strlen(response));
-        PRINTF(dbgColor_cyan, "Resp: %s\r", response);  
+        actionResult_t atResult = action_awaitResult(false);
+        
+        if (atResult.statusCode == RESULT_CODE_SUCCESS)         // statusCode == 200 (similar to HTTP codes)
+        {
+            PRINTF(dbgColor_info, "Got %d chars\r", strlen(atResult.response));
+            PRINTF(dbgColor_cyan, "Resp: %s\r", atResult.response);
 
-        // test response v. expected 
-        char* validResponse = "\r\nQuectel";
-        uint8_t responseTest = strncmp(validResponse, response, strlen(validResponse)); 
+            // test response v. expected 
+            char* validResponse = "\r\nQuectel";
+            uint8_t responseTest = strncmp(validResponse, atResult.response, strlen(validResponse)); 
 
-        if (responseTest != 0)
-            indicateFailure("Unexpected command response... failed."); 
+            if (responseTest != 0)
+                indicateFailure("Unexpected command response... failed."); 
+        }
+        else
+        {
+            PRINTF(dbgColor_error, "atResult=%d \r", atResult);
+            // indicateFailure("Unexpected command response... failed."); 
+        }
+        action_close();                                         // done with response, close action and release action lock
     }
     else
-    {
-        PRINTF(dbgColor_error, "atResult=%d \r", atResult);
-        // indicateFailure("Unexpected command response... failed."); 
-    }
+        PRINTF(dbgColor_warn, "Unable to get action lock.\r");
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -124,17 +110,17 @@ void loop() {
 ========================================================================================================================= */
 
 
-void recvResponse(char *response)
-{
-    iopXfrResult_t rxResult;
-    uint8_t retries;
-    do
-    {
-        rxResult = iop_rxGetCmdQueued(response, 65);
-        timing_delay(100);
-        retries++;
-    } while (rxResult == iopXfrResult_incomplete && retries < 5);
-}
+// void recvResponse(char *response)
+// {
+//     iopXfrResult_t rxResult;
+//     uint8_t retries;
+//     do
+//     {
+//         rxResult = iop_rxGetCmdQueued(response, 65);
+//         timing_delay(100);
+//         retries++;
+//     } while (rxResult == iopXfrResult_incomplete && retries < 5);
+// }
 
 
 

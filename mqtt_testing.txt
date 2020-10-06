@@ -1,0 +1,49 @@
+
+
+
+AT+QSSLCFG="sslversion",5,3
+AT+QMTCFG="ssl",5,1,5
+AT+QMTCFG="version",5,4
+
+
+AT+QMTOPEN=5,"iothub-dev-pelogical.azure-devices.net",8883
+AT+QMTCONN=5,"e8fdd7df-2ca2-4b64-95de-031c6b199299","iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30","SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=rLhCR1bmTMVOZGfreq3vYuUX9HsCRyEF7lAq3%2FqNptg%3D&se=1602770259"
+
+r
+
+AT+QMTSUB=5,99,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#",0
+
+AT+QMTUNS=5,99,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#"
+
+AT+QMTPUB=5,0,0,0,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/mId=~1&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:0.02"
+
+
+AT+QMTDISC=5
+AT+QMTCLOSE=5
+
+
+AT+QMTCONN?
+AT+QMTOPEN?
+
+
+#define MQTT_IOTHUB_C2D_TOPIC "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#"
+
+"299/messages/devicebound/%24.mid=c9d78c63-a995-491f-b5ec-1d99d7cb9acd&%24.to=%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299%2Fmessages%2Fdevicebound\",\"10/2/2020, 10:37:59 AM - test_c2d\"\r\n"
+
+"299/messages/devicebound/$.mid=c9d78c63-a995-491f-b5ec-1d99d7cb9acd&$.to=/devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound\",\"10/2/2020, 10:37:59 AM - test_c2d\"\r\n"
+
+"299/messages/devicebound/
+$.mid=c9d78c63-a995-491f-b5ec-1d99d7cb9acd&
+$.to=/devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound\",\"10/2/2020, 10:37:59 AM - test_c2d\"\r\n"
+
+
+
+
+0x20001e90 "299/messages/devicebound/$.mid=08b36255-78f2-4673-a1c4-c370d048e642&$.to=/devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound&customProp=12345\",\"test_c2d\"\r\n"
+
+
+0x20001d84 "+QMTRECV: 5,0,\"devices/e8fdd7df-2ca2-4b64-95de-031c6b199"
+
+devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/$.mid=79ac174d-baf6-43ad-b6ee-5d048ad6b7d2&$.to=/devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/d
+
+.mid=59b4650c-ac57-4d64-97e8-52d256f6cfd0&$.to=/devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound
