@@ -1,22 +1,19 @@
 \mainpage
-# Circuit River - LTEm1c 
-
-LooUQ Circuit River
-LTEm1 modem driver implemented in C99 for portability and a small footprint.
-
+# Circuit River - LTEm1c
 ## Release Status: v0.3 (release candidate)
-----
+
+LTEm1 modem driver implemented in C99 for portability and a small footprint.
 
 The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LTEm1 is designed to allow for cost-effective cellular communications in embedded systems by supporting LTE CAT-M1 and LTE CAT-NB1 (NB-IOT) communications. The LTEm1 is certified for use on the Verizon network and a registered device for the T-Mobile (formerly Sprint) Curiosity Network. It is also fully tested and supported using Hologram SIMs.
 
-## Getting Started
-*1st off, thanks for taking a look at the LTEm1 hardware and LTEm1c software!*
+**1st off, thanks for taking a look at the LTEm1 hardware and LTEm1c software!**
 
-The best way to get started understanding LTEm1c and considering it for your projects *today* is to look at the tests folder in the repository. This will be supplemented in the coming weeks. Working on getting doxygen documentation available soon and some real world example projects. The tests folder contains a series of progressive LTEm1c tests. Starting with simple platform I/O verification, thru MQTT protocol support. Each test builds on a succesful previous level test.
+## Getting Started
+The best way to get started understanding LTEm1c and considering it for your projects **today** is to look at the tests folder in the repository. This will be supplemented in the coming weeks. We are working on getting the source code documented with a more complete suite of *doxygen* markdown tags. We are also adding a couple real world example projects soon. The tests folder contains a series of progressive LTEm1c tests. Starting with simple platform I/O verification, thru MQTT protocol support. Each test builds on a succesful previous level test. Each test can serve as a template for you to start your implementation from.
 
 Each test shows the process for initializing, starting services, and a loop exercising the functionality of the subsystem under test.
 
-### LTEm1 Subsystems
+### LTEm1c Subsystems
 | Subsystem | Functions |
 | ---------  | --------- |
 | *action_* | Handles invoking AT commands to the modem's module and handling response parsing. Supports variable command timeouts, thread safety and completion determination. Results are presented in a simple STRUCT with a HTTP type status code, along with the detail string response  |
