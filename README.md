@@ -1,4 +1,3 @@
-\mainpage
 # Circuit River - LTEm1c 
 
 LooUQ Circuit River
