@@ -1,27 +1,13 @@
+\mainpage
 # Circuit River - LTEm1c 
 
 LooUQ Circuit River
 LTEm1 modem driver implemented in C99 for portability and a small footprint.
 
-## Pre-Release - v0.3 (release candidate)
+## Release Status: v0.3 (release candidate)
 ----
 
 The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LTEm1 is designed to allow for cost-effective cellular communications in embedded systems by supporting LTE CAT-M1 and LTE CAT-NB1 (NB-IOT) communications. The LTEm1 is certified for use on the Verizon network and a registered device for the T-Mobile (formerly Sprint) Curiosity Network. It is also fully tested and supported using Hologram SIMs.
-
-[LTEm1 Modem Specifications](https://loouq.github.io/resources/CTA-LTEM1_DataSheet.pdf)
-
-[LTEm1/LTEm1c FAQ](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/LTEm1-FAQ.md)
-
-[Version History](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/version-history.md)
-
-[LTEm1c Documentation](https://loouq.github.io/sites/ltem1c_doxy/html/index.html)
-
-----
-![](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/LTEm1c%20Stack.png)
-\image html "LTEm1c Stack.png"
-
-All of the core (blue) subsystems are functional. Extension subsystems (copper, with wide-borders) are optional and can be built into the application, or omitted to reduced code size. Grey boxes indicate future feature areas. 
-
 
 ## Getting Started
 *1st off, thanks for taking a look at the LTEm1 hardware and LTEm1c software!*
@@ -42,4 +28,15 @@ Each test shows the process for initializing, starting services, and a loop exer
 | *iop_* | Generally you won't directly interact with the iop_ subsystem. It performs the buffer management to/from hardware. It interfaces with the action_, sockets_, and mqtt_ subsystems to perform the necessary transfers.
 
 
-## Stay Tuned, Greg
+[LTEm1 Modem Specifications](https://loouq.github.io/resources/CTA-LTEM1_DataSheet.pdf)
+
+[LTEm1/LTEm1c FAQ](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/LTEm1-FAQ.md)
+
+[Version History](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/version-history.md)
+
+[LTEm1c Documentation](https://loouq.github.io/sites/ltem1c_doxy/html/index.html)
+
+----
+\image html "LTEm1c Stack.png"
+
+All of the core (blue) subsystems are functional. Extension subsystems (copper, with wide-borders) are optional and can be built into the application, or omitted to reduced code size. Grey boxes indicate future feature areas. 
