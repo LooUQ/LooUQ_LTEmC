@@ -31,7 +31,7 @@ Each test shows the process for initializing, starting services, and a loop exer
 | Subsystem | Functions |
 | ---------  | --------- |
 | *action_* | Handles invoking AT commands to the modem's module and handling response parsing. Supports variable command timeouts, thread safety and completion determination. Results are presented in a simple STRUCT with a HTTP type status code, along with the detail string response  |
-| *mdminfo* | Provides several common service functions for understanding the state of the modem and the network connection |
+| *mdminfo_* | Provides several common service functions for understanding the state of the modem and the network connection |
 | *gnss_* | The LTEm1 has a true multi-constellation GNSS receiver (aka GPS is the US). The GNSS module provides support for accessing this functionality. |
 | *geo_* | The LTEm1 supports the creation of geo-fence outlines and monitoring of device positioning relative to the geo-fence boundary. Note: geo_ requires the gnss_ module be built into your project to use these functions. |
 | *sockets_* | This is the typical POSIX style sockets layer. Support if TCP\UDP\SSL clients are there. *Note:* server mode is not currently planned, all US networks I have worked with do not support incoming connections for cellular without add-on services like VPNs or other network constructs. I recommend alternatives to attempting direct connection to your device over cellular. |
