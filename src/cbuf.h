@@ -31,11 +31,14 @@
 
 #include <stdint.h>
 
+/** 
+ *  \brief Circular buffer for use in the transmit functions.
+*/
 typedef struct {
-    uint8_t * buffer;
-    int head;
-    int tail;
-    int maxlen;
+    uint8_t * buffer;       ///< The internal char buffer storing the text
+    int head;               ///< Integer offset to the position where the next char will be added (pushed).
+    int tail;               ///< Integer offset to the consumer position, where the next request will be sourced.
+    int maxlen;             ///< The total size of the buffer. 
 } cbuf_t;
 
 

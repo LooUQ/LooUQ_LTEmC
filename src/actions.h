@@ -13,25 +13,28 @@
 #define ACTION_RETRY_INTERVALmillis 100
 #define ACTION_TIMEOUT_DEFAULTmillis 500
 
+/** 
+ *  \brief Structure to control invocation and management of an AT command with the BGx module.
+*/
 typedef struct action_tag
 {
-    char cmdStr[IOP_TX_BUFFER_SZ];
-    bool isOpen;
-    unsigned long invokedAt;
-    // char *resultHead;
-    // char *resultTail;
-    // uint8_t resultSz;
-    uint16_t resultCode;                    // 0 is pending, otherwise ACTION_RESULT_* codes
-    char *response;
-    uint16_t timeoutMillis;
-    uint16_t (*taskCompleteParser_func)(const char *response, char **endptr);
+    char cmdStr[IOP_TX_BUFFER_SZ];      ///< AT command string to be passed to the BGx module.
+    bool isOpen;                        ///< True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
+    unsigned long invokedAt;            ///< Tick value at the command invocation, used for timeout detection.
+    uint16_t resultCode;                ///< HTML type response code, 0 is special "pending" status, see ACTION_RESULT_* codes.
+    char *response;                     ///< The response to the command received from the BGx.
+    uint16_t timeoutMillis;             ///< Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
+    uint16_t (*taskCompleteParser_func)(const char *response, char **endptr);   ///< Function to parse the response looking for completion.
 } action_t;
 
 
+/** 
+ *  \brief Result structure returned from a action request (await or get).
+*/
 typedef struct actionResult_tag
 {
-    resultCode_t statusCode;
-    char *response;
+    resultCode_t statusCode;            ///< The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
+    char *response;                     ///< The char c-string containing the full response from the BGx.
 } actionResult_t;
 
 

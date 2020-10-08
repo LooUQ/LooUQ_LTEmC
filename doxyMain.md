@@ -37,3 +37,12 @@ Each test shows the process for initializing, starting services, and a loop exer
 \image html "LTEm1c Stack.png"
 
 All of the core (blue) subsystems are functional. Extension subsystems (copper, with wide-borders) are optional and can be built into the application, or omitted to reduced code size. Grey boxes indicate future feature areas. 
+
+
+## Future Directions
+If you have an opinion on any of these functions and their applicability to your product\project please let LooUQ know. Send your thoughts to answers@loouq.com.
+* Power Management - Support for PSM, wake options, etc.
+* HTTP(S) - Support for HTTP client in driver (not using raw TCP)
+* FTP(S) - Support for FTP client in driver (not using raw TCP)
+* File System - Support for file storage on BGx via driver (BG96 has approx. 10MB available)
+* FOTA - Support for scheduled FOTA 

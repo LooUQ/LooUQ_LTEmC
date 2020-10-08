@@ -87,40 +87,51 @@ typedef struct peerTypeMap_tag       // remote data sources, 1 indicates active 
 } peerTypeMap_t;    
 
 
+/** 
+ *  \brief Struct for a IOP smart buffer. Contains the char buffer and controls to marshall data between IOP and consumer (cmd,sockets,mqtt,etc.).
+ * 
+ *  Head and tail reference incoming (head) and outgoing (tail). IOP loads head, consumers (commands,sockets,mqtt,etc.) read from tail.
+*/
 typedef struct iopBuffer_tag
 {
-    char *buffer;               // data buffer, does not change while used
-    char *bufferEnd;            // end of physical buffer
-    char *head;                 // fill (in)
-    char *prevHead;             // if the last chunk is copied or consumed immediately used to restore head
-    char *tail;                 // consumer (out)
-    iopDataPeer_t dataPeer;     // data owner, peer sourcing this data
-    uint16_t irdSz;             // the number of expected bytes (sockets: reported by BGx IRD message)
-    bool dataReady;             // EOT (End-Of-Transmission) reached, either # of expected bytes received or EOT char sequence detected
+    char *buffer;               ///< data buffer, does not change while used.
+    char *bufferEnd;            ///< end of physical buffer
+    char *head;                 ///< fill (in)
+    char *prevHead;             ///< if the last chunk is copied or consumed immediately used to restore head
+    char *tail;                 ///< consumer (out)
+    iopDataPeer_t dataPeer;     ///< data owner, peer sourcing this data
+    uint16_t irdSz;             ///< the number of expected bytes (sockets: reported by BGx IRD message)
+    bool dataReady;             ///< EOT (End-Of-Transmission) reached, either # of expected bytes received or EOT char sequence detected
 } iopBuffer_t;
 
 
+/** 
+ *  \brief Struct for a IOP transmit (TX) buffer control block. Tracks progress of chunk sends to LTEm1.
+ * 
+ *  LTEm1 SPI bridge works with chunks of ~64 bytes (actual transfers are usually 58 - 62 bytes). IOP abstracts SPI chunks from senders.
+*/
 typedef struct iopTxCtrlBlock_tag
 {
-    char *txBuf;
-    char *chunkPtr;
-    size_t remainSz;
+    char *txBuf;                ///< Pointer to the base address of the TX buffer. Fixed, doesn't change with operations.
+    char *chunkPtr;             ///< Pointer to the next "chunk" of data to send to modem.
+    size_t remainSz;            ///< Remaining number of bytes in buffer to send to modem.
 } iopTxCtrlBlock_t;
+
 
 #define IOP_TX_ACTIVE() g_ltem1->iop->txCtrl->remainSz > 0
 
 
-/* head and tail reference incoming (head) and outgoing (tail). 
- * IOP loads head, consumers read from tail
+/** 
+ *  \brief Struct for the IOP subsystem state. During initialization a pointer to this structure is reference in g_ltem1.
 */
 typedef struct iop_tag
 {
-    cbuf_t *txBuf;                                      // transmit buffer (there is just one)
-    iopBuffer_t *rxCmdBuf;                              // command receive buffer, this is the default RX buffer
-    iopDataPeer_t rxDataPeer;                           // protocol data source: if no peer, IOP is in command mode
-    uint8_t rxDataBufIndx;                              // data goes into this slot rxDataBufs
-    iopBuffer_t *rxDataBufs[IOP_RX_DATABUFFERS_MAX];    // the data buffers (smart buffer structs)
-    peerTypeMap_t peerTypeMap;                          // map of possible IOP peers, used to optimise ISR string scanning
+    cbuf_t *txBuf;                                      ///< transmit buffer (there is just one)
+    iopBuffer_t *rxCmdBuf;                              ///< command receive buffer, this is the default RX buffer
+    iopDataPeer_t rxDataPeer;                           ///< protocol data source: if no peer, IOP is in command mode
+    uint8_t rxDataBufIndx;                              ///< data goes into this slot rxDataBufs
+    iopBuffer_t *rxDataBufs[IOP_RX_DATABUFFERS_MAX];    ///< the data buffers (smart buffer structs)
+    peerTypeMap_t peerTypeMap;                          ///< map of possible IOP peers, used to optimise ISR string scanning
 } iop_t;
 
 

@@ -110,43 +110,54 @@ typedef uint16_t resultCode_t;
 #include "mqtt.h"
 
 
+/** 
+ *  \brief Enum representing the service functionality to turn-on during LTEm1 initialization.
+*/
 typedef enum 
 {
-    ltem1Functionality_stop = 0,
-    ltem1Functionality_base = 1,
-    ltem1Functionality_iop = 2,
-    ltem1Functionality_actions = 3,
-    ltem1Functionality_services = 4
+    ltem1Functionality_stop = 0,        ///< Default state, no services set to start.
+    ltem1Functionality_base = 1,        ///< Basic services only, GPIO, SPI Bridge, BGx
+    ltem1Functionality_iop = 2,         ///< Start IOP (Input/Output Processor)
+    ltem1Functionality_actions = 3,     ///< Start actions services (AT commands)
+    ltem1Functionality_services = 4     ///< Start application services (protocols: sockets[TCP\UDP\SSL], MQTT, HTTP, etc.)
 } ltem1Functionality_t;
 
 
+/** 
+ *  \brief Enum indicating desirec state for LTEm1 hardware power-state at initialization.
+*/
 typedef enum
 {
-    ltem1Start_powerOff = 0,
-    ltem1Start_powerOn = 1
+    ltem1Start_powerOff = 0,            ///< At initialization, leave LTEm1 powered down
+    ltem1Start_powerOn = 1              ///< At initialization, power LTEm1 ON
 } ltem1Start_t;
 
 
+/** 
+ *  \brief Struct representing the LTEm1c. The struct behind the g_ltem1 global variable with all driver controls.
+ * 
+ *  Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
+*/
 typedef struct ltem1Device_tag
 {
-    ltem1Functionality_t funcLevel;
-	ltem1PinConfig_t pinConfig;
-    spiDevice_t *spi;
-    qbgReadyState_t qbgReadyState;
-    uint8_t dataContext;
-    bool cancellationRequest;
-    volatile iop_t *iop;
-    action_t *action;
-	modemInfo_t *modemInfo;
-    network_t *network;
-	volatile sockets_t *sockets;
-    mqtt_t *mqtt;
+    ltem1Functionality_t funcLevel;     ///< Enum value indicating services enabled during ltem1c startup.
+	ltem1PinConfig_t pinConfig;         ///< GPIO pin configuration for required GPIO and SPI interfacing.
+    spiDevice_t *spi;                   ///< SPI device (methods signatures compatible with Arduino).
+    qbgReadyState_t qbgReadyState;      ///< Ready state of the BGx module
+    uint8_t dataContext;                ///< The primary APN context with the network carrier for application transfers.
+    bool cancellationRequest;           ///< For RTOS implementations, token to request cancellation of background operation.
+    volatile iop_t *iop;                ///< IOP subsystem controls.
+    action_t *action;                   ///< Action subsystem controls.
+	modemInfo_t *modemInfo;             ///< Data structure holding persistent information about application modem state.
+    network_t *network;                 ///< Data structure representing the cellular network.
+	volatile sockets_t *sockets;        ///< IP sockets subsystem (TCP\UDP\SSL).
+    mqtt_t *mqtt;                       ///< MQTT protocol subsystem.
 } ltem1Device_t;
 
 
-extern ltem1Device_t *g_ltem1;
-extern ltem1PinConfig_t FEATHER_BREAKOUT;
-extern ltem1PinConfig_t RPI_BREAKOUT;
+extern ltem1Device_t *g_ltem1;              ///< The LTEm1 "object", since this is C99 like the instance class.
+extern ltem1PinConfig_t FEATHER_BREAKOUT;   ///< obsolete
+extern ltem1PinConfig_t RPI_BREAKOUT;       ///< obsolete
 
 
 void ltem1_create(const ltem1PinConfig_t ltem1_config, ltem1Start_t ltem1Start, ltem1Functionality_t funcLevel);
