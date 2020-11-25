@@ -41,35 +41,41 @@
 #define QBG_RATSEQ_CATM1   "02"
 #define QBG_RATSEQ_NBIOT   "03"
 
+
+/** 
+ *  \brief Enum describing the current BGx module state.
+*/
 typedef enum
 {
-    qbg_readyState_powerOff = 0,
-    qbg_readyState_powerOn = 1,
-    qbg_readyState_appReady = 2
+    qbg_readyState_powerOff = 0,        ///< BGx is powered off, in this state all components on the LTEm1 are powered down.
+    qbg_readyState_powerOn = 1,         ///< BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
+    qbg_readyState_appReady = 2         ///< BGx is powered ON and ready for application/services.
 } qbgReadyState_t;
 
 
+/** 
+ *  \brief Enum describing the mode the BGx module is using to look for available networks (carriers).
+*/
 typedef enum
 {
-    qbg_nw_scan_mode_auto = 0U,
-    qbg_nw_scan_mode_gsmonly = 1U,
-    qbg_nw_scan_mode_lteonly = 3U
+    qbg_nw_scan_mode_auto = 0U,         ///< BGx is considering either GSM or LTE carrier connections.
+    qbg_nw_scan_mode_gsmonly = 1U,      ///< GSM only mode: BGx is filtering visible networks and only considering connections to GSM endpoints.
+    qbg_nw_scan_mode_lteonly = 3U       ///< LTE only mode: BGx is filtering visible networks and only considering connections to LTE endpoints.
 } qbg_nw_scan_mode_t;
 
 
+/** 
+ *  \brief Enum describing the available options for an IoT protocol when connecting to the network.
+*/
 typedef enum
 {
-    qbg_nw_iot_mode_m1 = 0U,
-    qbg_nw_iot_mode_nb1 = 1U,
-    qbg_nw_iot_mode_m1nb1 = 2U
+    qbg_nw_iot_mode_m1 = 0U,            ///< CAT-M1 only mode: BGx is filtering visible networks and only considering CAT-M1 connections.
+    qbg_nw_iot_mode_nb1 = 1U,           ///< NB-IOT only mode: BGx is filtering visible networks and only considering NB-IOT connections.
+    qbg_nw_iot_mode_m1nb1 = 2U          ///< The BGx will connect to either a CAT-M1 or NB-IOT network.
 } qbg_nw_iot_mode_t;
 
 
-// void qbg_create();
-// void qbg_destroy();
-
 void qbg_start();
-// void qbg_stop();
 
 void qbg_powerOn();
 void qbg_powerOff();

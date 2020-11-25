@@ -27,40 +27,23 @@
  * Uses Azure IoTHub and the LooUQ Cloud as server side
  *****************************************************************************/
 
-#include <ltem1c.h>
-#include <stdio.h>
+// define options for how to assemble this build
+#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// debugging options
+#define _DEBUG                          // enable/expand 
+// #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
+// #define Serial JlinkRtt
+#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
-#define _DEBUG
-#include "dbgprint.h"
+#include <ltem1c.h>
+
 
 #define DEFAULT_NETWORK_CONTEXT 1
 #define XFRBUFFER_SZ 201
 #define SOCKET_ALREADYOPEN 563
 
-
 #define ASSERT(expected_true, failMsg)  if(!(expected_true))  indicateFailure(failMsg)
 #define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') indicateFailure(failMsg)
-
-const int APIN_RANDOMSEED = 0;
-
-ltem1PinConfig_t ltem1_pinConfig =
-{
-  spiCsPin : 13,
-  irqPin : 12,
-  statusPin : 6,
-  powerkeyPin : 11,
-  resetPin : 19,
-  ringUrcPin : 5,
-  wakePin : 10
-};
-
-spiConfig_t ltem1_spiConfig = 
-{
-  dataRate : 2000000U,
-  dataMode : spiDataMode_0,
-  bitOrder : spiBitOrder_msbFirst,
-  csPin : ltem1_pinConfig.spiCsPin
-};
 
 // replace with actual Azure IOTHUB device values  (changed before push)
 #define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
@@ -88,17 +71,18 @@ socketId_t mqttConnectionId = 1;
 char mqttTopic[200];
 char mqttMessage[200];
 
+
 void setup() {
-    #ifdef USE_SERIAL
+    #ifdef SERIAL_OPT
         Serial.begin(115200);
-        #if (USE_SERIAL)
-        while (!Serial) {}
+        #if (SERIAL_OPT > 0)
+        while (!Serial) {}      // force wait for serial ready
         #else
-        delay(1000);
+        delay(5000);            // just give it some time
         #endif
     #endif
 
-    PRINTF(dbgColor_white, "\rLTEm1c test8-MQTT\r\n");
+    PRINTFC(dbgColor_white, "\rLTEm1c test8-MQTT\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
 
     ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
@@ -106,11 +90,11 @@ void setup() {
     // mqtt is optional and not created with base ltem1 device
     mqtt_create();
 
-    PRINTF(dbgColor_none, "Waiting on network...\r");
+    PRINTFC(dbgColor_none, "Waiting on network...\r");
     networkOperator_t networkOp = ntwk_awaitOperator(30000);
     if (strlen(networkOp.operName) == 0)
         indicateFailure("Timout (30s) waiting for cellular network.");
-    PRINTF(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
+    PRINTFC(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     socketResult_t result = ntwk_fetchDataContexts();
     if (result == RESULT_CODE_NOTFOUND)
@@ -142,10 +126,10 @@ void loop()
             mqtt_publish(mqttTopic, mqttQos_1, mqttMessage);
         }
         else
-            PRINTF(dbgColor_info, "Publish skipped, disabled\r");
+            PRINTFC(dbgColor_info, "Publish skipped, disabled\r");
 
         loopCnt++;
-        PRINTF(dbgColor_magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
+        PRINTFC(dbgColor_magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
     }
 
     /* NOTE: ltem1_doWork() pipeline requires up to 3 invokes for each data receive. DoWork has no side effects 
@@ -156,34 +140,29 @@ void loop()
 
 void mqttReceiver(char *topic, char *topicProps, char *message)
 {
-    PRINTF(dbgColor_info, "\r**MQTT--MSG** @tick=%d\r", timing_millis());
-    PRINTF(dbgColor_cyan, "t(%d): %s\r", strlen(topic), topic);
-    PRINTF(dbgColor_cyan, "p(%d): %s\r", strlen(topicProps), topicProps);
-    PRINTF(dbgColor_cyan, "m(%d): %s\r", strlen(message), message);
+    PRINTFC(dbgColor_info, "\r**MQTT--MSG** @tick=%d\r", timing_millis());
+    PRINTFC(dbgColor_cyan, "\rt(%d): %s", strlen(topic), topic);
+    PRINTFC(dbgColor_cyan, "\rp(%d): %s", strlen(topicProps), topicProps);
+    PRINTFC(dbgColor_cyan, "\rm(%d): %s", strlen(message), message);
 
-    mqttMsgProps_t mqttProps = mqtt_parseTopicProperties(topicProps);
-    PRINTF(dbgColor_info, "Props(%d)\r", mqttProps.count);
+    propsDict_t mqttProps = util_parseStringToPropsDict(topicProps);
+    PRINTFC(dbgColor_info, "\rProps(%d)\r", mqttProps.count);
     for (size_t i = 0; i < mqttProps.count; i++)
     {
-        PRINTF(dbgColor_cyan, "%s=%s\r", mqttProps.names[i], mqttProps.values[i]);
+        PRINTFC(dbgColor_cyan, "%s=%s\r", mqttProps.names[i], mqttProps.values[i]);
     }
-    PRINTF(0, "\r");
+    PRINTFC(0, "\r");
 }
-
-
 
 
 
 /* test helpers
 ========================================================================================================================= */
 
-
-
-
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
+	PRINTFC(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+    PRINTFC(dbgColor_error, "** Test Assertion Failed. \r\n");
     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
 
     int halt = 1;

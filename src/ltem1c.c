@@ -3,8 +3,8 @@
 
 #include "ltem1c.h"
 
-#define _DEBUG
-#include "dbgprint.h"
+// #define _DEBUG
+// #include "dbgprint.h"
 
 
 /* ------------------------------------------------------------------------------------------------
@@ -22,8 +22,9 @@ static void initIO();
 /**
  *	\brief Initialize the LTEm1 modem.
  *
- *	\param[in] ltem1_config The LTE modem gpio pin configuration.
- *  \param[in] funcLevel Determines the LTEm1 functionality to create and start.
+ *	\param [in] ltem1_config - The LTE modem gpio pin configuration.
+ *  \param [in] ltem1Start - Determines if the LTEm1 is power ON or OFF during start.
+ *  \param [in] funcLevel - Determines the LTEm1 functionality to create and start.
  */
 void ltem1_create(const ltem1PinConfig_t ltem1_config, ltem1Start_t ltem1Start, ltem1Functionality_t funcLevel)
 {
@@ -173,6 +174,7 @@ void ltem1_doWork()
 /**
  *	\brief Function of last resort, catestrophic failure Background work task runner. To be called in application Loop() periodically.
  * 
+ *  \param [in] statusCode - HTTP style result code, generally sourced from BGx response to an operation.
  *  \param [in] faultMsg - Message from origination about the fatal condition.
  */
 void ltem1_faultHandler(uint16_t statusCode, const char * faultMsg)

@@ -85,6 +85,7 @@ extern "C"
 
 #define RESULT_CODE_ERRORS_BASE   400
 #define RESULT_CODE_BADREQUEST    400
+#define RESULT_CODE_FORBIDDEN     403
 #define RESULT_CODE_NOTFOUND      404
 #define RESULT_CODE_TIMEOUT       408
 #define RESULT_CODE_CONFLICT      409
@@ -93,10 +94,13 @@ extern "C"
 // action_result_t should be populated with RESULT_CODE_x constant values or an errorCode (uint >= 400)
 typedef uint16_t resultCode_t;
 
+#include "platform/platform_debug.h"
 
+#include "platform/platform_pins.h"
 #include "platform/platform_gpio.h"
 #include "platform/platform_timing.h"
 #include "platform/platform_spi.h"
+
 #include "nxp_sc16is741a.h"
 #include "quectel_bg.h"
 #include "util.h"
@@ -156,6 +160,7 @@ typedef struct ltem1Device_tag
 
 
 extern ltem1Device_t *g_ltem1;              ///< The LTEm1 "object", since this is C99 like the instance class.
+extern char g_dbgBuffer[DBGBUFFER_SZ];      ///< global shared buffer for debug output
 extern ltem1PinConfig_t FEATHER_BREAKOUT;   ///< obsolete
 extern ltem1PinConfig_t RPI_BREAKOUT;       ///< obsolete
 

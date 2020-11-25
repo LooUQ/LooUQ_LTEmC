@@ -28,12 +28,17 @@
 
 #include "ltem1c.h"
 
+#define PROPS_DICT_CNT 12
+
 
 #define IP_DISPLAY(NUM_IP, STRING_IP) \
 char STRING_IP##[16]; \
 sprintf(STRING_IP, "%d.%d.%d.%d", NUM_IP##.octet[0] , NUM_IP##.octet[1], NUM_IP##.octet[2], NUM_IP##.octet[3]);
 
 
+/** 
+ *  \brief Union datatype to facilitate display and manipulation of an IPv4 address.
+*/
 union ip_addr_tag
 {
     uint8_t octet[4];
@@ -43,17 +48,35 @@ union ip_addr_tag
 typedef union ip_addr_tag ip_addr_t;
 
 
+/** 
+ *  \brief Struct exposing the properties collection (names and values as c-strings) for a received message.
+*/
+typedef struct propsDict_tag
+{
+    uint8_t count;                      ///< During parsing, how many properties (name/value pairs) were found.
+    char *names[PROPS_DICT_CNT];   ///< Array of property names.
+    char *values[PROPS_DICT_CNT];  ///< Array of property values (as c-strings). Application is responsible for any type conversion.
+} propsDict_t;
+
+
+
 #ifdef __cplusplus
 extern "C"
 {
 #endif // __cplusplus
 
-/* seems like the only survivor is strToken which is referenced in gnss and network modules, likely move to ltem1c.c and drop util.c */
 
+char *strToken(char *source, int delimiter, char *token, uint8_t tokenMax);
+
+propsDict_t util_parseStringToPropsDict(char *propsSrc);
+char *util_getPropValue(const char *propName, propsDict_t props);
+
+
+/* seems like the only survivor is strToken which is referenced in gnss and network modules, likely move to ltem1c.c and drop util.c */
 //ip_addr_t util_parseIpAddr(const char *ipStr);
 //void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision);
-char *strToken(char *source, int delimiter, char *token, uint8_t tokenMax);
 //const char *strlenSafe(const char *charStr, uint16_t maxSz);
+
 
 #ifdef __cplusplus
 }

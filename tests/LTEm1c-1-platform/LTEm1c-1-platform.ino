@@ -24,46 +24,49 @@
  ******************************************************************************
  * The test1-platformAbstraction.ino tests the LTEm1 for proper I/O operations 
  * via the driver's platform abstraction functions. GPIO, timing, SPI 
- * and PRINTF.
+ * and PRINTFC.
  * 
  * This sketch is designed to be console attached for observation of serial 
  * output.
  *****************************************************************************/
 
-#define HOST_FEATHER_UXPLOR
-#include <platform_pins.h>
+// define options for how to assemble this build
+#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// debugging options
+#define _DEBUG                          // enable/expand 
+// #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
+// #define Serial JlinkRtt
+#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
+
 #include <ltem1c.h>
 
-#define _DEBUG
-#include "dbgprint.h"
-//#define USE_SERIAL 0
-
-
-// test environment
-const int APIN_RANDOMSEED = 7;
-// no reference to driver global g_ltem1, need a surrogate spi here to test without
+// this test has no reference to global g_ltem1 variable
+// so we need a surrogate spi pointer here to test locally 
 spiDevice_t *spi; 
 
+
 void setup() {
-    #ifdef USE_SERIAL
+    #ifdef SERIAL_OPT
         Serial.begin(115200);
-        #if (USE_SERIAL)
-        while (!Serial) {}
+        #if (SERIAL_OPT > 0)
+        while (!Serial) {}      // force wait for serial ready
         #else
-        delay(5000);
+        delay(5000);            // just give it some time
         #endif
     #endif
 
-    PRINTF(0, "LTEm1 C Test1: platformBasic \r\n");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
-    PRINTF(0, "LED pin = %i \r\n", LED_BUILTIN);
+    Serial.print("From a serial print.");
 
-    randomSeed(analogRead(APIN_RANDOMSEED));
+    PRINTFC(0, "LTEm1c Test1: platformIO \r\n");
+    gpio_openPin(LED_BUILTIN, gpioMode_output);
+    PRINTFC(0, "LED pin = %i \r\n", LED_BUILTIN);
+
+    randomSeed(analogRead(7));          // use an open analog input to seed random
 
 	gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_low);
 	gpio_writePin(ltem1_pinConfig.resetPin, gpioValue_low);
 	gpio_writePin(ltem1_pinConfig.spiCsPin, gpioValue_high);
-	gpio_openPin(ltem1_pinConfig.powerkeyPin, gpioMode_output);		    // powerKey: normal low
+	gpio_openPin(ltem1_pinConfig.powerkeyPin, gpioMode_output);
 	gpio_openPin(ltem1_pinConfig.statusPin, gpioMode_input);
 	
     powerModemOn();
@@ -91,10 +94,10 @@ void loop() {
     txBuffer.lsb = testPattern;
     // rxBuffer.lsb doesn't matter prior to read
 
+    PRINTFC(0, "Writing scratchpad regiser with transferWord...");
     spi_transferWord(spi, txBuffer.val);
     rxBuffer.val = spi_transferWord(spi, rxBuffer.val);
 
-    PRINTF(0, "Writing scratchpad regiser with transferWord...");
     if (testPattern != rxBuffer.lsb)
         indicateFailure("Scratchpad write/read failed (transferWord)."); 
 
@@ -122,7 +125,7 @@ void powerModemOn()
 {
 	if (!gpio_readPin(ltem1_pinConfig.statusPin))
 	{
-		PRINTF(0, "Powering LTEm1 On...");
+		PRINTFC(0, "Powering LTEm1 On...");
 		gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_high);
 		timing_delay(QBG_POWERON_DELAY);
 		gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_low);
@@ -130,11 +133,11 @@ void powerModemOn()
 		{
 			timing_delay(500);
 		}
-		PRINTF(0, "DONE.\r\n");
+		PRINTFC(0, "DONE.\r\n");
 	}
 	else
 	{
-		PRINTF(0, "LTEm1 is already powered on.\r\n");
+		PRINTFC(0, "LTEm1 is already powered on.\r\n");
 	}
 }
 
@@ -145,9 +148,9 @@ void powerModemOn()
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(dbgColor_info, "Loop: %i \r\n", loopCnt);
-    PRINTF(dbgColor_info, "      Tx: %i \r\n", testPattern);
-    PRINTF(dbgColor_info, "      Rx: %i \r\n", rxBuffer.lsb);
+    PRINTFC(dbgColor_info, "Loop: %i \r\n", loopCnt);
+    PRINTFC(dbgColor_info, "      Tx: %i \r\n", testPattern);
+    PRINTFC(dbgColor_info, "      Rx: %i \r\n", rxBuffer.lsb);
 
     for (int i = 0; i < 6; i++)
     {
@@ -157,19 +160,19 @@ void indicateLoop(int loopCnt, int waitNext)
         timing_delay(50);
     }
 
-    PRINTF(dbgColor_magenta, "Free memory: %u \r\n", getFreeMemory());
-    PRINTF(0, "Next test in (millis): %i\r\n\r\n", waitNext);
+    PRINTFC(dbgColor_magenta, "Free memory: %u \r\n", getFreeMemory());
+    PRINTFC(0, "Next test in (millis): %i\r\n\r\n", waitNext);
     timing_delay(waitNext);
 }
 
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
+	PRINTFC(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+    PRINTFC(dbgColor_error, "** Test Assertion Failed. \r\n");
 
     int halt = 1;
-    PRINTF(dbgColor_error, "** Halting Execution \r\n");
+    PRINTFC(dbgColor_error, "** Halting Execution \r\n");
     while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);

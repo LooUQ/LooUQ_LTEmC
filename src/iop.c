@@ -29,7 +29,6 @@
 #include "ltem1c.h"
 
 #define _DEBUG
-#include "dbgprint.h"
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define IOP_RXCTRLBLK_ADVINDEX(INDX) INDX = (++INDX == IOP_RXCTRLBLK_COUNT) ? 0 : INDX

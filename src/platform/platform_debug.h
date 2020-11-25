@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file platform_pins.h
+ *  \file platform_debug.h
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -21,57 +21,41 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- *****************************************************************************
- * Psuedo-Header referenced ONLY by application after defining host. This in turn
- * creates an initialized ltem1_pinConfig variable.
  *****************************************************************************/
+#ifndef __PLATFORM_DEBUG_H__
+#define __PLATFORM_DEBUG_H__
 
 
-/* Add one of the host board defines from the list below to configure your LTEm1 connection. 
- * To extend, define your connections in a new ltem1PinConfig_t initialization and give it a name.
+#define DBGBUFFER_SZ 120
 
-#define HOST_FEATHER_UXPLOR
-#define HOST_FEATHER_BASIC
-#define HOST_RASPI_UXPLOR
-*/
-
-#include "platform/platform_gpio.h"
-
-#ifdef HOST_FEATHER_UXPLOR
-ltem1PinConfig_t ltem1_pinConfig =
-{
-  spiCsPin : 13,
-  irqPin : 12,
-  statusPin : 6,
-  powerkeyPin : 11,
-  resetPin : 10,
-  ringUrcPin : 0,
-  wakePin : 0
-};
+#ifdef _DEBUG
+    #ifdef JLINK_RTT
+    #include <jlink_rtt.h>
+    // #define Serial JlinkRtt
+    #define PRINTFC(c_, f_, ...) rtt_printf((rtt_color_t)c_, (f_), ##__VA_ARGS__)
+    #define PRINTF(c_, f_, ...) rtt_printf((rtt_color_t)c_, (f_), ##__VA_ARGS__)
+    #else
+    #define PRINTF(c_, f_, ...) dbg_print((f_), ##__VA_ARGS__)
+    #define PRINTFC(c_, f_, ...) dbg_print((f_), ##__VA_ARGS__)
+    #endif
+#else
+#define PRINTF(c_, f_, ...) ;
+#define PRINTFC(c_, f_, ...) ;
 #endif
 
-#ifdef HOST_FEATHER_BASIC
-ltem1PinConfig_t ltem1_pinConfig =
-{
-  spiCsPin : 13,
-  irqPin : 12,
-  statusPin : 6,
-  powerkeyPin : 11,
-  resetPin : 19,
-  ringUrcPin : 5,
-  wakePin : 10
-};
-#endif
 
-#ifdef HOST_RASPI_UXPLOR
-ltem1PinConfig_t ltem1_pinConfig = 
+
+#ifdef __cplusplus
+extern "C"
 {
-	.spiCsPin = 0, 			//< J8_24
-	.irqPin = 22U,		    //< J8_15
-	.statusPin = 13U,		//< J8_22
-	.powerkeyPin = 24U,		//< J8_18
-	.resetPin = 23U,		//< J8_16
-	.ringUrcPin = 0,
-    .wakePin = 0
-};
-#endif
+#endif // __cplusplus
+
+
+void dbg_print(const char *msg, ...);
+
+
+#ifdef __cplusplus
+}
+#endif // __cplusplus
+
+#endif  /* !__PLATFORM_DEBUG_H__ */

@@ -35,7 +35,7 @@
 #define HOST_RASPI_UXPLOR
 */
 
-#include "platform/platform_gpio.h"
+#include "platform_gpio.h"
 
 #ifdef HOST_FEATHER_UXPLOR
 ltem1PinConfig_t ltem1_pinConfig =

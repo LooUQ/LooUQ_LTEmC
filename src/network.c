@@ -9,7 +9,7 @@
 #include "ltem1c.h"
 
 //#define _DEBUG
-#include "dbgprint.h"
+//#include "dbgprint.h"
 
 
 #define PROTOCOLS_CMD_BUFFER_SZ 80

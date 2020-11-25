@@ -41,25 +41,33 @@
 typedef uint8_t socketId_t; 
 typedef uint16_t socketResult_t;
 
+/** 
+ *  \brief typedef for the socket services data receiver function. Connects sockets to the applicatoin (receive).
+*/
 typedef void (*receiver_func_t)(socketId_t scktId, void *data, uint16_t dataSz);
 
 
+/** 
+ *  \brief Struct representing the state of a TCP\UDP\SSL socket connection.
+*/
 typedef struct socketCtrl_tag
 {
-    protocol_t protocol;            // application public protocol: UDP/TCP/SSL/HTTP/MQTT etc.
-    socketId_t socketId;            // socket number
-    bool open;                      // has the application opened this socket
-    bool dataPending;               // BGx reported data pending
-    uint8_t dataBufferIndx;         // buffer indx holding data 
-    uint8_t pdpContextId;
-    receiver_func_t receiver_func;
+    protocol_t protocol;            ///< Socket's protocol : UDP\TCP\SSL.
+    socketId_t socketId;            ///< Socket ID/number.
+    bool open;                      ///< Is the socket in an open state.
+    bool dataPending;               ///< The data pipeline has data (or the likelihood of data), triggered when BGx reports data pending (URC "recv").
+    uint8_t dataBufferIndx;         ///< buffer indx holding data 
+    uint8_t pdpContextId;           ///< Which network context is this data flow associated with.
+    receiver_func_t receiver_func;  ///< Data receive function for socket data. This func is invoked for every receive event.
 } socketCtrl_t;
 
 
+/** 
+ *  \brief Struct representing the sockets service.
+*/
 typedef struct sockets_tag
 {
-    socketCtrl_t socketCtrls[LTEM1_SOCKET_COUNT];
-
+    socketCtrl_t socketCtrls[LTEM1_SOCKET_COUNT];   ///< Array of socket connections.
 } sockets_t;
 
 

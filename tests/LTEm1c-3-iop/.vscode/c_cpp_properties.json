@@ -9,12 +9,15 @@
                 "C:/Users/GregTerrell/AppData/Local/Arduino15/packages/arduino/tools/arm-none-eabi-gcc/7-2017q4/lib/gcc/arm-none-eabi/7.2.1/include-fixed",
                 "C:/Users/GregTerrell/AppData/Local/Arduino15/packages/arduino/tools/CMSIS-Atmel/1.2.0/CMSIS/Device/ATMEL",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.6.2\\**",
-                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\tools\\**"
+                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\tools\\**",
+                "C:\\Program Files (x86)\\Arduino\\libraries\\**",
+                "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\**"
             ],
             "defines": [
                 "_DEBUG",
                 "UNICODE",
-                "_UNICODE"
+                "_UNICODE",
+                "USBCON"
             ],
             "windowsSdkVersion": "10.0.18362.0",
             "compilerPath": "C:/Users/GregTerrell/AppData/Local/Arduino15/packages/arduino/tools/arm-none-eabi-gcc/7-2017q4/bin/arm-none-eabi-g++.exe",

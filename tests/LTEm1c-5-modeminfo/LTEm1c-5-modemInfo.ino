@@ -24,30 +24,31 @@
  ******************************************************************************
  * Test a collection of canned cmds that return modem information.
  *****************************************************************************/
-#define HOST_FEATHER_UXPLOR
-#include <platform_pins.h>
+
+// define options for how to assemble this build
+#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// debugging options
+#define _DEBUG                          // enable/expand 
+// #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
+// #define Serial JlinkRtt
+#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
+
 #include <ltem1c.h>
 
-#define _DEBUG
-#include "dbgprint.h"
-//#define USE_SERIAL 0
-
-const int APIN_RANDOMSEED = 0;
-
 void setup() {
-    #ifdef USE_SERIAL
+    #ifdef SERIAL_OPT
         Serial.begin(115200);
-        #if (USE_SERIAL)
-        while (!Serial) {}
+        #if (SERIAL_OPT > 0)
+        while (!Serial) {}      // force wait for serial ready
         #else
-        delay(1000);
+        delay(5000);            // just give it some time
         #endif
     #endif
 
-    PRINTF(dbgColor_none, "LTEm1c test5-modemInfo\r\n");
+    PRINTFC(dbgColor_none, "LTEm1c test5-modemInfo\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
-    randomSeed(analogRead(APIN_RANDOMSEED));
+    randomSeed(analogRead(0));
 
     ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_actions);
 }
@@ -60,13 +61,13 @@ modemInfo_t modemInfo;
 void loop() {
     modemInfo = mdminfo_ltem1();
 
-    PRINTF(dbgColor_cyan, "\rModem Information\r");
-    PRINTF(dbgColor_cyan, "IMEI = %s \r", modemInfo.imei);
-    PRINTF(dbgColor_cyan, "ICCID = %s \r", modemInfo.iccid);
-    PRINTF(dbgColor_cyan, "Firmware = %s \r", modemInfo.fwver);
-    PRINTF(dbgColor_cyan, "Mfg/Model = %s \r", modemInfo.mfgmodel);
+    PRINTFC(dbgColor_cyan, "\rModem Information\r");
+    PRINTFC(dbgColor_cyan, "IMEI = %s \r", modemInfo.imei);
+    PRINTFC(dbgColor_cyan, "ICCID = %s \r", modemInfo.iccid);
+    PRINTFC(dbgColor_cyan, "Firmware = %s \r", modemInfo.fwver);
+    PRINTFC(dbgColor_cyan, "Mfg/Model = %s \r", modemInfo.mfgmodel);
 
-    PRINTF(dbgColor_info, "\rRSSI = %d dBm \r",mdminfo_rssi());
+    PRINTFC(dbgColor_info, "\rRSSI = %d dBm \r",mdminfo_rssi());
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -80,7 +81,7 @@ void loop() {
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(dbgColor_magenta, "\r\nLoop=%i \r\n", loopCnt);
+    PRINTFC(dbgColor_magenta, "\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -90,16 +91,16 @@ void indicateLoop(int loopCnt, int waitNext)
         timing_delay(50);
     }
 
-    PRINTF(dbgColor_gray, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(dbgColor_gray, "NextTest (millis)=%i\r\r", waitNext);
+    PRINTFC(dbgColor_gray, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTFC(dbgColor_gray, "NextTest (millis)=%i\r\r", waitNext);
     timing_delay(waitNext);
 }
 
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
+	PRINTFC(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+    PRINTFC(dbgColor_error, "** Test Assertion Failed. \r\n");
 
     uint8_t halt = 1;
     while (halt)

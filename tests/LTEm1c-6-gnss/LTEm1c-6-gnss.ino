@@ -25,37 +25,37 @@
  * Test the GNSS/GPS receiver basic functionality (on/off/get location).
  *****************************************************************************/
 
-#define HOST_FEATHER_UXPLOR
-#include <platform_pins.h>
+// define options for how to assemble this build
+#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// debugging options
+#define _DEBUG                          // enable/expand 
+// #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
+// #define Serial JlinkRtt
+#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
+
 #include <ltem1c.h>
-
-#define _DEBUG
-#include "dbgprint.h"
-//#define USE_SERIAL 0
-
-const int APIN_RANDOMSEED = 0;
 
 
 void setup() {
-    #ifdef USE_SERIAL
+    #ifdef SERIAL_OPT
         Serial.begin(115200);
-        #if (USE_SERIAL)
-        while (!Serial) {}
+        #if (SERIAL_OPT > 0)
+        while (!Serial) {}      // force wait for serial ready
         #else
-        delay(1000);
+        delay(5000);            // just give it some time
         #endif
     #endif
 
-    PRINTF(dbgColor_white, "\rLTEm1c test6-gnss\r");
+    PRINTFC(dbgColor_white, "\rLTEm1c Test6: gnss\r");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
-    randomSeed(analogRead(APIN_RANDOMSEED));
+    randomSeed(analogRead(0));
 
     ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
 
     // turn on GNSS
     resultCode_t cmdResult = gnss_on();
-    PRINTF(dbgColor_info, "GNSS On result=%d (504 is already on)\r", cmdResult);
+    PRINTFC(dbgColor_info, "GNSS On result=%d (504 is already on)\r", cmdResult);
 }
 
 
@@ -70,11 +70,11 @@ void loop() {
         char cLat[14];
         char cLon[14];
         
-        PRINTF(dbgColor_none, "Location Information\r");
-        PRINTF(dbgColor_cyan, "Lat=%4.4f, Lon=%4.4f \r", location.lat.val, location.lon.val);
+        PRINTFC(dbgColor_none, "Location Information\r");
+        PRINTFC(dbgColor_cyan, "Lat=%4.4f, Lon=%4.4f \r", location.lat.val, location.lon.val);
     }
     else
-        PRINTF(dbgColor_warn, "Location is not available (GNSS not fixed)\r");
+        PRINTFC(dbgColor_warn, "Location is not available (GNSS not fixed)\r");
 
     // if (location.statusCode == RESULT_CODE_TIMEOUT)
     // {
@@ -100,8 +100,8 @@ void loop() {
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
+	PRINTFC(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+    PRINTFC(dbgColor_error, "** Test Assertion Failed. \r\n");
 
     bool halt = true;
     while (halt)
@@ -116,7 +116,7 @@ void indicateFailure(char failureMsg[])
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
+    PRINTFC(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -126,8 +126,8 @@ void indicateLoop(int loopCnt, int waitNext)
         timing_delay(50);
     }
 
-    PRINTF(dbgColor_dMagenta, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(dbgColor_dMagenta, "NextTest (millis)=%i\r\r", waitNext);
+    PRINTFC(dbgColor_dMagenta, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTFC(dbgColor_dMagenta, "NextTest (millis)=%i\r\r", waitNext);
     timing_delay(waitNext);
 }
 

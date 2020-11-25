@@ -9,7 +9,7 @@
 #include "ltem1c.h"
 
 #define _DEBUG
-#include "dbgprint.h"
+//#include "dbgprint.h"
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
@@ -67,11 +67,12 @@ sockets_t *sckt_create()
 /**
  *	\brief Open a data connection (socket) to d data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
  *
- *	\param[in] protocol The IP protocol to use for the connection (TCP/UDP/TCP LISTENER/UDP SERVICE/SSL).
- *	\param[in] host The IP address (string) or domain name of the remote host to communicate with.
- *  \param[in] rmtPort The port number at the remote host.
- *  \param[in] lclPort The port number on this side of the conversation, set to 0 to auto-assign.
- *  \param[in] ipReceiver_func The callback function in your application to be notified of received data ready.
+ *	\param [in] socketId - The ID or number specifying the socket connect to open.
+ *	\param [in] protocol - The IP protocol to use for the connection (TCP/UDP/TCP LISTENER/UDP SERVICE/SSL).
+ *	\param [in] host - The IP address (string) or domain name of the remote host to communicate with.
+ *  \param [in] rmtPort - The port number at the remote host.
+ *  \param [in] lclPort - The port number on this side of the conversation, set to 0 to auto-assign.
+ *  \param [in] rcvr_func The callback function in your application to be notified of received data ready.
  */
 socketResult_t sckt_open(socketId_t socketId, protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, receiver_func_t rcvr_func)
 {
@@ -157,7 +158,7 @@ socketResult_t sckt_open(socketId_t socketId, protocol_t protocol, const char *h
 /**
  *	\brief Close an established (open) connection socket.
  *
- *	\param [in] socketNum - The connection socket to close.
+ *	\param [in] socketId - The socket ID or number for the connection to close.
  */
 void sckt_close(uint8_t socketId)
 {
@@ -199,9 +200,9 @@ void sckt_reset(uint8_t socketId)
 /**
  *	\brief Send data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
  *
- *	\param [in] - socketId The connection socket returned from open.
- *	\param [in] - data A character pointer containing the data to send.
- *  \param [in] - dataSz The size of the buffer (< 1501 bytes).
+ *	\param [in] socketId - The connection socket returned from open.
+ *	\param [in] data - A character pointer containing the data to send.
+ *  \param [in] dataSz - The size of the buffer (< 1501 bytes).
  */
 socketResult_t sckt_send(socketId_t socketId, const char *data, uint16_t dataSz)
 {

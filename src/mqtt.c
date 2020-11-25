@@ -10,7 +10,7 @@
 #include "ltem1c.h"
 
 //#define _DEBUG
-#include "dbgprint.h"
+//#include "dbgprint.h"
 
 #define WAIT_SECONDS(timeout) (timeout * 1000)
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -51,7 +51,7 @@ void mqtt_create()
 /**
  *  \brief Query the status of the MQTT server state.
  * 
- *  \param [in] host (optional) A char string to match with the currently connected server. Host is not checked if null string passed.
+ *  \param [in] host - (optional) A char string to match with the currently connected server. Host is not checked if null string passed.
  * 
  *  \returns A mqttStatus_t value indicating the state of the MQTT connection.
 */
@@ -94,11 +94,10 @@ mqttStatus_t mqtt_status(const char *host)
 /**
  *  \brief Open a remote MQTT server for use.
  * 
- *  \param [in] socketId The socket based identifier to use for the server connection.
- *  \param [in] host The host IP address or name of the remote server.
- *  \param [in] port The IP port number to use for the communications.
- *  \param [in] useSslVersion Specifies the version and options for use of SSL to protect communications.
- *  \param [in] useMqttVersion Specifies the MQTT protocol revision to use for communications.
+ *  \param [in] host - The host IP address or name of the remote server.
+ *  \param [in] port - The IP port number to use for the communications.
+ *  \param [in] useSslVersion - Specifies the version and options for use of SSL to protect communications.
+ *  \param [in] useMqttVersion - Specifies the MQTT protocol revision to use for communications.
  * 
  *  \returns A socketResult_t value indicating the success or type of failure.
 */
@@ -171,7 +170,7 @@ socketResult_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVer
 /**
  *  \brief Disconnect and close a connection to a MQTT server
  * 
- *  \param [in] socketId The socket based identifier for the connection to close
+ *  \param [in] socketId - The socket based identifier for the connection to close
 */
 void mqtt_close()
 {
@@ -214,10 +213,10 @@ void mqtt_close()
 /**
  *  \brief Connect (authenticate) to a MQTT server.
  * 
- *  \param [in] socketId The socket based identifier for the connection to close.
- *  \param [in] clientId The client or device identifier for the connection.
- *  \param [in] username The user identifier or name for the connection to authenticate.
- *  \param [in] password The secret string or phrase to authenticate the connection.
+ *  \param [in] clientId - The client or device identifier for the connection.
+ *  \param [in] username - The user identifier or name for the connection to authenticate.
+ *  \param [in] password - The secret string or phrase to authenticate the connection.
+ *  \param [in] sessionClean - Directs MQTT to preserve or flush messages received prior to the session start.
  * 
  *  \returns A socketResult_t value indicating the success or type of failure.
 */
@@ -255,17 +254,16 @@ socketResult_t mqtt_connect(const char *clientId, const char *username, const ch
 /**
  *  \brief Subscribe to a topic on the MQTT server.
  * 
- *  \param [in] socketId  The socket based identifier for the MQTT server connection to update.
- *  \param [in] topic  The messaging topic to subscribe to.
- *  \param [in] qos  The QOS level for messages subscribed to.
- *  \param [in] recv_func The receiver function in the application to receive subscribed messages on arrival.
+ *  \param [in] topic - The messaging topic to subscribe to.
+ *  \param [in] qos - The QOS level for messages subscribed to.
+ *  \param [in] recv_func - The receiver function in the application to receive subscribed messages on arrival.
  * 
  *  \returns A socketResult_t value indicating the success or type of failure.
 */
 socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqttRecv_func_t recv_func)
 {
     // AT+QMTSUB=1,99,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#",0
-    #define MQTT_PUBSUB_CMDSZ 140
+    #define MQTT_PUBSUB_CMDSZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ + MQTT_TOPIC_PUBOVRHD_SZ)
     #define MQTT_PUBSUB_RSPSZ 81
 
 
@@ -273,7 +271,7 @@ socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqttRecv_func_t 
     char actionResponse[MQTT_PUBSUB_RSPSZ] = {0};
     uint8_t subscriptionSlot = 255;
 
-    if (recv_func == NULL || strlen(topic) > MQTT_TOPIC_NAME_SZ - 1)
+    if (recv_func == NULL || strlen(topic) > (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ- 1))
         return RESULT_CODE_BADREQUEST;
 
     uint16_t topicSz = strlen(topic);               // test for MQTT multilevel wildcard, store separately for future topic parsing on recv
@@ -315,8 +313,7 @@ socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqttRecv_func_t 
 /**
  *  \brief Unsubscribe to a topic on the MQTT server.
  * 
- *  \param [in] socketId  The socket based identifier for the MQTT server connection to update.
- *  \param [in] topic  The messaging topic to unsubscribe from.
+ *  \param [in] topic - The messaging topic to unsubscribe from.
  * 
  *  \returns A socketResult_t value indicating the success or type of failure.
 */
@@ -359,9 +356,9 @@ socketResult_t mqtt_unsubscribe(const char *topic)
 /**
  *  \brief Publish a message to server.
  * 
- *  \param [in] *topic  The topic to receive the message on the server.
- *  \param [in] qos  The MQTT QOS to be assigned to sent message.
- *  \param [in] *message Pointer to message to be sent.
+ *  \param [in] *topic - The topic to receive the message on the server.
+ *  \param [in] qos - The MQTT QOS to be assigned to sent message.
+ *  \param [in] *message - Pointer to message to be sent.
  * 
  *  \returns A socketResult_t value indicating the success or type of failure.
 */
@@ -369,14 +366,16 @@ socketResult_t mqtt_publish(const char *topic, mqttQos_t qos, const char *messag
 {
     // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
 
-    char publishCmd[MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PUBOVRHD_SZ] = {0};
+    #define PUBBUF_SZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ + MQTT_TOPIC_PUBOVRHD_SZ)
+
+    char publishCmd[PUBBUF_SZ] = {0};
     char msgText[MQTT_MESSAGE_SZ];
     char actionResponse[81] = {0};
     actionResult_t atResult;
 
     // register the pending publish action
     uint16_t msgId = ((uint8_t)qos == 0) ? 0 : ++g_ltem1->mqtt->msgId;
-    snprintf(publishCmd, 160, "AT+QMTPUB=%d,%d,%d,0,\"%s\"", MQTT_SOCKET_ID, msgId, qos, topic);
+    snprintf(publishCmd, PUBBUF_SZ, "AT+QMTPUB=%d,%d,%d,0,\"%s\"", MQTT_SOCKET_ID, msgId, qos, topic);
     
     if (action_tryInvokeAdv(publishCmd, ACTION_RETRIES_DEFAULT, ACTION_RETRY_INTERVALmillis, iop_txDataPromptParser))
     {
@@ -398,6 +397,9 @@ socketResult_t mqtt_publish(const char *topic, mqttQos_t qos, const char *messag
 
 /**
  *  \brief Performs URL escape removal for special char (%20-%2F) without malloc.
+ * 
+ *  \param [in] src - Input text string to URL decode.
+ *  \param [in] len - Length of input text string.
 */
 static void util_urlDecode(char *src, int len)
 {
@@ -408,6 +410,8 @@ static void util_urlDecode(char *src, int len)
 
     for (size_t i = 0; i < len; i++)
     {
+        if (src[i] == ASCII_cNULL)
+            break;
         if (src[i] == '%')
         {
             srcChar = src[i + 2];
@@ -458,13 +462,13 @@ void mqtt_doWork()
         eot = memchr(topic, ASCII_cDBLQUOTE, g_ltem1->iop->rxDataBufs[iopBufIndx]->head - eot);
         if (eot == NULL)                                                        // malformed, overflowed somehow
             goto discardBuffer;
-        *eot  = '\0';                                                           // null term the topic
+        *eot  = ASCII_cNULL;                                                           // null term the topic
 
         message = eot + 3;                                                      // set the message start
-        eot = memchr(message, ASCII_cDBLQUOTE, g_ltem1->iop->rxDataBufs[iopBufIndx]->head - eot);
+        eot = memchr(message, ASCII_cCR, g_ltem1->iop->rxDataBufs[iopBufIndx]->head - eot);
         if (eot == NULL)                                                        // malformed, overflowed somehow
             goto discardBuffer;
-        *eot  = '\0';                                                           // null term the message
+        *(eot-1)  = ASCII_cNULL;                                                // null term the message (remove BGx trailing "\r\n)
 
         // find topic in subscriptions array & invoke application receiver
         for (size_t i = 0; i < MQTT_TOPIC_MAXCNT; i++)
@@ -484,53 +488,6 @@ void mqtt_doWork()
         iop_resetDataBuffer(iopBufIndx);           // delivered, clear IOP data buffer
     }
 }
-
-
-
-/**
- *  \brief Parses the topic properties string into a mqttProperties structure (MUTATES, NO COPY).
- * 
- *  \param topicProps [in] Char pointer to the c-string containing message properties passed in topic 
- * 
- *  \return Struct with pointer arrays to the properties (name/value)
-*/
-mqttMsgProps_t mqtt_parseTopicProperties(char *topicProps)
-{
-    mqttMsgProps_t result = {0, {0}, {0}};
-
-    if (strlen(topicProps) == 0)
-        return result;
-    
-    char *next = topicProps;
-    char *delimAt;
-    char *endAt = topicProps + strlen(topicProps);
-
-    // 1st pass; get names + values
-    for (size_t i = 0; i < MQTT_PROPERTIES_CNT; i++)
-    {
-        delimAt = strchr(topicProps, '&');
-        delimAt = (delimAt == NULL) ? endAt : delimAt;
-
-        result.names[i] = topicProps;
-        *delimAt = ASCII_cNULL;
-        topicProps = delimAt + 1;
-        result.count = i;
-        if (delimAt == endAt)
-            break;
-    }
-    result.count++;
-    // 2nd pass; split names/values
-    for (size_t i = 0; i < result.count; i++)
-    {
-        delimAt = strchr(result.names[i], '=');
-        *delimAt = ASCII_cNULL;
-        result.values[i] = delimAt + 1;
-        // (result.names[i])[delimAt] = ASCII_cNULL;
-        // result.values[i] = result.names[i] + delimAt + 1;
-    }
-    return result;
-}
-
 
 
 #pragma endregion

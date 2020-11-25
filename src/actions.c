@@ -4,7 +4,6 @@
 #include "ltem1c.h"
 
 #define _DEBUG
-#include "dbgprint.h"
 
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -29,8 +28,6 @@ void action_close()
  *	\brief Invokes a BGx AT command with default action values. 
  *
  *	\param [in] cmdStr - The command string to send to the BG96 module.
- *  \param [in] retry - Function will retry busy module if set to true.
- *  \param [in] taskCompleteParser - Custom command response parser to signal result is complete. NULL for std parser.
  * 
  *  \return True if action was invoked, false if not
  */
@@ -45,7 +42,8 @@ bool action_tryInvoke(const char *cmdStr)
  *	\brief Invokes a BGx AT command with application specified action values. 
  *
  *	\param [in] cmdStr - The command string to send to the BG96 module.
- *  \param [in] retry - Function will retry busy module if set to true.
+ *  \param [in] retries - Number of retries to obtain action lock that should be attempted. 0 = no retries.
+ *  \param [in] timeout - Number of milliseconds the action can take. If 0, the system default timeout is used.
  *  \param [in] taskCompleteParser - Custom command response parser to signal result is complete. NULL for std parser.
  * 
  *  \return True if action was invoked, false if not
@@ -93,12 +91,15 @@ void action_sendRaw(const char *data, uint16_t dataSz, uint16_t timeoutMillis, u
 
  *  \param [in] data - Pointer to the block of binary data to send.
  *  \param [in] dataSz - The size of the data block. 
+ *  \param [in] eotPhrase - Char string that is sent a the end-of-transmission.
+ *  \param [in] timeoutMillis - Timeout period (in millisecs) for send to complete.
+ *  \param [in] taskCompleteParser_func - Function pointer to parser looking for task completion
  */
-void action_sendRawWithEOTs(const char *data, uint16_t dataSz, const char *eotPhrase, uint16_t timeoutMillis, uint16_t (*taskCompleteParser)(const char *response, char **endptr))
+void action_sendRawWithEOTs(const char *data, uint16_t dataSz, const char *eotPhrase, uint16_t timeoutMillis, uint16_t (*taskCompleteParser_func)(const char *response, char **endptr))
 {
     if (timeoutMillis > 0)
         g_ltem1->action->timeoutMillis = timeoutMillis;
-    if (taskCompleteParser == NULL)
+    if (taskCompleteParser_func == NULL)
         action_okResultParser;
         
     iop_txSend(data, dataSz, false);
@@ -201,7 +202,7 @@ actionResult_t action_getResult(bool closeAction)
  *  \param [in] response - The string returned from the getResult function.
  *  \param [in] preamble - The string to look for to signal start of response match.
  *  \param [in] preambleReqd - The preamble string is required, set to false to search for only gap and terminator
- *  \param [in] gap - The min. char count between preamble (or start) and terminator (0 is valid).
+ *  \param [in] gapReqd - The min. char count between preamble (or start) and terminator (0 is valid).
  *  \param [in] terminator - The string to signal the end of the command response.
  *  \param [out] endptr - Char pointer to the next char in response after parser match
  * 
@@ -282,7 +283,9 @@ resultCode_t action_defaultResultParser(const char *response, const char *preamb
  *  \param [in] response - The string returned from the getResult function.
  *  \param [in] preamble - The string to look for to signal response matches command (scans from end backwards).
  *  \param [in] delim - The token delimeter char.
- *  \param [in] minTokens - The minimum number of tokens expected.
+ *  \param [in] reqdTokens - The minimum number of tokens expected.
+ *  \param [in] terminator - Text to look for indicating the sucessful end of command response.
+ *  \param [out] endptr - Char pointer to the next char in response after parser match
  * 
  *  \return True if the response meets the conditions in the preamble and token count required.
  */
@@ -329,7 +332,8 @@ resultCode_t action_tokenResultParser(const char *response, const char *preamble
 /**
  *	\brief Validate the response ends in a BGxx OK value.
  *
- *	\param [in] response - Pointer to the command response received from the BGxx.
+ *	\param [in] response - Pointer to the command response received from the BGx.
+ *  \param [out] endptr - Char pointer to the next char in response after parser match
  *
  *  \return bool If the response string ends in a valid OK sequence
  */
@@ -394,8 +398,8 @@ static void action_init(const char *cmdStr)
 /**
  *  \brief Attempts to get exclusive access to QBG module command interface.
  * 
- *  \param [in] actionCmd - Pointer to action structure.
- *  \param [in] retry - If exclusive access is not initially garnered, should retries be attempted.
+ *  \param [in] cmdStr - The AT command text.
+ *  \param [in] retries - Number of retries to be attempted, while obtaining lock.
 */
 bool actn_acquireLock(const char *cmdStr, uint8_t retries)
 {

@@ -115,30 +115,35 @@ typedef union \
 } SC16IS741A_##REG_NAME;
 
 
+/** 
+ *  \brief Enum representing the register addresses of the NXP SPI bridge chip on the LTEm1.
+ * 
+ *  For details about registers see the NXP SC16IS741A data sheet.
+*/
 typedef enum
 {
-    SC16IS741A_FIFO_ADDR = 0x00U,
-    SC16IS741A_IER_ADDR = 0x01U,
-    SC16IS741A_FCR_ADDR = 0x02U,
-    SC16IS741A_IIR_ADDR = 0x02U,
-    SC16IS741A_LCR_ADDR = 0x03U,
-    SC16IS741A_MCR_ADDR = 0x04U,
-    SC16IS741A_LSR_ADDR = 0x05U,
-    SC16IS741A_MSR_ADDR = 0x06U,
-    SC16IS741A_SPR_ADDR = 0x07U,
-    SC16IS741A_TCR_ADDR = 0x06U,
-    SC16IS741A_TLR_ADDR = 0x07U,
-    SC16IS741A_TXLVL_ADDR = 0x08U,
-    SC16IS741A_RXLVL_ADDR = 0x09U,
-    SC16IS741A_UARTRST_ADDR = 0x0EU,
-    SC16IS741A_EFCR_ADDR = 0x0FU,
-    SC16IS741A_DLL_ADDR = 0x00U,
-    SC16IS741A_DLH_ADDR = 0x01U,
-    SC16IS741A_EFR_ADDR = 0x02U,
-    SC16IS741A_XON1_ADDR = 0x04U,
-    SC16IS741A_XON2_ADDR = 0x05U,
-    SC16IS741A_XOFF1_ADDR = 0x06U,
-    SC16IS741A_XOFF2_ADDR = 0x07U
+    SC16IS741A_FIFO_ADDR = 0x00U,               ///< FIFO data register, accesses the TX/RX buffers
+    SC16IS741A_IER_ADDR = 0x01U,                ///< Interrupt enable register
+    SC16IS741A_FCR_ADDR = 0x02U,                ///< Frame control register
+    SC16IS741A_IIR_ADDR = 0x02U,                ///< Interrupt identification register
+    SC16IS741A_LCR_ADDR = 0x03U,                ///< Line control register
+    SC16IS741A_MCR_ADDR = 0x04U,                ///< Modem control register
+    SC16IS741A_LSR_ADDR = 0x05U,                ///< Line state register
+    SC16IS741A_MSR_ADDR = 0x06U,                ///< Modem status register
+    SC16IS741A_SPR_ADDR = 0x07U,                ///< Scratchpad register (test loopback)
+    SC16IS741A_TCR_ADDR = 0x06U,                ///< Transmission control register
+    SC16IS741A_TLR_ADDR = 0x07U,                ///< Trigger level register
+    SC16IS741A_TXLVL_ADDR = 0x08U,              ///< TX level register
+    SC16IS741A_RXLVL_ADDR = 0x09U,              ///< RX level register
+    SC16IS741A_UARTRST_ADDR = 0x0EU,            ///< UART reset
+    SC16IS741A_EFCR_ADDR = 0x0FU,               ///< Extra features register
+    SC16IS741A_DLL_ADDR = 0x00U,                ///< Divisor latch register (LSB)
+    SC16IS741A_DLH_ADDR = 0x01U,                ///< Divisor latch register (MSB)
+    SC16IS741A_EFR_ADDR = 0x02U,                ///< Enhanced features register
+    SC16IS741A_XON1_ADDR = 0x04U,               ///< XON-1 word 
+    SC16IS741A_XON2_ADDR = 0x05U,               ///< XON-2 word
+    SC16IS741A_XOFF1_ADDR = 0x06U,              ///< XOFF-1 word
+    SC16IS741A_XOFF2_ADDR = 0x07U               ///< XOFF-2 word
 } sc16is741a_reg_addr;
 
 

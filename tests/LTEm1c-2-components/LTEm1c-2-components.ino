@@ -26,14 +26,15 @@
  * BG96 module for basic serial operations. 
  *****************************************************************************/
 
-#define HOST_FEATHER_UXPLOR
-#include <platform_pins.h>
+// define options for how to assemble this build
+#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// debugging options
+#define _DEBUG                          // enable/expand 
+// #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
+// #define Serial JlinkRtt
+#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
+
 #include <ltem1c.h>
-
-#define _DEBUG
-//#define USE_SERIAL 0
-#include "dbgprint.h"
-
 
 // spiConfig_t ltem1_spiConfig = 
 // {
@@ -44,23 +45,20 @@
 // };
 
 
-// test setup
-const int APIN_RANDOMSEED = 0;
-
 void setup() {
-    #ifdef USE_SERIAL
+    #ifdef SERIAL_OPT
         Serial.begin(115200);
-        #if (USE_SERIAL)
-        while (!Serial) {}
+        #if (SERIAL_OPT > 0)
+        while (!Serial) {}      // force wait for serial ready
         #else
-        delay(1000);
+        delay(5000);            // just give it some time
         #endif
     #endif
 
-    PRINTF(0, "LTEm1c test2-components\r\n");
+    PRINTFC(0, "LTEm1c Test2: modem components\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
-    randomSeed(analogRead(APIN_RANDOMSEED));
+    randomSeed(analogRead(0));
 
     // create ltem1 and start it, wait for it to ready itself
     ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_base);
@@ -97,7 +95,7 @@ void loop() {
     uint8_t regValue = 0;
     char cmd[] = "AT+GSN\r\0";
     //char cmd[] = "AT+QPOWD\r\0";
-    PRINTF(0, "Invoking cmd: %s \r\n", cmd);
+    PRINTFC(0, "Invoking cmd: %s \r\n", cmd);
 
     sendCommand(cmd);
 
@@ -110,11 +108,11 @@ void loop() {
     char* validResponse = "AT+GSN\r\r\n86450";
     uint8_t imeiPrefixTest = strncmp(validResponse, response, strlen(validResponse)); 
 
-    PRINTF(0, "Expecting 32 chars response, got %d \r\n", strlen(response));
-    PRINTF(0, "Got response: %s", response);  
+    PRINTFC(0, "Expecting 32 chars response, got %d \r\n", strlen(response));
+    PRINTFC(0, "Got response: %s", response);  
 
     if (loopCnt < 3 && strlen(response) == 43)
-        PRINTF(dbgColor_warn, "Received APP RDY from LTEm1.\r\n");
+        PRINTFC(dbgColor_warn, "Received APP RDY from LTEm1.\r\n");
     else if (imeiPrefixTest != 0 || strlen(response) != 32)
         indicateFailure("Unexpected IMEI value returned on cmd test... failed."); 
 
@@ -182,7 +180,7 @@ bool validOkResponse(const char *response)
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(dbgColor_info, "Loop: %i \r\n", loopCnt);
+    PRINTFC(dbgColor_info, "Loop: %i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -192,19 +190,19 @@ void indicateLoop(int loopCnt, int waitNext)
         delay(50);
     }
 
-    PRINTF(dbgColor_magenta, "Free memory: %u \r\n", getFreeMemory());
-    PRINTF(0, "Next test in (millis): %i\r\n\r\n", waitNext);
+    PRINTFC(dbgColor_magenta, "Free memory: %u \r\n", getFreeMemory());
+    PRINTFC(0, "Next test in (millis): %i\r\n\r\n", waitNext);
     delay(waitNext);
 }
 
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
+	PRINTFC(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+    PRINTFC(dbgColor_error, "** Test Assertion Failed. \r\n");
 
     int halt = 1;
-    PRINTF(dbgColor_error, "** Halting Execution \r\n");
+    PRINTFC(dbgColor_error, "** Halting Execution \r\n");
     while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);

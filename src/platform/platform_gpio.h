@@ -33,6 +33,8 @@ extern "C"
 #include <stdint.h>
 #endif // __cplusplus
 
+#define GPIO_NM 9
+
 typedef struct ltem1PinConfig_tag
 {
     int spiCsPin;

@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEm1c-7-ipProto.ino
+ *  \file LTEm1c-7-sockets.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -25,24 +25,24 @@
  * Test IP protocol client send/receive.
  *****************************************************************************/
 
-#define HOST_FEATHER_UXPLOR
-#include <platform_pins.h>
-#include <ltem1c.h>
+// define options for how to assemble this build
+#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// debugging options
+#define _DEBUG                          // enable/expand 
+// #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
+// #define Serial JlinkRtt
+#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
-#define _DEBUG
-#include "dbgprint.h"
-//#define USE_SERIAL 0
+#include <ltem1c.h>
 
 
 // test setup
 #define CYCLE_INTERVAL 5000
 #define SEND_BUFFER_SZ 201
 #define TCPIP_TEST_SERVER "97.83.32.119"
-const int APIN_RANDOMSEED = 0;
 uint16_t loopCnt = 0;
 uint32_t lastCycle;
 bool sendImmediate = false;
-
 
 // ltem1c 
 #define DEFAULT_NETWORK_CONTEXT 1
@@ -52,40 +52,40 @@ char sendBuf[SEND_BUFFER_SZ] = {0};
 
 
 void setup() {
-    #ifdef USE_SERIAL
+    #ifdef SERIAL_OPT
         Serial.begin(115200);
-        #if (USE_SERIAL)
-        while (!Serial) {}
+        #if (SERIAL_OPT > 0)
+        while (!Serial) {}      // force wait for serial ready
         #else
-        delay(1000);
+        delay(5000);            // just give it some time
         #endif
     #endif
 
-    PRINTF(dbgColor_white, "\rLTEm1c Test: 7-Sockets\r\n");
+    PRINTFC(dbgColor_white, "\rLTEm1c Test: 7-Sockets\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
 
     ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
 
-    PRINTF(dbgColor_none, "Waiting on network...\r");
+    PRINTFC(dbgColor_none, "Waiting on network...\r");
     networkOperator_t networkOp = ntwk_awaitOperator(30000);
     if (strlen(networkOp.operName) == 0)
         indicateFailure("Timout (30s) waiting for cellular network.");
-    PRINTF(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
+    PRINTFC(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     resultCode_t resultCode = ntwk_fetchDataContexts();
     if (resultCode == RESULT_CODE_NOTFOUND)
     {
         resultCode = ntwk_activateContext(DEFAULT_NETWORK_CONTEXT);
-        PRINTF(0, "Network PDP context activation=%d\r", resultCode);
+        PRINTFC(0, "Network PDP context activation=%d\r", resultCode);
     }
 
     // open socket
     scktResult = sckt_open(0, protocol_udp, TCPIP_TEST_SERVER, 9011, 0, ipReceiver);
     if (scktResult == SOCKET_RESULT_PREVOPEN)
-        PRINTF(dbgColor_warn, "Socket 0 found already open!\r");
+        PRINTFC(dbgColor_warn, "Socket 0 found already open!\r");
     else if (scktResult != RESULT_CODE_SUCCESS)
     {
-        PRINTF(dbgColor_error, "Socket 0 open failed, resultCode=%d\r", scktResult);
+        PRINTFC(dbgColor_error, "Socket 0 open failed, resultCode=%d\r", scktResult);
         indicateFailure("Failed to open socket.");
     }
 }
@@ -130,7 +130,7 @@ void loop()
         } while (scktResult == RESULT_CODE_CONFLICT && retries < 10);
         txCnt = (scktResult == RESULT_CODE_SUCCESS) ? ++txCnt : txCnt;
 
-        PRINTF((scktResult == RESULT_CODE_SUCCESS) ? dbgColor_cyan : dbgColor_warn, "Send Loop %d, sendRslt=%d \r", loopCnt, scktResult);
+        PRINTFC((scktResult == RESULT_CODE_SUCCESS) ? dbgColor_cyan : dbgColor_warn, "Send Loop %d, sendRslt=%d \r", loopCnt, scktResult);
         loopCnt++;
     }
     /*
@@ -161,7 +161,7 @@ void ipReceiver(socketId_t socketId, void *data, uint16_t dataSz)
     temp[dataSz] = '\0';
 
     rxCnt++;
-    PRINTF(dbgColor_info, "appRcvd (@tick=%d) %s\r", timing_millis(), temp);
+    PRINTFC(dbgColor_info, "appRcvd (@tick=%d) %s\r", timing_millis(), temp);
 }
 
 
@@ -175,9 +175,9 @@ void showStats()
 {
     if (loopCnt == 0) return;
     
-    PRINTF(dbgColor_magenta, "\rFreeMem=%u  ", getFreeMemory());
-    PRINTF(dbgColor_magenta, "<<Loop=%d\r", loopCnt);
-    PRINTF(dbgColor_magenta, "Tx=%d,  Rx=%d (d=%d)\r", txCnt, rxCnt, drops);
+    PRINTFC(dbgColor_magenta, "\rFreeMem=%u  ", getFreeMemory());
+    PRINTFC(dbgColor_magenta, "<<Loop=%d\r", loopCnt);
+    PRINTFC(dbgColor_magenta, "Tx=%d,  Rx=%d (d=%d)\r", txCnt, rxCnt, drops);
     for (int i = 0; i < 5; i++)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
@@ -188,7 +188,7 @@ void showStats()
     if (rxCnt == prevRx)
     {
         drops++;
-        PRINTF(dbgColor_warn, "\rMissed recv! (drops=%d)\r", drops);
+        PRINTFC(dbgColor_warn, "\rMissed recv! (drops=%d)\r", drops);
     }
     prevRx = rxCnt;
 }
@@ -196,8 +196,8 @@ void showStats()
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(dbgColor_error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(dbgColor_error, "** Test Assertion Failed. \r\n");
+	PRINTFC(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+    PRINTFC(dbgColor_error, "** Test Assertion Failed. \r\n");
 
     int halt = 1;
     while (halt)

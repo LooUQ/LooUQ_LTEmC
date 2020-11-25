@@ -2,7 +2,6 @@
 //	Licensed under The MIT License. See LICENSE in the root directory.
 
 #include "ltem1c.h"
-//#include "nxp_sc16is741a.h"
 #include <string.h>
 
 

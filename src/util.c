@@ -5,6 +5,105 @@
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 
+
+char *strToken(char *source, int delimiter, char *token, uint8_t tokenMax) 
+{
+    char *delimAt;
+    if (source == NULL)
+        return false;
+
+    delimAt = strchr(source, delimiter);
+    uint8_t tokenSz = delimAt - source;
+    if (tokenSz == 0)
+        return NULL;
+
+    memset(token, 0, tokenMax);
+    strncpy(token, source, MIN(tokenSz, tokenMax-1));
+    return delimAt + 1;
+}
+
+
+/**
+ *  \brief Parses the topic properties string into a mqttProperties structure (MUTATES, NO COPY).
+ * 
+ *  \param [in] propsSrc - Char pointer to the c-string containing message properties passed in topic 
+ * 
+ *  \return Struct with pointer arrays to the properties (name/value)
+*/
+propsDict_t util_parseStringToPropsDict(char *propsSrc)
+{
+    propsDict_t result = {0, {0}, {0}};
+
+    if (strlen(propsSrc) == 0)
+        return result;
+    
+    char *next = propsSrc;
+    char *delimAt;
+    char *endAt = propsSrc + strlen(propsSrc);
+
+    for (size_t i = 0; i < MQTT_PROPERTIES_CNT; i++)                        // 1st pass; get names + values
+    {
+        delimAt = memchr(propsSrc, '&', endAt - propsSrc);
+        delimAt = (delimAt == NULL) ? endAt : delimAt;
+
+        result.names[i] = propsSrc;
+        *delimAt = ASCII_cNULL;
+        propsSrc = delimAt + 1;
+        result.count = i;
+        if (delimAt == endAt)
+            break;
+    }
+    result.count++;
+    
+    for (size_t i = 0; i < result.count; i++)                               // 2nd pass; split names/values
+    {
+        delimAt = memchr(result.names[i], '=', endAt - result.names[i]);
+        if (delimAt == NULL)
+        {
+            result.count = i;
+            break;
+        }
+        *delimAt = ASCII_cNULL;
+        result.values[i] = delimAt + 1;
+    }
+    return result;
+}
+
+
+/**
+ *  \brief Scans the qryProps struct for the a prop and returns the value.
+ * 
+ *  \param [in] propsName - Char pointer to the c-string containing message properties passed in topic 
+ * 
+ *  \return Struct with pointer arrays to the properties (name/value)
+*/
+char *util_getPropValue(const char *propName, propsDict_t props)
+{
+    for (size_t i = 0; i < props.count; i++)
+    {
+        if (strcmp(props.names[i], propName) == 0)
+            return props.values[i];
+    }
+    return NULL;
+}
+
+
+// /**
+//  *	\brief Safe string length, limits search for NULL char to maxSz.
+//  *
+//  *  \param [in] charStr - Pointer to character string to search for its length.
+//  *  \param [in] maxSz - The maximum number of characters to search.
+//  *
+//  *  \return AT command control structure.
+//  */
+// const char *strlenSafe(const char *charStr, uint16_t maxSz)
+// {
+//     return memchr(charStr, '\0', maxSz);
+// }
+
+
+
+
 /**
 *	\brief Simple string to packed numeric IP address parser.
 */
@@ -82,37 +181,4 @@
 *
 *  \return Pointer to the continue point of tokenization.
 */
-char *strToken(char *source, int delimiter, char *token, uint8_t tokenMax) 
-{
-    char *delimAt;
-    if (source == NULL)
-        return false;
-
-    delimAt = strchr(source, delimiter);
-    uint8_t tokenSz = delimAt - source;
-    if (tokenSz == 0)
-        return NULL;
-
-    memset(token, 0, tokenMax);
-    strncpy(token, source, MIN(tokenSz, tokenMax-1));
-    return delimAt + 1;
-}
-
-// /**
-//  *	\brief Safe string length, limits search for NULL char to maxSz.
-//  *
-//  *  \param [in] charStr - Pointer to character string to search for its length.
-//  *  \param [in] maxSz - The maximum number of characters to search.
-//  *
-//  *  \return AT command control structure.
-//  */
-// const char *strlenSafe(const char *charStr, uint16_t maxSz)
-// {
-//     return memchr(charStr, '\0', maxSz);
-// }
-
-
-
-
-
 

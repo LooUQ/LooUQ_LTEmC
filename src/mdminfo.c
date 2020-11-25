@@ -4,7 +4,7 @@
 #include "ltem1c.h"
 
 //#define _DEBUG
-#include "dbgprint.h"
+//#include "dbgprint.h"
 
 #define IMEI_OFFSET 2
 #define IMEI_SIZE 15
@@ -130,7 +130,7 @@ int16_t mdminfo_rssi()
 
 static resultCode_t iccidCompleteParser(const char *response, char **endptr)
 {
-    return action_gapResultParser(response, "+ICCID: ", true, 20, ASCII_sOK, endptr);
+    return action_defaultResultParser(response, "+ICCID: ", true, 20, ASCII_sOK, endptr);
 }
 
 

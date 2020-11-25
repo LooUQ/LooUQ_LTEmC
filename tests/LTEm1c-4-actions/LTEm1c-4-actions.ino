@@ -26,31 +26,31 @@
  * subsystem in the driver which multiplexes the command and protocol streams.
  *****************************************************************************/
 
-#define HOST_FEATHER_UXPLOR
-#include <platform_pins.h>
+// define options for how to assemble this build
+#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// debugging options
+#define _DEBUG                          // enable/expand 
+// #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
+// #define Serial JlinkRtt
+#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
+
 #include <ltem1c.h>
-
-#define _DEBUG
-#include "dbgprint.h"
-//#define USE_SERIAL 0
-
-const int APIN_RANDOMSEED = 0;
 
 void setup() 
 {
-    #ifdef USE_SERIAL
+    #ifdef SERIAL_OPT
         Serial.begin(115200);
-        #if (USE_SERIAL)
-        while (!Serial) {}
+        #if (SERIAL_OPT > 0)
+        while (!Serial) {}      // force wait for serial ready
         #else
-        delay(1000);
+        delay(5000);            // just give it some time
         #endif
     #endif
 
-    PRINTF(0, "LTEm1c test4-actions\r");
+    PRINTFC(0, "LTEm1c test4: actions\r");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
-    randomSeed(analogRead(APIN_RANDOMSEED));
+    randomSeed(analogRead(7));
 
     ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_actions);
 }
@@ -73,7 +73,7 @@ void loop()
 
     uint8_t regValue = 0;
     char cmdStr[] = "ATI\r\0";
-    PRINTF(dbgColor_none, "Invoking cmd: %s \r\n", cmdStr);
+    PRINTFC(dbgColor_none, "Invoking cmd: %s \r\n", cmdStr);
 
     if (action_tryInvoke(cmdStr))
     {
@@ -81,8 +81,8 @@ void loop()
         
         if (atResult.statusCode == RESULT_CODE_SUCCESS)         // statusCode == 200 (similar to HTTP codes)
         {
-            PRINTF(dbgColor_info, "Got %d chars\r", strlen(atResult.response));
-            PRINTF(dbgColor_cyan, "Resp: %s\r", atResult.response);
+            PRINTFC(dbgColor_info, "Got %d chars\r", strlen(atResult.response));
+            PRINTFC(dbgColor_cyan, "Resp: %s\r", atResult.response);
 
             // test response v. expected 
             char* validResponse = "\r\nQuectel";
@@ -93,13 +93,13 @@ void loop()
         }
         else
         {
-            PRINTF(dbgColor_error, "atResult=%d \r", atResult);
+            PRINTFC(dbgColor_error, "atResult=%d \r", atResult);
             // indicateFailure("Unexpected command response... failed."); 
         }
         action_close();                                         // done with response, close action and release action lock
     }
     else
-        PRINTF(dbgColor_warn, "Unable to get action lock.\r");
+        PRINTFC(dbgColor_warn, "Unable to get action lock.\r");
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -129,11 +129,11 @@ void loop()
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(dbgColor_error, "\r\n** %s \r", failureMsg);
-    PRINTF(dbgColor_error, "** Test Assertion Failed. \r");
+	PRINTFC(dbgColor_error, "\r\n** %s \r", failureMsg);
+    PRINTFC(dbgColor_error, "** Test Assertion Failed. \r");
 
     #if 1
-    PRINTF(dbgColor_error, "** Halting Execution \r\n");
+    PRINTFC(dbgColor_error, "** Halting Execution \r\n");
     bool halt = true;
     while (halt)
     {
@@ -148,7 +148,7 @@ void indicateFailure(char failureMsg[])
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
+    PRINTFC(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -158,8 +158,8 @@ void indicateLoop(int loopCnt, int waitNext)
         timing_delay(50);
     }
 
-    PRINTF(dbgColor_magenta, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(dbgColor_none, "NextTest (millis)=%i\r\r", waitNext);
+    PRINTFC(dbgColor_magenta, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTFC(dbgColor_none, "NextTest (millis)=%i\r\r", waitNext);
     timing_delay(waitNext);
 }
 
