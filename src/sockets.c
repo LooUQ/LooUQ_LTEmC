@@ -1,15 +1,13 @@
 /******************************************************************************
- *  \file ip.c
+ *  \file sockets.c
  *  \author Greg Terrell
  *  \license MIT License
  *
  *  Copyright (c) 2020 LooUQ Incorporated.
  *****************************************************************************/
 
+//#define _DEBUG
 #include "ltem1c.h"
-
-#define _DEBUG
-//#include "dbgprint.h"
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 

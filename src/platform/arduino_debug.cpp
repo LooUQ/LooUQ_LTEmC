@@ -10,11 +10,15 @@ void dbg_print(const char *msg, ...)
 {
     asm(".global _printf_float");
 
+    //Serial.println("*** preparing print expansion");
+
     char buf[DBGBUFFER_SZ] = {0};
     va_list args;
     va_start(args, msg);
     vsnprintf(buf, sizeof(buf), msg, args);
     va_end(args);
+
+    //Serial.println("*** print expansion completed");
 
     // Arduino Serial.print()
     Serial.print(buf);

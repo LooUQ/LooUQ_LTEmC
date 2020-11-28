@@ -1,9 +1,10 @@
-/* --------------------------------------------------------------------------------------------- */
+// Copyright (c) 2020 LooUQ Incorporated.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+//#define _DEBUG
 #include "ltem1c.h"
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
-
 
 
 char *strToken(char *source, int delimiter, char *token, uint8_t tokenMax) 

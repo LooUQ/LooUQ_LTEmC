@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file platformSpi.h
+ *  \file LTEm1c-1-platform.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -35,7 +35,6 @@
 // debugging options
 #define _DEBUG                          // enable/expand 
 // #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
-// #define Serial JlinkRtt
 #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
 #include <ltem1c.h>
@@ -55,13 +54,11 @@ void setup() {
         #endif
     #endif
 
-    Serial.print("From a serial print.");
-
     PRINTFC(0, "LTEm1c Test1: platformIO \r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     PRINTFC(0, "LED pin = %i \r\n", LED_BUILTIN);
 
-    randomSeed(analogRead(7));          // use an open analog input to seed random
+    randomSeed(analogRead(7));
 
 	gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_low);
 	gpio_writePin(ltem1_pinConfig.resetPin, gpioValue_low);

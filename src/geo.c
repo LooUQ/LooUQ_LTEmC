@@ -3,8 +3,8 @@
 
 #include <stdlib.h>
 
+//#define _DEBUG
 #include "ltem1c.h"
-#include "gnss.h"
 #include "geo.h"
 
 // private local declarations

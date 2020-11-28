@@ -1,6 +1,7 @@
 // Copyright (c) 2020 LooUQ Incorporated.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+//#define _DEBUG                          // enable debug output, expand PRINTF macros
 #include "ltem1c.h"
 
 #define GNSS_CMD_RESULTBUF_SZ 90
@@ -69,6 +70,9 @@ gnssLocation_t gnss_getLocation()
             action_close();
             return gnssResult;
         }
+
+        PRINTFC(dbgColor_warn, "getLocation(): parse starting...\r");
+
         continueAt = atResult.response + GNSS_LOC_DATAOFFSET;
         continueAt = strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
         if (continueAt != NULL)
@@ -89,6 +93,8 @@ gnssLocation_t gnss_getLocation()
         gnssResult.nsat = strtol(continueAt, &continueAt, 10);
         action_close();
     }
+    PRINTFC(dbgColor_warn, "getLocation(): parse completed\r");
+
 
     return gnssResult;
 }
@@ -104,7 +110,10 @@ gnssLocation_t gnss_getLocation()
 static resultCode_t gnssLocCompleteParser(const char *response, char **endptr)
 {
     //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr
-    return action_tokenResultParser(response, "+QGPSLOC:", ASCII_cCOMMA, GNSS_LOC_EXPECTED_TOKENCOUNT, ASCII_sOK, endptr);
+    resultCode_t result = action_tokenResultParser(response, "+QGPSLOC:", ASCII_cCOMMA, GNSS_LOC_EXPECTED_TOKENCOUNT, ASCII_sOK, endptr);
+
+    PRINTFC(0, "gnssParser(): result=%i\r", result);
+    return result;
 }
 
 

@@ -25,14 +25,11 @@
  * Manages module genaral and non-protocol cellular radio functions,
  *****************************************************************************/
 
+//#define _DEBUG
 #include "ltem1c.h"
-//#include "quectel_bg96.h"
 
-#define _DEBUG
-//#include "dbgprint.h"
 
 #define BG96_INIT_COMMAND_COUNT 1
-
 
 const char* const qbg_initCmds[] = 
 { 

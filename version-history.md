@@ -1,5 +1,9 @@
 # LTEm1c Version History
 
+## v0.4.1 - Misc (Nov 28, 2020)
+* Remove dependency on JLink RTT 
+* Fixed parse issue in GNSS getLocation()
+
 ## v0.3 - IOP Redesign (Oct 6, 2020)
 Overhaul of the IOP buffering system. 
 * Simplified receive buffer management and eliminated copies from receive pipeline

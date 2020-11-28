@@ -26,14 +26,15 @@
 #define __PLATFORM_DEBUG_H__
 
 
+
 #define DBGBUFFER_SZ 120
 
 #ifdef _DEBUG
     #ifdef JLINK_RTT
     #include <jlink_rtt.h>
     // #define Serial JlinkRtt
-    #define PRINTFC(c_, f_, ...) rtt_printf((rtt_color_t)c_, (f_), ##__VA_ARGS__)
-    #define PRINTF(c_, f_, ...) rtt_printf((rtt_color_t)c_, (f_), ##__VA_ARGS__)
+    #define PRINTFC(c_, f_, ...) rtt_printf(c_, (f_), ##__VA_ARGS__)
+    #define PRINTF(c_, f_, ...) rtt_printf(c_, (f_), ##__VA_ARGS__)
     #else
     #define PRINTF(c_, f_, ...) dbg_print((f_), ##__VA_ARGS__)
     #define PRINTFC(c_, f_, ...) dbg_print((f_), ##__VA_ARGS__)
@@ -43,6 +44,25 @@
 #define PRINTFC(c_, f_, ...) ;
 #endif
 
+
+typedef enum dbg_color_tag {
+    dbgColor_none = 0,
+    dbgColor_info = 1,
+    dbgColor_warn = 2,
+    dbgColor_error = 3,
+
+    dbgColor_cyan = 10,
+    dbgColor_magenta = 11,
+    dbgColor_white = 12,
+    dbgColor_gray = 13,
+    dbgColor_blue = 14,
+
+    dbgColor_dCyan = 20,
+    dbgColor_dMagenta = 21,
+
+    dbgColor_green = 1,
+    dbgColor_dGreen = 25
+} dbg_color_t;
 
 
 #ifdef __cplusplus

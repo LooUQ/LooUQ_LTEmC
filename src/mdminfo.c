@@ -1,10 +1,9 @@
 // Copyright (c) 2020 LooUQ Incorporated.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+//#define _DEBUG
 #include "ltem1c.h"
 
-//#define _DEBUG
-//#include "dbgprint.h"
 
 #define IMEI_OFFSET 2
 #define IMEI_SIZE 15

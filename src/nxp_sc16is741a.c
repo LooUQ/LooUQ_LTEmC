@@ -1,9 +1,10 @@
 //	Copyright (c) 2020 LooUQ Incorporated.
 //	Licensed under The MIT License. See LICENSE in the root directory.
 
+//#define _DEBUG
 #include "ltem1c.h"
-#include <string.h>
 
+#include <string.h>
 
 #define REG_MODIFY(REG_NAME, MODIFY_ACTION) \
 REG_NAME REG_NAME##_reg = {0}; \

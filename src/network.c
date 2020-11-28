@@ -6,11 +6,8 @@
  *  Copyright (c) 2020 LooUQ Incorporated.
  *****************************************************************************/
 
-#include "ltem1c.h"
-
 //#define _DEBUG
-//#include "dbgprint.h"
-
+#include "ltem1c.h"
 
 #define PROTOCOLS_CMD_BUFFER_SZ 80
 

@@ -7,10 +7,8 @@
  *
  *****************************************************************************/
 
-#include "ltem1c.h"
-
 //#define _DEBUG
-//#include "dbgprint.h"
+#include "ltem1c.h"
 
 #define WAIT_SECONDS(timeout) (timeout * 1000)
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))

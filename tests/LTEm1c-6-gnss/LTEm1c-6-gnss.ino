@@ -29,9 +29,8 @@
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 // debugging options
 #define _DEBUG                          // enable/expand 
-// #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
-// #define Serial JlinkRtt
-#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
+#define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
+//#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
 #include <ltem1c.h>
 
@@ -63,6 +62,7 @@ int loopCnt = 0;
 gnssLocation_t location;
 
 void loop() {
+
     location = gnss_getLocation();
 
     if (location.statusCode == 200)

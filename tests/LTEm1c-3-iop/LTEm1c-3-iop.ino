@@ -32,7 +32,6 @@
 // debugging options
 #define _DEBUG                          // enable/expand 
 // #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
-// #define Serial JlinkRtt
 #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
 #include <ltem1c.h>
@@ -70,7 +69,7 @@ void loop()
     PRINTFC(0, "Invoking cmd: %s \r\n", cmd);
 
     iop_resetCmdBuffer();                               // send command
-    iop_txSend(cmd, strlen(cmd), false);
+    iop_txSend(cmd, strlen(cmd), true);
     PRINTFC(0, "CmdSent\r\n");
 
     timing_delay(100);                                      // give BGx time to respond

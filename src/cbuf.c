@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file txbuf.c
+ *  \file cbuf.c
  *  \author Greg Terrell
  *  \license MIT License
  *

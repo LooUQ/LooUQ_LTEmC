@@ -26,9 +26,9 @@
  * data to/from the LTEm1 to be handled by the command or protocol processes.
  *****************************************************************************/
 
+// #define _DEBUG
 #include "ltem1c.h"
 
-#define _DEBUG
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define IOP_RXCTRLBLK_ADVINDEX(INDX) INDX = (++INDX == IOP_RXCTRLBLK_COUNT) ? 0 : INDX
