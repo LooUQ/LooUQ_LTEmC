@@ -26,8 +26,11 @@
  * data to/from the LTEm1 to be handled by the command or protocol processes.
  *****************************************************************************/
 
-// #define _DEBUG
+#define _DEBUG
 #include "ltem1c.h"
+// debugging output options             UNCOMMENT one of the next two lines to direct debug (PRINTF) output
+#include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
+// #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -356,56 +359,59 @@ static void txSendChunk()
 */
 void iop_rxParseImmediate()
 {
-    if (g_ltem1->iop->peerTypeMap.sslSocket && memcmp("+QSSLURC: \"recv", g_ltem1->iop->rxCmdBuf->prevHead + 2, strlen("+QSSLURC: \"recv")) == 0)
+    char *urcPrefix = memchr(g_ltem1->iop->rxCmdBuf->prevHead, '+', 6);             // all URC start with '+', skip leading \r\n 
+    if (urcPrefix)
     {
-        PRINTF(dbgColor_cyan, "-e=sslURC");
-        char *connIdPtr = g_ltem1->iop->rxCmdBuf->prevHead + strlen("+QSSLURC: \"recv");
-        char *endPtr = NULL;
-        uint8_t socketId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-        g_ltem1->sockets->socketCtrls[socketId + iopDataPeer__SOCKET].dataPending = true;
-        // discard this chunk, processed here
-        g_ltem1->iop->rxCmdBuf->head = g_ltem1->iop->rxCmdBuf->prevHead;
-    }
+        if (g_ltem1->iop->peerTypeMap.sslSocket && memcmp("+QSSLURC: \"recv", urcPrefix, strlen("+QSSLURC: \"recv")) == 0)
+        {
+            PRINTF(dbgColor_cyan, "-e=sslURC");
+            char *connIdPtr = g_ltem1->iop->rxCmdBuf->prevHead + strlen("+QSSLURC: \"recv");
+            char *endPtr = NULL;
+            uint8_t socketId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
+            g_ltem1->sockets->socketCtrls[socketId + iopDataPeer__SOCKET].dataPending = true;
+            // discard this chunk, processed here
+            g_ltem1->iop->rxCmdBuf->head = g_ltem1->iop->rxCmdBuf->prevHead;
+        }
 
-    else if (g_ltem1->iop->peerTypeMap.tcpudpSocket && memcmp("+QIURC: \"recv", g_ltem1->iop->rxCmdBuf->prevHead + 2, strlen("+QIURC: \"recv")) == 0)
-    {
-        PRINTF(dbgColor_cyan, "-e=ipURC");
-        char *connIdPtr = g_ltem1->iop->rxCmdBuf->prevHead + strlen("+QIURC: \"recv");
-        char *endPtr = NULL;
-        uint8_t socketId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-        g_ltem1->sockets->socketCtrls[socketId + iopDataPeer__SOCKET].dataPending = true;
-        // discard this chunk, processed here
-        g_ltem1->iop->rxCmdBuf->head = g_ltem1->iop->rxCmdBuf->prevHead;
-    }
+        else if (g_ltem1->iop->peerTypeMap.tcpudpSocket && memcmp("+QIURC: \"recv", urcPrefix, strlen("+QIURC: \"recv")) == 0)
+        {
+            PRINTF(dbgColor_cyan, "-e=ipURC");
+            char *connIdPtr = g_ltem1->iop->rxCmdBuf->prevHead + strlen("+QIURC: \"recv");
+            char *endPtr = NULL;
+            uint8_t socketId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
+            g_ltem1->sockets->socketCtrls[socketId + iopDataPeer__SOCKET].dataPending = true;
+            // discard this chunk, processed here
+            g_ltem1->iop->rxCmdBuf->head = g_ltem1->iop->rxCmdBuf->prevHead;
+        }
 
-    else if (g_ltem1->iop->peerTypeMap.mqttSubscribe && memcmp("+QMTRECV:", g_ltem1->iop->rxCmdBuf->prevHead + 2, strlen("+QMTRECV:")) == 0)
-    {
-        PRINTF(dbgColor_cyan, "-e=mqttR");
-        // this chunk, needs to stay here until the complete message is received, chunk will then will be copied to start of data buffer
-        // props below define that copy
-        g_ltem1->mqtt->firstChunkBegin = g_ltem1->iop->rxCmdBuf->prevHead + 2;
-        g_ltem1->mqtt->firstChunkSz = g_ltem1->iop->rxCmdBuf->head - (g_ltem1->iop->rxCmdBuf->prevHead + 2);
-        g_ltem1->iop->rxDataPeer = iopDataPeer_MQTT;
-    }
+        else if (g_ltem1->iop->peerTypeMap.mqttSubscribe && memcmp("+QMTRECV:", urcPrefix, strlen("+QMTRECV:")) == 0)
+        {
+            PRINTF(dbgColor_cyan, "-e=mqttR");
+            // this chunk, needs to stay here until the complete message is received, chunk will then will be copied to start of data buffer
+            // props below define that copy
+            g_ltem1->mqtt->firstChunkBegin = urcPrefix;
+            g_ltem1->mqtt->firstChunkSz = g_ltem1->iop->rxCmdBuf->head - urcPrefix;
+            g_ltem1->iop->rxDataPeer = iopDataPeer_MQTT;
+        }
 
-    else if (g_ltem1->iop->peerTypeMap.mqttConnection && memcmp("+QMTSTAT:", g_ltem1->iop->rxCmdBuf->prevHead + 2, strlen("+QMTSTAT:")) == 0)
-    {
-        PRINTF(dbgColor_cyan, "-e=mqttS");
-        // todo mark mqtt connection closed
-    }
+        else if (g_ltem1->iop->peerTypeMap.mqttConnection && memcmp("+QMTSTAT:", urcPrefix, strlen("+QMTSTAT:")) == 0)
+        {
+            PRINTF(dbgColor_cyan, "-e=mqttS");
+            // todo mark mqtt connection closed
+        }
 
-    else if (g_ltem1->iop->peerTypeMap.pdpContext && memcmp("+QIURC: \"pdpdeact", g_ltem1->iop->rxCmdBuf->prevHead, strlen("+QIURC: \"pdpdeact")) == 0)
-    {
-        PRINTF(dbgColor_cyan, "-e=pdpD");
+        else if (g_ltem1->iop->peerTypeMap.pdpContext && memcmp("+QIURC: \"pdpdeact", urcPrefix, strlen("+QIURC: \"pdpdeact")) == 0)
+        {
+            PRINTF(dbgColor_cyan, "-e=pdpD");
 
-        char *connIdPtr = g_ltem1->iop->rxCmdBuf->prevHead + strlen("+QIURC: \"pdpdeact");
-        char *endPtr = NULL;
-        uint8_t contextId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-        g_ltem1->network->contexts[contextId].contextState = 0;
-        g_ltem1->network->contexts[contextId].ipAddress[0] = '\0';
-
-        // discard this chunk, processed here
-        g_ltem1->iop->rxCmdBuf->head = g_ltem1->iop->rxCmdBuf->prevHead;
+            char *connIdPtr = g_ltem1->iop->rxCmdBuf->prevHead + strlen("+QIURC: \"pdpdeact");
+            char *endPtr = NULL;
+            uint8_t contextId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
+            g_ltem1->network->contexts[contextId].contextState = 0;
+            g_ltem1->network->contexts[contextId].ipAddress[0] = '\0';
+            // discard this chunk, processed here
+            g_ltem1->iop->rxCmdBuf->head = g_ltem1->iop->rxCmdBuf->prevHead;
+        }
     }
 
     else if (g_ltem1->qbgReadyState != qbg_readyState_appReady && memcmp("\r\nAPP RDY", g_ltem1->iop->rxCmdBuf->prevHead, strlen("\r\nAPP RDY")) == 0)

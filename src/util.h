@@ -67,9 +67,8 @@ extern "C"
 
 
 char *strToken(char *source, int delimiter, char *token, uint8_t tokenMax);
-
 propsDict_t util_parseStringToPropsDict(char *propsSrc);
-char *util_getPropValue(const char *propName, propsDict_t props);
+char *util_getActionPropValue(const char *propName, propsDict_t props);
 
 
 /* seems like the only survivor is strToken which is referenced in gnss and network modules, likely move to ltem1c.c and drop util.c */

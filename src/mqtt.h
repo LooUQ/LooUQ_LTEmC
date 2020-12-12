@@ -120,17 +120,17 @@ typedef enum mqttStatus_tag
 /** 
  *  \brief typedef of MQTT subscription receiver function (required signature).
 */
-typedef void (*mqttRecv_func_t)(char *topic, char *props, char *message);
+typedef void (*mqtt_recvFunc_t)(char *topic, char *props, char *message);
 
 
 /** 
  *  \brief Struct describing a MQTT topic subscription.
 */
-typedef struct mqtt_Subscription_tag
+typedef struct mqttSubscription_tag
 {
     char topicName[MQTT_TOPIC_NAME_SZ];     ///< Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
     char wildcard;                          ///< Set to '#' if multilevel wildcard specified when subscribing to topic.
-    mqttRecv_func_t receiver_func;          ///< Function to receive incoming messages (event). Note that receiver_func can be unique or shared amongst subscriptions.
+    mqtt_recvFunc_t receiver_func;          ///< Function to receive incoming messages (event). Note that receiver_func can be unique or shared amongst subscriptions.
 } mqttSubscription_t;
 
 
@@ -165,7 +165,7 @@ socketResult_t mqtt_connect(const char *clientId, const char *username, const ch
 void mqtt_close();
 
 
-socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqttRecv_func_t rcvr_func);
+socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqtt_recvFunc_t rcvr_func);
 socketResult_t mqtt_unsubscribe(const char *topic);
 socketResult_t mqtt_publish(const char *topic, mqttQos_t qos, const char *message);
 

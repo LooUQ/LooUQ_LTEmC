@@ -89,6 +89,17 @@ char *util_getPropValue(const char *propName, propsDict_t props)
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
 // /**
 //  *	\brief Safe string length, limits search for NULL char to maxSz.
 //  *
@@ -101,8 +112,6 @@ char *util_getPropValue(const char *propName, propsDict_t props)
 // {
 //     return memchr(charStr, '\0', maxSz);
 // }
-
-
 
 
 /**
@@ -129,7 +138,6 @@ char *util_getPropValue(const char *propName, propsDict_t props)
 //         result.packed = 0;
 //     return result;
 // }
-
 
 
 // /**
@@ -169,17 +177,3 @@ char *util_getPropValue(const char *propName, propsDict_t props)
 //     }
 //     buf[pos++] = '\0';
 // }
-
-
-
-/**
-*  \brief C99 thread-safe implementation of c-string token extractor.
-*
-*  \param[in] source The source to extract tokens from.
-*  \param[in] delimeter The character delimeter as an integer.
-*  \param[in] token Buffer containing the token.
-*  \param[in] tokenMax The maximum size for the extracted token.
-*
-*  \return Pointer to the continue point of tokenization.
-*/
-

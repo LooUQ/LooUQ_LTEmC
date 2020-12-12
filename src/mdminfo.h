@@ -35,6 +35,7 @@ extern "C" {
 
 modemInfo_t mdminfo_ltem1();
 int16_t mdminfo_rssi();
+uint8_t mdminfo_rssiBars(uint8_t numberOfBars);
 
 
 #ifdef __cplusplus

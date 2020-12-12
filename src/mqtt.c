@@ -220,7 +220,7 @@ void mqtt_close()
 */
 socketResult_t mqtt_connect(const char *clientId, const char *username, const char *password, mqttSession_t sessionClean)
 {
-    #define MQTT_CONNECT_CMDSZ 540
+    #define MQTT_CONNECT_CMDSZ 400
     #define MQTT_CONNECT_RSPSZ 81
 
     char actionCmd[MQTT_CONNECT_CMDSZ] = {0};
@@ -236,8 +236,8 @@ socketResult_t mqtt_connect(const char *clientId, const char *username, const ch
             return RESULT_CODE_ERROR;
     }
 
-    snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTCONN=%d,\"%s\",\"%s\",\"SharedAccessSignature %s\"", MQTT_SOCKET_ID, clientId, username, password);
-    if (action_tryInvokeAdv(actionCmd, ACTION_RETRIES_DEFAULT, WAIT_SECONDS(30), mqttConnectCompleteParser))
+    snprintf(actionCmd, MQTT_CONNECT_CMDSZ, "AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", MQTT_SOCKET_ID, clientId, username, password);
+    if (action_tryInvokeAdv(actionCmd, ACTION_RETRIES_DEFAULT, WAIT_SECONDS(60), mqttConnectCompleteParser))
     {
         atResult = action_awaitResult(true);
         if (atResult.statusCode == RESULT_CODE_SUCCESS)
@@ -258,7 +258,7 @@ socketResult_t mqtt_connect(const char *clientId, const char *username, const ch
  * 
  *  \returns A socketResult_t value indicating the success or type of failure.
 */
-socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqttRecv_func_t recv_func)
+socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqtt_recvFunc_t recv_func)
 {
     // AT+QMTSUB=1,99,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#",0
     #define MQTT_PUBSUB_CMDSZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ + MQTT_TOPIC_PUBOVRHD_SZ)

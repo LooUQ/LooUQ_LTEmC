@@ -29,13 +29,12 @@
 
 // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
-// debugging options
+
 #define _DEBUG                          // enable/expand 
-// #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
-#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
-
 #include <ltem1c.h>
-
+// debugging output options             UNCOMMENT one of the next two lines to direct debug (PRINTF) output
+#include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
+// #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
 #define DEFAULT_NETWORK_CONTEXT 1
 #define XFRBUFFER_SZ 201
@@ -44,20 +43,33 @@
 #define ASSERT(expected_true, failMsg)  if(!(expected_true))  indicateFailure(failMsg)
 #define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') indicateFailure(failMsg)
 
-// replace with actual Azure IOTHUB device values  (changed before push)
+
+/* Test is designed for use with Azure IoTHub. If you do not have a Azure subscription you can get a free test account with a preloaded credit.
+ * Optionally you can request a trial account for LooUQ's LQ Cloud, which uses Azure IoTHub for device data ingress.
+ * 
+ * LQ Cloud or Azure IoTHub needs 3 provisioning elements: 
+ *   -- The hub address, if you are using LQ Cloud for testing the MQTT_IOTHUB address below is valid. Otherwise supply your MQTT access point (no protocol prefix)
+ *   -- A deviceId and 
+ *   -- A SAS token (a timelimited password). For deviceId we recommend the modem's
+ * 
+ * The Device ID is up to 40 characters long and we suggest using the modem's IMEI. An example of the SAS token is shown on the next line.  
+ * 
+ * "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=XbjrqvX4kQXOTefJIaw86jRhfkv1UMJwK%2FFDiWmfqFU%3D&se=1759244275"
+ *
+ * Your values will be different, update MQTT_IOTHUB_DEVICEID and MQTT_IOTHUB_SASTOKEN with your values.
+*/
+
 #define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
 #define MQTT_PORT 8883
 
-//"HostName=iothub-dev-pelogical.azure-devices.net;DeviceId=e8fdd7df-2ca2-4b64-95de-031c6b199299;SharedAccessSignature=SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=XbjrqvX4kQXOTefJIaw86jRhfkv1UMJwK%2FFDiWmfqFU%3D&se=1759244275"
+#define MQTT_IOTHUB_DEVICEID "867198053158865"
+#define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/" MQTT_IOTHUB_DEVICEID "/?api-version=2018-06-30"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053158865&sig=GrUIHARevRNxaIh6Atpk7hKDCdNf2ls9xvrj48MaF7I%3D&se=1607886093"
 
-#define MQTT_IOTHUB_DEVICEID "e8fdd7df-2ca2-4b64-95de-031c6b199299"
-#define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/e8fdd7df-2ca2-4b64-95de-031c6b199299/?api-version=2018-06-30"
-#define MQTT_IOTHUB_SASTOKEN "sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=XbjrqvX4kQXOTefJIaw86jRhfkv1UMJwK%2FFDiWmfqFU%3D&se=1759244275"
-
-#define MQTT_IOTHUB_D2C_TOPIC "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/"
-#define MQTT_IOTHUB_C2D_TOPIC "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#"
+#define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
+#define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
 #define MQTT_MSG_PROPERTIES "mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97"
-
+#define MQTT_MSG_BODY_TEMPLATE "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97"
 
 // test setup
 #define CYCLE_INTERVAL 5000
@@ -110,7 +122,7 @@ void setup() {
 }
 
 
-bool testPublish = true;
+bool testPublish = false;
 
 void loop() 
 {
@@ -120,7 +132,7 @@ void loop()
 
         if (testPublish)
         {
-            snprintf(mqttTopic, 200, "devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/events/mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97", loopCnt);
+            snprintf(mqttTopic, 200, MQTT_MSG_BODY_TEMPLATE, loopCnt);
             snprintf(mqttMessage, 200, "MQTT message for loop=%d", loopCnt);
             mqtt_publish(mqttTopic, mqttQos_1, mqttMessage);
         }

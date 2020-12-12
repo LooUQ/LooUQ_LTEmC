@@ -50,7 +50,7 @@ resultCode_t gnss_off()
 
 gnssLocation_t gnss_getLocation()
 {
-    // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08  + lineEnds and OK
+    
 
     #define TOKEN_BUF_SZ 12
 
@@ -59,6 +59,8 @@ gnssLocation_t gnss_getLocation()
     gnssLocation_t gnssResult;
 
     //action_t *gnssCmd = action_build("AT+QGPSLOC=2", GNSS_CMD_RESULTBUF_SZ, 500, gnssLocCompleteParser);
+    
+    // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08  + lineEnds and OK
 
     if (action_tryInvokeAdv("AT+QGPSLOC=2", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, gnssLocCompleteParser))
     {
@@ -73,17 +75,17 @@ gnssLocation_t gnss_getLocation()
 
         PRINTFC(dbgColor_warn, "getLocation(): parse starting...\r");
 
-        continueAt = atResult.response + GNSS_LOC_DATAOFFSET;
-        continueAt = strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
+        continueAt = atResult.response + GNSS_LOC_DATAOFFSET;                           // skip past +QGPSLOC: 
+        continueAt = strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);        // grab 1st element as a string
         if (continueAt != NULL)
             strncpy(gnssResult.utc, tokenBuf, 11);
-        gnssResult.lat.val = strtof(continueAt, &continueAt);
+        gnssResult.lat.val = strtof(continueAt, &continueAt);                           // grab a float
         gnssResult.lat.dir = ASCII_cSPACE;
-        gnssResult.lon.val = strtof(++continueAt, &continueAt);
+        gnssResult.lon.val = strtof(++continueAt, &continueAt);                         // ++continueAt, pre-incr to skip previous comma
         gnssResult.lon.dir = ASCII_cSPACE;
         gnssResult.hdop = strtof(++continueAt, &continueAt);
         gnssResult.altitude = strtof(++continueAt, &continueAt);
-        gnssResult.fixType = strtol(++continueAt, &continueAt, 10);
+        gnssResult.fixType = strtol(++continueAt, &continueAt, 10);                     // grab an integer
         gnssResult.course = strtof(++continueAt, &continueAt);
         gnssResult.speedkm = strtof(++continueAt, &continueAt);
         gnssResult.speedkn = strtof(++continueAt, &continueAt);

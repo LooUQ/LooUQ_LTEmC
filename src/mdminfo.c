@@ -102,7 +102,8 @@ modemInfo_t mdminfo_ltem1()
 */
 int16_t mdminfo_rssi()
 {
-    int16_t rssi = -999;
+    uint8_t csq = 0;
+    int8_t rssi;
 
     if (action_tryInvoke("AT+CSQ"))
     {
@@ -111,12 +112,18 @@ int16_t mdminfo_rssi()
         {
             char *term;
             term = strstr(atResult.response + ASCII_szCRLF, "+CSQ");
-            rssi = strtol(term + 5, NULL, 10);
+            csq = strtol(term + 5, NULL, 10);
         }
-        rssi = (rssi == 99) ? rssi = -999 : -113 + 2 * rssi;
+        rssi = (csq == 99) ? 0 : -113 + 2 * csq;        // raw=99: no signal, range -51 to -113
         action_close();
     }
     return rssi;
+}
+
+uint8_t mdminfo_rssiBars(uint8_t numberOfBars)
+{
+    uint8_t barSpan = (113 - 51) / numberOfBars;
+    return (int)((mdminfo_rssi() + 113 + barSpan) / barSpan);
 }
 
 
