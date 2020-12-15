@@ -3,6 +3,9 @@
 
 //#define _DEBUG
 #include "ltem1c.h"
+// debugging output options             UNCOMMENT one of the next two lines to direct debug (PRINTF) output
+// #include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
+// #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))

@@ -10,9 +10,13 @@
 #include "ltem1c.h"
 
 #define PROTOCOLS_CMD_BUFFER_SZ 80
+#define MIN(x, y) (((x)<(y)) ? (x):(y))
 
+#pragma region Static Local Function Declarations
 static resultCode_t contextStatusCompleteParser(const char *response, char **endptr);
 static networkOperator_t getNetworkOperator();
+char *grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
+#pragma endregion
 
 
 /* public tcpip functions
@@ -121,7 +125,7 @@ resultCode_t ntwk_fetchDataContexts()
 
                 g_ltem1->network->contexts[cntxt].contextState = (int)strtol(continueAt + 1, &continueAt, 10);
                 g_ltem1->network->contexts[cntxt].contextType = (int)strtol(continueAt + 1, &continueAt, 10);
-                continueAt = strToken(continueAt + 2, ASCII_cDBLQUOTE, tokenBuf, TOKEN_BUF_SZ);
+                continueAt = grabToken(continueAt + 2, ASCII_cDBLQUOTE, tokenBuf, TOKEN_BUF_SZ);
                 if (continueAt != NULL)
                 {
                     strncpy(g_ltem1->network->contexts[cntxt].ipAddress, tokenBuf, TOKEN_BUF_SZ);
@@ -243,7 +247,7 @@ static networkOperator_t getNetworkOperator()
                 continueAt = strchr(atResult.response, ASCII_cDBLQUOTE);
                 if (continueAt != NULL)
                 {
-                    continueAt = strToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem1->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
+                    continueAt = grabToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem1->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
                     ntwkMode = (uint8_t)strtol(continueAt + 1, &continueAt, 10);
                     if (ntwkMode == 8)
                         strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-M1");
@@ -262,5 +266,30 @@ static networkOperator_t getNetworkOperator()
     return *g_ltem1->network->networkOperator;
 }
 
+/**
+ *  \brief Scans a C-String (char array) for the next delimeted token and null terminates it.
+ * 
+ *  \param [in] source - Original char array to scan.
+ *  \param [in] delimeter - Character separating tokens (passed as integer value).
+ *  \param [out] token - Pointer to where token should be copied to.
+ *  \param [in] tokenSz - Size of buffer to receive token.
+ * 
+ *  \return Pointer to the location in the source string immediately following the token.
+*/
+char *grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz) 
+{
+    char *delimAt;
+    if (source == NULL)
+        return false;
+
+    delimAt = strchr(source, delimiter);
+    uint8_t tokenSz = delimAt - source;
+    if (tokenSz == 0)
+        return NULL;
+
+    memset(tokenBuf, 0, tokenSz);
+    strncpy(tokenBuf, source, MIN(tokenSz, tokenBufSz-1));
+    return delimAt + 1;
+}
 
 #pragma endregion

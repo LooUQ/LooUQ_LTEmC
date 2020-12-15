@@ -9,19 +9,24 @@
 
 //#define _DEBUG
 #include "ltem1c.h"
+// debugging output options             UNCOMMENT one of the next two lines to direct debug (PRINTF) output
+// #include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
+// #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
+
 
 #define WAIT_SECONDS(timeout) (timeout * 1000)
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 
-/* private function declarations */
+#pragma region Static Local Function Declarations
 static resultCode_t mqttOpenStatusParser(const char *response, char **endptr);
 static resultCode_t mqttOpenCompleteParser(const char *response, char **endptr);
 static resultCode_t mqttConnectStatusParser(const char *response, char **endptr);
 static resultCode_t mqttConnectCompleteParser(const char *response, char **endptr);
 static resultCode_t mqttSubscribeCompleteParser(const char *response, char **endptr);
 static resultCode_t mqttPublishCompleteParser(const char *response, char **endptr);
-
+static void urlDecode(char *src, int len);
+#pragma endregion
 
 
 /* public mqtt functions
@@ -264,7 +269,6 @@ socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqtt_recvFunc_t 
     #define MQTT_PUBSUB_CMDSZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ + MQTT_TOPIC_PUBOVRHD_SZ)
     #define MQTT_PUBSUB_RSPSZ 81
 
-
     char actionCmd[MQTT_PUBSUB_CMDSZ] = {0};
     char actionResponse[MQTT_PUBSUB_RSPSZ] = {0};
     uint8_t subscriptionSlot = 255;
@@ -399,7 +403,7 @@ socketResult_t mqtt_publish(const char *topic, mqttQos_t qos, const char *messag
  *  \param [in] src - Input text string to URL decode.
  *  \param [in] len - Length of input text string.
 */
-static void util_urlDecode(char *src, int len)
+static void urlDecode(char *src, int len)
 {
     char subTable[] = " !\"#$%&'()*+,-./";
     uint8_t srcChar;
@@ -450,7 +454,7 @@ void mqtt_doWork()
         uint16_t start, end;
         char *eot;
 
-        util_urlDecode(g_ltem1->iop->rxDataBufs[iopBufIndx]->buffer, IOP_RX_DATABUF_SZ);
+        urlDecode(g_ltem1->iop->rxDataBufs[iopBufIndx]->buffer, IOP_RX_DATABUF_SZ);
 
         topic = memchr(g_ltem1->iop->rxDataBufs[iopBufIndx]->buffer, ASCII_cDBLQUOTE, MQTT_TOPIC_OFFSET_MAX);
         if (topic == NULL)                                                      // malformed
@@ -474,9 +478,8 @@ void mqtt_doWork()
             uint16_t topicSz = strlen(g_ltem1->mqtt->subscriptions[i].topicName);
             if (strncmp(g_ltem1->mqtt->subscriptions[i].topicName, topic, topicSz) == 0)
             {
-                topic += topicSz;
-                //                                           (topic name,                              , props, message)
-                g_ltem1->mqtt->subscriptions[i].receiver_func(g_ltem1->mqtt->subscriptions[i].topicName, topic, message);
+                //                                           (topic name,                                props,           message body)
+                g_ltem1->mqtt->subscriptions[i].receiver_func(g_ltem1->mqtt->subscriptions[i].topicName, topic + topicSz, message);
                 break;
             }
         }

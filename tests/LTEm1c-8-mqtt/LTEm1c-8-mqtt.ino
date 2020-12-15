@@ -30,11 +30,13 @@
 // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
-#define _DEBUG                          // enable/expand 
+//#define _DEBUG                          // enable/expand 
 #include <ltem1c.h>
 // debugging output options             UNCOMMENT one of the next two lines to direct debug (PRINTF) output
-#include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
+//#include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
 // #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
+
+#include "lqc_collections.h"
 
 #define DEFAULT_NETWORK_CONTEXT 1
 #define XFRBUFFER_SZ 201
@@ -56,7 +58,11 @@
  * 
  * "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=XbjrqvX4kQXOTefJIaw86jRhfkv1UMJwK%2FFDiWmfqFU%3D&se=1759244275"
  *
- * Your values will be different, update MQTT_IOTHUB_DEVICEID and MQTT_IOTHUB_SASTOKEN with your values.
+ * Your values will be different, update MQTT_IOTHUB_DEVICEID and MQTT_IOTHUB_SASTOKEN with your values. If you obtain the SAS Token from Azure IoT Explorer it will
+ * be prefixed with additional information: Hostname, DeviceId and the SharedAccessSignature property keys, these must be removed for using MQTT directly.
+ * 
+ * HostName=iothub-dev-pelogical.azure-devices.net;DeviceId=867198053158865;SharedAccessSignature=SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053158865&sig=YlW6PuH4MA93cINEhgstihwQxWt4Zr9iY9Tnkl%2BuQK4%3D&se=1608052225
+ * ^^^                          REMOVE, NOT PART OF THE SAS TOKEN                              ^^^              KEEP ALL FOLLOWING '='
 */
 
 #define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
@@ -64,7 +70,7 @@
 
 #define MQTT_IOTHUB_DEVICEID "867198053158865"
 #define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/" MQTT_IOTHUB_DEVICEID "/?api-version=2018-06-30"
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053158865&sig=GrUIHARevRNxaIh6Atpk7hKDCdNf2ls9xvrj48MaF7I%3D&se=1607886093"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053158865&sig=YlW6PuH4MA93cINEhgstihwQxWt4Zr9iY9Tnkl%2BuQK4%3D&se=1608052225"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
@@ -122,7 +128,7 @@ void setup() {
 }
 
 
-bool testPublish = false;
+bool publishToCloud = true;
 
 void loop() 
 {
@@ -130,7 +136,7 @@ void loop()
     {
         lastCycle = timing_millis();
 
-        if (testPublish)
+        if (publishToCloud)
         {
             snprintf(mqttTopic, 200, MQTT_MSG_BODY_TEMPLATE, loopCnt);
             snprintf(mqttMessage, 200, "MQTT message for loop=%d", loopCnt);
@@ -156,11 +162,12 @@ void mqttReceiver(char *topic, char *topicProps, char *message)
     PRINTFC(dbgColor_cyan, "\rp(%d): %s", strlen(topicProps), topicProps);
     PRINTFC(dbgColor_cyan, "\rm(%d): %s", strlen(message), message);
 
-    propsDict_t mqttProps = util_parseStringToPropsDict(topicProps);
+    // use local copy of LQ Cloud query string processor
+    keyValueDict_t mqttProps = lqc_createDictFromQueryString(topicProps);
     PRINTFC(dbgColor_info, "\rProps(%d)\r", mqttProps.count);
     for (size_t i = 0; i < mqttProps.count; i++)
     {
-        PRINTFC(dbgColor_cyan, "%s=%s\r", mqttProps.names[i], mqttProps.values[i]);
+        PRINTFC(dbgColor_cyan, "%s=%s\r", mqttProps.keys[i], mqttProps.values[i]);
     }
     PRINTFC(0, "\r");
 }

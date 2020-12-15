@@ -37,18 +37,8 @@ extern "C"
 #include <stdbool.h>
 #endif // __cplusplus
 
-// #include "platform/platform_gpio.h"
-// #include "platform/platform_timing.h"
-// #include "platform/platform_spi.h"
-// #include "nxp_sc16is741a.h"
-// #include "quectel_bg.h"
-// #include "util.h"
-
-
 /* Capabilities for build defined here globally */
-
 // Comment out any function not utilized in your applications
-
 #define LTEM1_SOCKETS
 #define LTEM1_MQTT
 //#define LTEM1_HTTP
@@ -103,7 +93,6 @@ typedef uint16_t resultCode_t;
 
 #include "nxp_sc16is741a.h"
 #include "quectel_bg.h"
-#include "util.h"
 
 #include "iop.h"
 #include "actions.h"
