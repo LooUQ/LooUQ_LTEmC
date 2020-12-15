@@ -14,9 +14,9 @@ You can learn about using IoTHub directly from MQTT in the guide below.
 The test continuously publishes message to IoTHub which you can view in **Azure IoT Explorer** as shown below. You can also publish C2D (cloud-to-device) messages to your
 device using IoT Explorer (debugging output shown below in Segger RTT viewer).
 
-![]("MQTT_D2C.png")
+![](MQTT_D2C.png)
 \image html "MQTT_D2C.png"
 
-![]("MQTT_C2D.png")
+![](MQTT_C2D.png)
 \image html "MQTT_C2D.png"
 
