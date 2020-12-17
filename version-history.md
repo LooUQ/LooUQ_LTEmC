@@ -1,4 +1,12 @@
 # LTEm1c Version History
+#### Versions will be simply marked by their release date moving forward. Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
+
+
+## Dec-15-2020
+*	Updated ISR for intermittent missed event when receiving MQTT publish
+*	Reformatted tests/LTEm1c-8-mqtt.ino for readability and test setup with Azure IoTHub
+*	Removed utils.c from LTEm1c library
+    *	Functionality is now part of LQ Cloud but can be used independently as lqc_collections (.h\.c)
 
 ## v0.4.1 - Misc (Nov 28, 2020)
 * Remove dependency on JLink RTT 
@@ -7,13 +15,13 @@
 ## v0.3 - IOP Redesign (Oct 6, 2020)
 Overhaul of the IOP buffering system. 
 * Simplified receive buffer management and eliminated copies from receive pipeline
-  * Small copy <60 chars remains (required) for MQTT receives
+    * Small copy <60 chars remains (required) for MQTT receives
 * Reduce code in ISR path, push processing to doWork() background path
 * Finishing MQTT support
-  * Publish to topic
-  * Subscribe\unsubscribe to topics
-  * Support for C2D (cloud-to-device) topic based properties
-  * Receiver events per subscription (subscriptions can share a receiver function or have distinct receiver functions)
+    * Publish to topic
+    * Subscribe\unsubscribe to topics
+    * Support for C2D (cloud-to-device) topic based properties
+    * Receiver events per subscription (subscriptions can share a receiver function or have distinct receiver functions)
 * Multiple fixes
 
 ## v0.2 - Fixes and Enhancements (Jun 25, 2020)
