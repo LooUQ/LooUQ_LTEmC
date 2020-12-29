@@ -95,7 +95,6 @@ uint8_t ntwk_getActivePdpContexts()
     for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)         // empty context table return and if success refill from parsing
     {
         g_ltem1->network->contexts[i].contextId = 0;
-        g_ltem1->network->contexts[i].apnName[0] = 0;
         g_ltem1->network->contexts[i].ipAddress[0] = 0;
     }
 
@@ -134,6 +133,7 @@ uint8_t ntwk_getActivePdpContexts()
             apnIndx++;
         }
     }
+    action_close();
     return apnIndx;
 }
 

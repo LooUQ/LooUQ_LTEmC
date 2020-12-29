@@ -89,7 +89,6 @@ typedef struct pdpContext_tag
 {
     uint8_t contextId;                  ///< context ID recognized by the carrier (valid are 1 to 16)
     contextIpType_t contextIpType;      ///< IPv4 or IPv6
-	char apnName[21];                   ///< The APN name for this context. This can be blank, APN naming is specific to each carrier.
 	char ipAddress[16];                 ///< The IP address obtained from the carrier for this context. The IP address of the modem.
 } pdpContext_t;
 

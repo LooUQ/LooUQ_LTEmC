@@ -412,7 +412,6 @@ void iop_rxParseImmediate()
                 if (g_ltem1->network->contexts[i].contextId == contextId)
                 {
                     g_ltem1->network->contexts[i].contextId = 0;
-                    g_ltem1->network->contexts[i].apnName[0] = 0;
                     g_ltem1->network->contexts[i].ipAddress[0] = 0;
                     break;
                 }
