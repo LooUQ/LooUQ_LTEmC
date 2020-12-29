@@ -82,6 +82,7 @@ sockets_t *sckt_create();
 socketResult_t sckt_open(socketId_t socketId, protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, receiver_func_t rcvr_func);
 void sckt_close(uint8_t socketNum);
 void sckt_reset(uint8_t socketNum);
+void sckt_closeAll(uint8_t contxtId);
 
 socketResult_t sckt_send(socketId_t socketId, const char *data, uint16_t dataSz);
 void sckt_doWork();

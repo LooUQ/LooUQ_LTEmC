@@ -99,8 +99,10 @@ void action_sendRawWithEOTs(const char *data, uint16_t dataSz, const char *eotPh
 {
     if (timeoutMillis > 0)
         g_ltem1->action->timeoutMillis = timeoutMillis;
-    if (taskCompleteParser_func == NULL)
-        action_okResultParser;
+    if (taskCompleteParser_func != NULL)
+        g_ltem1->action->taskCompleteParser_func = taskCompleteParser_func;
+    else
+        g_ltem1->action->taskCompleteParser_func = action_okResultParser;
         
     iop_txSend(data, dataSz, false);
     iop_txSend(eotPhrase, strlen(eotPhrase), true);

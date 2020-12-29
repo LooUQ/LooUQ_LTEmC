@@ -1,5 +1,14 @@
 # LTEm1c Version History
 
+## v0.5.0 - Fixes and Network PDP context handling (Dec 28, 2020)
+* Fixed MQTT not trapping publish errors
+* Fixed ACTION parsing on multistep actions with custom response parser (affected MQTT publish)
+* Changed NETWORK module PDP context handling
+    * Changed internal active PDP table organization
+    * Change function signatures to better match behaviors
+    * Added reset to deactivate\activate all presently active PDP contexts
+* Change IOP pdp deactivate detect logic to match internal implementation in NETWORK module
+
 ## v0.4.1 - Misc (Nov 28, 2020)
 * Remove dependency on JLink RTT 
 * Fixed parse issue in GNSS getLocation()
@@ -10,10 +19,10 @@ Overhaul of the IOP buffering system.
   * Small copy <60 chars remains (required) for MQTT receives
 * Reduce code in ISR path, push processing to doWork() background path
 * Finishing MQTT support
-  * Publish to topic
-  * Subscribe\unsubscribe to topics
-  * Support for C2D (cloud-to-device) topic based properties
-  * Receiver events per subscription (subscriptions can share a receiver function or have distinct receiver functions)
+    * Publish to topic
+    * Subscribe\unsubscribe to topics
+    * Support for C2D (cloud-to-device) topic based properties
+    * Receiver events per subscription (subscriptions can share a receiver function or have distinct receiver functions)
 * Multiple fixes
 
 ## v0.2 - Fixes and Enhancements (Jun 25, 2020)

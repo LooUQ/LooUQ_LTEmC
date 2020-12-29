@@ -65,7 +65,7 @@ mqttStatus_t mqtt_status(const char *host)
     #define MQTT_OPENED_STATUS 505
     #define MQTT_CONNECTED_STATUS 503
 
-    mqttStatus_t mqttStatus = mqttStatus_idle;
+    mqttStatus_t mqttStatus = mqttStatus_closed;
 
     if (action_tryInvokeAdv("AT+QMTOPEN?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, mqttOpenStatusParser))
     {
@@ -78,7 +78,7 @@ mqttStatus_t mqtt_status(const char *host)
         else
         {
             char *hostNameAt = strchr(atResult.response, ASCII_cDBLQUOTE);
-            mqttStatus = (hostNameAt != NULL && strncmp(hostNameAt + 1, host, strlen(host)) == 0) ? mqttStatus_open : mqttStatus_idle;
+            mqttStatus = (hostNameAt != NULL && strncmp(hostNameAt + 1, host, strlen(host)) == 0) ? mqttStatus_open : mqttStatus_closed;
         }
 
         // if open, test for connected
@@ -86,7 +86,7 @@ mqttStatus_t mqtt_status(const char *host)
         {
             actionResult_t atResult = action_awaitResult(true);
             if (atResult.statusCode == MQTT_CONNECTED_STATUS)       // special case, 500 (error base) + 3 expected BGx MQTT state value
-                mqttStatus = mqttStatus_conn;
+                mqttStatus = mqttStatus_connected;
         }
     }
     return mqttStatus;
@@ -194,7 +194,7 @@ void mqtt_close()
         g_ltem1->mqtt->subscriptions[i].receiver_func = NULL;
     }
 
-    if (g_ltem1->mqtt->state == mqttStatus_conn)
+    if (g_ltem1->mqtt->state == mqttStatus_connected)
     {
         snprintf(actionCmd, 80, "AT+QMTDISC=%d", MQTT_SOCKET_ID);
         if (action_tryInvoke(actionCmd))
@@ -207,7 +207,7 @@ void mqtt_close()
             action_awaitResult(true);
     }
 
-    g_ltem1->mqtt->state == mqttStatus_idle;
+    g_ltem1->mqtt->state == mqttStatus_closed;
     return RESULT_CODE_SUCCESS;
 }
 
@@ -231,7 +231,7 @@ socketResult_t mqtt_connect(const char *clientId, const char *username, const ch
     char actionCmd[MQTT_CONNECT_CMDSZ] = {0};
     actionResult_t atResult;
 
-    if (g_ltem1->mqtt->state == mqttStatus_conn)      // already connected
+    if (g_ltem1->mqtt->state == mqttStatus_connected)      // already connected
         return RESULT_CODE_SUCCESS;
 
     snprintf(actionCmd, ACTION_CMD_SZ, "AT+QMTCFG=\"session\",%d,%d", MQTT_SOCKET_ID, (uint8_t)sessionClean);

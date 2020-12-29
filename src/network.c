@@ -36,7 +36,7 @@ network_t *ntwk_create()
 
     network->networkOperator = calloc(1, sizeof(networkOperator_t));
 
-    pdpContext_t *context = calloc(NTWK_CONTEXT_COUNT, sizeof(pdpContext_t));
+    pdpContext_t *context = calloc(BGX_CONTEXT_COUNT, sizeof(pdpContext_t));
 	if (context == NULL)
 	{
         ltem1_faultHandler(0, "ipProtocols-could not alloc IP protocol struct");
@@ -45,9 +45,7 @@ network_t *ntwk_create()
 
     for (size_t i = 0; i < IOP_SOCKET_COUNT; i++)
     {   
-        network->contexts[i].contextState = context_state_inactive;
-        network->contexts[i].contextType = context_type_IPV4;
-        network->contexts[i].ipAddress[0] = '\0';
+        network->contexts[i].contextIpType = contextIpType_IPV4;
     }
     return network;
 }
@@ -83,88 +81,97 @@ networkOperator_t ntwk_awaitOperator(uint16_t waitDuration)
 
 
 /**
- *	\brief Get APN active status and optionally activate.
+ *	\brief Get collection of APN active data contexts from BGx.
  * 
- *  \param[in] contextNum The APN to operate on. Typically 0 or 1
- *  \param[in] activate Attempt to activate the APN if found not active.
+ *  \return Count of active data contexts (BGx max is 3).
  */
-resultCode_t ntwk_fetchDataContexts()
+uint8_t ntwk_getActivePdpContexts()
 {
     #define IP_QIACT_SZ 8
 
     action_tryInvokeAdv("AT+QIACT?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, contextStatusCompleteParser);
     actionResult_t atResult = action_awaitResult(false);
 
-    if (atResult.statusCode == RESULT_CODE_SUCCESS)
+    for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)         // empty context table return and if success refill from parsing
     {
-        if (strlen(atResult.response) > IP_QIACT_SZ)
+        g_ltem1->network->contexts[i].contextId = 0;
+        g_ltem1->network->contexts[i].apnName[0] = 0;
+        g_ltem1->network->contexts[i].ipAddress[0] = 0;
+    }
+
+    if (atResult.statusCode != RESULT_CODE_SUCCESS)
+    {
+        action_close();
+        return 0;
+    }
+
+    uint8_t apnIndx = 0;
+    if (strlen(atResult.response) > IP_QIACT_SZ)
+    {
+        #define TOKEN_BUF_SZ 16
+        char *nextContext;
+        char *landmarkAt;
+        char *continueAt;
+        uint8_t landmarkSz = IP_QIACT_SZ;
+        char tokenBuf[TOKEN_BUF_SZ];
+
+        nextContext = strstr(atResult.response, "+QIACT: ");
+
+        // no contexts returned = none active (only active contexts are returned)
+        while (nextContext != NULL)                             // now parse each pdp context entry
         {
-            #define TOKEN_BUF_SZ 16
-            char *nextContext;
-            char *landmarkAt;
-            char *continueAt;
-            uint8_t landmarkSz = IP_QIACT_SZ;
-            char tokenBuf[TOKEN_BUF_SZ];
+            landmarkAt = nextContext;
+            g_ltem1->network->contexts[apnIndx].contextId = strtol(landmarkAt + landmarkSz, &continueAt, 10);
+            continueAt = strchr(++continueAt, ',');             // skip context_state: always 1
+            g_ltem1->network->contexts[apnIndx].contextIpType = (int)strtol(continueAt + 1, &continueAt, 10);
 
-            nextContext = strstr(atResult.response, "+QIACT: ");
-
-            // no contexts returned = none active (only active contexts are returned)
-            if (nextContext == NULL)
+            continueAt = grabToken(continueAt + 2, ASCII_cDBLQUOTE, tokenBuf, TOKEN_BUF_SZ);
+            if (continueAt != NULL)
             {
-                for (size_t i = 0; i < NTWK_CONTEXT_COUNT; i++)
-                {
-                    g_ltem1->network->contexts[i].contextState = context_state_inactive;
-                }
-                
+                strncpy(g_ltem1->network->contexts[apnIndx].ipAddress, tokenBuf, TOKEN_BUF_SZ);
             }
-            while (nextContext != NULL)                         // now parse each pdp context entry
-            {
-                landmarkAt = nextContext;
-                uint8_t cntxt = strtol(landmarkAt + landmarkSz, &continueAt, 10);
-                cntxt--;    //adjust for 0 base array
-
-                g_ltem1->network->contexts[cntxt].contextState = (int)strtol(continueAt + 1, &continueAt, 10);
-                g_ltem1->network->contexts[cntxt].contextType = (int)strtol(continueAt + 1, &continueAt, 10);
-                continueAt = grabToken(continueAt + 2, ASCII_cDBLQUOTE, tokenBuf, TOKEN_BUF_SZ);
-                if (continueAt != NULL)
-                {
-                    strncpy(g_ltem1->network->contexts[cntxt].ipAddress, tokenBuf, TOKEN_BUF_SZ);
-                }
-                nextContext = strstr(nextContext + landmarkSz, "+QIACT: ");
-            }
-            atResult.statusCode = RESULT_CODE_SUCCESS;
-        }
-        else
-        {
-            for (size_t i = 0; i < NTWK_CONTEXT_COUNT; i++)
-            {
-                g_ltem1->network->contexts[i].contextState = context_state_inactive;
-                g_ltem1->network->contexts[i].ipAddress[0] = ASCII_cNULL;
-            }
-            atResult.statusCode = RESULT_CODE_NOTFOUND;
+            nextContext = strstr(nextContext + landmarkSz, "+QIACT: ");
+            apnIndx++;
         }
     }
-    action_close();
-    return atResult.statusCode;
+    return apnIndx;
 }
 
+
+/**
+ *	\brief Get APN\PDP Context information
+ * 
+ *  \param [in] cntxtId The APN to retreive.
+ * 
+ *  \return Pointer to APN info in active APN table, NULL if not active
+ */
+pdpContext_t *ntwk_getPdpContext(uint8_t cntxtId)
+{
+    for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)
+    {
+        if(g_ltem1->network->contexts[i].contextId != 0)
+            return &g_ltem1->network->contexts[i];
+    }
+    return NULL;
+}
 
 
 /**
  *	\brief Activate APN.
  * 
- *  \param[in] contextNum The APN to operate on. Typically 0 or 1
+ *  \param[in] cntxtId The APN to operate on. Typically 0 or 1
  */
-resultCode_t ntwk_activateContext(uint8_t contextNum)
+void ntwk_activatePdpContext(uint8_t cntxtId)
 {
     char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
 
-    snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIACT=%d\r", contextNum);
+    snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIACT=%d\r", cntxtId);
     if (action_tryInvokeAdv(atCmd, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, contextStatusCompleteParser))
     {
-        return action_awaitResult(true).statusCode;
+        resultCode_t atResult = action_awaitResult(true).statusCode;
+        if ( atResult == RESULT_CODE_SUCCESS)
+            ntwk_getActivePdpContexts();
     }
-    return RESULT_CODE_CONFLICT;
 }
 
 
@@ -172,41 +179,44 @@ resultCode_t ntwk_activateContext(uint8_t contextNum)
 /**
  *	\brief Deactivate APN.
  * 
- *  \param[in] contextNum The APN to operate on. Typically 0 or 1
+ *  \param[in] cntxtId The APN number to operate on.
  */
-resultCode_t ntwk_deactivateContext(uint8_t contxtId)
+void ntwk_deactivatePdpContext(uint8_t cntxtId)
 {
-    ntwk_closeContext(contxtId);
-
     char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
-    snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIDEACT=%d\r", contxtId);
+    snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIDEACT=%d\r", cntxtId);
 
     if (action_tryInvokeAdv(atCmd, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, contextStatusCompleteParser))
     {
-        g_ltem1->network->contexts[contxtId].contextState = context_state_inactive;
-        g_ltem1->network->contexts[contxtId].ipAddress[0] = ASCII_cNULL;
-        return action_awaitResult(true).statusCode;
+        resultCode_t atResult = action_awaitResult(true).statusCode;
+        if ( atResult == RESULT_CODE_SUCCESS)
+            ntwk_getActivePdpContexts();
     }
-    return RESULT_CODE_CONFLICT;
 }
-
 
 
 /**
- *  \brief Close out all TCP/IP sockets on a context.
-*/
-void ntwk_closeContext(uint8_t contxtId)
+ *	\brief Reset (deactivate\activate) all network APNs.
+ *  Note: activate and deactivate have side effects, they internally call getActiveContexts prior to return
+ */
+void ntwk_resetPdpContexts()
 {
-    for (size_t i = 0; i < IOP_SOCKET_COUNT; i++)
+    uint8_t activeIds[BGX_CONTEXT_COUNT] = {0};
+
+    for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)                         // preserve initial active APN list
     {
-        if (g_ltem1->sockets->socketCtrls[i].pdpContextId == contxtId)
+        if(g_ltem1->network->contexts[i].contextId != 0)
+            activeIds[i] = g_ltem1->network->contexts[i].contextId;
+    }
+    for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)                         // now, cycle the active contexts
+    {
+        if(activeIds[i] != 0)
         {
-            ip_close(i);
+            ntwk_deactivatePdpContext(activeIds[i]);
+            ntwk_activatePdpContext(activeIds[i]);
         }
     }
-    
 }
-
 
 #pragma endregion
 

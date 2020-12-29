@@ -111,9 +111,10 @@ typedef enum mqttSession_tag
 */
 typedef enum mqttStatus_tag
 {
-    mqttStatus_idle = 0,            ///< MQTT is idle, not active.
+    mqttStatus_closed = 0,          ///< MQTT is idle, not active.
     mqttStatus_open = 1,            ///< MQTT is open, open but not connected.
-    mqttStatus_conn = 2             ///< MQTT is connected, in session with server.
+    mqttStatus_connected = 2,       ///< MQTT is connected, in session with server.
+    mqttStatus_badHost = 255        ///< MQTT is open+, but to unintended host (if appl requested host validation).
 } mqttStatus_t;
 
 

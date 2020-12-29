@@ -29,7 +29,7 @@
 #include "ltem1c.h"
 
 
-#define NTWK_CONTEXT_COUNT 3
+#define BGX_CONTEXT_COUNT 3
 #define NTWK_DEFAULT_CONTEXT 255
 
 /** 
@@ -57,23 +57,13 @@ typedef enum
 
 
 /** 
- *  \brief Enum of network carrier APN or data contect state.
-*/
-typedef enum 
-{
-    context_state_inactive = 0,         ///< Inactive. Note: the modem may be connected to a network, but it is not in a active communications state.
-    context_state_active = 1            ///< Active, APN is open and ready. Modem should have an IP address via the APN at this state.
-} context_state_t;
-
-
-/** 
  *  \brief Enum of the two common APN contexts provided by network carriers.
 */
-typedef enum
+typedef enum contextIpType_tag
 {
-    context_type_IPV4 = 1,              ///< IP v4, 32-bit address (ex: 192.168.37.52)
-    context_type_IPV6 = 2               ///< IP v6, 128-bit address (ex: 2001:0db8:0000:0000:0000:8a2e:0370:7334)
-} context_type_t;
+    contextIpType_IPV4 = 1,              ///< IP v4, 32-bit address (ex: 192.168.37.52)
+    contextIpType_IPV6 = 2               ///< IP v6, 128-bit address (ex: 2001:0db8:0000:0000:0000:8a2e:0370:7334)
+} contextIpType_t;
 
 
 #define NTWKOPERATOR_OPERNAME_SZ 29
@@ -93,12 +83,12 @@ typedef struct networkOperator_tag
 #define PDPCONTEXT_IPADDRESS_SZ 16
 
 /** 
- *  \brief Struct representing the state of an active PDP context (aka: APN or data context).
+ *  \brief Struct representing the state of active PDP contexts (aka: APN or data context).
 */
 typedef struct pdpContext_tag
 {
-    context_state_t contextState;       ///< Is the context active or inactive
-    context_type_t contextType;         ///< IPv4 or IPv6
+    uint8_t contextId;                  ///< context ID recognized by the carrier (valid are 1 to 16)
+    contextIpType_t contextIpType;      ///< IPv4 or IPv6
 	char apnName[21];                   ///< The APN name for this context. This can be blank, APN naming is specific to each carrier.
 	char ipAddress[16];                 ///< The IP address obtained from the carrier for this context. The IP address of the modem.
 } pdpContext_t;
@@ -110,7 +100,7 @@ typedef struct pdpContext_tag
 typedef struct network_tag
 {
     networkOperator_t *networkOperator;         ///< Network operator name and protocol
-    pdpContext_t contexts[NTWK_CONTEXT_COUNT];  ///< Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
+    pdpContext_t contexts[BGX_CONTEXT_COUNT];  ///< Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
 } network_t;
 
 
@@ -123,12 +113,12 @@ extern "C"
 network_t *ntwk_create();
 
 networkOperator_t ntwk_awaitOperator(uint16_t waitDuration);
+uint8_t ntwk_getActivePdpContexts();
+pdpContext_t *ntwk_getPdpContext(uint8_t contxtId);
 
-resultCode_t ntwk_fetchDataContexts();
-resultCode_t ntwk_activateContext(uint8_t contxtId);
-resultCode_t ntwk_deactivateContext(uint8_t contxtId);
-pdpContext_t ntwk_getDataContext(uint8_t contxtId);
-void ntwk_closeContext(uint8_t contxtId);
+void ntwk_activatePdpContext(uint8_t contxtId);
+void ntwk_deactivatePdpContext(uint8_t contxtId);
+void ntwk_resetPdpContexts();
 
 
 #ifdef __cplusplus

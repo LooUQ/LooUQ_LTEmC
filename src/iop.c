@@ -407,8 +407,16 @@ void iop_rxParseImmediate()
             char *connIdPtr = g_ltem1->iop->rxCmdBuf->prevHead + strlen("+QIURC: \"pdpdeact");
             char *endPtr = NULL;
             uint8_t contextId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-            g_ltem1->network->contexts[contextId].contextState = 0;
-            g_ltem1->network->contexts[contextId].ipAddress[0] = '\0';
+            for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)
+            {
+                if (g_ltem1->network->contexts[i].contextId == contextId)
+                {
+                    g_ltem1->network->contexts[i].contextId = 0;
+                    g_ltem1->network->contexts[i].apnName[0] = 0;
+                    g_ltem1->network->contexts[i].ipAddress[0] = 0;
+                    break;
+                }
+            }
             // discard this chunk, processed here
             g_ltem1->iop->rxCmdBuf->head = g_ltem1->iop->rxCmdBuf->prevHead;
         }

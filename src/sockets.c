@@ -196,6 +196,23 @@ void sckt_reset(uint8_t socketId)
 
 
 /**
+ *  \brief Close out all TCP/IP sockets on a context.
+*/
+void sckt_closeAll(uint8_t contxtId)
+{
+    for (size_t i = 0; i < IOP_SOCKET_COUNT; i++)
+    {
+        if (g_ltem1->sockets->socketCtrls[i].pdpContextId == contxtId)
+        {
+            ip_close(i);
+        }
+    }
+    
+}
+
+
+
+/**
  *	\brief Send data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
  *
  *	\param [in] socketId - The connection socket returned from open.
