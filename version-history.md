@@ -1,12 +1,5 @@
 # LTEm1c Version History
-#### Versions will be simply marked by their release date moving forward. Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
-
-
-## Dec-15-2020
-*	Updated ISR for intermittent missed event when receiving MQTT publish
-*	Reformatted tests/LTEm1c-8-mqtt.ino for readability and test setup with Azure IoTHub
-*	Removed utils.c from LTEm1c library
-    *	Functionality is now part of LQ Cloud but can be used independently as lqc_collections (.h\.c)
+#### Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
 
 ## v0.5.0 - Fixes and Network PDP context handling (Dec 28, 2020)
 * Fixed MQTT not trapping publish errors
@@ -16,6 +9,12 @@
     * Change function signatures to better match behaviors
     * Added reset to deactivate\activate all presently active PDP contexts
 * Change IOP pdp deactivate detect logic to match internal implementation in NETWORK module
+
+## v0.4.2 - Misc (Dec-15-2020)
+*	Updated ISR for intermittent missed event when receiving MQTT publish
+*	Reformatted tests/LTEm1c-8-mqtt.ino for readability and test setup with Azure IoTHub
+*	Removed utils.c from LTEm1c library
+*	Functionality is now part of LQ Cloud but can be used independently as lqc_collections (.h\.c)
 
 ## v0.4.1 - Misc (Nov 28, 2020)
 * Remove dependency on JLink RTT 
