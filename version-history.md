@@ -6,9 +6,9 @@
 * Fixed ACTION parsing on multistep actions with custom response parser (affected MQTT publish)
 * Changed NETWORK module PDP context handling
     * Changed internal active PDP table organization
-    * Change function signatures to better match behaviors
+    * Change (_ntwk) function signatures to better match behaviors
     * Added reset to deactivate\activate all presently active PDP contexts
-* Change IOP pdp deactivate detect logic to match internal implementation in NETWORK module
+* Change IOP PDP deactivated detect logic to match internal implementation in NETWORK module
 
 ## 0.4.2 (Dec 15, 2020)
 *	Updated ISR for intermittent missed event when receiving MQTT publish
