@@ -354,6 +354,7 @@ socketResult_t mqtt_unsubscribe(const char *topic)
 }
 
 
+#define MQTT_PUBLISH_TIMEOUT 15000
 
 /**
  *  \brief Publish a message to server.
@@ -386,7 +387,7 @@ socketResult_t mqtt_publish(const char *topic, mqttQos_t qos, const char *messag
         // wait for data prompt for data, now complete sub-command to actually transfer data
         if (atResult.statusCode == RESULT_CODE_SUCCESS)
         {
-            action_sendRawWithEOTs(message, strlen(message), ASCII_sCTRLZ, 2000, mqttPublishCompleteParser);
+            action_sendRawWithEOTs(message, strlen(message), ASCII_sCTRLZ, MQTT_PUBLISH_TIMEOUT, mqttPublishCompleteParser);
             atResult = action_awaitResult(true);
         }
     }

@@ -123,7 +123,8 @@ int16_t mdminfo_rssi()
 uint8_t mdminfo_rssiBars(uint8_t numberOfBars)
 {
     uint8_t barSpan = (113 - 51) / numberOfBars;
-    return (int)((mdminfo_rssi() + 113 + barSpan) / barSpan);
+    int rssi = mdminfo_rssi();
+    return (int)((rssi + 113 + barSpan) / barSpan);
 }
 
 
