@@ -79,7 +79,9 @@ extern "C"
 #define RESULT_CODE_NOTFOUND      404
 #define RESULT_CODE_TIMEOUT       408
 #define RESULT_CODE_CONFLICT      409
+#define RESULT_CODE_CANCELLED     499
 #define RESULT_CODE_ERROR         500
+#define RESULT_CODE_UNAVAILABLE   503
 
 // action_result_t should be populated with RESULT_CODE_x constant values or an errorCode (uint >= 400)
 typedef uint16_t resultCode_t;
@@ -138,9 +140,9 @@ typedef struct ltem1Device_tag
     spiDevice_t *spi;                   ///< SPI device (methods signatures compatible with Arduino).
     qbgReadyState_t qbgReadyState;      ///< Ready state of the BGx module
     uint8_t dataContext;                ///< The primary APN context with the network carrier for application transfers.
-    bool cancellationRequest;           ///< For RTOS implementations, token to request cancellation of background operation.
     volatile iop_t *iop;                ///< IOP subsystem controls.
     action_t *action;                   ///< Action subsystem controls.
+    bool cancellationRequest;           ///< For RTOS implementations, token to request cancellation of long running task\action.
 	modemInfo_t *modemInfo;             ///< Data structure holding persistent information about application modem state.
     network_t *network;                 ///< Data structure representing the cellular network.
 	volatile sockets_t *sockets;        ///< IP sockets subsystem (TCP\UDP\SSL).
@@ -163,6 +165,7 @@ void ltem1_reset();
 
 void ltem1_doWork();
 void ltem1_faultHandler(uint16_t statusCode, const char * fault) __attribute__ ((noreturn));
+void ltem1_setYieldCb(platform_yieldCB_func_t yieldCb_func);
 
 
 #ifdef __cplusplus

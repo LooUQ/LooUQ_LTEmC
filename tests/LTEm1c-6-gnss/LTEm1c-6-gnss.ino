@@ -76,18 +76,6 @@ void loop() {
     else
         PRINTFC(dbgColor_warn, "Location is not available (GNSS not fixed)\r");
 
-    // if (location.statusCode == RESULT_CODE_TIMEOUT)
-    // {
-    //     uint8_t txAvailable = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
-    //     uint8_t rxLevel = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-    //     uint8_t iirVal = sc16is741a_readReg(SC16IS741A_IIR_ADDR);
-    //     uint8_t fifoVal = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
- 
-    //     //iop_txSend("AT+QPOWD\r", 9);
-    //     int halt = 1;
-    //     while(halt){};
-    // }
-
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
 }
@@ -107,9 +95,9 @@ void indicateFailure(char failureMsg[])
     while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(1000);
+        lDelay(1000);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(100);
+        lDelay(100);
     }
 }
 
@@ -121,14 +109,14 @@ void indicateLoop(int loopCnt, int waitNext)
     for (int i = 0; i < 6; i++)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(50);
+        lDelay(50);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(50);
+        lDelay(50);
     }
 
     PRINTFC(dbgColor_dMagenta, "FreeMem=%u\r\n", getFreeMemory());
     PRINTFC(dbgColor_dMagenta, "NextTest (millis)=%i\r\r", waitNext);
-    timing_delay(waitNext);
+    lDelay(waitNext);
 }
 
 

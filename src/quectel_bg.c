@@ -55,13 +55,13 @@ void qbg_powerOn()
 {
     PRINTF(dbgColor_none, "Powering LTEm1 On...");
     gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_high);
-    timing_delay(QBG_POWERON_DELAY);
+    lDelay(QBG_POWERON_DELAY);
     gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_low);
 
     // wait for status=ready
     while (!gpio_readPin(g_ltem1->pinConfig.statusPin))
     {
-        timing_delay(500);          // allow background tasks to operate
+        lDelay(500);          // allow background tasks to operate
     }
     PRINTF(dbgColor_none, "DONE\r");
 }
@@ -75,12 +75,12 @@ void qbg_powerOff()
 {
     PRINTF(dbgColor_none, "Powering LTEm1 Off\r");
 	gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_high);
-	timing_delay(QBG_POWEROFF_DELAY);
+	lDelay(QBG_POWEROFF_DELAY);
 	gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_low);
 
     while (gpio_readPin(g_ltem1->pinConfig.statusPin))
     {
-        timing_delay(500);          // allow background tasks to operate
+        lDelay(500);          // allow background tasks to operate
     }
 }
 
@@ -97,7 +97,7 @@ void qbg_reset()
     iop_txSend("AT+CFUN=1,1\r", 11, true);
     while (!gpio_readPin(g_ltem1->pinConfig.statusPin))
     {
-        timing_delay(500);          // allow background tasks to operate
+        lDelay(500);          // allow background tasks to operate
     }
 }
 

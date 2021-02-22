@@ -8,10 +8,10 @@
                 "C:/Users/GregTerrell/AppData/Local/Arduino15/packages/arduino/tools/arm-none-eabi-gcc/7-2017q4/lib/gcc/arm-none-eabi/7.2.1/include",
                 "C:/Users/GregTerrell/AppData/Local/Arduino15/packages/arduino/tools/arm-none-eabi-gcc/7-2017q4/lib/gcc/arm-none-eabi/7.2.1/include-fixed",
                 "C:/Users/GregTerrell/AppData/Local/Arduino15/packages/arduino/tools/CMSIS-Atmel/1.2.0/CMSIS/Device/ATMEL",
-                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.6.2\\**",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\tools\\**",
                 "C:\\Program Files (x86)\\Arduino\\libraries\\**",
-                "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\**"
+                "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\**",
+                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.6.4\\**"
             ],
             "defines": [
                 "_DEBUG",
@@ -25,7 +25,7 @@
             "cppStandard": "c++11",
             "intelliSenseMode": "gcc-x64",
             "forcedInclude": [
-                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.6.2\\cores\\arduino\\Arduino.h"
+                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.6.4\\cores\\arduino\\Arduino.h"
             ]
         }
     ],

@@ -12,6 +12,21 @@
 #define ACTION_RETRIES_DEFAULT 10
 #define ACTION_RETRY_INTERVALmillis 100
 #define ACTION_TIMEOUT_DEFAULTmillis 500
+#define ACTION_HISTRESPBUF_SZ 240
+
+
+
+/** 
+ *  \brief Record of last action, NOTE: only set on action NON-SUCCESS.
+*/
+typedef struct actionHistory_tag
+{
+    char cmdStr[IOP_TX_BUFFER_SZ];          ///< AT command string to be passed to the BGx module.
+    char response[ACTION_HISTRESPBUF_SZ];   ///< The char c-string containing the full response from the BGx.
+    uint32_t duration;                      ///< Duration from AT invoke to action complete (or timeout)
+    resultCode_t statusCode;                ///< The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
+} actionHistory_t;
+
 
 /** 
  *  \brief Structure to control invocation and management of an AT command with the BGx module.
@@ -20,11 +35,12 @@ typedef struct action_tag
 {
     char cmdStr[IOP_TX_BUFFER_SZ];      ///< AT command string to be passed to the BGx module.
     bool isOpen;                        ///< True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
-    unsigned long invokedAt;            ///< Tick value at the command invocation, used for timeout detection.
+    uint32_t invokedAt;                 ///< Tick value at the command invocation, used for timeout detection.
     uint16_t resultCode;                ///< HTML type response code, 0 is special "pending" status, see ACTION_RESULT_* codes.
     char *response;                     ///< The response to the command received from the BGx.
     uint16_t timeoutMillis;             ///< Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
     uint16_t (*taskCompleteParser_func)(const char *response, char **endptr);   ///< Function to parse the response looking for completion.
+    actionHistory_t *lastAction;        ///< Struct containing information on last action response\result. NOTE: only set on NON-SUCCESS.
 } action_t;
 
 
@@ -36,6 +52,7 @@ typedef struct actionResult_tag
     resultCode_t statusCode;            ///< The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
     char *response;                     ///< The char c-string containing the full response from the BGx.
 } actionResult_t;
+
 
 
 #ifdef __cplusplus
@@ -56,6 +73,7 @@ resultCode_t action_okResultParser(const char *response, char** endptr);
 resultCode_t action_defaultResultParser(const char *response, const char *landmark, bool landmarkReqd, uint8_t gap, const char *terminator, char** endptr);
 resultCode_t action_tokenResultParser(const char *response, const char *landmark, char token, uint8_t reqdTokens, const char *terminator, char** endptr);
 resultCode_t action_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx, char** endptr);
+char *action_strToken(char *source, int delimiter, char *token, uint8_t tokenMax);
 
 
 #ifdef __cplusplus

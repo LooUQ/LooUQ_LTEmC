@@ -72,7 +72,7 @@ void loop()
     iop_txSend(cmd, strlen(cmd), true);
     PRINTFC(0, "CmdSent\r\n");
 
-    timing_delay(100);                                      // give BGx time to respond
+    lDelay(100);                                      // give BGx time to respond
     // timing_delay(5000);                                  // give BGx time to respond, longer for network
 
     int len = strlen(g_ltem1->iop->rxCmdBuf->buffer);
@@ -93,7 +93,7 @@ void indicateLoop(int loopCnt, int waitNext)
     PRINTFC(dbgColor_info, "\r\nLoop=%i \r\n", loopCnt);
     PRINTFC(0, "FreeMem=%u\r\n", getFreeMemory());
     PRINTFC(0, "NextTest (millis)=%i\r\r", waitNext);
-    timing_delay(waitNext);
+    lDelay(waitNext);
 }
 
 
@@ -107,9 +107,9 @@ void indicateFailure(char failureMsg[])
     while (1)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(1000);
+        lDelay(1000);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(100);
+        lDelay(100);
     }
     #endif
 }

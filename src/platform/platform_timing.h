@@ -25,6 +25,22 @@
 #ifndef __PLATFORM_TIMING_H__
 #define __PLATFORM_TIMING_H__
 
+
+
+// yield callback allows host application to be signalled when the LTEm1 is awaiting network events
+
+typedef void (*platform_yieldCB_func_t)();
+
+extern platform_yieldCB_func_t platform_yieldCB_func;
+
+
+// typedef struct lTiming_tag
+// {
+//     yieldCB_func_t yieldCB_func;        ///< Callback (CB) to host application when driver code is waiting for network events, allows for background\watchdog\etc.
+//     bool cancellationRequest;           ///< For RTOS implementations, token to request cancellation of background operation.
+// } lTiming_t;
+
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -33,15 +49,13 @@ extern "C"
 #include <stdint.h>
 #endif // __cplusplus
 
-#if 0
-typedef struct platformThread_tag* platform_thread;
-#endif
-
-uint32_t timing_millis();
-void timing_yield();
+uint32_t lMillis();
+void lYield();
 
 // platform implementation should support task switching here
-void timing_delay(uint32_t delay_ms);
+void lDelay(uint32_t delay_ms);
+
+bool lTimerExpired(uint32_t timerBase, uint32_t timerTimeout);
 
 #ifdef __cplusplus
 }

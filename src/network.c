@@ -64,15 +64,15 @@ networkOperator_t ntwk_awaitOperator(uint16_t waitDuration)
     networkOperator_t ntwk;
     unsigned long startMillis, endMillis;
 
-    startMillis = timing_millis();
+    startMillis = lMillis();
     waitDuration = waitDuration * 1000;
     do 
     {
         ntwk = getNetworkOperator();
-        if (ntwk.operName[0] != '\0')
+        if (ntwk.operName != 0)
             break;
-        timing_delay(1000);
-        endMillis = timing_millis();
+        lDelay(1000);
+        endMillis = lMillis();
     } while (endMillis - startMillis < waitDuration || g_ltem1->cancellationRequest);
     //       timed out waiting                      || global cancellation
     return ntwk;
@@ -245,34 +245,34 @@ static resultCode_t contextStatusCompleteParser(const char *response, char **end
 */
 static networkOperator_t getNetworkOperator()
 {
-    if (*g_ltem1->network->networkOperator->operName == NULL)
+    if (*g_ltem1->network->networkOperator->operName != 0)
+        return *g_ltem1->network->networkOperator;
+
+    if (action_tryInvoke("AT+COPS?"))
     {
-        if (action_tryInvoke("AT+COPS?"))
+        actionResult_t atResult = action_awaitResult(false);
+        if (atResult.statusCode == RESULT_CODE_SUCCESS)
         {
-            actionResult_t atResult = action_awaitResult(false);
-            if (atResult.statusCode == RESULT_CODE_SUCCESS)
+            char *continueAt;
+            uint8_t ntwkMode;
+            continueAt = strchr(atResult.response, ASCII_cDBLQUOTE);
+            if (continueAt != NULL)
             {
-                char *continueAt;
-                uint8_t ntwkMode;
-                continueAt = strchr(atResult.response, ASCII_cDBLQUOTE);
-                if (continueAt != NULL)
-                {
-                    continueAt = grabToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem1->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
-                    ntwkMode = (uint8_t)strtol(continueAt + 1, &continueAt, 10);
-                    if (ntwkMode == 8)
-                        strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-M1");
-                    else
-                        strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-NB1");
-                }
+                continueAt = grabToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem1->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
+                ntwkMode = (uint8_t)strtol(continueAt + 1, &continueAt, 10);
+                if (ntwkMode == 8)
+                    strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-M1");
                 else
-                {
-                    g_ltem1->network->networkOperator->operName[0] = NULL;
-                    g_ltem1->network->networkOperator->ntwkMode[0] = NULL;
-                }
+                    strcpy(g_ltem1->network->networkOperator->ntwkMode, "CAT-NB1");
             }
-            action_close();
+        }
+        else
+        {
+            g_ltem1->network->networkOperator->operName[0] = 0;
+            g_ltem1->network->networkOperator->ntwkMode[0] = 0;
         }
     }
+    action_close();
     return *g_ltem1->network->networkOperator;
 }
 

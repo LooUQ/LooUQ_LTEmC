@@ -10,19 +10,29 @@
 #include <Arduino.h>
 
 
-uint32_t timing_millis()
+platform_yieldCB_func_t platform_yieldCB_func;
+
+
+uint32_t lMillis()
 {
     return millis();
 }
 
-
-void timing_yield()
+void lYield()
 {
-    yield();
+    yield();                            // allow for platform yield processing (ex: Arduino scheduler, ESPx, etc.)
+    if (platform_yieldCB_func)          // allow for device application yield processing
+        platform_yieldCB_func();
 }
 
 
-void timing_delay(uint32_t delay_ms)
+void lDelay(uint32_t delay_ms)
 {
     delay(delay_ms);
 }
+
+bool lTimerExpired(uint32_t timerBase, uint32_t timerTimeout)
+{
+    return millis() - timerBase > timerTimeout;
+}
+

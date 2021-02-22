@@ -124,11 +124,11 @@ void powerModemOn()
 	{
 		PRINTFC(0, "Powering LTEm1 On...");
 		gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_high);
-		timing_delay(QBG_POWERON_DELAY);
+		lDelay(QBG_POWERON_DELAY);
 		gpio_writePin(ltem1_pinConfig.powerkeyPin, gpioValue_low);
 		while (!gpio_readPin(ltem1_pinConfig.statusPin))
 		{
-			timing_delay(500);
+			lDelay(500);
 		}
 		PRINTFC(0, "DONE.\r\n");
 	}
@@ -152,14 +152,14 @@ void indicateLoop(int loopCnt, int waitNext)
     for (int i = 0; i < 6; i++)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(50);
+        lDelay(50);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(50);
+        lDelay(50);
     }
 
     PRINTFC(dbgColor_magenta, "Free memory: %u \r\n", getFreeMemory());
     PRINTFC(0, "Next test in (millis): %i\r\n\r\n", waitNext);
-    timing_delay(waitNext);
+    lDelay(waitNext);
 }
 
 
@@ -173,9 +173,9 @@ void indicateFailure(char failureMsg[])
     while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(1000);
+        lDelay(1000);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(100);
+        lDelay(100);
     }
 }
 

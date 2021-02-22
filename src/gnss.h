@@ -42,7 +42,7 @@ typedef struct gnssLocation_tag
     float speedkn;          ///< Speed over ground (nautical). Format: xxxx.x; unit: Knots/h; accurate to one decimal place (Quoted from GPVTG sentence).
     char date[7];           ///< UTC time when fixing position. Format: ddmmyy (Quoted from GPRMC sentence).
     uint16_t nsat;          ///< Number of satellites, from 00 (The first 0 should be retained) to 12 (Quoted from GPGGA sentence).
-    uint16_t statusCode;    ///< Result code indicating get location status. 0 = success, otherwise error condition.
+    uint16_t statusCode;    ///< Result code indicating get location status. 200 = success, otherwise error condition.
 } gnssLocation_t;
 
 

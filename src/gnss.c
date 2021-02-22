@@ -15,6 +15,7 @@
 static resultCode_t gnssLocCompleteParser(const char *response, char **endptr);
 
 
+
 /*
  *  AT+QGPSLOC=2 (format=2)
  *  +QGPSLOC: 113355.0,44.74770,-85.56527,1.2,192.0,2,277.11,0.0,0.0,250420,10
@@ -76,7 +77,7 @@ gnssLocation_t gnss_getLocation()
         PRINTFC(dbgColor_warn, "getLocation(): parse starting...\r");
 
         continueAt = atResult.response + GNSS_LOC_DATAOFFSET;                           // skip past +QGPSLOC: 
-        continueAt = strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);        // grab 1st element as a string
+        continueAt = action_strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);        // grab 1st element as a string
         if (continueAt != NULL)
             strncpy(gnssResult.utc, tokenBuf, 11);
         gnssResult.lat.val = strtof(continueAt, &continueAt);                           // grab a float
@@ -89,7 +90,7 @@ gnssLocation_t gnss_getLocation()
         gnssResult.course = strtof(++continueAt, &continueAt);
         gnssResult.speedkm = strtof(++continueAt, &continueAt);
         gnssResult.speedkn = strtof(++continueAt, &continueAt);
-        continueAt = strToken(continueAt + 1, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
+        continueAt = action_strToken(continueAt + 1, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
         if (continueAt != NULL)
             strncpy(gnssResult.date, tokenBuf, 7);
         gnssResult.nsat = strtol(continueAt, &continueAt, 10);
@@ -117,6 +118,5 @@ static resultCode_t gnssLocCompleteParser(const char *response, char **endptr)
     PRINTFC(0, "gnssParser(): result=%i\r", result);
     return result;
 }
-
 
 #pragma endregion

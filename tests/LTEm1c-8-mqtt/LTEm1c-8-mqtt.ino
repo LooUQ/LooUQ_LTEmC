@@ -113,10 +113,10 @@ void setup() {
         indicateFailure("Timout (30s) waiting for cellular network.");
     PRINTFC(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
-    socketResult_t result = ntwk_fetchDataContexts();
+    socketResult_t result = ntwk_getActivePdpContexts();
     if (result == RESULT_CODE_NOTFOUND)
     {
-        ntwk_activateContext(DEFAULT_NETWORK_CONTEXT);
+        ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT);
     }
 
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
@@ -132,9 +132,9 @@ bool publishToCloud = true;
 
 void loop() 
 {
-    if (timing_millis() - lastCycle >= CYCLE_INTERVAL)
+    if (lTimerExpired(lastCycle, CYCLE_INTERVAL))
     {
-        lastCycle = timing_millis();
+        lastCycle = lMillis();
 
         if (publishToCloud)
         {
@@ -157,7 +157,7 @@ void loop()
 
 void mqttReceiver(char *topic, char *topicProps, char *message)
 {
-    PRINTFC(dbgColor_info, "\r**MQTT--MSG** @tick=%d\r", timing_millis());
+    PRINTFC(dbgColor_info, "\r**MQTT--MSG** @tick=%d\r", lMillis());
     PRINTFC(dbgColor_cyan, "\rt(%d): %s", strlen(topic), topic);
     PRINTFC(dbgColor_cyan, "\rp(%d): %s", strlen(topicProps), topicProps);
     PRINTFC(dbgColor_cyan, "\rm(%d): %s", strlen(message), message);

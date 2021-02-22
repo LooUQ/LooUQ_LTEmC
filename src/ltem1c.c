@@ -52,6 +52,7 @@ void ltem1_create(const ltem1PinConfig_t ltem1_config, ltem1Start_t ltem1Start, 
     if (funcLevel >= ltem1Functionality_actions)
     {
         g_ltem1->action = calloc(1, sizeof(action_t));
+        g_ltem1->action->lastAction = calloc(1, sizeof(actionHistory_t));
         g_ltem1->action->isOpen = false;
     }
     if (funcLevel >= ltem1Functionality_services)
@@ -196,6 +197,17 @@ void ltem1_faultHandler(uint16_t statusCode, const char * faultMsg)
 void ltem1_registerApplicationFaultHandler(void * customFaultHandler)
 {
     // TBD
+}
+
+
+/**
+ *	\brief Registers the address (void*) of your application yield callback handler.
+ * 
+ *  \param [in] customFaultHandler - Pointer to application provided fault handler.
+ */
+void ltem1_setYieldCb(platform_yieldCB_func_t yieldCb_func)
+{
+    platform_yieldCB_func = yieldCb_func;
 }
 
 

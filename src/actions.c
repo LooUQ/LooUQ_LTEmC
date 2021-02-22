@@ -12,7 +12,7 @@
 
 // Local private declarations
 static void action_init(const char *cmdStr);
-
+static void action_resultToHistory();
 
 
 /**
@@ -54,7 +54,7 @@ bool action_tryInvokeAdv(const char *cmdStr, uint8_t retries, uint16_t timeout, 
         return false;
 
     g_ltem1->action->timeoutMillis = timeout;
-    g_ltem1->action->invokedAt = timing_millis();
+    g_ltem1->action->invokedAt = lMillis();
     g_ltem1->action->taskCompleteParser_func = taskCompleteParser == NULL ? action_okResultParser : taskCompleteParser;
 
     iop_txSend(cmdStr, strlen(cmdStr), false);
@@ -123,10 +123,17 @@ actionResult_t action_awaitResult(bool closeAction)
     do
     {
         actionResult = action_getResult(closeAction);
-        yield();
+        
+        if (g_ltem1->cancellationRequest)
+        {
+            actionResult.response = 0;
+            actionResult.statusCode = RESULT_CODE_CANCELLED;
+            break;
+        }
+        lYield();
+
     } while (actionResult.statusCode == RESULT_CODE_PENDING);
     
-
     return actionResult;
 }
 
@@ -168,11 +175,14 @@ actionResult_t action_getResult(bool closeAction)
         }
     }
     
-    if (timing_millis() - g_ltem1->action->invokedAt > g_ltem1->action->timeoutMillis)
+    if (lTimerExpired(g_ltem1->action->invokedAt, g_ltem1->action->timeoutMillis))
     {
         g_ltem1->action->isOpen = false;
         g_ltem1->action->resultCode = result.statusCode = RESULT_CODE_TIMEOUT;
     }
+
+    if (result.statusCode != RESULT_CODE_SUCCESS)
+        action_resultToHistory();
     return result;
 }
 
@@ -345,7 +355,7 @@ resultCode_t action_okResultParser(const char *response, char** endptr)
 
 
 /**
- *	\brief [private] Parser for open connection response, shared by UDP/TCP/SSL.
+ *	\brief Parser for open connection response, shared by UDP/TCP/SSL.
  */
 resultCode_t action_serviceResponseParser(const char *response, const char *preamble, uint8_t resultIndx, char** endptr) 
 {
@@ -367,11 +377,32 @@ resultCode_t action_serviceResponseParser(const char *response, const char *prea
 }
 
 
+/**
+ *	\brief C-string token grabber.
+ */
+char *action_strToken(char *source, int delimiter, char *token, uint8_t tokenMax) 
+{
+    char *delimAt;
+    if (source == NULL)
+        return false;
+
+    delimAt = strchr(source, delimiter);
+    uint8_t tokenSz = delimAt - source;
+    if (tokenSz == 0)
+        return NULL;
+
+    memset(token, 0, tokenMax);
+    strncpy(token, source, MIN(tokenSz, tokenMax-1));
+    return delimAt + 1;
+}
+
 #pragma endregion  // completionParsers
 
+
+
+#pragma region private functions
 /* private (static) fuctions
  * --------------------------------------------------------------------------------------------- */
-#pragma region private functions
 
 
 /**
@@ -391,6 +422,22 @@ static void action_init(const char *cmdStr)
     g_ltem1->action->taskCompleteParser_func = NULL;
     // response side
     iop_resetCmdBuffer();
+
+}
+
+
+
+/**
+ *	\brief Copies response\result information at action conclusion.
+ */
+static void action_resultToHistory()
+{
+    memset(g_ltem1->action->lastAction->cmdStr, 0, ACTION_HISTRESPBUF_SZ);
+    strncpy(g_ltem1->action->lastAction->cmdStr, g_ltem1->action->cmdStr, ACTION_HISTRESPBUF_SZ-1);
+    memset(g_ltem1->action->lastAction->response, 0, ACTION_HISTRESPBUF_SZ);
+    strncpy(g_ltem1->action->lastAction->response, g_ltem1->action->response, ACTION_HISTRESPBUF_SZ-1);
+    g_ltem1->action->lastAction->statusCode = g_ltem1->action->resultCode;
+    g_ltem1->action->lastAction->duration = lMillis() - g_ltem1->action->invokedAt;
 }
 
 
@@ -413,7 +460,7 @@ bool actn_acquireLock(const char *cmdStr, uint8_t retries)
                 if (retries == 0)
                     return false;
 
-                timing_delay(ACTION_RETRY_INTERVALmillis);
+                lDelay(ACTION_RETRY_INTERVALmillis);
                 //ip_recvDoWork();
             }
         }

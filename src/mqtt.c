@@ -180,10 +180,10 @@ void mqtt_close()
     char actionCmd[81] = {0};
     char actionResponse[81] = {0};
 
-    g_ltem1->mqtt->state = mqtt_status("");                 // refresh state, adjust mqtt start process as needed 
+    g_ltem1->mqtt->state = mqtt_status("");                 
 
-    g_ltem1->iop->peerTypeMap.mqttConnection = 0;
-    for (size_t i = 0; i < IOP_RX_DATABUFFERS_MAX; i++)         // release any iop buffers assigned
+    g_ltem1->iop->peerTypeMap.mqttConnection = 0;           // release mqtt socket in IOP
+    for (size_t i = 0; i < IOP_RX_DATABUFFERS_MAX; i++)     // release any iop buffers assigned
     {
         if (g_ltem1->iop->rxDataBufs[i]->dataPeer == iopDataPeer_MQTT)
             g_ltem1->iop->rxDataBufs[i]->dataPeer = iopDataPeer__NONE;

@@ -122,11 +122,11 @@ void iop_start()
  */
 void iop_awaitAppReady()
 {
-    unsigned long apprdyWaitStart = timing_millis();
+    unsigned long apprdyWaitStart = lMillis();
     while (g_ltem1->qbgReadyState < qbg_readyState_appReady)
     {
-        timing_yield();
-        if (apprdyWaitStart + QBG_APPREADY_MILLISMAX < timing_millis())
+        lYield();
+        if (apprdyWaitStart + QBG_APPREADY_MILLISMAX < lMillis())
             ltem1_faultHandler(500, "qbg-BGx module failed to start in the allowed time");
     }
 }

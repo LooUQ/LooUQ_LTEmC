@@ -72,11 +72,10 @@ void setup() {
         indicateFailure("Timout (30s) waiting for cellular network.");
     PRINTFC(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
-    resultCode_t resultCode = ntwk_fetchDataContexts();
+    resultCode_t resultCode = ntwk_getActivePdpContexts();
     if (resultCode == RESULT_CODE_NOTFOUND)
     {
-        resultCode = ntwk_activateContext(DEFAULT_NETWORK_CONTEXT);
-        PRINTFC(0, "Network PDP context activation=%d\r", resultCode);
+        ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT);
     }
 
     // open socket
@@ -97,17 +96,17 @@ uint16_t prevRx = 0;
 
 void loop() 
 {
-    if (timing_millis() - lastCycle >= CYCLE_INTERVAL || sendImmediate)
+    if (lMillis() - lastCycle >= CYCLE_INTERVAL || sendImmediate)
     {
         sendImmediate = false;
-        lastCycle = timing_millis();
+        lastCycle = lMillis();
         showStats();
 
         #define SEND_TEST 0
 
         #if SEND_TEST == 0
         /* test for short-send, fits is 1 TX chunk */
-        snprintf(sendBuf, SEND_BUFFER_SZ, "%d-%lu ABCDEFGHIJKLMNOPQRSTUVWXYZ", loopCnt, timing_millis());
+        snprintf(sendBuf, SEND_BUFFER_SZ, "%d-%lu ABCDEFGHIJKLMNOPQRSTUVWXYZ", loopCnt, lMillis());
         uint16_t sendSz = strlen(sendBuf);
         #elif SEND_TEST == 1
         /* test for longer, 2+ tx chunks */
@@ -161,7 +160,7 @@ void ipReceiver(socketId_t socketId, void *data, uint16_t dataSz)
     temp[dataSz] = '\0';
 
     rxCnt++;
-    PRINTFC(dbgColor_info, "appRcvd (@tick=%d) %s\r", timing_millis(), temp);
+    PRINTFC(dbgColor_info, "appRcvd (@tick=%d) %s\r", lMillis(), temp);
 }
 
 
@@ -181,9 +180,9 @@ void showStats()
     for (int i = 0; i < 5; i++)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(50);
+        lDelay(50);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(50);
+        lDelay(50);
     }
     if (rxCnt == prevRx)
     {

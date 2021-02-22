@@ -137,9 +137,9 @@ void indicateFailure(char failureMsg[])
     while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(1000);
+        lDelay(1000);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(100);
+        lDelay(100);
     }
     #endif
 }
@@ -152,14 +152,14 @@ void indicateLoop(int loopCnt, int waitNext)
     for (int i = 0; i < 6; i++)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        timing_delay(50);
+        lDelay(50);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        timing_delay(50);
+        lDelay(50);
     }
 
     PRINTFC(dbgColor_magenta, "FreeMem=%u\r\n", getFreeMemory());
     PRINTFC(dbgColor_none, "NextTest (millis)=%i\r\r", waitNext);
-    timing_delay(waitNext);
+    lDelay(waitNext);
 }
 
 
