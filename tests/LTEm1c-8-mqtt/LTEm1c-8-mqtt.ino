@@ -113,8 +113,8 @@ void setup() {
         indicateFailure("Timout (30s) waiting for cellular network.");
     PRINTFC(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
-    socketResult_t result = ntwk_getActivePdpContexts();
-    if (result == RESULT_CODE_NOTFOUND)
+    uint8_t cntxtCnt = ntwk_getActivePdpCntxtCnt();
+    if (cntxtCnt == 0)
     {
         ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT);
     }

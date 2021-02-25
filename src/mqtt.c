@@ -44,7 +44,6 @@ void mqtt_create()
 	{
         ltem1_faultHandler(0, "mqtt-could not alloc mqtt service struct");
 	}
-    //g_ltem1->mqtt->state = mqttStatus_idle;           calloc takes care of this & subscription table
     g_ltem1->mqtt->msgId = 1;
     g_ltem1->mqtt->dataBufferIndx = IOP_NO_BUFFER;
 }
@@ -54,42 +53,69 @@ void mqtt_create()
 /**
  *  \brief Query the status of the MQTT server state.
  * 
- *  \param [in] host - (optional) A char string to match with the currently connected server. Host is not checked if null string passed.
+ *  \param host [in] A char string to match with the currently connected server. Host is not checked if empty string passed.
+ *  \param force [in] If true query BGx for current state, otherwise return internal g_ltem1 property
  * 
  *  \returns A mqttStatus_t value indicating the state of the MQTT connection.
 */
-mqttStatus_t mqtt_status(const char *host)
+mqttStatus_t mqtt_status(const char *host, bool force)
 {
-    // AT+QMTOPEN?
-    // AT+QMTCONN?
-    #define MQTT_OPENED_STATUS 505
-    #define MQTT_CONNECTED_STATUS 503
+    // See BG96_MQTT_Application_Note: AT+QMTOPEN? and AT+QMTCONN?
 
     mqttStatus_t mqttStatus = mqttStatus_closed;
 
-    if (action_tryInvokeAdv("AT+QMTOPEN?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, mqttOpenStatusParser))
+    if (!force && host[0] == '\0')                          // if not forcing query and no host verification, return current internal prop value
+        return g_ltem1->mqtt->state;
+
+    // connect check first to short-circuit efforts
+    if (action_tryInvokeAdv("AT+QMTCONN?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, mqttConnectStatusParser))
     {
         actionResult_t atResult = action_awaitResult(true);
-        if (atResult.statusCode != MQTT_OPENED_STATUS)              // special case, 500 (error base) + 5 expected socket
-            return mqttStatus;
+        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+            mqttStatus = mqttStatus_connected;
+    }
+    // if not connected or need host verification: check open
+    if (mqtt_status != mqttStatus_connected ||
+        host[0] != '\0' ||
+        action_tryInvokeAdv("AT+QMTOPEN?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, mqttOpenStatusParser))
+    {
+        actionResult_t atResult = action_awaitResult(true);
+        if (atResult.statusCode != RESULT_CODE_SUCCESS)
+            return mqttStatus;                              // default response: closed until proved otherwise
 
         if (host[0] == '\0')
             mqttStatus = mqttStatus_open;
-        else
+        else                                                // host matching requested, check modem response host == requested host
         {
             char *hostNameAt = strchr(atResult.response, ASCII_cDBLQUOTE);
             mqttStatus = (hostNameAt != NULL && strncmp(hostNameAt + 1, host, strlen(host)) == 0) ? mqttStatus_open : mqttStatus_closed;
         }
-
-        // if open, test for connected
-        if (mqttStatus == mqttStatus_open && action_tryInvokeAdv("AT+QMTCONN?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, mqttConnectStatusParser))
-        {
-            actionResult_t atResult = action_awaitResult(true);
-            if (atResult.statusCode == MQTT_CONNECTED_STATUS)       // special case, 500 (error base) + 3 expected BGx MQTT state value
-                mqttStatus = mqttStatus_connected;
-        }
     }
     return mqttStatus;
+
+    // if (action_tryInvokeAdv("AT+QMTOPEN?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, mqttOpenStatusParser))
+    // {
+    //     actionResult_t atResult = action_awaitResult(true);
+    //     if (atResult.statusCode != RESULT_CODE_SUCCESS)
+    //         return mqttStatus;                              // default response: closed until proved otherwise
+
+    //     if (host[0] == '\0')
+    //         mqttStatus = mqttStatus_open;
+    //     else                                                // host matching requested, check modem response host == requested host
+    //     {
+    //         char *hostNameAt = strchr(atResult.response, ASCII_cDBLQUOTE);
+    //         mqttStatus = (hostNameAt != NULL && strncmp(hostNameAt + 1, host, strlen(host)) == 0) ? mqttStatus_open : mqttStatus_closed;
+    //     }
+
+    //     // if open, test for connected
+    //     if (mqttStatus == mqttStatus_open && action_tryInvokeAdv("AT+QMTCONN?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, mqttConnectStatusParser))
+    //     {
+    //         actionResult_t atResult = action_awaitResult(true);
+    //         if (atResult.statusCode == RESULT_CODE_SUCCESS)
+    //             mqttStatus = mqttStatus_connected;
+    //     }
+    // }
+    // return mqttStatus;
 }
 
 
@@ -97,18 +123,17 @@ mqttStatus_t mqtt_status(const char *host)
 /**
  *  \brief Open a remote MQTT server for use.
  * 
- *  \param [in] host - The host IP address or name of the remote server.
- *  \param [in] port - The IP port number to use for the communications.
- *  \param [in] useSslVersion - Specifies the version and options for use of SSL to protect communications.
- *  \param [in] useMqttVersion - Specifies the MQTT protocol revision to use for communications.
+ *  \param host [in] The host IP address or name of the remote server.
+ *  \param port [in] The IP port number to use for the communications.
+ *  \param useSslVersion [in] Specifies the version and options for use of SSL to protect communications.
+ *  \param useMqttVersion [in] Specifies the MQTT protocol revision to use for communications.
  * 
- *  \returns A socketResult_t value indicating the success or type of failure.
+ *  \returns A resultCode_t value indicating the success or type of failure.
 */
-socketResult_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion)
+resultCode_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion)
 {
     // AT+QSSLCFG="sslversion",5,3
     // AT+QMTCFG="ssl",5,1,0
-
     // AT+QMTCFG="version",5,4
     // AT+QMTOPEN=5,"iothub-dev-pelogical.azure-devices.net",8883
 
@@ -118,8 +143,8 @@ socketResult_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVer
     char actionResponse[ACTION_RSP_SZ] = {0};
     actionResult_t atResult;
 
-    g_ltem1->mqtt->state = mqtt_status(host);           // refresh state, adjust mqtt start process as needed 
-    if (g_ltem1->mqtt->state >= mqttStatus_open)           // already open with server "host", maybe connected
+    g_ltem1->mqtt->state = mqtt_status(host, false);    // refresh state, adjust mqtt start process as needed 
+    if (g_ltem1->mqtt->state >= mqttStatus_connected)   // already open+connected with server "host"
         return RESULT_CODE_SUCCESS;
 
     if (useSslVersion != sslVersion_none)
@@ -154,13 +179,33 @@ socketResult_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVer
     if (action_tryInvokeAdv(actionCmd, ACTION_RETRIES_DEFAULT, WAIT_SECONDS(45), mqttOpenCompleteParser))
     {
         actionResult_t atResult = action_awaitResult(true);
-        if (atResult.statusCode == RESULT_CODE_SUCCESS)
-            g_ltem1->iop->peerTypeMap.mqttConnection = 1;
-        else
-            return RESULT_CODE_ERROR;
+
+        // if (atResult.statusCode == RESULT_CODE_SUCCESS)
+        //     g_ltem1->iop->peerTypeMap.mqttConnection = 1;
+        // else
+        //     return RESULT_CODE_ERROR;
+
+        switch (atResult.statusCode)
+        {
+            case RESULT_CODE_SUCCESS:
+                g_ltem1->iop->peerTypeMap.mqttConnection = 1;
+                return RESULT_CODE_SUCCESS;
+            case 899:
+            case 903:
+            case 905:
+                return RESULT_CODE_GONE;
+            case 901:
+                return RESULT_CODE_BADREQUEST;
+            case 902:
+                return RESULT_CODE_CONFLICT;
+            case 904:
+                return RESULT_CODE_NOTFOUND;
+            default:
+                return RESULT_CODE_ERROR;
+        }
     }
     //g_ltem1->sockets->socketCtrls[MQTT_SOCKET_ID].protocol = (useSslVersion == sslVersion_none) ? protocol_mqtt : protocol_mqtts;
-    return RESULT_CODE_SUCCESS;
+    //return RESULT_CODE_SUCCESS;
 }
 
 
@@ -180,7 +225,7 @@ void mqtt_close()
     char actionCmd[81] = {0};
     char actionResponse[81] = {0};
 
-    g_ltem1->mqtt->state = mqtt_status("");                 
+    g_ltem1->mqtt->state = mqttStatus_closed;                 
 
     g_ltem1->iop->peerTypeMap.mqttConnection = 0;           // release mqtt socket in IOP
     for (size_t i = 0; i < IOP_RX_DATABUFFERS_MAX; i++)     // release any iop buffers assigned
@@ -194,13 +239,13 @@ void mqtt_close()
         g_ltem1->mqtt->subscriptions[i].receiver_func = NULL;
     }
 
-    if (g_ltem1->mqtt->state == mqttStatus_connected)
-    {
-        snprintf(actionCmd, 80, "AT+QMTDISC=%d", MQTT_SOCKET_ID);
-        if (action_tryInvoke(actionCmd))
-            action_awaitResult(true);
-    }
-    else if (g_ltem1->mqtt->state == mqttStatus_open)
+    // if (g_ltem1->mqtt->state == mqttStatus_connected)
+    // {
+    //     snprintf(actionCmd, 80, "AT+QMTDISC=%d", MQTT_SOCKET_ID);
+    //     if (action_tryInvoke(actionCmd))
+    //         action_awaitResult(true);
+    // }
+    if (g_ltem1->mqtt->state >= mqttStatus_open)
     {
         snprintf(actionCmd, 80, "AT+QMTCLOSE=%d", MQTT_SOCKET_ID);
         if (action_tryInvoke(actionCmd))
@@ -221,9 +266,9 @@ void mqtt_close()
  *  \param [in] password - The secret string or phrase to authenticate the connection.
  *  \param [in] sessionClean - Directs MQTT to preserve or flush messages received prior to the session start.
  * 
- *  \returns A socketResult_t value indicating the success or type of failure.
+ *  \returns A resultCode_t value indicating the success or type of failure.
 */
-socketResult_t mqtt_connect(const char *clientId, const char *username, const char *password, mqttSession_t sessionClean)
+resultCode_t mqtt_connect(const char *clientId, const char *username, const char *password, mqttSession_t sessionClean)
 {
     #define MQTT_CONNECT_CMDSZ 400
     #define MQTT_CONNECT_RSPSZ 81
@@ -245,11 +290,29 @@ socketResult_t mqtt_connect(const char *clientId, const char *username, const ch
     if (action_tryInvokeAdv(actionCmd, ACTION_RETRIES_DEFAULT, WAIT_SECONDS(60), mqttConnectCompleteParser))
     {
         atResult = action_awaitResult(true);
-        if (atResult.statusCode == RESULT_CODE_SUCCESS)
-            g_ltem1->iop->peerTypeMap.mqttConnection = 2;
-        return atResult.statusCode;
+
+        // if (atResult.statusCode == RESULT_CODE_SUCCESS)
+        //     g_ltem1->iop->peerTypeMap.mqttConnection = 2;
+        // return atResult.statusCode;
+
+        switch (atResult.statusCode)
+        {
+            case RESULT_CODE_SUCCESS:
+                g_ltem1->iop->peerTypeMap.mqttConnection = 2;
+                return RESULT_CODE_SUCCESS;
+            case 901:
+            case 902:
+            case 904:
+                return RESULT_CODE_BADREQUEST;
+            case 903:
+                return RESULT_CODE_UNAVAILABLE;
+            case 905:
+                return RESULT_CODE_FORBIDDEN;
+            default:
+                return RESULT_CODE_ERROR;
+        }
     }
-    return RESULT_CODE_BADREQUEST;
+    return RESULT_CODE_BADREQUEST;          // bad parameters assumed
 }
 
 
@@ -261,11 +324,10 @@ socketResult_t mqtt_connect(const char *clientId, const char *username, const ch
  *  \param [in] qos - The QOS level for messages subscribed to.
  *  \param [in] recv_func - The receiver function in the application to receive subscribed messages on arrival.
  * 
- *  \returns A socketResult_t value indicating the success or type of failure.
+ *  \returns A resultCode_t value indicating the success or type of failure.
 */
-socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqtt_recvFunc_t recv_func)
+resultCode_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqtt_recvFunc_t recv_func)
 {
-    // AT+QMTSUB=1,99,"devices/e8fdd7df-2ca2-4b64-95de-031c6b199299/messages/devicebound/#",0
     #define MQTT_PUBSUB_CMDSZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ + MQTT_TOPIC_PUBOVRHD_SZ)
     #define MQTT_PUBSUB_RSPSZ 81
 
@@ -317,9 +379,9 @@ socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqtt_recvFunc_t 
  * 
  *  \param [in] topic - The messaging topic to unsubscribe from.
  * 
- *  \returns A socketResult_t value indicating the success or type of failure.
+ *  \returns A resultCode_t (http status type) value indicating the success or type of failure.
 */
-socketResult_t mqtt_unsubscribe(const char *topic)
+resultCode_t mqtt_unsubscribe(const char *topic)
 {
     // AT+QMTUNS=<tcpconnectID>,<msgID>,"<topic1>"
 
@@ -363,9 +425,9 @@ socketResult_t mqtt_unsubscribe(const char *topic)
  *  \param [in] qos - The MQTT QOS to be assigned to sent message.
  *  \param [in] *message - Pointer to message to be sent.
  * 
- *  \returns A socketResult_t value indicating the success or type of failure.
+ *  \returns A resultCode_t value indicating the success or type of failure (http status type code).
 */
-socketResult_t mqtt_publish(const char *topic, mqttQos_t qos, const char *message)
+resultCode_t mqtt_publish(const char *topic, mqttQos_t qos, const char *message)
 {
     // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
 

@@ -29,7 +29,7 @@
 #include "ltem1c.h"
 
 
-#define BGX_CONTEXT_COUNT 3
+#define BGX_PDPCONTEXT_COUNT 3
 #define NTWK_DEFAULT_CONTEXT 255
 
 /** 
@@ -59,11 +59,20 @@ typedef enum
 /** 
  *  \brief Enum of the two common APN contexts provided by network carriers.
 */
-typedef enum contextIpType_tag
+typedef enum pdpCntxtIpType_tag
 {
-    contextIpType_IPV4 = 1,              ///< IP v4, 32-bit address (ex: 192.168.37.52)
-    contextIpType_IPV6 = 2               ///< IP v6, 128-bit address (ex: 2001:0db8:0000:0000:0000:8a2e:0370:7334)
-} contextIpType_t;
+    pdpCntxtIpType_IPV4 = 1,              ///< IP v4, 32-bit address (ex: 192.168.37.52)
+    pdpCntxtIpType_IPV6 = 2               ///< IP v6, 128-bit address (ex: 2001:0db8:0000:0000:0000:8a2e:0370:7334)
+} pdpCntxtIpType_t;
+
+
+typedef enum pdpCntxtAuthMethods_tag
+{
+    pdpCntxtAuthMethods_none = 0,
+    pdpCntxtAuthMethods_pap = 1,
+    pdpCntxtAuthMethods_chap = 2,
+    pdpCntxtAuthMethods_papChap = 3
+} pdpCntxtAuthMethods_t;
 
 
 #define NTWKOPERATOR_OPERNAME_SZ 29
@@ -85,12 +94,12 @@ typedef struct networkOperator_tag
 /** 
  *  \brief Struct representing the state of active PDP contexts (aka: APN or data context).
 */
-typedef struct pdpContext_tag
+typedef struct pdpCntxt_tag
 {
-    uint8_t contextId;                  ///< context ID recognized by the carrier (valid are 1 to 16)
-    contextIpType_t contextIpType;      ///< IPv4 or IPv6
-	char ipAddress[16];                 ///< The IP address obtained from the carrier for this context. The IP address of the modem.
-} pdpContext_t;
+    uint8_t contextId;              ///< context ID recognized by the carrier (valid are 1 to 16)
+    pdpCntxtIpType_t ipType;        ///< IPv4 or IPv6
+	char ipAddress[16];             ///< The IP address obtained from the carrier for this context. The IP address of the modem.
+} pdpCntxt_t;
 
 
 /** 
@@ -98,8 +107,8 @@ typedef struct pdpContext_tag
 */
 typedef struct network_tag
 {
-    networkOperator_t *networkOperator;         ///< Network operator name and protocol
-    pdpContext_t contexts[BGX_CONTEXT_COUNT];  ///< Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
+    networkOperator_t *networkOperator;             ///< Network operator name and protocol
+    pdpCntxt_t pdpCntxts[BGX_PDPCONTEXT_COUNT];   ///< Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
 } network_t;
 
 
@@ -112,8 +121,9 @@ extern "C"
 network_t *ntwk_create();
 
 networkOperator_t ntwk_awaitOperator(uint16_t waitDuration);
-uint8_t ntwk_getActivePdpContexts();
-pdpContext_t *ntwk_getPdpContext(uint8_t contxtId);
+uint8_t ntwk_getActivePdpCntxtCnt();
+void ntwk_configPdpCntxt(uint8_t contxtId, pdpCntxtIpType_t ipType, const char *userId, const char *pw, pdpCntxtAuthMethods_t authMethod);
+pdpCntxt_t *ntwk_getPdpCntxt(uint8_t contxtId);
 
 void ntwk_activatePdpContext(uint8_t contxtId);
 void ntwk_deactivatePdpContext(uint8_t contxtId);

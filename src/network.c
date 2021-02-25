@@ -36,7 +36,7 @@ network_t *ntwk_create()
 
     network->networkOperator = calloc(1, sizeof(networkOperator_t));
 
-    pdpContext_t *context = calloc(BGX_CONTEXT_COUNT, sizeof(pdpContext_t));
+    pdpCntxt_t *context = calloc(BGX_PDPCONTEXT_COUNT, sizeof(pdpCntxt_t));
 	if (context == NULL)
 	{
         ltem1_faultHandler(0, "ipProtocols-could not alloc IP protocol struct");
@@ -45,7 +45,7 @@ network_t *ntwk_create()
 
     for (size_t i = 0; i < IOP_SOCKET_COUNT; i++)
     {   
-        network->contexts[i].contextIpType = contextIpType_IPV4;
+        network->pdpCntxts[i].ipType = pdpCntxtIpType_IPV4;
     }
     return network;
 }
@@ -81,21 +81,21 @@ networkOperator_t ntwk_awaitOperator(uint16_t waitDuration)
 
 
 /**
- *	\brief Get collection of APN active data contexts from BGx.
+ *	\brief Get count of APN active data contexts from BGx.
  * 
  *  \return Count of active data contexts (BGx max is 3).
  */
-uint8_t ntwk_getActivePdpContexts()
+uint8_t ntwk_getActivePdpCntxtCnt()
 {
     #define IP_QIACT_SZ 8
 
     action_tryInvokeAdv("AT+QIACT?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, contextStatusCompleteParser);
     actionResult_t atResult = action_awaitResult(false);
 
-    for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)         // empty context table return and if success refill from parsing
+    for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)         // empty context table return and if success refill from parsing
     {
-        g_ltem1->network->contexts[i].contextId = 0;
-        g_ltem1->network->contexts[i].ipAddress[0] = 0;
+        g_ltem1->network->pdpCntxts[i].contextId = 0;
+        g_ltem1->network->pdpCntxts[i].ipAddress[0] = 0;
     }
 
     if (atResult.statusCode != RESULT_CODE_SUCCESS)
@@ -120,14 +120,14 @@ uint8_t ntwk_getActivePdpContexts()
         while (nextContext != NULL)                             // now parse each pdp context entry
         {
             landmarkAt = nextContext;
-            g_ltem1->network->contexts[apnIndx].contextId = strtol(landmarkAt + landmarkSz, &continueAt, 10);
+            g_ltem1->network->pdpCntxts[apnIndx].contextId = strtol(landmarkAt + landmarkSz, &continueAt, 10);
             continueAt = strchr(++continueAt, ',');             // skip context_state: always 1
-            g_ltem1->network->contexts[apnIndx].contextIpType = (int)strtol(continueAt + 1, &continueAt, 10);
+            g_ltem1->network->pdpCntxts[apnIndx].ipType = (int)strtol(continueAt + 1, &continueAt, 10);
 
             continueAt = grabToken(continueAt + 2, ASCII_cDBLQUOTE, tokenBuf, TOKEN_BUF_SZ);
             if (continueAt != NULL)
             {
-                strncpy(g_ltem1->network->contexts[apnIndx].ipAddress, tokenBuf, TOKEN_BUF_SZ);
+                strncpy(g_ltem1->network->pdpCntxts[apnIndx].ipAddress, tokenBuf, TOKEN_BUF_SZ);
             }
             nextContext = strstr(nextContext + landmarkSz, "+QIACT: ");
             apnIndx++;
@@ -145,12 +145,12 @@ uint8_t ntwk_getActivePdpContexts()
  * 
  *  \return Pointer to APN info in active APN table, NULL if not active
  */
-pdpContext_t *ntwk_getPdpContext(uint8_t cntxtId)
+pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
 {
-    for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)
+    for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)
     {
-        if(g_ltem1->network->contexts[i].contextId != 0)
-            return &g_ltem1->network->contexts[i];
+        if(g_ltem1->network->pdpCntxts[i].contextId != 0)
+            return &g_ltem1->network->pdpCntxts[i];
     }
     return NULL;
 }
@@ -170,7 +170,7 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
     {
         resultCode_t atResult = action_awaitResult(true).statusCode;
         if ( atResult == RESULT_CODE_SUCCESS)
-            ntwk_getActivePdpContexts();
+            ntwk_getActivePdpCntxtCnt();
     }
 }
 
@@ -201,14 +201,14 @@ void ntwk_deactivatePdpContext(uint8_t cntxtId)
  */
 void ntwk_resetPdpContexts()
 {
-    uint8_t activeIds[BGX_CONTEXT_COUNT] = {0};
+    uint8_t activeIds[BGX_PDPCONTEXT_COUNT] = {0};
 
-    for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)                         // preserve initial active APN list
+    for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)                         // preserve initial active APN list
     {
-        if(g_ltem1->network->contexts[i].contextId != 0)
-            activeIds[i] = g_ltem1->network->contexts[i].contextId;
+        if(g_ltem1->network->pdpCntxts[i].contextId != 0)
+            activeIds[i] = g_ltem1->network->pdpCntxts[i].contextId;
     }
-    for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)                         // now, cycle the active contexts
+    for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)                         // now, cycle the active contexts
     {
         if(activeIds[i] != 0)
         {

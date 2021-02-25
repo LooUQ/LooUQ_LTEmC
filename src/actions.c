@@ -27,7 +27,7 @@ void action_close()
 /**
  *	\brief Invokes a BGx AT command with default action values. 
  *
- *	\param [in] cmdStr - The command string to send to the BG96 module.
+ *	\param cmdStr [in] The command string to send to the BG96 module.
  * 
  *  \return True if action was invoked, false if not
  */
@@ -41,10 +41,10 @@ bool action_tryInvoke(const char *cmdStr)
 /**
  *	\brief Invokes a BGx AT command with application specified action values. 
  *
- *	\param [in] cmdStr - The command string to send to the BG96 module.
- *  \param [in] retries - Number of retries to obtain action lock that should be attempted. 0 = no retries.
- *  \param [in] timeout - Number of milliseconds the action can take. If 0, the system default timeout is used.
- *  \param [in] taskCompleteParser - Custom command response parser to signal result is complete. NULL for std parser.
+ *	\param cmdStr [in] The command string to send to the BG96 module.
+ *  \param retries [in] Number of retries to obtain action lock that should be attempted. 0 = no retries.
+ *  \param timeout [in] Number of milliseconds the action can take. If 0, the system default timeout is used.
+ *  \param taskCompleteParser [in] Custom command response parser to signal result is complete. NULL for std parser.
  * 
  *  \return True if action was invoked, false if not
  */
@@ -67,10 +67,10 @@ bool action_tryInvokeAdv(const char *cmdStr, uint8_t retries, uint16_t timeout, 
 /**
  *	\brief Performs data transfer (send) sub-action.
 
- *  \param [in] data - Pointer to the block of binary data to send.
- *  \param [in] dataSz - The size of the data block. 
- *  \param [in] timeoutMillis - Timeout period (in millisecs) for send to complete.
- *  \param [in] taskCompleteParser_func - Function pointer to parser looking for task completion
+ *  \param data [in] Pointer to the block of binary data to send.
+ *  \param dataSz [in] The size of the data block. 
+ *  \param timeoutMillis [in] Timeout period (in millisecs) for send to complete.
+ *  \param taskCompleteParser_func [in] Function pointer to parser looking for task completion
  */
 void action_sendRaw(const char *data, uint16_t dataSz, uint16_t timeoutMillis, uint16_t (*taskCompleteParser_func)(const char *response, char **endptr))
 {
@@ -89,11 +89,11 @@ void action_sendRaw(const char *data, uint16_t dataSz, uint16_t timeoutMillis, u
 /**
  *	\brief Performs data transfer (send) sub-action.
 
- *  \param [in] data - Pointer to the block of binary data to send.
- *  \param [in] dataSz - The size of the data block. 
- *  \param [in] eotPhrase - Char string that is sent a the end-of-transmission.
- *  \param [in] timeoutMillis - Timeout period (in millisecs) for send to complete.
- *  \param [in] taskCompleteParser_func - Function pointer to parser looking for task completion
+ *  \param data [in] Pointer to the block of binary data to send.
+ *  \param dataSz [in] The size of the data block. 
+ *  \param eotPhrase [in] Char string that is sent a the end-of-transmission.
+ *  \param timeoutMillis [in] Timeout period (in millisecs) for send to complete.
+ *  \param taskCompleteParser_func [in] Function pointer to parser looking for task completion
  */
 void action_sendRawWithEOTs(const char *data, uint16_t dataSz, const char *eotPhrase, uint16_t timeoutMillis, uint16_t (*taskCompleteParser_func)(const char *response, char **endptr))
 {
@@ -112,7 +112,8 @@ void action_sendRawWithEOTs(const char *data, uint16_t dataSz, const char *eotPh
 
 /**
  *	\brief Waits for an AT command result until completed response or timeout.
- *  \param [in] closeAction : USE WITH CAUTION - On result, close the action. The caller only needs the status code. 
+ *
+ *  \param closeAction [in] USE WITH CAUTION - On result, close the action. The caller only needs the status code. 
  * 
  *  \return Action result. WARNING - the actionResult.response validity is undetermined after close. 
  */
@@ -142,7 +143,7 @@ actionResult_t action_awaitResult(bool closeAction)
 /**
  *	\brief Gets command response and returns immediately.
  *
- *  \param [in] closeAction : USE WITH CAUTION - On result, close the action. The caller only needs the status code. 
+ *  \param closeAction [in] USE WITH CAUTION - On result, close the action. The caller only needs the status code. 
  * 
  *  \return Action result. WARNING - the actionResult.response validity is undetermined after close. 
  */
@@ -210,12 +211,12 @@ actionResult_t action_getResult(bool closeAction)
 /**
  *	\brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
  *
- *  \param [in] response - The string returned from the getResult function.
- *  \param [in] preamble - The string to look for to signal start of response match.
- *  \param [in] preambleReqd - The preamble string is required, set to false to search for only gap and terminator
- *  \param [in] gapReqd - The min. char count between preamble (or start) and terminator (0 is valid).
- *  \param [in] terminator - The string to signal the end of the command response.
- *  \param [out] endptr - Char pointer to the next char in response after parser match
+ *  \param response [in] The string returned from the getResult function.
+ *  \param preamble [in] The string to look for to signal start of response match.
+ *  \param preambleReqd [in] The preamble string is required, set to false to search for only gap and terminator
+ *  \param gapReqd [in] The minimum char count between preamble (or start) and terminator (0 is valid).
+ *  \param terminator [in] The string to signal the end of the command response.
+ *  \param endptr [out] Char pointer to the next char in response after parser match
  * 
  *  \return HTTP style result code, 0 if parser incomplete (need more response).
  */
@@ -291,12 +292,12 @@ resultCode_t action_defaultResultParser(const char *response, const char *preamb
 /**
  *	\brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
  *
- *  \param [in] response - The string returned from the getResult function.
- *  \param [in] preamble - The string to look for to signal response matches command (scans from end backwards).
- *  \param [in] delim - The token delimeter char.
- *  \param [in] reqdTokens - The minimum number of tokens expected.
- *  \param [in] terminator - Text to look for indicating the sucessful end of command response.
- *  \param [out] endptr - Char pointer to the next char in response after parser match
+ *  \param response [in] The string returned from the getResult function.
+ *  \param preamble [in] The string to look for to signal response matches command (scans from end backwards).
+ *  \param delim [in] The token delimeter char.
+ *  \param reqdTokens [in] The minimum number of tokens expected.
+ *  \param terminator [in] Text to look for indicating the sucessful end of command response.
+ *  \param endptr [out] Char pointer to the next char in response after parser match
  * 
  *  \return True if the response meets the conditions in the preamble and token count required.
  */
@@ -342,8 +343,8 @@ resultCode_t action_tokenResultParser(const char *response, const char *preamble
 /**
  *	\brief Validate the response ends in a BGxx OK value.
  *
- *	\param [in] response - Pointer to the command response received from the BGx.
- *  \param [out] endptr - Char pointer to the next char in response after parser match
+ *	\param response [in] - Pointer to the command response received from the BGx.
+ *  \param endptr [out] - Char pointer to the next char in response after parser match
  *
  *  \return bool If the response string ends in a valid OK sequence
  */
@@ -355,7 +356,11 @@ resultCode_t action_okResultParser(const char *response, char** endptr)
 
 
 /**
- *	\brief Parser for open connection response, shared by UDP/TCP/SSL.
+ *	\brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
+ *  \param response [in] Pointer to the command response received from the BGx.
+ *  \param preamble [in] Pointer to a landmark phrase to look for in the response
+ *  \param resultIndx [in] Zero based index after landmark of numeric fields to find result
+ *  \param endptr [out] Pointer to character in response following parser match
  */
 resultCode_t action_serviceResponseParser(const char *response, const char *preamble, uint8_t resultIndx, char** endptr) 
 {
@@ -373,7 +378,7 @@ resultCode_t action_serviceResponseParser(const char *response, const char *prea
     }
     uint16_t resultVal = strtol(next, endptr, 10);
     
-    return  resultVal == 0 ? RESULT_CODE_SUCCESS : (resultVal < RESULT_CODE_ERROR ? resultVal + RESULT_CODE_ERROR : resultVal);
+    return  resultVal == 0 ? RESULT_CODE_SUCCESS : (resultVal < 100 ? resultVal + RESULT_CODE_CUSTOMBASE : resultVal);
 }
 
 
@@ -445,8 +450,8 @@ static void action_resultToHistory()
 /**
  *  \brief Attempts to get exclusive access to QBG module command interface.
  * 
- *  \param [in] cmdStr - The AT command text.
- *  \param [in] retries - Number of retries to be attempted, while obtaining lock.
+ *  \param cmdStr [in] The AT command text.
+ *  \param retries [in] Number of retries to be attempted, while obtaining lock.
 */
 bool actn_acquireLock(const char *cmdStr, uint8_t retries)
 {

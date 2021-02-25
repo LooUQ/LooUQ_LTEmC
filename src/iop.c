@@ -397,6 +397,7 @@ void iop_rxParseImmediate()
         else if (g_ltem1->iop->peerTypeMap.mqttConnection && memcmp("+QMTSTAT:", urcPrefix, strlen("+QMTSTAT:")) == 0)
         {
             PRINTF(dbgColor_cyan, "-e=mqttS");
+            g_ltem1->mqtt->state = mqttStatus_closed;
             // todo mark mqtt connection closed
         }
 
@@ -407,12 +408,12 @@ void iop_rxParseImmediate()
             char *connIdPtr = g_ltem1->iop->rxCmdBuf->prevHead + strlen("+QIURC: \"pdpdeact");
             char *endPtr = NULL;
             uint8_t contextId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-            for (size_t i = 0; i < BGX_CONTEXT_COUNT; i++)
+            for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)
             {
-                if (g_ltem1->network->contexts[i].contextId == contextId)
+                if (g_ltem1->network->pdpCntxts[i].contextId == contextId)
                 {
-                    g_ltem1->network->contexts[i].contextId = 0;
-                    g_ltem1->network->contexts[i].ipAddress[0] = 0;
+                    g_ltem1->network->pdpCntxts[i].contextId = 0;
+                    g_ltem1->network->pdpCntxts[i].ipAddress[0] = 0;
                     break;
                 }
             }

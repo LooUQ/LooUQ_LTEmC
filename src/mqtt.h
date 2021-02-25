@@ -113,8 +113,7 @@ typedef enum mqttStatus_tag
 {
     mqttStatus_closed = 0,          ///< MQTT is idle, not active.
     mqttStatus_open = 1,            ///< MQTT is open, open but not connected.
-    mqttStatus_connected = 2,       ///< MQTT is connected, in session with server.
-    mqttStatus_badHost = 255        ///< MQTT is open+, but to unintended host (if appl requested host validation).
+    mqttStatus_connected = 2        ///< MQTT is connected, in session with server.
 } mqttStatus_t;
 
 
@@ -160,15 +159,15 @@ extern "C"
 
 void mqtt_create();
 
-mqttStatus_t mqtt_status(const char *host);
-socketResult_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion);
-socketResult_t mqtt_connect(const char *clientId, const char *username, const char *password, mqttSession_t clean);
+mqttStatus_t mqtt_status(const char *host, bool force);
+resultCode_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion);
+resultCode_t mqtt_connect(const char *clientId, const char *username, const char *password, mqttSession_t clean);
 void mqtt_close();
 
 
-socketResult_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqtt_recvFunc_t rcvr_func);
-socketResult_t mqtt_unsubscribe(const char *topic);
-socketResult_t mqtt_publish(const char *topic, mqttQos_t qos, const char *message);
+resultCode_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqtt_recvFunc_t rcvr_func);
+resultCode_t mqtt_unsubscribe(const char *topic);
+resultCode_t mqtt_publish(const char *topic, mqttQos_t qos, const char *message);
 
 void mqtt_doWork();
 

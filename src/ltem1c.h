@@ -79,9 +79,12 @@ extern "C"
 #define RESULT_CODE_NOTFOUND      404
 #define RESULT_CODE_TIMEOUT       408
 #define RESULT_CODE_CONFLICT      409
+#define RESULT_CODE_GONE          410
+#define RESULT_CODE_PRECONDFAILED 412
 #define RESULT_CODE_CANCELLED     499
 #define RESULT_CODE_ERROR         500
 #define RESULT_CODE_UNAVAILABLE   503
+#define RESULT_CODE_CUSTOMBASE    900
 
 // action_result_t should be populated with RESULT_CODE_x constant values or an errorCode (uint >= 400)
 typedef uint16_t resultCode_t;
@@ -119,13 +122,23 @@ typedef enum
 
 
 /** 
- *  \brief Enum indicating desirec state for LTEm1 hardware power-state at initialization.
+ *  \brief Enum indicating desired state for LTEm1 hardware power-state at initialization.
 */
-typedef enum
+typedef enum ltem1Start_tag
 {
     ltem1Start_powerOff = 0,            ///< At initialization, leave LTEm1 powered down
     ltem1Start_powerOn = 1              ///< At initialization, power LTEm1 ON
 } ltem1Start_t;
+
+
+/** 
+ *  \brief Enum indicating desirec state for LTEm1 hardware power-state at initialization.
+*/
+typedef enum ltem1SpiError_tag
+{
+    ltem1SpiError_none = 0,
+    ltem1SpiError_CommFailure = 1
+} ltem1SpiError_t;
 
 
 /** 
@@ -139,6 +152,7 @@ typedef struct ltem1Device_tag
 	ltem1PinConfig_t pinConfig;         ///< GPIO pin configuration for required GPIO and SPI interfacing.
     spiDevice_t *spi;                   ///< SPI device (methods signatures compatible with Arduino).
     qbgReadyState_t qbgReadyState;      ///< Ready state of the BGx module
+    ltem1SpiError_t mdmSpiError;        ///< Error indicates problems with local (SPI) communications between host and modem.
     uint8_t dataContext;                ///< The primary APN context with the network carrier for application transfers.
     volatile iop_t *iop;                ///< IOP subsystem controls.
     action_t *action;                   ///< Action subsystem controls.
