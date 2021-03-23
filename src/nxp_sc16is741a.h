@@ -45,6 +45,9 @@ extern "C"
 #define SC16IS741A_FIFO_RnW_READ    0x01
 #define SC16IS741A_FIFO_RnW_WRITE   0x00
 
+#define NXP_TX_FIFOSZ 0x40
+#define NXP_RX_FIFOSZ 0x40
+
 // NXP Bridge register set selector values (applied to LCR register)
 #define SC16IS741A_REG_SET_GENERAL  0x00
 #define SC16IS741A_REG_SET_SPECIAL  0x80
@@ -351,6 +354,7 @@ typedef enum
 // void sc16is741a_uninit();
 void sc16is741a_start();
 void sc16is741a_enableIrqMode();
+bool sc16is741a_chkCommReady();
 
 void sc16is741a_write(const void * src, uint8_t src_len);
 void sc16is741a_read(void* dest, uint8_t dest_len);

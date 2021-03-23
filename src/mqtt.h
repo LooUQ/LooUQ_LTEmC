@@ -28,14 +28,24 @@
 
 #include "ltem1c.h"
 
+#define MQTT_PUBLISH_TIMEOUT 2500                                   ///< in millis, BGx documentation says 15s but in practice this is typically
+                                                                    ///< 550ms - 750ms, excessively long timeout creates situation where a msg
+                                                                    ///< timeout, causes a subsequent msg timeout
 
-#define MQTT_MESSAGE_SZ 1548
+#define MQTT_MESSAGE_SZ 1548                                        ///< BGx max publish size
 #define MQTT_TOPIC_OFFSET_MAX 24                                    ///< Number of BGx preamble chars to get to topic
+
+/* MQTT TOPIC
+ BGx documentation doesn't state a max for topic length. The information below is
+ derived from the topic's construction for AZURE IoTHub connectivity.build
+ ------------------------------------------------------------------*/
 #define MQTT_TOPIC_NAME_SZ 90                                       ///< Azure IoTHub typically 50-70 chars
 #define MQTT_TOPIC_PROPS_SZ 320                                     ///< typically 250-300 bytes
 #define MQTT_TOPIC_SZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ)    ///< Total topic size (name+props) for buffer sizing
-#define MQTT_TOPIC_PUBOVRHD_SZ 27                                   ///< when publishing, number of extra chars in outgoing buffer
-#define MQTT_TOPIC_MAXCNT 3                                         ///< number of slots for MQTT service subscriptions (reduce for mem conservation)
+#define MQTT_TOPIC_PUBCMD_OVRHD_SZ 27                               ///< when publishing, number of extra chars in outgoing buffer added to AT cmd
+#define MQTT_TOPIC_PUBBUF_SZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ + MQTT_TOPIC_PUBCMD_OVRHD_SZ)
+
+#define MQTT_TOPIC_MAXCNT 2                                         ///< number of slots for MQTT service subscriptions (reduce for mem conservation)
 #define MQTT_SOCKET_ID 5                                            ///< MQTT assigned BGx socket (this is behind-the-scenes and not readily visible)
 #define MQTT_PROPERTIES_CNT 12                                      ///< Azure IoTHub 3-sysProps, 3-props, plus your application
 
@@ -149,6 +159,7 @@ typedef struct mqtt_tag
     uint8_t dataBufferIndx;                 ///< index to IOP data buffer holding last completed message (set to IOP_NO_BUF if no recv ready)
 } mqtt_t;
 
+typedef mqtt_t *mqttPtr_t;
 
 
 #ifdef __cplusplus
@@ -156,7 +167,7 @@ extern "C"
 {
 #endif // __cplusplus
 
-
+//mqtt_t *mqtt_create();
 void mqtt_create();
 
 mqttStatus_t mqtt_status(const char *host, bool force);

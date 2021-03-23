@@ -26,28 +26,27 @@ char *grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz)
 /**
  *	\brief Initialize the IP network contexts structure.
  */
-network_t *ntwk_create()
+void ntwk_create()
 {
-    network_t *network = calloc(1, sizeof(network_t));
-	if (network == NULL)
+    network_t *networkPtr = calloc(1, sizeof(network_t));
+	if (networkPtr == NULL)
 	{
-        ltem1_faultHandler(0, "ipProtocols-could not alloc IP protocol struct");
+        ltem1_notifyApp(ltem1NotifType_memoryAllocFault,  "Could not alloc network struct");
 	}
 
-    network->networkOperator = calloc(1, sizeof(networkOperator_t));
-
+    networkPtr->networkOperator = calloc(1, sizeof(networkOperator_t));
     pdpCntxt_t *context = calloc(BGX_PDPCONTEXT_COUNT, sizeof(pdpCntxt_t));
 	if (context == NULL)
 	{
-        ltem1_faultHandler(0, "ipProtocols-could not alloc IP protocol struct");
-        free(network);
+        ltem1_notifyApp(ltem1NotifType_memoryAllocFault, "Could not alloc PDP context struct");
+        free(networkPtr);
 	}
 
     for (size_t i = 0; i < IOP_SOCKET_COUNT; i++)
     {   
-        network->pdpCntxts[i].ipType = pdpCntxtIpType_IPV4;
+        networkPtr->pdpCntxts[i].ipType = pdpCntxtIpType_IPV4;
     }
-    return network;
+    g_ltem1->network = networkPtr;
 }
 
 
@@ -139,11 +138,11 @@ uint8_t ntwk_getActivePdpCntxtCnt()
 
 
 /**
- *	\brief Get APN\PDP Context information
+ *	\brief Get PDP Context\APN information
  * 
- *  \param [in] cntxtId The APN to retreive.
+ *  \param cntxtId [in] - The PDP context (APN) to retreive.
  * 
- *  \return Pointer to APN info in active APN table, NULL if not active
+ *  \return Pointer to PDP context info in active context table, NULL if not active
  */
 pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
 {
@@ -157,9 +156,9 @@ pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
 
 
 /**
- *	\brief Activate APN.
+ *	\brief Activate PDP Context\APN.
  * 
- *  \param[in] cntxtId The APN to operate on. Typically 0 or 1
+ *  \param cntxtId [in] - The APN to operate on. Typically 0 or 1
  */
 void ntwk_activatePdpContext(uint8_t cntxtId)
 {
@@ -179,7 +178,7 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
 /**
  *	\brief Deactivate APN.
  * 
- *  \param[in] cntxtId The APN number to operate on.
+ *  \param cntxtId [in] - The APN number to operate on.
  */
 void ntwk_deactivatePdpContext(uint8_t cntxtId)
 {
@@ -197,7 +196,8 @@ void ntwk_deactivatePdpContext(uint8_t cntxtId)
 
 /**
  *	\brief Reset (deactivate\activate) all network APNs.
- *  Note: activate and deactivate have side effects, they internally call getActiveContexts prior to return
+ *
+ *  \NOTE: activate and deactivate have side effects, they internally call getActiveContexts prior to return
  */
 void ntwk_resetPdpContexts()
 {
@@ -279,10 +279,10 @@ static networkOperator_t getNetworkOperator()
 /**
  *  \brief Scans a C-String (char array) for the next delimeted token and null terminates it.
  * 
- *  \param [in] source - Original char array to scan.
- *  \param [in] delimeter - Character separating tokens (passed as integer value).
- *  \param [out] token - Pointer to where token should be copied to.
- *  \param [in] tokenSz - Size of buffer to receive token.
+ *  \param source [in] - Original char array to scan.
+ *  \param delimeter [in] - Character separating tokens (passed as integer value).
+ *  \param token [out] - Pointer to where token should be copied to.
+ *  \param tokenSz [in] - Size of buffer to receive token.
  * 
  *  \return Pointer to the location in the source string immediately following the token.
 */

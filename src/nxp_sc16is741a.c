@@ -53,6 +53,13 @@ void sc16is741a_start()
     REG_MODIFY(SC16IS741A_EFR, SC16IS741A_EFR_reg.ENHANCED_FNS_EN = 1;)
     sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_GENERAL);
 
+    /* Using FCR for trigger\interrupt generation 
+            (NXP SC16IS741A manual section 8.13)
+            When the trigger level setting in TLR is zero, the SC16IS741A uses the trigger level
+            setting defined in FCR. If TLR has non-zero trigger level value, the trigger level defined in
+            FCR is discarded. This applies to both transmit FIFO and receive FIFO trigger level
+            setting.
+    */
 	SC16IS741A_FCR fcrRegister = {0};
 	fcrRegister.FIFO_EN = 1;
     fcrRegister.RX_TRIGGER_LVL = (int)RX_LVL_56CHARS;
@@ -75,8 +82,8 @@ void sc16is741a_start()
 /**
  *	\brief Enable IRQ servicing for communications between SC16IS741 and BG96.
  *
- *	\param[in] bridge The SC16IS741A bridge;
- *	\param[in] enable IRQ/ISR control enable/disable.
+ *	\param bridge [in] - The SC16IS741A bridge;
+ *	\param enable [in] - IRQ/ISR control enable/disable.
  */
 void sc16is741a_enableIrqMode()
 {
@@ -100,17 +107,28 @@ void sc16is741a_enableIrqMode()
 }
 
 
+/**
+ *	\brief Perform simple write\read using SC16IS741A scratchpad register. Used to test SPI communications.
+ */
+bool sc16is741a_chkCommReady()
+{
+    uint8_t wrVal = (uint8_t)(lMillis() & 0xFF);
+    sc16is741a_writeReg(SC16IS741A_SPR_ADDR, wrVal);
+    return sc16is741a_readReg(SC16IS741A_SPR_ADDR) == wrVal;
+}
+
 #pragma endregion
 
-#pragma region bridgeReadWrite
 
+
+#pragma region bridgeReadWrite
 
 /**
  *	\brief Read from a SC16IS741A bridge register.
  *
- *	\param[in] bridge The SC16IS741A bridge.
- *	\param[in] reg_addr The register address.
- *	\param[out] reg_data A pointer to the destination to read the register into.
+ *	\param bridge [in] - The SC16IS741A bridge.
+ *	\param reg_addr [in] - The register address.
+ *	\param reg_data [out] - A pointer to the destination to read the register into.
  */
 uint8_t sc16is741a_readReg(uint8_t reg_addr)
 {
@@ -127,9 +145,9 @@ uint8_t sc16is741a_readReg(uint8_t reg_addr)
 /**
  *	\brief Write to a SC16IS741A bridge register.
  *
- *	\param[in] bridge The SC16IS741A bridge.
- *	\param[in] reg_addr The register address.
- *	\param[in] reg_data A pointer to the data to write to the register.
+ *	\param bridge [in] - The SC16IS741A bridge.
+ *	\param reg_addr [in] - The register address.
+ *	\param reg_data [in] - Pointer to the data to write to the register.
  */
 void sc16is741a_writeReg(uint8_t reg_addr, uint8_t reg_data)
 {
@@ -146,11 +164,8 @@ void sc16is741a_writeReg(uint8_t reg_addr, uint8_t reg_data)
 /**
  *	\brief Reads through the SC16IS741A bridge (its RX FIFO).
  *
- *	\param[in] The SC16IS741A bridge.
- *	\param[out] dest The destination buffer.
- *	\param[in] The length of the destination buffer.
- *	\param[in/out] read_in The amount of bytes read into the destination.
- *	\returns The success of the operation.
+ *	\param dest [out] - The destination buffer.
+ *	\param dest_len [in] - The length of the destination buffer.
  */
 void sc16is741a_read(void* dest, uint8_t dest_len)
 {
@@ -166,10 +181,8 @@ void sc16is741a_read(void* dest, uint8_t dest_len)
 /**
  *	\brief Write through the SC16IS741A bridge.
  *
- *	\param[in] bridge The SC16IS741A bridge.
- *	\param[in] src The source data to write.
- *	\param[in] src_len The length of the source.
- *	\returns The success of the operation.
+ *	\param src [in] - The source data to write.
+ *	\param src_len [in] - The length of the source.
  */
 void sc16is741a_write(const void* src, uint8_t src_len)
 {
@@ -185,7 +198,7 @@ void sc16is741a_write(const void* src, uint8_t src_len)
 /**
  *	\brief Perform reset on bridge FIFO.
  *
- *  \param[in] resetAction What to reset TX, RX or both.
+ *  \param resetAction [in] - What to reset TX, RX or both.
  */
 void sc16is741a_resetFifo(resetFifo_action_t resetAction)
 {
@@ -213,13 +226,16 @@ void sc16is741a_flushRxFifo()
 
 
 
+/**
+ *	\brief Debug: Show FIFO buffers fill level.
+ */
 void displayFifoStatus(const char *dispMsg)
 {
-    PRINTF_INFO("%s...\r\n", dispMsg);
+    PRINTF(dbgColor_gray, "%s...\r\n", dispMsg);
     uint8_t bufFill = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-    PRINTF_INFO("  -- RX buf level=%d\r\n", bufFill);
+    PRINTF(dbgColor_gray, "  -- RX buf level=%d\r\n", bufFill);
     bufFill = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
-    PRINTF_INFO("  -- TX buf level=%d\r\n", bufFill);
+    PRINTF(dbgColor_gray, "  -- TX buf level=%d\r\n", bufFill);
 }
 
 

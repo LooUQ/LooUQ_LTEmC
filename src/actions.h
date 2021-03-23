@@ -9,11 +9,12 @@
 #include <stdint.h>
 
 
-#define ACTION_RETRIES_DEFAULT 10
-#define ACTION_RETRY_INTERVALmillis 100
-#define ACTION_TIMEOUT_DEFAULTmillis 500
-#define ACTION_HISTRESPBUF_SZ 240
+#define ACTION_RETRIES_DEFAULT           10
+#define ACTION_RETRY_INTERVALmillis     100
+#define ACTION_TIMEOUT_DEFAULTmillis    500
+#define ACTION_HISTRESPBUF_SZ           240
 
+#define RESULT_CODE_PENDING             0xFFFF
 
 
 /** 
@@ -39,8 +40,8 @@ typedef struct action_tag
     uint16_t resultCode;                ///< HTML type response code, 0 is special "pending" status, see ACTION_RESULT_* codes.
     char *response;                     ///< The response to the command received from the BGx.
     uint16_t timeoutMillis;             ///< Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
-    uint16_t (*taskCompleteParser_func)(const char *response, char **endptr);   ///< Function to parse the response looking for completion.
-    actionHistory_t *lastAction;        ///< Struct containing information on last action response\result. NOTE: only set on NON-SUCCESS.
+    actionHistory_t *lastActionError;   ///< Struct containing information on last action response\result. NOTE: only set on NON-SUCCESS.
+    uint16_t (*taskCompleteParser_func)(const char *response, char **endptr);  ///< Function to parse the response looking for completion.
 } action_t;
 
 
@@ -51,6 +52,7 @@ typedef struct actionResult_tag
 {
     resultCode_t statusCode;            ///< The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
     char *response;                     ///< The char c-string containing the full response from the BGx.
+    uint16_t responseCode;              ///< Numeric response value from many "status" action parsers (suffixed with _rc)
 } actionResult_t;
 
 

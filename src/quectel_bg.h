@@ -45,7 +45,7 @@
 /** 
  *  \brief Enum describing the current BGx module state.
 */
-typedef enum
+typedef enum qbgReadyState_tag
 {
     qbg_readyState_powerOff = 0,        ///< BGx is powered off, in this state all components on the LTEm1 are powered down.
     qbg_readyState_powerOn = 1,         ///< BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.

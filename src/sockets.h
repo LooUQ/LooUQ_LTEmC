@@ -23,8 +23,8 @@
  *
  *****************************************************************************/
 
-#ifndef __IP_H__
-#define __IP_H__
+#ifndef __SOCKETS_H__
+#define __SOCKETS_H__
 
 #include "ltem1c.h"
 
@@ -37,6 +37,7 @@
 #define SOCKET_COUNT 6
 #define SOCKET_CLOSED 255
 #define SOCKET_RESULT_PREVOPEN 563
+#define SOCKET_SEND_RETRIES 3
 
 typedef uint8_t socketId_t; 
 typedef uint16_t socketResult_t;
@@ -55,6 +56,7 @@ typedef struct socketCtrl_tag
     protocol_t protocol;            ///< Socket's protocol : UDP\TCP\SSL.
     socketId_t socketId;            ///< Socket ID/number.
     bool open;                      ///< Is the socket in an open state.
+    bool flushing;                  ///< True if the socket was opened with cleanSession and the socket was found already open.
     bool dataPending;               ///< The data pipeline has data (or the likelihood of data), triggered when BGx reports data pending (URC "recv").
     uint8_t dataBufferIndx;         ///< buffer indx holding data 
     uint8_t pdpContextId;           ///< Which network context is this data flow associated with.
@@ -65,9 +67,9 @@ typedef struct socketCtrl_tag
 /** 
  *  \brief Struct representing the sockets service.
 */
-typedef struct sockets_tag
+typedef volatile struct sockets_tag
 {
-    socketCtrl_t socketCtrls[LTEM1_SOCKET_COUNT];   ///< Array of socket connections.
+    socketCtrl_t socketCtrls[SOCKET_COUNT];   ///< Array of socket connections.
 } sockets_t;
 
 
@@ -77,12 +79,14 @@ extern "C"
 #endif // __cplusplus
 
 
-sockets_t *sckt_create();
+void sckt_create();
 
-socketResult_t sckt_open(socketId_t socketId, protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, receiver_func_t rcvr_func);
-void sckt_close(uint8_t socketNum);
-void sckt_reset(uint8_t socketNum);
+socketResult_t sckt_open(socketId_t socketId, protocol_t protocol, const char *host, uint16_t rmtPort, uint16_t lclPort, bool cleanSession, receiver_func_t rcvr_func);
+void sckt_close(uint8_t socketId);
+bool sckt_flush(uint8_t socketId);
 void sckt_closeAll(uint8_t contxtId);
+
+bool sckt_getState(uint8_t socketId);
 
 socketResult_t sckt_send(socketId_t socketId, const char *data, uint16_t dataSz);
 void sckt_doWork();
@@ -92,4 +96,4 @@ void sckt_doWork();
 }
 #endif // !__cplusplus
 
-#endif  /* !__IP_H__ */
+#endif  /* !__SOCKETS_H__ */

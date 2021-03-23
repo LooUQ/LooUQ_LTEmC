@@ -13,6 +13,15 @@
             "servertype": "jlink",
             "device": "ATSAMD21G18",
             "runToMain": true
+        },
+        {
+            "name": "Cortex Debug (attach)",
+            "type": "cortex-debug",
+            "cwd": "${workspaceRoot}",
+            "executable": ".//.build/ltem1c-7-sockets.ino.elf",
+            "request": "attach",
+            "servertype": "jlink",
+            "device": "ATSAMD21G18"
         }
     ]
 }

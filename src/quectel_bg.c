@@ -103,6 +103,9 @@ void qbg_reset()
 
 
 
+/**
+ *	\brief Initializes the BGx module.
+ */
 void qbg_start()
 {
     uint8_t attempts = 0;
@@ -112,7 +115,7 @@ void qbg_start()
 
     // toss out an empty AT command to flush any debris in the command channel
     action_tryInvoke("AT");
-    (void)action_awaitResult(true);
+    action_awaitResult(true);
 
     // init BGx state
     for (size_t i = 0; i < BG96_INIT_COMMAND_COUNT; i++)
@@ -131,7 +134,7 @@ void qbg_start()
                     iop_awaitAppReady();
                     goto qbg_startRetry;
                 }
-                ltem1_faultHandler(atResult.statusCode, "qbg-start() init sequence failed");
+                ltem1_notifyApp(ltem1NotifType_bgInitFailed, "qbg-start() init sequence failed");
             }
         }
     }
@@ -142,50 +145,57 @@ void qbg_start()
 /**
  *  \brief Configure RAT searching sequence
 */
-/*
-    AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
-
+void qbg_setNwScanSeq(const char* sequence)
+{
+    //AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
+    /*
     <scanseq> Number format. RAT search sequence.
-    (e.g.: 020301 stands for LTE Cat M1  LTE Cat NB1  GSM))
-        00 Automatic (LTE Cat M1  LTE Cat NB1  GSM)
+    (e.g.: 020301 stands for LTE Cat M1 | LTE Cat NB1 | GSM))
+        00 Automatic (LTE Cat M1 | LTE Cat NB1 | GSM)
         01 GSM
         02 LTE Cat M1
         03 LTE Cat NB1
     <effect> Number format. When to take effect.
         0 Take effect after UE reboots
         1 Take effect immediately
-*/
-void qbg_setNwScanSeq(const char* sequence)
-{
+    */
+    char atCmd[DFLT_ATBUFSZ] = {0};
+    snprintf(atCmd, DFLT_ATBUFSZ, "AT+QCFG=\"nwscanseq\",%s", sequence);
+    action_tryInvoke(atCmd);
+    action_awaitResult(true);
 }
 
 
 /** 
  *  \brief Configure RAT(s) allowed to be searched
 */
-/*
-    AT+QCFG="nwscanmode"[,<scanmode>[,<effect>]]
-
+void qbg_setNwScanMode(qbg_nw_scan_mode_t mode)
+{
+    // AT+QCFG="nwscanmode"[,<scanmode>[,<effect>]]
+    /*
     <scanmode> Number format. RAT(s) to be searched.
         0 Automatic
         1 GSM only
         3 LTE only
     <effect> Number format. When to take effect.
         0 Take effect after UE reboots
-        1 Take effect immediately
-*/
-void qbg_setNwScanMode(qbg_nw_scan_mode_t mode)
-{
+        1 Take effect immediately    
+    */
+    char atCmd[DFLT_ATBUFSZ] = {0};
+    snprintf(atCmd, DFLT_ATBUFSZ, "AT+QCFG=\"nwscanmode\",%d", mode);
+    action_tryInvoke(atCmd);
+    action_awaitResult(true);
 }
 
 
 
 /** 
  *  \brief Configure the network category to be searched under LTE RAT.
-*/
-/*
-    AT+QCFG="iotopmode"[,<mode>[,<effect>]]
-
+ */
+void qbg_setIotOpMode(qbg_nw_iot_mode_t mode)
+{
+    //AT+QCFG="iotopmode"[,<mode>[,<effect>]]
+    /*
     <mode> Number format. Network category to be searched under LTE RAT.
         0 LTE Cat M1
         1 LTE Cat NB1
@@ -193,9 +203,11 @@ void qbg_setNwScanMode(qbg_nw_scan_mode_t mode)
     <effect> Number format. When to take effect.
         0 Take effect after UE reboots
         1 Take effect immediately
-*/
-void qbg_setIotOpMode(qbg_nw_iot_mode_t mode)
-{
+    */
+    char atCmd[DFLT_ATBUFSZ] = {0};
+    snprintf(atCmd, DFLT_ATBUFSZ, "AT+QCFG=\"iotopmode\",%d", mode);
+    action_tryInvoke(atCmd);
+    action_awaitResult(true);
 }
 
 #pragma endregion

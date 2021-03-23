@@ -3,6 +3,7 @@
 
 //#define _DEBUG                          // enable debug output, expand PRINTF macros
 #include "ltem1c.h"
+#include "gnss.h"
 
 #define GNSS_CMD_RESULTBUF_SZ 90
 #define GNSS_LOC_DATAOFFSET 12
@@ -27,6 +28,11 @@ static resultCode_t gnssLocCompleteParser(const char *response, char **endptr);
 #pragma region public functions
 
 
+/**
+ *	\brief Turn GNSS\GPS subsystem on. 
+ *
+ *  \return Result code representing status of operation, OK = 200.
+ */
 resultCode_t gnss_on()
 {
     if (action_tryInvokeAdv("AT+QGPS=1", ACTION_RETRIES_DEFAULT, 800, NULL))
@@ -38,6 +44,11 @@ resultCode_t gnss_on()
 
 
 
+/**
+ *	\brief Turn GNSS\GPS subsystem off. 
+ *
+ *  \return Result code representing status of operation, OK = 200.
+ */
 resultCode_t gnss_off()
 {
     if (action_tryInvokeAdv("AT+QGPSEND", ACTION_RETRIES_DEFAULT, 800, NULL))
@@ -48,11 +59,13 @@ resultCode_t gnss_off()
 }
 
 
-
+/**
+ *	\brief Query BGx for current location\positioning information. 
+ *
+ *  \return GNSS location struct, see gnss.h for details.
+ */
 gnssLocation_t gnss_getLocation()
 {
-    
-
     #define TOKEN_BUF_SZ 12
 
     char tokenBuf[TOKEN_BUF_SZ] = {0};
@@ -110,6 +123,9 @@ gnssLocation_t gnss_getLocation()
 #pragma region private functions
 
 
+/**
+ *	\brief Action response parser for GNSS location request. 
+ */
 static resultCode_t gnssLocCompleteParser(const char *response, char **endptr)
 {
     //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr

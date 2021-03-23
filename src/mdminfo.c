@@ -23,7 +23,7 @@ static resultCode_t iccidCompleteParser(const char *response, char **endptr);
 /**
  *  \brief Get the LTEm1 static device identification\provisioning information.
  * 
- *  \return Modem information structure.
+ *  \return Modem information struct, see mdminfo.h for details.
 */
 modemInfo_t mdminfo_ltem1()
 {
@@ -120,6 +120,14 @@ int16_t mdminfo_rssi()
     return rssi;
 }
 
+
+/**
+ *  \brief Get the RSSI value as a calculate bar count for visualizations. Like on a smartphone.
+ * 
+ *  \param numberOfBars [in] The total number of bars on your display. 
+ * 
+ *  \return The number of bars to indicate based on the current RSSI and your scale.
+*/
 uint8_t mdminfo_rssiBars(uint8_t numberOfBars)
 {
     uint8_t barSpan = (113 - 51) / numberOfBars;
@@ -134,7 +142,9 @@ uint8_t mdminfo_rssiBars(uint8_t numberOfBars)
  * --------------------------------------------------------------------------------------------- */
 #pragma region private functions
 
-
+/**
+ *	\brief Action response parser for iccid value request. 
+ */
 static resultCode_t iccidCompleteParser(const char *response, char **endptr)
 {
     return action_defaultResultParser(response, "+ICCID: ", true, 20, ASCII_sOK, endptr);

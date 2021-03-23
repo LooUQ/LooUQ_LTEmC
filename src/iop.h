@@ -27,8 +27,6 @@
 #define __IOP_H__
 
 #include <stdint.h>
-#include "network.h"
-#include "sockets.h"
 #include "ltem1c.h"
 
 #define CBUF_SZ  1749       // cmd 
@@ -77,13 +75,19 @@ typedef enum iopDataPeer_tag
 } iopDataPeer_t;
 
 
-typedef struct peerTypeMap_tag       // remote data sources, 1 indicates active session (could source URC event)
+typedef struct peerTypeMap_tag      // Remote data sources, 1 indicates active session (session can source an URC event)
+                                    // a 1 bit in the member bytes indicates an active session partner (network connection)
+                                    // - Some peers have only a single possible partner; so bit position not relevant
+                                    // - Some peers have multiple session partners (sockets); these represent the partner by bit position 
+                                    //    example (sockets): bit 0 = socket 0 open, bit 1 = socket 1 open.
+                                    // A bit "set" in tcpudpSocket and sslSocket are mutually exclusive
+                                    // BGx uses distinct AT command syntax for TCP/UDP and SSL
 {
-    uint8_t pdpContext;             // network pdp context open (cellular network)
-    uint8_t tcpudpSocket;           // TCP or UDP
-    uint8_t sslSocket;              // SSL 
-    uint8_t mqttConnection;         // MQTT server connection
-    uint8_t mqttSubscribe;          // MQTT topic subscription, incoming message
+    uint8_t pdpContext;             // bit-map of open network pdp contexts (cellular network)
+    uint8_t tcpudpSocket;           // bit-map of open TCP or UDP sockets
+    uint8_t sslSocket;              // bit-map of open SSL sockets
+    uint8_t mqttConnection;         // bool of MQTT server connection (only one connection to manage\monitor)
+    uint8_t mqttSubscribe;          // bool of MQTT topic subscription, incoming message (only one incoming message receiver currently supported)
 } peerTypeMap_t;    
 
 
@@ -127,13 +131,15 @@ typedef struct iopTxCtrlBlock_tag
 typedef struct iop_tag
 {
     cbuf_t *txBuf;                                      ///< transmit buffer (there is just one)
+    uint16_t txPend;                                    ///< outstanding TX char pending
     iopBuffer_t *rxCmdBuf;                              ///< command receive buffer, this is the default RX buffer
     iopDataPeer_t rxDataPeer;                           ///< protocol data source: if no peer, IOP is in command mode
     uint8_t rxDataBufIndx;                              ///< data goes into this slot rxDataBufs
     iopBuffer_t *rxDataBufs[IOP_RX_DATABUFFERS_MAX];    ///< the data buffers (smart buffer structs)
-    peerTypeMap_t peerTypeMap;                          ///< map of possible IOP peers, used to optimise ISR string scanning
+    peerTypeMap_t peerTypeMap;                          ///< map (struct) of possible IOP peers (data sources), used to optimise ISR string scanning
 } iop_t;
 
+typedef iop_t *iopPtr_t ;
 
 
 #ifdef __cplusplus
@@ -142,20 +148,18 @@ extern "C"
 #endif // __cplusplus
 
 
-iop_t *iop_create();
+void iop_create();
+void iop_registerProtocol(ltem1OptnModule_t proto, void *protoPtr);
 
 void iop_start();
 void iop_awaitAppReady();
 
-void iop_txSend(const char *sendData, uint16_t sendSz, bool sendImmediate);
+uint16_t iop_txSend(const char *sendData, uint16_t sendSz, bool sendReady);
 void iop_rxParseImmediate();
 void iop_resetCmdBuffer();
 
 resultCode_t iop_txDataPromptParser(const char *response, char **endptr);
 
-// iopXfrResult_t iop_rxGetCmdQueued(char *recvData, uint16_t recvSz);
-// uint16_t iop_rxGetSocketQueued(socketId_t socketId, char **data, char *rmtHost, char *rmtPort);
-// void iop_tailFinalize(socketId_t socketId);
 
 #ifdef __cplusplus
 }

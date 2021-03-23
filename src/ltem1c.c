@@ -3,16 +3,16 @@
 
 
 // #define _DEBUG
-#include "ltem1c.h"
+#include <ltem1c.h>
 
 
 /* ------------------------------------------------------------------------------------------------
- * GLOBAL LTEm1 Device Object
+ * GLOBAL LTEm1 Device Object, One LTEm1 supported
  * --------------------------------------------------------------------------------------------- */
 ltem1Device_t *g_ltem1;
 
 // private local declarations 
-static void initIO();
+static void s_initIO();
 
 
 #pragma region public functions
@@ -21,16 +21,16 @@ static void initIO();
 /**
  *	\brief Initialize the LTEm1 modem.
  *
- *	\param [in] ltem1_config - The LTE modem gpio pin configuration.
- *  \param [in] ltem1Start - Determines if the LTEm1 is power ON or OFF during start.
- *  \param [in] funcLevel - Determines the LTEm1 functionality to create and start.
+ *	\param ltem1_config [in] - The LTE modem gpio pin configuration.
+ *  \param funcLevel [in] - Determines the LTEm1 functionality to create and start.
+ *  \param appNotifyCB [in] - If supplied (not NULL), this function will be invoked for significant LTEm1 events.
  */
-void ltem1_create(const ltem1PinConfig_t ltem1_config, ltem1Start_t ltem1Start, ltem1Functionality_t funcLevel)
+void ltem1_create(const ltem1PinConfig_t ltem1_config, appNotify_func appNotifyCB)
 {
 	g_ltem1 = calloc(1, sizeof(ltem1Device_t));
 	if (g_ltem1 == NULL)
 	{
-        ltem1_faultHandler(0, "ltem1-could not alloc ltem1 object");
+        ltem1_notifyApp(ltem1NotifType_memoryAllocFault, "ltem1-could not alloc ltem1 object");
 	}
 
 	g_ltem1->pinConfig = ltem1_config;
@@ -40,31 +40,43 @@ void ltem1_create(const ltem1PinConfig_t ltem1_config, ltem1Start_t ltem1Start, 
     g_ltem1->modemInfo = calloc(1, sizeof(modemInfo_t));
 	if (g_ltem1->modemInfo == NULL)
 	{
-        ltem1_faultHandler(500, "ltem1-could not alloc ltem1 modem info object");
+        ltem1_notifyApp(ltem1NotifType_memoryAllocFault, "ltem1-could not alloc ltem1 modem info object");
 	}
 
     g_ltem1->dataContext = 1;
 
-    if (funcLevel >= ltem1Functionality_iop)
-    {
-        g_ltem1->iop = iop_create();
-    }
-    if (funcLevel >= ltem1Functionality_actions)
-    {
-        g_ltem1->action = calloc(1, sizeof(action_t));
-        g_ltem1->action->lastAction = calloc(1, sizeof(actionHistory_t));
-        g_ltem1->action->isOpen = false;
-    }
-    if (funcLevel >= ltem1Functionality_services)
-    {
-        g_ltem1->network = ntwk_create();
-        g_ltem1->sockets = sckt_create();
-    }
-    g_ltem1->funcLevel = funcLevel;
+    g_ltem1->action = calloc(1, sizeof(action_t));
+    g_ltem1->action->lastActionError = calloc(1, sizeof(actionHistory_t));
+    g_ltem1->action->isOpen = false;
     g_ltem1->cancellationRequest = false;
+    g_ltem1->appNotifyCB = appNotifyCB;
 
-    if (ltem1Start)
-        ltem1_start();
+    iop_create();
+    ntwk_create();
+
+    //g_ltem1->mqtt = mqtt_create();
+
+    // if (funcLevel >= ltem1Functionality_iop)
+    // {
+    //     g_ltem1->iop = iop_create();
+    // }
+    // if (funcLevel >= ltem1Functionality_actions)
+    // {
+    //     g_ltem1->action = calloc(1, sizeof(action_t));
+    //     g_ltem1->action->lastAction = calloc(1, sizeof(actionHistory_t));
+    //     g_ltem1->action->isOpen = false;
+    // }
+    // if (funcLevel >= ltem1Functionality_services)
+    // {
+    //     g_ltem1->network = ntwk_create();
+    //     g_ltem1->sockets = sckt_create();
+    //     g_ltem1->mqtt = mqtt_create();
+    // }
+    // g_ltem1->funcLevel = funcLevel;
+
+    // if (ltem1Start)
+    //     ltem1_start();
+    return g_ltem1;
 }
 
 
@@ -72,11 +84,11 @@ void ltem1_create(const ltem1PinConfig_t ltem1_config, ltem1Start_t ltem1Start, 
 /**
  *	\brief Power on and start the modem (perform component init).
  * 
- *  \param [in] funcLevel - Enum specifying which LTEm1c subsystems should be initialized and started.
+ *  \param ltem1Start [in] - Determines if the LTEm1 should be started (aka powered ON) during initialization process.
  */
 void ltem1_start()
 {
-    initIO();   // make sure GPIO pins in correct state
+    s_initIO();                             // set GPIO pins to operating state
     spi_start(g_ltem1->spi);
 
 	if (!gpio_readPin(g_ltem1->pinConfig.statusPin))
@@ -98,17 +110,10 @@ void ltem1_start()
         }
 	}
 
-    // start NXP SPI-UART bridge
-    sc16is741a_start();
-
-    if (g_ltem1->funcLevel >= ltem1Functionality_iop)
-    {
-        iop_start();
-        iop_awaitAppReady();
-    }
-
-    if (g_ltem1->funcLevel >= ltem1Functionality_actions)
-        qbg_start();
+    sc16is741a_start();     // start NXP SPI-UART bridge
+    iop_start();
+    iop_awaitAppReady();    // wait for BGx to signal out firmware ready
+    qbg_start();            // initialize BGx operating settings
 }
 
 
@@ -120,6 +125,28 @@ void ltem1_reset()
 {
     qbg_reset();
     ltem1_start();
+}
+
+
+
+/**
+ *	\brief Check the BGx for hardware ready (status pin).
+ *
+ *  \return True is status HIGH, hardware ready.
+ */
+bool ltem1_chkHwReady()
+{
+	return gpio_readPin(g_ltem1->pinConfig.statusPin);
+}
+
+
+
+/**
+ *	\brief Performs a HW reset of LTEm1 and optionally executes start sequence.
+ */
+qbgReadyState_t ltem1_getReadyState()
+{
+    return g_ltem1->qbgReadyState;
 }
 
 
@@ -137,8 +164,6 @@ void ltem1_stop()
 
 /**
  *	\brief Uninitialize the LTE modem.
- *
- *	\param[in] modem The LTE modem.
  */
 void ltem1_destroy()
 {
@@ -163,41 +188,36 @@ void ltem1_destroy()
  */
 void ltem1_doWork()
 {
-    sckt_doWork();
+    if (g_ltem1->scktWork_func != NULL)
+    {
+        g_ltem1->scktWork_func();
+    }
+    //sckt_doWork();
     
-    #ifdef LTEM1_MQTT
-    mqtt_doWork();
-    #endif
+    if (g_ltem1->mqttWork_func != NULL)
+    {
+        g_ltem1->mqttWork_func();
+    }
+    //mqtt_doWork();
 }
 
 
 /**
- *	\brief Function of last resort, catestrophic failure Background work task runner. To be called in application Loop() periodically.
+ *	\brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
  * 
- *  \param [in] statusCode - HTTP style result code, generally sourced from BGx response to an operation.
- *  \param [in] faultMsg - Message from origination about the fatal condition.
+ *  \param notifyType [in] - Enum of broad notification categories.
+ *  \param notifyMsg [in] - Message from origination about the fatal condition.
  */
-void ltem1_faultHandler(uint16_t statusCode, const char * faultMsg)
+void ltem1_notifyApp(uint8_t notifType, const char *msg)
 {
-    PRINTF(dbgColor_error, "\r\rStatus=%d %s\r", statusCode, faultMsg);
+    PRINTF(dbgColor_error, "\r\rLTEm1C FaultCd=%d - %s\r", notifType, msg);         // log to debugger if attached
 
-    // NotImplemented if custom fault handler go there
+    if (g_ltem1->appNotifyCB != NULL)                                       
+        g_ltem1->appNotifyCB(notifType, msg);                   // if app handler registered, it may/may not return
 
-    int halt = 1;               // make it possible while debugging to reset error conditions and return
-    while(halt) {};
+    while (notifType > ltem1NotifType__CATASTROPHIC) {}         // if notice is "fatal" loop forever and hope for a watchdog
 }
 
-
-
-/**
- *	\brief Registers the address (void*) of your application custom fault handler.
- * 
- *  \param [in] customFaultHandler - Pointer to application provided fault handler.
- */
-void ltem1_registerApplicationFaultHandler(void * customFaultHandler)
-{
-    // TBD
-}
 
 
 /**
@@ -223,7 +243,7 @@ void ltem1_setYieldCb(platform_yieldCB_func_t yieldCb_func)
  *
  *	\param[in] modem The LTE modem.
  */
-static void initIO()
+static void s_initIO()
 {
 	// on Arduino, ensure pin is in default "logical" state prior to opening
 	gpio_writePin(g_ltem1->pinConfig.powerkeyPin, gpioValue_low);

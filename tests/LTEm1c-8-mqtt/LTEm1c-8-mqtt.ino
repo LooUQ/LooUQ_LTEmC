@@ -30,10 +30,12 @@
 // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
-//#define _DEBUG                          // enable/expand 
 #include <ltem1c.h>
+#include <mqtt.h>
+
+#define _DEBUG                          // enable/expand 
 // debugging output options             UNCOMMENT one of the next two lines to direct debug (PRINTF) output
-//#include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
+#include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
 // #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
 #include "lqc_collections.h"
@@ -42,8 +44,8 @@
 #define XFRBUFFER_SZ 201
 #define SOCKET_ALREADYOPEN 563
 
-#define ASSERT(expected_true, failMsg)  if(!(expected_true))  indicateFailure(failMsg)
-#define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') indicateFailure(failMsg)
+#define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyRecvr(255, failMsg)
+#define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') appNotifyRecvr(255, failMsg)
 
 
 /* Test is designed for use with Azure IoTHub. If you do not have a Azure subscription you can get a free test account with a preloaded credit.
@@ -68,9 +70,9 @@
 #define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
 #define MQTT_PORT 8883
 
-#define MQTT_IOTHUB_DEVICEID "867198053158865"
+#define MQTT_IOTHUB_DEVICEID "864508030074113"
 #define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/" MQTT_IOTHUB_DEVICEID "/?api-version=2018-06-30"
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053158865&sig=YlW6PuH4MA93cINEhgstihwQxWt4Zr9iY9Tnkl%2BuQK4%3D&se=1608052225"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F864508030074113&sig=bHV12YRyVnKJHtABYi%2BSGlnkvBCpRD0rb7Ak9rg2fxM%3D&se=2872679808"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
@@ -102,15 +104,12 @@ void setup() {
     PRINTFC(dbgColor_white, "\rLTEm1c test8-MQTT\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
 
-    ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
-
-    // mqtt is optional and not created with base ltem1 device
-    mqtt_create();
+    ltem1_create(ltem1_pinConfig, appNotifyRecvr);
 
     PRINTFC(dbgColor_none, "Waiting on network...\r");
     networkOperator_t networkOp = ntwk_awaitOperator(30000);
     if (strlen(networkOp.operName) == 0)
-        indicateFailure("Timout (30s) waiting for cellular network.");
+        appNotifyRecvr(255, "Timout (30s) waiting for cellular network.");
     PRINTFC(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     uint8_t cntxtCnt = ntwk_getActivePdpCntxtCnt();
@@ -177,11 +176,10 @@ void mqttReceiver(char *topic, char *topicProps, char *message)
 /* test helpers
 ========================================================================================================================= */
 
-void indicateFailure(char failureMsg[])
+void appNotifyRecvr(uint8_t notifType, const char *notifMsg)
 {
-	PRINTFC(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+	PRINTFC(dbgColor_error, "\r\n** %s \r\n", notifMsg);
     PRINTFC(dbgColor_error, "** Test Assertion Failed. \r\n");
-    gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
 
     int halt = 1;
     while (halt) {}

@@ -37,7 +37,7 @@
  * 
  *  Note: all of the protocols are clients, while the BGx line of modules support server mode the network carriers generally don't
 */
-typedef enum 
+typedef enum protocol_tag
 {
     protocol_tcp = 0x00,                ///< TCP client.
     protocol_udp = 0x01,                ///< UDP client.
@@ -118,7 +118,7 @@ extern "C"
 #endif // __cplusplus
 
 
-network_t *ntwk_create();
+void ntwk_create();
 
 networkOperator_t ntwk_awaitOperator(uint16_t waitDuration);
 uint8_t ntwk_getActivePdpCntxtCnt();

@@ -15,7 +15,9 @@ static resultCode_t geoQueryResponseParser(const char *response);
  * --------------------------------------------------------------------------------------------- */
 #pragma region public functions
 
-
+/**
+ *	\brief Create a geo-fence for future position evaluations.
+ */
 resultCode_t geo_add(uint8_t geoId, geo_mode_t mode, geo_shape_t shape, double lat1, double lon1, double lat2, double lon2, double lat3, double lon3, double lat4, double lon4)
 {
     #define COORD_SZ 12
@@ -65,6 +67,9 @@ resultCode_t geo_add(uint8_t geoId, geo_mode_t mode, geo_shape_t shape, double l
 
 
 
+/**
+ *	\brief Delete a geo-fence for future position evaluations.
+ */
 resultCode_t geo_delete(uint8_t geoId)
 {
     char cmdStr[28] = {0};
@@ -78,6 +83,9 @@ resultCode_t geo_delete(uint8_t geoId)
 
 
 
+/**
+ *	\brief Determine the current location relation to a geo-fence, aka are you inside or outside the fence.
+ */
 geo_position_t geo_query(uint8_t geoId)
 {
     char cmdStr[28] = {0};
@@ -101,7 +109,9 @@ geo_position_t geo_query(uint8_t geoId)
  * --------------------------------------------------------------------------------------------- */
 #pragma region private functions
 
-
+/**
+ *	\brief Action response parser for a geo-fence query.
+ */
 static resultCode_t geoQueryResponseParser(const char *response)
 {
     return serviceResponseParser(response, "+QCFGEXT: \"querygeo\",");

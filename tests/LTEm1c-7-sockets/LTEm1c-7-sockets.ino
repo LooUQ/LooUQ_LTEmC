@@ -27,22 +27,26 @@
 
 // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
-// debugging options
-#define _DEBUG                          // enable/expand 
-#define _DEBUG                          // enable/expand 
-// #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
-#define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
 #include <ltem1c.h>
+#define _DEBUG                          // enable/expand 
+// debugging output options             UNCOMMENT one of the next two lines to direct debug (PRINTF) output
+#include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
+// #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
+#if LTEM1_MQTT == 1
+#define success
+#endif
 
 // test setup
-#define CYCLE_INTERVAL 5000
+#define CYCLE_INTERVAL 10000
 #define SEND_BUFFER_SZ 201
+#define TCPIP_TEST_PROTOCOL 1               //  TCP = 0, UDP = 1, SSL = 2
 #define TCPIP_TEST_SERVER "97.83.32.119"
+#define TCPIP_TEST_SOCKET 9011
+
 uint16_t loopCnt = 0;
 uint32_t lastCycle;
-bool sendImmediate = false;
 
 // ltem1c 
 #define DEFAULT_NETWORK_CONTEXT 1
@@ -61,15 +65,18 @@ void setup() {
         #endif
     #endif
 
-    PRINTFC(dbgColor_white, "\rLTEm1c Test: 7-Sockets\r\n");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
+    PRINTFC(dbgColor_error, "\rLTEm1c Test: 7-Sockets\r\n");
+    //gpio_openPin(LED_BUILTIN, gpioMode_output);                       // use on-board LED to signal activity
 
-    ltem1_create(ltem1_pinConfig, ltem1Start_powerOn, ltem1Functionality_services);
+    ltem1_create(ltem1_pinConfig, appNotifRecvr);                       // create base modem object
+    sckt_create();                                                      // add optional services : sockets (TCP/UDP/SSL)
+    ltem1_start();                                                      // now start modem
 
     PRINTFC(dbgColor_none, "Waiting on network...\r");
-    networkOperator_t networkOp = ntwk_awaitOperator(30000);
+    networkOperator_t networkOp = ntwk_awaitOperator(120 * 1000);
     if (strlen(networkOp.operName) == 0)
-        indicateFailure("Timout (30s) waiting for cellular network.");
+        appNotifRecvr(255, "Timeout (120s) waiting for cellular network.");
+
     PRINTFC(dbgColor_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     uint8_t cntxtCnt = ntwk_getActivePdpCntxtCnt();
@@ -79,13 +86,15 @@ void setup() {
     }
 
     // open socket
-    scktResult = sckt_open(0, protocol_udp, TCPIP_TEST_SERVER, 9011, 0, ipReceiver);
+    scktResult = sckt_open(0, (protocol_t)TCPIP_TEST_PROTOCOL, TCPIP_TEST_SERVER, TCPIP_TEST_SOCKET, 0, true, ipReceiver);
     if (scktResult == SOCKET_RESULT_PREVOPEN)
+    {
         PRINTFC(dbgColor_warn, "Socket 0 found already open!\r");
+    }
     else if (scktResult != RESULT_CODE_SUCCESS)
     {
         PRINTFC(dbgColor_error, "Socket 0 open failed, resultCode=%d\r", scktResult);
-        indicateFailure("Failed to open socket.");
+        appNotifRecvr(255, "Failed to open socket.");
     }
 }
 
@@ -96,9 +105,9 @@ uint16_t prevRx = 0;
 
 void loop() 
 {
-    if (lMillis() - lastCycle >= CYCLE_INTERVAL || sendImmediate)
+    if (lMillis() - lastCycle >= CYCLE_INTERVAL)
     {
-        sendImmediate = false;
+        // PRINTF(dbgColor_magenta, "SPIready=%d\r", sc16is741a_chkCommReady());
         lastCycle = lMillis();
         showStats();
 
@@ -106,7 +115,7 @@ void loop()
 
         #if SEND_TEST == 0
         /* test for short-send, fits is 1 TX chunk */
-        snprintf(sendBuf, SEND_BUFFER_SZ, "%d-%lu ABCDEFGHIJKLMNOPQRSTUVWXYZ", loopCnt, lMillis());
+        snprintf(sendBuf, SEND_BUFFER_SZ, "%d-%lu drops=%d  ABCDEFGHIJKLMNOPQRSTUVWXYZ", loopCnt, lMillis(), drops);
         uint16_t sendSz = strlen(sendBuf);
         #elif SEND_TEST == 1
         /* test for longer, 2+ tx chunks */
@@ -118,23 +127,25 @@ void loop()
         uint16_t sendSz = 64;
         #endif
 
-
-        // typical send loop, there could be a blocking cmd or IO so retry a small number of times
-        uint8_t retries = 0;
-        do
+        scktResult = sckt_send(scktNm, sendBuf, sendSz);
+        if (scktResult == RESULT_CODE_CONFLICT)
         {
-            scktResult = sckt_send(scktNm, sendBuf, sendSz);
-            retries++;
-            ltem1_doWork();
-        } while (scktResult == RESULT_CODE_CONFLICT && retries < 10);
+            PRINTF(dbgColor_warn, "STOP!\r");
+        }
+        if (scktResult != RESULT_CODE_SUCCESS)
+        {
+            PRINTF(dbgColor_warn, "sgnl=%d, scktState=%d\r", mdminfo_rssi(), sckt_getState(0));
+            // sckt_close(0);
+            // scktResult = sckt_open(0, (protocol_t)TCPIP_TEST_PROTOCOL, TCPIP_TEST_SERVER, TCPIP_TEST_SOCKET, 0, true, ipReceiver);
+        }
         txCnt = (scktResult == RESULT_CODE_SUCCESS) ? ++txCnt : txCnt;
-
         PRINTFC((scktResult == RESULT_CODE_SUCCESS) ? dbgColor_cyan : dbgColor_warn, "Send Loop %d, sendRslt=%d \r", loopCnt, scktResult);
+
         loopCnt++;
     }
     /*
-     * NOTE: ltem1_doWork() pipeline requires multiple invokes to complete data receives. 
-     * doWork() has no side effects other than taking time and SHOULD BE INVOKED LIBERALLY.
+     * NOTE: ltem1_doWork() pipeline required to complete data receives. doWork() has no side effects other than
+     * taking a brief amount of time to check and advance socket pipeline and SHOULD BE INVOKED LIBERALLY.
      */
     ltem1_doWork();
 }
@@ -172,39 +183,40 @@ void ipReceiver(socketId_t socketId, void *data, uint16_t dataSz)
 
 void showStats() 
 {
-    if (loopCnt == 0) return;
-    
-    PRINTFC(dbgColor_magenta, "\rFreeMem=%u  ", getFreeMemory());
-    PRINTFC(dbgColor_magenta, "<<Loop=%d\r", loopCnt);
-    PRINTFC(dbgColor_magenta, "Tx=%d,  Rx=%d (d=%d)\r", txCnt, rxCnt, drops);
-    for (int i = 0; i < 5; i++)
-    {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        lDelay(50);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        lDelay(50);
-    }
-    if (rxCnt == prevRx)
-    {
+    static uint16_t lastTx = 0;
+    static uint16_t lastRx = 0;
+    static uint16_t lastDrops = 0;
+
+    // for (int i = 0; i < 5; i++)                                          // optional show activity via on-board LED
+    // {
+    //     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+    //     lDelay(50);
+    //     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+    //     lDelay(50);
+    // }
+
+    uint16_t newTxCnt = txCnt - lastTx;
+    uint16_t newRxCnt = rxCnt - lastRx;
+    if (newRxCnt < newTxCnt)
         drops++;
-        PRINTFC(dbgColor_warn, "\rMissed recv! (drops=%d)\r", drops);
-    }
-    prevRx = rxCnt;
+
+    PRINTFC((lastDrops == drops) ? dbgColor_magenta : dbgColor_warn, "\rTx=%d, Rx=%d (d=%d)\r", txCnt, rxCnt, drops);
+    PRINTFC(dbgColor_magenta, "FreeMem=%u  Loop=%d\r", getFreeMemory(), loopCnt);
+
+    lastTx = txCnt;
+    lastRx = rxCnt;
+    lastDrops = drops;
 }
 
 
-void indicateFailure(char failureMsg[])
+void appNotifRecvr(uint8_t notifType, const char *notifMsg)
 {
-	PRINTFC(dbgColor_error, "\r\n** %s \r\n", failureMsg);
+	PRINTFC(dbgColor_error, "\r\n** %s \r\n", notifMsg);
     PRINTFC(dbgColor_error, "** Test Assertion Failed. \r\n");
+    gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
 
-    int halt = 1;
-    while (halt)
-    {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-    }
+    while (1) {}
 }
-
 
 
 /* Check free memory (stack-heap) 
