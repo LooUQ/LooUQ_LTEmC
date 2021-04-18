@@ -24,8 +24,10 @@
 
 #define ASCII_sSENDOK "SEND OK\r\n"
 
+// file scope global variables
+static uint32_t irdReqstAt = 0;             // if not 0, IRD open is pending and value is tick cnt when IRD request issued
 
-// local function declarations
+// file scope local function declarations
 static bool s_requestIrdData(iopDataPeer_t dataPeer, bool applyLock);
 static resultCode_t s_tcpudpOpenCompleteParser(const char *response, char **endptr);
 static resultCode_t s_sslOpenCompleteParser(const char *response, char **endptr);
@@ -102,14 +104,14 @@ socketResult_t sckt_open(socketId_t socketId, protocol_t protocol, const char *h
         strcpy(protoName, "UDP");
         iopPtr->peerTypeMap.tcpudpSocket = iopPtr->peerTypeMap.tcpudpSocket | socketBitMap;
         snprintf(openCmd, SOCKETS_CMDBUF_SZ, "AT+QIOPEN=%d,%d,\"%s\",\"%s\",%d", g_ltem1->dataContext, socketId, protoName, host, rmtPort);
-        action_tryInvokeAdv(openCmd, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, s_tcpudpOpenCompleteParser);
+        action_tryInvokeAdv(openCmd, ACTION_TIMEOUTml, s_tcpudpOpenCompleteParser);
         break;
 
     case protocol_tcp:
         strcpy(protoName, "TCP");
         iopPtr->peerTypeMap.tcpudpSocket = iopPtr->peerTypeMap.tcpudpSocket | socketBitMap;
         snprintf(openCmd, SOCKETS_CMDBUF_SZ, "AT+QIOPEN=%d,%d,\"%s\",\"%s\",%d", g_ltem1->dataContext, socketId, protoName, host, rmtPort);
-        action_tryInvokeAdv(openCmd, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, s_tcpudpOpenCompleteParser);
+        action_tryInvokeAdv(openCmd, ACTION_TIMEOUTml, s_tcpudpOpenCompleteParser);
         break;
 
     case protocol_ssl:
@@ -117,7 +119,7 @@ socketResult_t sckt_open(socketId_t socketId, protocol_t protocol, const char *h
         socketBitMap = 0x01 << socketId;
         iopPtr->peerTypeMap.sslSocket = iopPtr->peerTypeMap.sslSocket | socketBitMap;
         snprintf(openCmd, SOCKETS_CMDBUF_SZ, "AT+QSSLOPEN=%d,%d,\"%s\",\"%s\",%d", g_ltem1->dataContext, socketId, protoName, host, rmtPort);
-        action_tryInvokeAdv(openCmd, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, s_sslOpenCompleteParser);
+        action_tryInvokeAdv(openCmd, ACTION_TIMEOUTml, s_sslOpenCompleteParser);
         break;
 
         /* The 2 use cases here are not really supported by the network carriers without premium service */
@@ -132,7 +134,7 @@ socketResult_t sckt_open(socketId_t socketId, protocol_t protocol, const char *h
     }
 
     // snprintf(openCmd, SOCKETS_CMDBUF_SZ, "AT+QIOPEN=%d,%d,\"%s\",\"%s\",%d", g_ltem1->dataContext, socketId, protoName, host, rmtPort);
-    // action_tryInvokeAdv(openCmd, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, s_tcpudpOpenCompleteParser);
+    // action_tryInvokeAdv(openCmd, ACTION_LOCKRETRIES, ACTION_TIMEOUT_DEFAULTmillis, s_tcpudpOpenCompleteParser);
 
     // await result of open from inside switch() above
     actionResult_t atResult = action_awaitResult(true);
@@ -214,7 +216,12 @@ bool sckt_flush(uint8_t socketId)
     if (scktPtr->socketCtrls[socketId].protocol == protocol_void)
         return;
 
-    return s_requestIrdData(socketId, true);          // return status; failure is unable to obtain lock
+    if (s_requestIrdData(socketId, true))           // initiate an IRD flow
+    {
+        irdReqstAt = lMillis();
+        return true;
+    }
+    return false;                                   // unable to obtain action lock
 }
 
 
@@ -241,16 +248,12 @@ bool sckt_getState(uint8_t socketId)
 {
     char sendCmd[DFLT_ATBUFSZ] = {0};
 
-
-    // AT+QISEND command initiates send, signals we plan to send on a socket a number of bytes, send has subcommand so don't automatically close
     snprintf(sendCmd, DFLT_ATBUFSZ, "AT+QISTATE=1,%d", socketId);
-
-    if (!action_tryInvokeAdv(sendCmd, ACTION_RETRIES_DEFAULT, ACTION_RETRY_INTERVALmillis, s_socketStatusParser))
+    if (!action_tryInvokeAdv(sendCmd, ACTION_TIMEOUTml, s_socketStatusParser))
         return RESULT_CODE_CONFLICT;
 
     actionResult_t atResult = action_awaitResult(true);
-    return atResult.statusCode;
-
+    return atResult.statusCode == RESULT_CODE_SUCCESS;
 }
 
 
@@ -267,17 +270,14 @@ socketResult_t sckt_send(socketId_t socketId, const char *data, uint16_t dataSz)
     char sendCmd[DFLT_ATBUFSZ] = {0};
     actionResult_t atResult = { .statusCode = RESULT_CODE_SUCCESS };
 
-    // // advance receiver tasks prior to attmpting send
-    // // some receive functions are blocking, this increases likelihood of a send without need to retry
-    // sckt_doWork();
-
     if (scktPtr->socketCtrls[socketId].protocol > protocol_AnyIP || !scktPtr->socketCtrls[socketId].open)
         return RESULT_CODE_BADREQUEST;
 
-    // AT+QISEND command initiates send, signals we plan to send on a socket a number of bytes, send has subcommand so don't automatically close
+    // AT+QISEND command initiates send by signaling we plan to send dataSz bytes on a socket,
+    // send has subcommand to actual transfer the bytes, so don't automatically close action cmd
     snprintf(sendCmd, DFLT_ATBUFSZ, "AT+QISEND=%d,%d", socketId, dataSz);
 
-    if (!action_tryInvokeAdv(sendCmd, ACTION_RETRIES_DEFAULT, ACTION_RETRY_INTERVALmillis, iop_txDataPromptParser))
+    if (!action_tryInvokeAdv(sendCmd, ACTION_TIMEOUTml, iop_txDataPromptParser))
         return RESULT_CODE_CONFLICT;
 
     atResult = action_awaitResult(false);                   // waiting for data prompt, leaving action open on return if sucessful
@@ -293,48 +293,63 @@ socketResult_t sckt_send(socketId_t socketId, const char *data, uint16_t dataSz)
 
 
 
+#define IRD_WAIT_CYCLES 4                                   ///< number of doWork cycles to wait between IRD flows (actual cycles is 1 less than defined)
+
 /**
  *   \brief Perform background tasks to move socket data through pipeline, deliver RX data to application and update socket\IOP status values.
 */
 void sckt_doWork()
 {
-    /* push data pipeline forward for existing data buffers 
-    ----------------------------------------------------- */
+    static uint8_t irdWait = 0;                         // IRD fairness; give foreground action opportunity between IRD (receive) flows
+    static uint8_t irdNextSckt = 0;                     // IRD fairness; give each open socket opportunity to initiate IRD flow
 
-    if (iopPtr->rxDataPeer < iopDataPeer__SOCKET_CNT)             // if any socket open
+    //irdWait += (irdWait == 0) ? 0 : 1;                              // IRD fairness, if irdWait is non-zero don't open/initiate a new IRD flow
+    irdWait = (irdWait + (irdWait == 0 ? 0 : 1)) % IRD_WAIT_CYCLES;     // IRD fairness, if irdWait is non-zero don't open/initiate a new IRD flow
+    //irdLastSckt = (++irdLastSckt) % iopDataPeer__SOCKET_CNT;            // last socket to initiate an IRD flow
+
+    /* Push data pipeline forward for existing data buffers */
+    /* Service an open IRD data flow: parse the first block (from data buffer), check for flow 
+     * complete, close out resources.
+    -------------------------------------------------------------------------------------------- */
+
+    if (iopPtr->rxDataPeer < iopDataPeer__SOCKET_CNT)               // if any socket open
     {
         for (size_t bufIndx = 0; bufIndx < IOP_RX_DATABUFFERS_MAX; bufIndx++) 
         {
-            if (iopPtr->rxDataBufs[bufIndx] == NULL)              // rxDataBufs expands as needed, break if past end of allocated buffers
+            if (iopPtr->rxDataBufs[bufIndx] == NULL)                // rxDataBufs expands as needed, break if past end of allocated buffers
                 break;
 
-            iopBuffer_t *buf = iopPtr->rxDataBufs[bufIndx];       // for convenience
+            iopBuffer_t *buf = iopPtr->rxDataBufs[bufIndx];         // for convenience
 
             // check data buffers for missing IRD length, happens after 1st chunk of IRD data is received
             // parse for IRD length
             // *** Example: \r\n+QIRD: 142\r\n  where 142 is the number of chars arriving
 
-            if (buf->dataPeer < iopDataPeer__SOCKET_CNT && buf->irdSz == 0 && buf->head > buf->buffer)     // irdSz not set && buffer has atleast 1 data chunk
-            {
+            if (buf->dataPeer < iopDataPeer__SOCKET_CNT &&          // open "socket" data peer
+                buf->irdSz == 0 &&                                  // irdSz not yet set for this IRD data peer flow
+                buf->head > buf->buffer)                            // data RX buffer has at least 1 data chunk (UART FIFO buffer)
+            {                                                       // -- 1st data chuck has data header with size of data BGx is ready to send
                 // char dbg[65] = {0};
                 // strncpy(dbg, buf->buffer, 64);
                 // PRINTF(0,"SdWrcv>>%s<<\r", dbg);
 
-                char *irdSzAt = buf->buffer + 9;                // strlen data prefix from BGx >> "\r\n+QIRD: " = 9
-                buf->irdSz = strtol(irdSzAt, &buf->tail, 10);   // parse out data size from IRD response
+                char *irdSzAt = buf->buffer + 9;                        // data prefix from BGx:  len("\r\n+QIRD: ") == 9
+                buf->irdSz = strtol(irdSzAt, &buf->tail, 10);           // parse out data size from IRD response:  \r\n+QIRD: <dataSz>
 
-                if (buf->irdSz > 0)                             // test for data complete
+                if (buf->irdSz > 0)                                     // test for data complete
                 {
-                    buf->tail += 2;                             // move buf->head pointer to data (past line separator)
-                                                                // test for buffer fill complete: if complete, hand off to socket
-                    buf->dataReady = buf->head - buf->tail == buf->irdSz + 8;           // + 8 : trailing /r/n/r/nOK/r/n
+                    PRINTF(dbgColor_magenta, "IRDdur reqst=%d\r", lMillis() - irdReqstAt);  // IRD command to BGx responded, remaining IRD work is IOP moving buffers
+
+                    buf->tail += 2;                                                 // move buf->head pointer to data (past CRLF line separator)
+                                                                                    // test for buffer fill complete: if complete, take it from IOP
+                    buf->dataReady = buf->head - buf->tail == buf->irdSz + 8;       // + 8 char suffix:  trailing "/r/n/r/nOK/r/n"
                     if (buf->dataReady)
                     {
-                        scktPtr->socketCtrls[iopPtr->rxDataPeer].dataBufferIndx = iopPtr->rxDataBufIndx;   // take buffer from IOP
-                        iopPtr->rxDataBufIndx = IOP_NO_BUFFER;                                                            // IOP releases buffer
+                        scktPtr->socketCtrls[iopPtr->rxDataPeer].dataBufferIndx = iopPtr->rxDataBufIndx;   // sockets takes buffer
+                        iopPtr->rxDataBufIndx = IOP_NO_BUFFER;                                             // IOP releases buffer
                     }
                 }
-                else                                            // irdSz size of 0: recv event completed, pipeline is empty, buffer can be released
+                else                                                    // irdSz size of 0: recv event completed, pipeline is empty, buffer can be released
                 {
                     PRINTFC(dbgColor_dGreen, "closeIRD sckt=%d\r", buf->dataPeer);
 
@@ -343,15 +358,16 @@ void sckt_doWork()
                     scktPtr->socketCtrls[buf->dataPeer].dataPending = false;
                     scktPtr->socketCtrls[buf->dataPeer].flushing = false;
 
-                    iop_resetDataBuffer(bufIndx);           // delivered, reset buffer and reset ready
+                    /* close out IRD request signaling no more data pending behind +QIURC\+QSSLURC event */
+                    iop_resetDataBuffer(bufIndx);                           // delivered, reset buffer and reset ready
                     iopPtr->rxDataBufIndx = IOP_NO_BUFFER;
                     iopPtr->rxDataPeer = iopDataPeer__NONE;
-                    action_close();
+                    action_close();                                         // close IRD request action and release action lock
+                    irdWait = 1;
                 }
             }
 
-            // push tail passed IRD header to actual appl data
-            if (buf->dataReady)                                 // buffer data ready, signal to application
+            if (buf->dataReady)                                     // buffer data ready, pass-off to application receiver
             {
                 socketCtrl_t sckt = scktPtr->socketCtrls[buf->dataPeer];
 
@@ -362,34 +378,59 @@ void sckt_doWork()
                     scktPtr->socketCtrls[buf->dataPeer].receiver_func(sckt.socketId, buf->tail, buf->irdSz);
                 }
 
-                iop_resetDataBuffer(sckt.dataBufferIndx);                           // delivered, clear buffer
-                PRINTFC(dbgColor_dGreen, "SCKT-nextIRD sckt=%d\r", sckt.socketId);
-                s_requestIrdData(sckt.socketId, false);                             // check the data pipeline for more data
+                /* close out IRD request resulting with data */
+                iop_resetDataBuffer(sckt.dataBufferIndx);           // delivered, clear buffer
+                iopPtr->rxDataBufIndx = IOP_NO_BUFFER;          
+                iopPtr->rxDataPeer = iopDataPeer__NONE;
+                action_close();                                     // close IRD request action and release action lock
+                PRINTF(dbgColor_magenta, "IRDdur total=%d\r", lMillis() - irdReqstAt);
+                irdReqstAt = 0;
+                irdWait = 1;
+
+                // PRINTFC(dbgColor_dGreen, "SCKT-nextIRD sckt=%d\r", sckt.socketId);
+                // s_requestIrdData(sckt.socketId, false);                             // check the data pipeline for more data
+            }
+
+            if (lTimerExpired(irdReqstAt, ACTION_TIMEOUTml))                // if check for IRD timeout
+            {
+                irdReqstAt = 0;                                                             // no longer waiting for IRD response
+                action_close();                                                             // release action lock
+                // irdWait = 1;                                                                // signal IRD fairness wait started
+                // signal application socket maybe unstable
+                ltem1_notifyApp(ltem1NotifType_scktError, "IRD timeout");
             }
         }
     }
 
 
-    /* open a data pipeline from sockets sources
-    ------------------------------------------------ */
+    /* Open a data pipeline from sockets sources */
+    /* IRD is a data peer, if no data peer active (IRD are single-threaded) look to see if any 
+     * sockets have dataPending condition to service. A socket's dataPending flag goes true
+     * when +QIURC/+QSSLURC (data recv'd event) is reported by BGx
+    -------------------------------------------------------------------------------------------- */
 
-    // IRD is a data peer, if no data peer active (can only have one) look to see if any sockets have dataPending
-    // socket dataPending goes true when URC recv is reported by BGx
-    if ((iopPtr->peerTypeMap.sslSocket != 0 || iopPtr->peerTypeMap.tcpudpSocket != 0) && iopPtr->rxDataPeer == iopDataPeer__NONE)
+    if ((iopPtr->peerTypeMap.sslSocket != 0 || iopPtr->peerTypeMap.tcpudpSocket != 0) && 
+        iopPtr->rxDataPeer == iopDataPeer__NONE)
     {
-        for (uint8_t sckt = 0; sckt < iopDataPeer__SOCKET_CNT; sckt++)
-        {
-            if (scktPtr->socketCtrls[sckt].dataPending)
+        for (uint8_t sckt = irdNextSckt; sckt < iopDataPeer__SOCKET_CNT; sckt++)        // start loop at next socket in line for IRD
+        {                                                                               // NOTE: fairness process will waste 1 doWork cycle between active sockets
+            if (scktPtr->socketCtrls[sckt].dataPending && irdWait == 0)
             {
-                PRINTFC(dbgColor_dGreen, "SCKT-openIRD sckt=%d\r", sckt);
-                s_requestIrdData(sckt, true);           /* Request data (IRD) with action lock */
-                
-                break;                                  // If the IRD request gets a lock, the IRD process starts for the data pending socket
+                //irdNextSckt = (++irdNextSckt) % iopDataPeer__SOCKET_CNT;
+
+                if (s_requestIrdData(sckt, true))        /* Request data (IRD) with action lock */
+                {
+                    PRINTFC(dbgColor_dGreen, "SCKT-openIRD sckt=%d\r", sckt);
+                    irdReqstAt = lMillis();
+                    break;                              // If the IRD request gets a lock, the IRD process starts for the data pending socket
                                                         // If the request cannot get a lock (maybe a send\transmit cmd is underway) it silently 
                                                         // returns
                                                         // The IRD process is a true BGx action that block other foreground actions until the 
                                                         // pipeline is emptied and no more data is pending. This releases the lock and allows
                                                         // other types of commands to be sent to BGx. 
+                }
+                else
+                    ltem1_notifyApp(ltem1NotifType_scktError, "IRD open failed");
             }
         }
     }

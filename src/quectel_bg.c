@@ -134,7 +134,7 @@ void qbg_start()
                     iop_awaitAppReady();
                     goto qbg_startRetry;
                 }
-                ltem1_notifyApp(ltem1NotifType_bgInitFailed, "qbg-start() init sequence failed");
+                ltem1_notifyApp(ltem1NotifType_hwInitFailed, "qbg-start() init sequence failed");
             }
         }
     }

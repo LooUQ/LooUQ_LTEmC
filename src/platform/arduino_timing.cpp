@@ -31,8 +31,8 @@ void lDelay(uint32_t delay_ms)
     delay(delay_ms);
 }
 
-bool lTimerExpired(uint32_t timerBase, uint32_t timerTimeout)
+bool lTimerExpired(uint32_t timerStart, uint32_t timerTimeout)
 {
-    return millis() - timerBase > timerTimeout;
+    return (timerStart == 0) ? 0 : millis() - timerStart > timerTimeout;
 }
 

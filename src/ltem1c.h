@@ -99,7 +99,7 @@ extern "C"
 void ltem1_create(const ltem1PinConfig_t ltem1_config, appNotify_func appNotifyCB);
 void ltem1_destroy();
 
-void ltem1_start();
+void ltem1_start(uint16_t protos);
 void ltem1_stop();
 void ltem1_reset();
 bool ltem1_chkHwReady();

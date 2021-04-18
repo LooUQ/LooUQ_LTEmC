@@ -127,16 +127,13 @@ void loop()
         uint16_t sendSz = 64;
         #endif
 
+
         scktResult = sckt_send(scktNm, sendBuf, sendSz);
-        if (scktResult == RESULT_CODE_CONFLICT)
-        {
-            PRINTF(dbgColor_warn, "STOP!\r");
-        }
+
         if (scktResult != RESULT_CODE_SUCCESS)
         {
-            PRINTF(dbgColor_warn, "sgnl=%d, scktState=%d\r", mdminfo_rssi(), sckt_getState(0));
-            // sckt_close(0);
-            // scktResult = sckt_open(0, (protocol_t)TCPIP_TEST_PROTOCOL, TCPIP_TEST_SERVER, TCPIP_TEST_SOCKET, 0, true, ipReceiver);
+            if (socketRecover() == RESULT_CODE_SUCCESS)                 // attempt recovery: close/reopen socket if network closed it remotely
+                scktResult = sckt_send(scktNm, sendBuf, sendSz);
         }
         txCnt = (scktResult == RESULT_CODE_SUCCESS) ? ++txCnt : txCnt;
         PRINTFC((scktResult == RESULT_CODE_SUCCESS) ? dbgColor_cyan : dbgColor_warn, "Send Loop %d, sendRslt=%d \r", loopCnt, scktResult);
@@ -148,6 +145,14 @@ void loop()
      * taking a brief amount of time to check and advance socket pipeline and SHOULD BE INVOKED LIBERALLY.
      */
     ltem1_doWork();
+}
+
+
+uint16_t socketRecover()
+{
+    PRINTF(dbgColor_warn, "sgnl=%d, scktState=%d\r", mdminfo_rssi(), sckt_getState(0));
+    sckt_close(0);
+    return sckt_open(0, (protocol_t)TCPIP_TEST_PROTOCOL, TCPIP_TEST_SERVER, TCPIP_TEST_SOCKET, 0, true, ipReceiver);
 }
 
 
@@ -211,6 +216,12 @@ void showStats()
 
 void appNotifRecvr(uint8_t notifType, const char *notifMsg)
 {
+    if (notifType == ltem1NotifType_scktError)
+    {
+        PRINTFC(dbgColor_error, "Socket Error: %s\r", notifMsg);
+        brk();
+    }
+
 	PRINTFC(dbgColor_error, "\r\n** %s \r\n", notifMsg);
     PRINTFC(dbgColor_error, "** Test Assertion Failed. \r\n");
     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);

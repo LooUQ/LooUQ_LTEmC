@@ -84,10 +84,23 @@ void ltem1_create(const ltem1PinConfig_t ltem1_config, appNotify_func appNotifyC
 /**
  *	\brief Power on and start the modem (perform component init).
  * 
- *  \param ltem1Start [in] - Determines if the LTEm1 should be started (aka powered ON) during initialization process.
+ *  \param protos [in] - OR'd list of expected protocol services. Simple validation that the expected optional protocol x_create() methods have been invoked.
  */
-void ltem1_start()
+void ltem1_start(uint16_t protocolBitMap)
 {
+    // validate create
+    if (protocolBitMap != ltem1Protocols__SKIPVALIDATE)
+    {
+        if (protocolBitMap & ltem1Protocols_sockets && g_ltem1->sockets == NULL)
+            ltem1_notifyApp(ltem1NotifType_hardFault, "No sckt_create()");
+
+        if (protocolBitMap & ltem1Protocols_mqtt && g_ltem1->mqtt == NULL)
+            ltem1_notifyApp(ltem1NotifType_hardFault, "No mqtt_create()");
+
+        // if (protos & ltem1Proto_http && g_ltem1->http == NULL)
+        //     ltem1_notifyApp(ltem1NotifType_hardFault, "HTTP noCreate");
+    }
+
     s_initIO();                             // set GPIO pins to operating state
     spi_start(g_ltem1->spi);
 
@@ -124,7 +137,7 @@ void ltem1_start()
 void ltem1_reset()
 {
     qbg_reset();
-    ltem1_start();
+    ltem1_start(ltem1Protocols__SKIPVALIDATE);
 }
 
 
@@ -188,17 +201,17 @@ void ltem1_destroy()
  */
 void ltem1_doWork()
 {
+    if (!ltem1_chkHwReady())
+        ltem1_notifyApp(ltem1NotifType_hwNotReady, "LTEm1 I/O Error");
+
     if (g_ltem1->scktWork_func != NULL)
     {
         g_ltem1->scktWork_func();
     }
-    //sckt_doWork();
-    
     if (g_ltem1->mqttWork_func != NULL)
     {
         g_ltem1->mqttWork_func();
     }
-    //mqtt_doWork();
 }
 
 
@@ -206,7 +219,7 @@ void ltem1_doWork()
  *	\brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
  * 
  *  \param notifyType [in] - Enum of broad notification categories.
- *  \param notifyMsg [in] - Message from origination about the fatal condition.
+ *  \param notifyMsg [in] - Message from origination about the issue being reported.
  */
 void ltem1_notifyApp(uint8_t notifType, const char *msg)
 {

@@ -5,10 +5,11 @@
 #include "ltem1c.h"
 #include "file.h"
 
-#define FILE_CMD_SZ 81
-#define FILE_INFO_DATAOFFSET 10
-#define FILE_POS_DATAOFFSET 12              // +QFPOSITION: 
-#define FILE_OPEN_DATAOFFSET 9              // +QFOPEN: <filehandle>
+#define FILE_CMD_SZ             81
+#define FILE_INFO_DATAOFFSET    10
+#define FILE_POS_DATAOFFSET     12      ///< +QFPOSITION: 
+#define FILE_OPEN_DATAOFFSET     9      ///< +QFOPEN: <filehandle>
+#define FILE_TIMEOUTml         800
 
 
 void file_setRecvrFunc(fileReceiver_func_t fileRecvr_func)
@@ -22,7 +23,7 @@ fileInfoResult_t file_info()
     char *continueAt;
 
     // first get file system info
-    if (action_tryInvokeAdv("AT+QFLDS=\"UFS\"", ACTION_RETRIES_DEFAULT, 800, NULL))
+    if (action_tryInvokeAdv("AT+QFLDS=\"UFS\"", FILE_TIMEOUTml, NULL))
     {
         actionResult_t atResult = action_awaitResult(false);
         if (atResult.statusCode != RESULT_CODE_SUCCESS)
@@ -44,7 +45,7 @@ fileInfoResult_t file_info()
         return fileResult;
     }
     // now get file collection info
-    if (action_tryInvokeAdv("AT+QFLDS", ACTION_RETRIES_DEFAULT, 800, NULL))
+    if (action_tryInvokeAdv("AT+QFLDS", FILE_TIMEOUTml, NULL))
     {
         actionResult_t atResult = action_awaitResult(false);
         if (atResult.statusCode != RESULT_CODE_SUCCESS)
@@ -86,7 +87,7 @@ resultCode_t file_delete(const char* fileName)
 
     snprintf(fileCmd, FILE_CMD_SZ, "AT+QFDEL=%s", fileName);
 
-    if (action_tryInvokeAdv(fileCmd, ACTION_RETRIES_DEFAULT, 800, NULL))
+    if (action_tryInvokeAdv(fileCmd, FILE_TIMEOUTml, NULL))
     {
         return action_awaitResult(true).statusCode;
     }
@@ -116,7 +117,7 @@ fileOpenResult_t file_open(const char* fileName, fileOpenMode_t openMode, fileRe
     snprintf(fileCmd, FILE_CMD_SZ, "AT+QFOPEN=%s,%d", fileName, openMode);
 
     // first get file system info
-    if (action_tryInvokeAdv(fileCmd, ACTION_RETRIES_DEFAULT, 800, NULL))
+    if (action_tryInvokeAdv(fileCmd, FILE_TIMEOUTml, NULL))
     {
         actionResult_t atResult = action_awaitResult(false);
         if (atResult.statusCode != RESULT_CODE_SUCCESS)
@@ -164,7 +165,7 @@ resultCode_t file_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t seek
 
     snprintf(fileCmd, FILE_CMD_SZ, "AT+QFSEEK=%d,%d,%d", fileHandle, offset, seekFrom);
 
-    if (action_tryInvokeAdv(fileCmd, ACTION_RETRIES_DEFAULT, 800, NULL))
+    if (action_tryInvokeAdv(fileCmd, FILE_TIMEOUTml, NULL))
     {
         return action_awaitResult(true).statusCode;
     }
@@ -179,7 +180,7 @@ filePositionResult_t file_getPosition(uint16_t fileHandle)
     char *continueAt;
 
     snprintf(fileCmd, FILE_CMD_SZ, "AT+QFPOSITION=%d", fileHandle);
-    if (action_tryInvokeAdv(fileCmd, ACTION_RETRIES_DEFAULT, 800, NULL))
+    if (action_tryInvokeAdv(fileCmd, FILE_TIMEOUTml, NULL))
     {
         actionResult_t atResult = action_awaitResult(false);
         if (atResult.statusCode != RESULT_CODE_SUCCESS)
@@ -214,7 +215,7 @@ resultCode_t file_truncate(uint16_t fileHandle)
 
     snprintf(fileCmd, FILE_CMD_SZ, "AT+QFTUCAT=%d", fileHandle);
 
-    if (action_tryInvokeAdv(fileCmd, ACTION_RETRIES_DEFAULT, 800, NULL))
+    if (action_tryInvokeAdv(fileCmd, FILE_TIMEOUTml, NULL))
     {
         return action_awaitResult(true).statusCode;
     }
@@ -235,7 +236,7 @@ resultCode_t file_close(uint16_t fileHandle)
 
     snprintf(fileCmd, FILE_CMD_SZ, "AT+QFCLOSE=%d", fileHandle);
 
-    if (action_tryInvokeAdv(fileCmd, ACTION_RETRIES_DEFAULT, 800, NULL))
+    if (action_tryInvokeAdv(fileCmd, FILE_TIMEOUTml, NULL))
     {
         return action_awaitResult(true).statusCode;
     }

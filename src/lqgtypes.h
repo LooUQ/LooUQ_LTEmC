@@ -32,9 +32,10 @@
 #define ASCII_sCR "\r"
 #define ASCII_cCOMMA ','
 #define ASCII_cNULL '\0'
-#define ASCII_cDBLQUOTE '\"'
-#define ASCII_cHYPHEN '-'
-#define ASCII_cSPACE ' '
+#define ASCII_cESC (char)0x1B
+#define ASCII_cSPACE (char)0x20
+#define ASCII_cDBLQUOTE (char)0x22
+#define ASCII_cHYPHEN (char)0x2D
 #define ASCII_sCTRLZ "\032"
 #define ASCII_sCRLF "\r\n"
 #define ASCII_sOK "OK\r\n"
@@ -58,6 +59,7 @@
 #define RESULT_CODE_CANCELLED     499
 #define RESULT_CODE_ERROR         500
 #define RESULT_CODE_UNAVAILABLE   503
+#define RESULT_CODE_GTWYTIMEOUT   504               ///< signals for a background (doWork) process timeout
 
 #define RESULT_CODE_ERRORS        400
 #define RESULT_CODE_SUCCESSRANGE   99
@@ -93,16 +95,34 @@ typedef enum ltem1OptnModule_tag            // must preceed IOP
 } ltem1OptnModule_t;
 
 
+typedef enum ltem1Protos_tag
+{
+    ltem1Protocols_sockets = 0x0001,
+    ltem1Protocols_mqtt = 0x0002,
+    ltem1Protocols_http = 0x0004,
+    ltem1Protocols__SKIPVALIDATE = 0xFFFF
+} ltem1Protos_t;
+
+
 typedef enum ltem1NotifType_tag
 {
     ltem1NotifType_info = 0,
-    ltem1NotifType_pdpDeactivate = 1,
+
+    ltem1NotifType__NETWORK = 100,
+    // transport (101-109)
+    ltem1NotifType_pdpDeactivate = 101,
+    // protocols (111-129)
+    ltem1NotifType_scktInfo = 111,
+    ltem1NotifType_scktError = 112,
+    ltem1NotifType_mqttInfo = 113,
+    ltem1NotifType_mqttError = 114,
+    // services (131-149)  -  NA to LTEm1c
 
     ltem1NotifType__CATASTROPHIC = 200,
-    ltem1NotifType_hwNotReady = 201,
+    ltem1NotifType_memoryAllocFault = 201,
     ltem1NotifType_localCommError = 202,
-    ltem1NotifType_memoryAllocFault = 203,
-    ltem1NotifType_bgInitFailed = 204,
+    ltem1NotifType_hwNotReady = 203,
+    ltem1NotifType_hwInitFailed = 204,
     ltem1NotifType_resetFailed = 205,
     ltem1NotifType_bufferOverflow = 206,
 

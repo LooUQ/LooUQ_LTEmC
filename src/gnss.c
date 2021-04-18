@@ -8,6 +8,7 @@
 #define GNSS_CMD_RESULTBUF_SZ 90
 #define GNSS_LOC_DATAOFFSET 12
 #define GNSS_LOC_EXPECTED_TOKENCOUNT 11
+#define GNSS_TIMEOUTml 800
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
@@ -35,7 +36,7 @@ static resultCode_t gnssLocCompleteParser(const char *response, char **endptr);
  */
 resultCode_t gnss_on()
 {
-    if (action_tryInvokeAdv("AT+QGPS=1", ACTION_RETRIES_DEFAULT, 800, NULL))
+    if (action_tryInvokeAdv("AT+QGPS=1", GNSS_TIMEOUTml, NULL))
     {
         return action_awaitResult(true).statusCode;
     }
@@ -51,7 +52,7 @@ resultCode_t gnss_on()
  */
 resultCode_t gnss_off()
 {
-    if (action_tryInvokeAdv("AT+QGPSEND", ACTION_RETRIES_DEFAULT, 800, NULL))
+    if (action_tryInvokeAdv("AT+QGPSEND", GNSS_TIMEOUTml, NULL))
     {
         return action_awaitResult(true).statusCode;
     }
@@ -76,7 +77,7 @@ gnssLocation_t gnss_getLocation()
     
     // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08  + lineEnds and OK
 
-    if (action_tryInvokeAdv("AT+QGPSLOC=2", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, gnssLocCompleteParser))
+    if (action_tryInvokeAdv("AT+QGPSLOC=2", ACTION_TIMEOUTml, gnssLocCompleteParser))
     {
         actionResult_t atResult = action_awaitResult(false);
 

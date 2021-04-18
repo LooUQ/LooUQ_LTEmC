@@ -26,13 +26,10 @@
  * data to/from the LTEm1 to be handled by the command or protocol processes.
  *****************************************************************************/
 
-#define _DEBUG
 #include "ltem1c.h"
 #include "iop.h"
 
-// #include "sockets.h"
-// #include "mqtt.h"
-
+//#define _DEBUG
 // debugging output options             UNCOMMENT one of the next two lines to direct debug (PRINTF) output
 #include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
 // #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
@@ -150,7 +147,7 @@ void iop_awaitAppReady()
     {
         lYield();
         if (apprdyWaitStart + QBG_APPREADY_MILLISMAX < lMillis())
-        ltem1_notifyApp(ltem1NotifType_bgInitFailed,  "qbg-BGx module failed to start in the allowed time");
+        ltem1_notifyApp(ltem1NotifType_hwInitFailed,  "qbg-BGx module failed to start in the allowed time");
     }
 }
 

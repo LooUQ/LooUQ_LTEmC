@@ -15,8 +15,6 @@
 // #include <jlinkRtt.h>                   // output debug PRINTF macros to J-Link RTT channel
 // #define SERIAL_OPT 1                    // enable serial port comm with devl host (1 = wait for serial ready)
 
-
-#define WAIT_SECONDS(timeout) (timeout * 1000)
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 #define MQTT_ACTION_CMD_SZ 81
@@ -83,7 +81,7 @@ mqttStatus_t mqtt_status(const char *host, bool force)
     mqttPtr->state = mqttStatus_closed;
 
     // connect check first to short-circuit efforts
-    if (action_tryInvokeAdv("AT+QMTCONN?", ACTION_RETRIES_DEFAULT, PERIOD_FROM_SECONDS(5), mqttConnectStatusParser))
+    if (action_tryInvokeAdv("AT+QMTCONN?", PERIOD_FROM_SECONDS(5), mqttConnectStatusParser))
     {
         actionResult_t atResult = action_awaitResult(true);
         if (atResult.statusCode == RESULT_CODE_SUCCESS)
@@ -92,7 +90,7 @@ mqttStatus_t mqtt_status(const char *host, bool force)
 
     if (mqttPtr->state != mqttStatus_connected ||           // if not connected
         *host != 0 &&                                       // or need host verification: check open
-        action_tryInvokeAdv("AT+QMTOPEN?", ACTION_RETRIES_DEFAULT, PERIOD_FROM_SECONDS(5), mqttOpenStatusParser))
+        action_tryInvokeAdv("AT+QMTOPEN?", PERIOD_FROM_SECONDS(5), mqttOpenStatusParser))
     {
         actionResult_t atResult = action_awaitResult(true);
         if (atResult.statusCode == RESULT_CODE_SUCCESS)
@@ -163,7 +161,7 @@ resultCode_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersi
 
     // TYPICAL: AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
     snprintf(actionCmd, MQTT_ACTION_CMD_SZ, "AT+QMTOPEN=%d,\"%s\",%d", MQTT_SOCKET_ID, host, port);
-    if (action_tryInvokeAdv(actionCmd, ACTION_RETRIES_DEFAULT, WAIT_SECONDS(45), mqttOpenCompleteParser))
+    if (action_tryInvokeAdv(actionCmd, PERIOD_FROM_SECONDS(45), mqttOpenCompleteParser))
     {
         actionResult_t atResult = action_awaitResult(true);
 
@@ -264,7 +262,7 @@ resultCode_t mqtt_connect(const char *clientId, const char *username, const char
     }
 
     snprintf(actionCmd, MQTT_CONNECT_CMD_SZ, "AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", MQTT_SOCKET_ID, clientId, username, password);
-    if (action_tryInvokeAdv(actionCmd, ACTION_RETRIES_DEFAULT, WAIT_SECONDS(60), mqttConnectCompleteParser))
+    if (action_tryInvokeAdv(actionCmd, PERIOD_FROM_SECONDS(60), mqttConnectCompleteParser))
     {
         atResult = action_awaitResult(true);
 
@@ -351,7 +349,7 @@ resultCode_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqtt_recvFunc_t re
     // if sucessful, the topic's subscription will overwrite the IOP peer map without issue as well (same bitmap value)
 
     snprintf(actionCmd, MQTT_ACTION_CMD_SZ, "AT+QMTSUB=%d,%d,\"%s\",%d", MQTT_SOCKET_ID, ++mqttPtr->msgId, topic, qos);
-    if (action_tryInvokeAdv(actionCmd, ACTION_RETRIES_DEFAULT, WAIT_SECONDS(15), mqttSubscribeCompleteParser))
+    if (action_tryInvokeAdv(actionCmd, PERIOD_FROM_SECONDS(15), mqttSubscribeCompleteParser))
     {
         actionResult_t atResult = action_awaitResult(true);
         if (atResult.statusCode == RESULT_CODE_SUCCESS)
@@ -428,16 +426,18 @@ resultCode_t mqtt_publish(const char *topic, mqttQos_t qos, const char *message)
     uint16_t msgId = ((uint8_t)qos == 0) ? 0 : ++mqttPtr->msgId;
     snprintf(publishCmd, MQTT_TOPIC_PUBBUF_SZ, "AT+QMTPUB=%d,%d,%d,0,\"%s\"", MQTT_SOCKET_ID, msgId, qos, topic);
     
-    if (action_tryInvokeAdv(publishCmd, ACTION_RETRIES_DEFAULT, ACTION_RETRY_INTERVALmillis, iop_txDataPromptParser))
+    if (action_tryInvokeAdv(publishCmd, ACTION_TIMEOUTml, iop_txDataPromptParser))
     {
         atResult = action_awaitResult(false);
 
-        // wait for data prompt for data, now complete sub-command to actually transfer data
-        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+        if (atResult.statusCode == RESULT_CODE_SUCCESS)         // wait for data prompt for data, now complete sub-command to actually transfer data
         {
             action_sendRawWithEOTs(message, strlen(message), ASCII_sCTRLZ, MQTT_PUBLISH_TIMEOUT, mqttPublishCompleteParser);
             atResult = action_awaitResult(true);
         }
+
+        if (atResult.statusCode != RESULT_CODE_SUCCESS)         // if any problem, make sure BGx is out of text mode
+            action_exitTextMode();
     }
     else 
         return RESULT_CODE_BADREQUEST;
@@ -586,7 +586,8 @@ static resultCode_t mqttOpenCompleteParser(const char *response, char **endptr)
 static resultCode_t mqttConnectStatusParser(const char *response, char **endptr) 
 {
     // BGx +QMTCONN Read returns Status = 3 for connected, service parser returns success code == 203
-    return action_serviceResponseParser(response, "+QMTCONN: ", 1, endptr) == 203 ? RESULT_CODE_SUCCESS : RESULT_CODE_UNAVAILABLE;
+    resultCode_t rslt = action_serviceResponseParser(response, "+QMTCONN: ", 1, endptr);
+    return (rslt == RESULT_CODE_PENDING) ? RESULT_CODE_PENDING : (rslt == 203) ? RESULT_CODE_SUCCESS : RESULT_CODE_UNAVAILABLE;
 }
 
 
@@ -596,7 +597,7 @@ static resultCode_t mqttConnectStatusParser(const char *response, char **endptr)
  *  \param response [in] Character data recv'd from BGx to parse for task complete
  *  \param endptr [out] Char pointer to the char following parsed text
  * 
- *  \return HTTP style result code, 0 = not complete
+ *  \return HTTP style result code, RESULT_CODE_PENDING = not complete
  */
 static resultCode_t mqttConnectCompleteParser(const char *response, char **endptr) 
 {
@@ -610,7 +611,7 @@ static resultCode_t mqttConnectCompleteParser(const char *response, char **endpt
  *  \param response [in] Character data recv'd from BGx to parse for task complete
  *  \param endptr [out] Char pointer to the char following parsed text
  * 
- *  \return HTTP style result code, 0 = not complete
+ *  \return HTTP style result code, RESULT_CODE_PENDING = not complete
  */
 static resultCode_t mqttSubscribeCompleteParser(const char *response, char **endptr) 
 {
@@ -624,11 +625,11 @@ static resultCode_t mqttSubscribeCompleteParser(const char *response, char **end
  *  \param response [in] Character data recv'd from BGx to parse for task complete
  *  \param endptr [out] Char pointer to the char following parsed text
  * 
- *  \return HTTP style result code, 0 = not complete
+ *  \return HTTP style result code, RESULT_CODE_PENDING = not complete
  */
 static resultCode_t mqttPublishCompleteParser(const char *response, char **endptr) 
 {
-    return action_serviceResponseParser(response, "+QMTPUB: ", 2, endptr) == 202 ? RESULT_CODE_TIMEOUT : RESULT_CODE_SUCCESS;;
+    return action_serviceResponseParser(response, "+QMTPUB: ", 2, endptr);
 }
 
 

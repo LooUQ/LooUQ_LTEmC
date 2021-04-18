@@ -88,7 +88,7 @@ uint8_t ntwk_getActivePdpCntxtCnt()
 {
     #define IP_QIACT_SZ 8
 
-    action_tryInvokeAdv("AT+QIACT?", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, contextStatusCompleteParser);
+    action_tryInvokeAdv("AT+QIACT?", ACTION_TIMEOUTml, contextStatusCompleteParser);
     actionResult_t atResult = action_awaitResult(false);
 
     for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)         // empty context table return and if success refill from parsing
@@ -165,7 +165,7 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
     char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
 
     snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIACT=%d\r", cntxtId);
-    if (action_tryInvokeAdv(atCmd, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, contextStatusCompleteParser))
+    if (action_tryInvokeAdv(atCmd, ACTION_TIMEOUTml, contextStatusCompleteParser))
     {
         resultCode_t atResult = action_awaitResult(true).statusCode;
         if ( atResult == RESULT_CODE_SUCCESS)
@@ -185,7 +185,7 @@ void ntwk_deactivatePdpContext(uint8_t cntxtId)
     char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
     snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIDEACT=%d\r", cntxtId);
 
-    if (action_tryInvokeAdv(atCmd, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, contextStatusCompleteParser))
+    if (action_tryInvokeAdv(atCmd, ACTION_TIMEOUTml, contextStatusCompleteParser))
     {
         resultCode_t atResult = action_awaitResult(true).statusCode;
         if ( atResult == RESULT_CODE_SUCCESS)

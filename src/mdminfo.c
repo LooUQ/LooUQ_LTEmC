@@ -43,7 +43,7 @@ modemInfo_t mdminfo_ltem1()
     if (*g_ltem1->modemInfo->iccid == NULL)                             // uses custom cmd str
     {
         //action_t *iccidCmd = action_build("AT+ICCID\r", 41, 500, iccidCompleteParser);
-        if (action_tryInvokeAdv("AT+ICCID", ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, iccidCompleteParser))
+        if (action_tryInvokeAdv("AT+ICCID", ACTION_TIMEOUTml, iccidCompleteParser))
         {
             actionResult_t atResult = action_awaitResult(false);
             if (atResult.statusCode == RESULT_CODE_SUCCESS)

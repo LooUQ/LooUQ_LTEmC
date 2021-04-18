@@ -8,9 +8,12 @@
 // #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 
 
+// Local scoped #defines
+#define ACTION_LOCKRETRIES             3        ///< Number of attemps to acquire action lock
+#define ACTION_LOCKRETRY_INTERVALml   50        ///< Millis to wait between action lock acquisition attempts
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
-// Local private declarations
+// Local scoped function declarations
 static void s_actionInit(const char *cmdStr);
 static void s_copyToDiagnostics();
 
@@ -33,7 +36,7 @@ void action_close()
  */
 bool action_tryInvoke(const char *cmdStr)
 {
-    return action_tryInvokeAdv(cmdStr, ACTION_RETRIES_DEFAULT, ACTION_TIMEOUT_DEFAULTmillis, action_okResultParser);
+    return action_tryInvokeAdv(cmdStr, ACTION_TIMEOUTml, action_okResultParser);
 }
 
 
@@ -43,14 +46,14 @@ bool action_tryInvoke(const char *cmdStr)
  *
  *	\param cmdStr [in] The command string to send to the BG96 module.
  *  \param retries [in] Number of retries to obtain action lock that should be attempted. 0 = no retries.
- *  \param timeout [in] Number of milliseconds the action can take. If 0, the system default timeout is used.
+ *  \param timeout [in] Number of milliseconds the action can take. Use system default ACTION_TIMEOUTml or your value.
  *  \param taskCompleteParser [in] Custom command response parser to signal result is complete. NULL for std parser.
  * 
  *  \return True if action was invoked, false if not
  */
-bool action_tryInvokeAdv(const char *cmdStr, uint8_t retries, uint16_t timeout, uint16_t (*taskCompleteParser)(const char *response, char **endptr))
+bool action_tryInvokeAdv(const char *cmdStr, uint16_t timeout, uint16_t (*taskCompleteParser)(const char *response, char **endptr))
 {
-    if ( !actn_acquireLock(cmdStr, retries) )
+    if ( !actn_acquireLock(cmdStr, ACTION_LOCKRETRIES) )
         return false;
 
     g_ltem1->action->timeoutMillis = timeout;
@@ -198,7 +201,28 @@ actionResult_t action_getResult(bool closeAction)
 }
 
 
+/**
+ *	\brief Sends ESC character to ensure BGx is not in text mode (> prompt awaiting ^Z/ESC).
+ */
+void action_exitTextMode()
+{
+    iop_txSend("\x1B", 1, true);            // send ESC - 0x1B
+}
+
+
+/**
+ *	\brief Sends +++ sequence to transition BGx out of data mode to command mode.
+ */
+void action_exitDataMode()
+{
+    lDelay(1000);
+    iop_txSend("+++", 1, true);             // send +++, gaurded by 1 second of quiet
+    lDelay(1000);
+}
+
+
 #pragma endregion
+
 
 #pragma region completionParsers
 /* --------------------------------------------------------------------------------------------------------
@@ -483,7 +507,7 @@ bool actn_acquireLock(const char *cmdStr, uint8_t retries)
                 if (retries == 0)
                     return false;
 
-                lDelay(ACTION_RETRY_INTERVALmillis);
+                lDelay(ACTION_LOCKRETRY_INTERVALml);
                 //ip_recvDoWork();
             }
         }
