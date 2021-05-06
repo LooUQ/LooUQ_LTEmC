@@ -70,7 +70,7 @@ void setup() {
 
     ltem1_create(ltem1_pinConfig, appNotifRecvr);                       // create base modem object
     sckt_create();                                                      // add optional services : sockets (TCP/UDP/SSL)
-    ltem1_start();                                                      // now start modem
+    ltem1_start(ltem1Protocols_sockets);                                // now start modem
 
     PRINTFC(dbgColor_none, "Waiting on network...\r");
     networkOperator_t networkOp = ntwk_awaitOperator(120 * 1000);
