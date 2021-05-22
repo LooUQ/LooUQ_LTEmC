@@ -1,5 +1,16 @@
-# LTEm1c Version History
+# LTEmC Version History
 #### Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
+
+## v1.0.0 - MAJOR RELEASE
+### Version 1.0.0 is a major release with several breaking changes. This release is the 1st version fully vetted in commercial projects and sets the stage for future multiple LooUQ LTE modem models.
+You are encouraged to review the Release_V1-0.md file for specifics on the major changes and how to adapt your application code.
+*   Project rename: LTEm1c to LTEmC, as this project will be adding support for future LooUQ LTE modems in Q3-2021
+*   New instantiation (create) and startup process
+*   Support for optional protocol inclusions
+*   Support for future shared code support of different modem models (modules)
+*   Improved support for Segger RTT debug output
+*   Filename and .h file adjustments and cleanup
+*   Misc fixes
 
 ## v0.5.0 - Fixes and Network PDP context handling (Dec 28, 2020)
 * Fixed MQTT not trapping publish errors

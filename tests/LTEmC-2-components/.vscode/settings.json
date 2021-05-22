@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "nxp-sc16is741a.h": "c",
+        "cstdio": "c",
+        "cstddef": "c",
+        "limits": "c",
+        "type_traits": "c",
+        "bitset": "cpp"
+    },
+    "C_Cpp.dimInactiveRegions": true
+}
