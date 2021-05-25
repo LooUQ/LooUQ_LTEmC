@@ -12,30 +12,30 @@ The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LT
 
 [LTEm1 Modem Specifications](https://loouq.github.io/resources/CR-LTEM1_DataSheet.pdf)
 
-[LTEm1/LTEm1c FAQ](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/LTEm1-FAQ.md)
+[LTEm1/LTEmC FAQ](https://github.com/LooUQ/CircuitRiver-LTEmC/blob/master/LTEm1-FAQ.md)
 
-[Version History](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/version-history.md)
+[Version History](https://github.com/LooUQ/CircuitRiver-LTEmC/blob/master/version-history.md)
 
-[LTEm1c Documentation](https://loouq.github.io/sites/ltemc_doxy/html/index.html)
+[LTEmC Documentation](https://loouq.github.io/sites/ltemc_doxy/html/index.html)
 
 ----
-![](https://github.com/LooUQ/CircuitRiver-LTEm1c/blob/master/LTEm1c%20Stack.png)
-\image html "LTEm1c Stack.png"
+![](https://github.com/LooUQ/CircuitRiver-LTEmC/blob/master/LTEmC%20Stack.png)
+\image html "LTEmC Stack.png"
 
 All of the core (blue) subsystems are functional. Extension subsystems (copper, with wide-borders) are optional and can be built into the application, or omitted to reduced code size. Grey boxes indicate future feature areas. 
 
 
 ## Getting Started
-*1st off, thanks for taking a look at the LTEm1 hardware and LTEm1c software!*
+*1st off, thanks for taking a look at the LTEm1 hardware and LTEmC software!*
 
-The best way to get started understanding LTEm1c and considering it for your projects *today* is to look at the tests folder in the repository. This will be supplemented in the coming weeks. Working on getting doxygen documentation available soon and some real world example projects. The tests folder contains a series of progressive LTEm1c tests. Starting with simple platform I/O verification, thru MQTT protocol support. Each test builds on a succesful previous level test.
+The best way to get started understanding LTEmC and considering it for your projects *today* is to look at the tests folder in the repository. This will be supplemented in future releases. Working on getting doxygen documentation available soon and some real world example projects. The tests folder contains a series of progressive LTEm1c tests. Starting with simple platform I/O verification, thru MQTT protocol support. Each test builds on a succesful previous level test.
 
 Each test shows the process for initializing, starting services, and a loop exercising the functionality of the subsystem under test.
 
-### LTEm1 Subsystems
+### LTEmC Subsystems
 | Subsystem | Functions |
 | ---------  | --------- |
-| *action_* | Handles invoking AT commands to the modem's module and handling response parsing. Supports variable command timeouts, thread safety and completion determination. Results are presented in a simple STRUCT with a HTTP type status code, along with the detail string response  |
+| *atcmd_* | Handles invoking AT commands to the modem's module and handling response parsing. Supports variable command timeouts, thread safety and completion determination. Results are presented in a simple STRUCT with a HTTP type status code, along with the detail string response  |
 | *mdminfo_* | Provides several common service functions for understanding the state of the modem and the network connection |
 | *gnss_* | The LTEm1 has a multi-constellation GNSS receiver (aka GPS is the US). The GNSS module provides support for accessing this functionality, like knowing exactly where your device is. |
 | *geo_* | The LTEm1 supports the creation of geo-fence outlines and monitoring of device positioning relative to the geo-fence boundary. Note: geo_ requires the gnss_ module be built into your project to use these functions. |
