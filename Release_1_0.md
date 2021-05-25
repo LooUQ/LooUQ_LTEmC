@@ -87,19 +87,35 @@ void notificationCB(uint8_t notifType, const char *notifMsg)
 }
 ```
 ## New Setup and Start, Protocol Inclusion
-The create code, start code and the inclusion of protocols has been separated into distinct methods.  The new approach is to create the required features, then issue a ltem1_start() call. 
+In your application's setup routine the functions to create/initialize the LTEm1 and to start the modem has been separated into distinct methods.  The new approach is to create the required features, then issue a ltem1_start() call. 
 
 ```
-    ltem1_create(ltem1_pinConfig, appNotifyCB);         // otherwise reference your application notification callback
-    //ltem1_create(ltem1_pinConfig, NULL);              // if application doesn't implement a notification callback, provide NULL
-    ltem1_start(pdpProtocol_none);                      // start LTEm1 with only IOP configured, AT commands but no protocols. 
+    ltem1_create(ltem1_pinConfig, appNotifyCB);
+    sckt_create();
+    ltem1_start(pdpProtocol_sockets);
+```
+
+The application notification callback is optional and can be disabled with **ltem1_create(ltem1_pinConfig, NULL);**
+
+Optional Protocols are are bit flags that are binary or'd together. Available options are:
+* pdpProtocol_none          // access to only network carrier status functionality
+* pdpProtocol_sockets       // TCP/UDP/SSL/TLS POSIX style sockets
+* pdpProtocol_mqtt          // MQTT message queueing
+
+To use both sockets and MQTT you would initialize the LTEm1 with...
+```
+    ltem1_create(ltem1_pinConfig, appNotifyCB);
+    sckt_create();
+    mqtt_create();
+    ltem1_start(pdpProtocol_sockets | pdpProtocol_mqtt);
 ```
 
 ## Debug Printing
-Debugging is of course a necessary part of our lives as developers. For those of you using Segger J-Link products I recommend the RTT (real time terminal) functionality the J-Link software provides. The inclusion of a small macro block makes turning on/off debugging output using J-Link RTT a simple one line change. LooUQ has a Arduino compatible fork of the Segger J-Link RTT source available on GitHub ().
+Debugging is of course a necessary part of our lives as developers. For those of you using Segger J-Link products I recommend the RTT (real time terminal) functionality the J-Link software provides. The inclusion of a small macro block makes turning on/off debugging output using J-Link RTT a simple one line change. LooUQ has a Arduino compatible fork of the Segger J-Link RTT source available on GitHub (https://github.com/LooUQ/JLinkRTT).
 
+### _DEBUG Value = 2 for J-LINK RTT and RTT Viewer
 ```
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
