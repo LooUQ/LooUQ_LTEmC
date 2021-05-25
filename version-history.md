@@ -3,6 +3,9 @@
 
 ## v1.0.0 - MAJOR RELEASE
 ### Version 1.0.0 is a major release with several breaking changes. This release is the 1st version fully vetted in commercial projects and sets the stage for future multiple LooUQ LTE modem models.
+
+https://github.com/LooUQ/CircuitRiver-LTEmC/blob/master/Release_1_0.md
+
 You are encouraged to review the Release_V1-0.md file for specifics on the major changes and how to adapt your application code.
 *   Project rename: LTEm1c to LTEmC, as this project will be adding support for future LooUQ LTE modems in Q3-2021
 *   New instantiation (create) and startup process
