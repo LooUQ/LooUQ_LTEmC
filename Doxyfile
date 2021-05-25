@@ -58,7 +58,7 @@ PROJECT_LOGO           = "C:/Users/GregTerrell/LooUQ Incorporated/LooUQ - Docume
 # entered, it will be relative to the location where doxygen was started. If
 # left blank the current directory will be used.
 
-OUTPUT_DIRECTORY       = C:\Users\GregTerrell\Documents\CodeDev\GitHub\loouq.github.io\sites\ltemC_doxy
+OUTPUT_DIRECTORY       = C:\Users\GregTerrell\Documents\CodeDev\GitHub\loouq.github.io\sites\ltemc_doxy
 
 # If the CREATE_SUBDIRS tag is set to YES then doxygen will create 4096 sub-
 # directories (in 2 levels) under the output directory of each output format and

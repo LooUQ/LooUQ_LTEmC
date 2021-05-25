@@ -58,7 +58,7 @@ static resultCode_t s_iccidCompleteParser(const char *response, char **endptr);
 
 
 /**
- *  \brief Get the LTEm1 static device identification\provisioning information.
+ *  \brief Get the LTEm1 static device identification/provisioning information.
  * 
  *  \return Modem information struct, see mdminfo.h for details.
 */

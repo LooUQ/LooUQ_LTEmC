@@ -174,7 +174,7 @@ void mqtt_create();
 
 mqttStatus_t mqtt_status(const char *host, bool force);
 resultCode_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion);
-resultCode_t mqtt_connect(const char *clientId, const char *username, const char *password, mqttSession_t clean);
+resultCode_t mqtt_connect(const char *clientId, const char *username, const char *password, mqttSession_t cleanSession);
 void mqtt_close();
 
 

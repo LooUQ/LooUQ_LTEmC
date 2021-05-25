@@ -268,7 +268,7 @@ void mqtt_close()
  *  \param clientId [in] - The client or device identifier for the connection.
  *  \param username [in] - The user identifier or name for the connection to authenticate.
  *  \param password [in] - The secret string or phrase to authenticate the connection.
- *  \param sessionClean [in] - Directs MQTT to preserve or flush messages received prior to the session start.
+ *  \param cleanSession [in] - Directs MQTT to preserve or flush messages received prior to the session start.
  * 
  *  \returns A resultCode_t value indicating the success or type of failure, OK = 200.
 */

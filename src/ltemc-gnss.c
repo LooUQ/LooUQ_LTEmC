@@ -66,7 +66,7 @@ static resultCode_t gnssLocCompleteParser(const char *response, char **endptr);
 
 
 /**
- *	\brief Turn GNSS\GPS subsystem on. 
+ *	\brief Turn GNSS/GPS subsystem on. 
  *
  *  \return Result code representing status of operation, OK = 200.
  */
@@ -82,7 +82,7 @@ resultCode_t gnss_on()
 
 
 /**
- *	\brief Turn GNSS\GPS subsystem off. 
+ *	\brief Turn GNSS/GPS subsystem off. 
  *
  *  \return Result code representing status of operation, OK = 200.
  */
@@ -97,7 +97,7 @@ resultCode_t gnss_off()
 
 
 /**
- *	\brief Query BGx for current location\positioning information. 
+ *	\brief Query BGx for current location/positioning information. 
  *
  *  \return GNSS location struct, see gnss.h for details.
  */

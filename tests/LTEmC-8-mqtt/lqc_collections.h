@@ -36,7 +36,7 @@
 /** 
  *  \brief Struct exposing action's parameters collection (names and values as c-strings).
  * 
- *  NOTE: This struct maps key\value pairs in an existing HTTP query string formated char array. The array is parsed
+ *  NOTE: This struct maps key/value pairs in an existing HTTP query string formated char array. The array is parsed
  *  using the lqc_parseQueryStringDict() function. Parsing MUTATES the original char array. The original char array
  *  must stay in scope as it contains the keys and the values. The keyValueDict struct only provides a higher level
  *  map of the data stored in the char array and a utility function lqc_getDictValue(key) to access the value.

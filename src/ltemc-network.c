@@ -45,9 +45,9 @@
 #define MIN(x, y) (((x)<(y)) ? (x):(y))
 
 #pragma region Static Local Function Declarations
-static resultCode_t contextStatusCompleteParser(const char *response, char **endptr);
-static networkOperator_t getNetworkOperator();
-char *grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
+static resultCode_t s_contextStatusCompleteParser(const char *response, char **endptr);
+static networkOperator_t s_getNetworkOperator();
+static char *s_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
 #pragma endregion
 
 
@@ -99,7 +99,7 @@ networkOperator_t ntwk_awaitOperator(uint16_t waitDuration)
     waitDuration = waitDuration * 1000;
     do 
     {
-        ntwk = getNetworkOperator();
+        ntwk = s_getNetworkOperator();
         if (ntwk.operName != 0)
             break;
         lDelay(1000);
@@ -120,7 +120,7 @@ uint8_t ntwk_getActivePdpCntxtCnt()
 {
     #define IP_QIACT_SZ 8
 
-    atcmd_tryInvokeAdv("AT+QIACT?", ACTION_TIMEOUTml, contextStatusCompleteParser);
+    atcmd_tryInvokeAdv("AT+QIACT?", ACTION_TIMEOUTml, s_contextStatusCompleteParser);
     atcmdResult_t atResult = atcmd_awaitResult(false);
 
     for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)         // empty context table return and if success refill from parsing
@@ -155,7 +155,7 @@ uint8_t ntwk_getActivePdpCntxtCnt()
             continueAt = strchr(++continueAt, ',');             // skip context_state: always 1
             g_ltem->network->pdpCntxts[apnIndx].ipType = (int)strtol(continueAt + 1, &continueAt, 10);
 
-            continueAt = grabToken(continueAt + 2, ASCII_cDBLQUOTE, tokenBuf, TOKEN_BUF_SZ);
+            continueAt = s_grabToken(continueAt + 2, ASCII_cDBLQUOTE, tokenBuf, TOKEN_BUF_SZ);
             if (continueAt != NULL)
             {
                 strncpy(g_ltem->network->pdpCntxts[apnIndx].ipAddress, tokenBuf, TOKEN_BUF_SZ);
@@ -170,7 +170,7 @@ uint8_t ntwk_getActivePdpCntxtCnt()
 
 
 /**
- *	\brief Get PDP Context\APN information
+ *	\brief Get PDP Context/APN information
  * 
  *  \param cntxtId [in] - The PDP context (APN) to retreive.
  * 
@@ -188,7 +188,7 @@ pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
 
 
 /**
- *	\brief Activate PDP Context\APN.
+ *	\brief Activate PDP Context/APN.
  * 
  *  \param cntxtId [in] - The APN to operate on. Typically 0 or 1
  */
@@ -197,7 +197,7 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
     char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
 
     snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIACT=%d\r", cntxtId);
-    if (atcmd_tryInvokeAdv(atCmd, ACTION_TIMEOUTml, contextStatusCompleteParser))
+    if (atcmd_tryInvokeAdv(atCmd, ACTION_TIMEOUTml, s_contextStatusCompleteParser))
     {
         resultCode_t atResult = atcmd_awaitResult(true).statusCode;
         if ( atResult == RESULT_CODE_SUCCESS)
@@ -217,7 +217,7 @@ void ntwk_deactivatePdpContext(uint8_t cntxtId)
     char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
     snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIDEACT=%d\r", cntxtId);
 
-    if (atcmd_tryInvokeAdv(atCmd, ACTION_TIMEOUTml, contextStatusCompleteParser))
+    if (atcmd_tryInvokeAdv(atCmd, ACTION_TIMEOUTml, s_contextStatusCompleteParser))
     {
         resultCode_t atResult = atcmd_awaitResult(true).statusCode;
         if ( atResult == RESULT_CODE_SUCCESS)
@@ -227,9 +227,9 @@ void ntwk_deactivatePdpContext(uint8_t cntxtId)
 
 
 /**
- *	\brief Reset (deactivate\activate) all network APNs.
+ *	\brief Reset (deactivate/activate) all network APNs.
  *
- *  \NOTE: activate and deactivate have side effects, they internally call getActiveContexts prior to return
+ *  NOTE: activate and deactivate have side effects, they internally call getActiveContexts prior to return
  */
 void ntwk_resetPdpContexts()
 {
@@ -263,7 +263,7 @@ void ntwk_resetPdpContexts()
  * 
  *   \return standard action result integer (http result).
 */
-static resultCode_t contextStatusCompleteParser(const char *response, char **endptr)
+static resultCode_t s_contextStatusCompleteParser(const char *response, char **endptr)
 {
     return atcmd_defaultResultParser(response, "+QIACT: ", false, 2, ASCII_sOK, endptr);
 }
@@ -275,7 +275,7 @@ static resultCode_t contextStatusCompleteParser(const char *response, char **end
  * 
  *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-static networkOperator_t getNetworkOperator()
+static networkOperator_t s_getNetworkOperator()
 {
     if (*g_ltem->network->networkOperator->operName != 0)
         return *g_ltem->network->networkOperator;
@@ -290,7 +290,7 @@ static networkOperator_t getNetworkOperator()
             continueAt = strchr(atResult.response, ASCII_cDBLQUOTE);
             if (continueAt != NULL)
             {
-                continueAt = grabToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
+                continueAt = s_grabToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
                 ntwkMode = (uint8_t)strtol(continueAt + 1, &continueAt, 10);
                 if (ntwkMode == 8)
                     strcpy(g_ltem->network->networkOperator->ntwkMode, "CAT-M1");
@@ -313,12 +313,12 @@ static networkOperator_t getNetworkOperator()
  * 
  *  \param source [in] - Original char array to scan.
  *  \param delimeter [in] - Character separating tokens (passed as integer value).
- *  \param token [out] - Pointer to where token should be copied to.
- *  \param tokenSz [in] - Size of buffer to receive token.
+ *  \param tokenBuf [out] - Pointer to where token should be copied to.
+ *  \param tokenBufSz [in] - Size of buffer to receive token.
  * 
  *  \return Pointer to the location in the source string immediately following the token.
 */
-char *grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz) 
+static char *s_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz) 
 {
     char *delimAt;
     if (source == NULL)

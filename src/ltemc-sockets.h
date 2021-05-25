@@ -51,11 +51,11 @@ typedef void (*receiver_func_t)(socketId_t scktId, void *data, uint16_t dataSz);
 
 
 /** 
- *  \brief Struct representing the state of a TCP\UDP\SSL socket connection.
+ *  \brief Struct representing the state of a TCP/UDP/SSL socket connection.
 */
 typedef struct socketCtrl_tag
 {
-    protocol_t protocol;            ///< Socket's protocol : UDP\TCP\SSL.
+    protocol_t protocol;            ///< Socket's protocol : UDP/TCP/SSL.
     socketId_t socketId;            ///< Socket ID/number.
     bool open;                      ///< Is the socket in an open state.
     bool flushing;                  ///< True if the socket was opened with cleanSession and the socket was found already open.

@@ -13,7 +13,7 @@ Release 1.0 is a milestone for the LTEm1c software. The modem and the software h
 ## Callbacks
 Two callback conventions have be formalized: yield and notification. The yield callback allows for the application to invoke watchdog keepalives whenevr the LTEm1c code passes through a wait for response block. This is optional and is specified with the *ltem1_setYieldCb(yieldCb)* method. The yieldCb() method takes no parameters and returns a void.
 
-The other callback is for notifying your application of significant events, such as: connecting, disconnecting and errors. This is compatible with the notification callback used in the LQCloud driver. An example callback handler is shown below. The example below shows how the device application can respond to events with local displays\indicators.
+The other callback is for notifying your application of significant events, such as: connecting, disconnecting and errors. This is compatible with the notification callback used in the LQCloud driver. An example callback handler is shown below. The example below shows how the device application can respond to events with local displays/indicators.
 
 ```
 void notificationCB(uint8_t notifType, const char *notifMsg)
@@ -96,7 +96,7 @@ The create code, start code and the inclusion of protocols has been separated in
 ```
 
 ## Debug Printing
-Debugging is of course a necessary part of our lives as developers. For those of you using Segger J-Link products I recommend the RTT (real time terminal) functionality the J-Link software provides. The inclusion of a small macro block makes turning on\off debugging output using J-Link RTT a simple one line change. LooUQ has a Arduino compatible fork of the Segger J-Link RTT source available on GitHub ().
+Debugging is of course a necessary part of our lives as developers. For those of you using Segger J-Link products I recommend the RTT (real time terminal) functionality the J-Link software provides. The inclusion of a small macro block makes turning on/off debugging output using J-Link RTT a simple one line change. LooUQ has a Arduino compatible fork of the Segger J-Link RTT source available on GitHub ().
 
 ```
 #define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 

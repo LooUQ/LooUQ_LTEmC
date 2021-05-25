@@ -68,7 +68,7 @@ static iop_t *iopPtr;
 static sockets_t *scktPtr;
 
 /**
- *	\brief Allocate and initialize the IP socket protocol (TCP\UDP\SSL) structure.
+ *	\brief Allocate and initialize the IP socket protocol (TCP/UDP/SSL) structure.
  */
 void sckt_create()
 {
@@ -321,7 +321,7 @@ socketResult_t sckt_send(socketId_t socketId, const char *data, uint16_t dataSz)
 #define IRD_WAIT_CYCLES 4                                   ///< number of doWork cycles to wait between IRD flows (actual cycles is 1 less than defined)
 
 /**
- *   \brief Perform background tasks to move socket data through pipeline, deliver RX data to application and update socket\IOP status values.
+ *   \brief Perform background tasks to move socket data through pipeline, deliver RX data to application and update socket/IOP status values.
 */
 void sckt_doWork()
 {

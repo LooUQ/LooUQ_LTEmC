@@ -64,13 +64,13 @@ extern "C"
 
 
 /** 
- *  \brief Struct representing the LTEm1c model. The struct behind the g_ltem1 global variable with all driver controls.
+ *  \brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
  * 
  *  Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
 */
 typedef struct ltemDevice_tag
 {
-    // ltem1Functionality_t funcLevel;  ///< Enum value indicating services enabled during ltem1c startup.
+    // ltem1Functionality_t funcLevel;  ///< Enum value indicating services enabled during ltemC startup.
 	ltemPinConfig_t pinConfig;          ///< GPIO pin configuration for required GPIO and SPI interfacing.
     spiDevice_t *spi;                   ///< SPI device (methods signatures compatible with Arduino).
     qbgReadyState_t qbgReadyState;      ///< Ready state of the BGx module
@@ -78,12 +78,12 @@ typedef struct ltemDevice_tag
     uint8_t dataContext;                ///< The primary APN context with the network carrier for application transfers.
     volatile iop_t *iop;                ///< IOP subsystem controls.
     atcmd_t *atcmd;                     ///< Action subsystem controls.
-    bool cancellationRequest;           ///< For RTOS implementations, token to request cancellation of long running task\action.
+    bool cancellationRequest;           ///< For RTOS implementations, token to request cancellation of long running task/action.
 	modemInfo_t *modemInfo;             ///< Data structure holding persistent information about application modem state.
     network_t *network;                 ///< Data structure representing the cellular network.
 
     /* optional services                only taking room for some pointers if not implemented */
-	void *sockets;                      ///< IP sockets subsystem (TCP\UDP\SSL).
+	void *sockets;                      ///< IP sockets subsystem (TCP/UDP/SSL).
     void (*scktWork_func)();            ///< Sockets background do work function
     void *mqtt;                         ///< MQTT protocol subsystem.
     void (*mqttWork_func)();            ///< MQTT background do work function

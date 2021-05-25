@@ -32,7 +32,7 @@
 #define FILE_CMD_SZ             81
 #define FILE_INFO_DATAOFFSET    10
 #define FILE_POS_DATAOFFSET     12      ///< +QFPOSITION: 
-#define FILE_OPEN_DATAOFFSET     9      ///< +QFOPEN: <filehandle>
+#define FILE_OPEN_DATAOFFSET     9      ///< +QFOPEN: {filehandle}
 #define FILE_TIMEOUTml         800
 
 
@@ -101,7 +101,7 @@ fileListResult_t filsys_list(const char* fileName)
 /**
  *	\brief Delete a file from the file system.
  *
- *	\param [in] namePattern - "*" or filename to delete. Wildcard with filename is not allowed.
+ *	\param fileName [in] - "*" or filename to delete. Wildcard with filename is not allowed.
  * 
  *  \return ResultCode=200 if successful, otherwise error code (HTTP status type).
  */

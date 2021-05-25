@@ -140,7 +140,7 @@ void sc16is741a_enableIrqMode()
 
 
 /**
- *	\brief Perform simple write\read using SC16IS741A scratchpad register. Used to test SPI communications.
+ *	\brief Perform simple write/read using SC16IS741A scratchpad register. Used to test SPI communications.
  */
 bool sc16is741a_chkCommReady()
 {

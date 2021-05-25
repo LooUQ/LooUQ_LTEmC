@@ -55,7 +55,6 @@ ltemDevice_t *g_ltem;
  *	\brief Initialize the LTEm1 modem.
  *
  *	\param ltem_config [in] - The LTE modem gpio pin configuration.
- *  \param funcLevel [in] - Determines the LTEm1 functionality to create and start.
  *  \param appNotifyCB [in] - If supplied (not NULL), this function will be invoked for significant LTEm1 events.
  */
 void ltem_create(const ltemPinConfig_t ltem_config, appNotify_func appNotifyCB)
@@ -97,7 +96,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, appNotify_func appNotifyCB)
 /**
  *	\brief Power on and start the modem (perform component init).
  * 
- *  \param protos [in] - Binary-OR'd list of expected protocol services to validate inclusion and start.
+ *  \param protocolBitMap [in] - Binary-OR'd list of expected protocol services to validate inclusion and start.
  */
 void ltem_start(uint16_t protocolBitMap)
 {
@@ -220,14 +219,14 @@ void ltem_doWork()
  *  \param notifyType [in] - Enum of broad notification categories.
  *  \param notifyMsg [in] - Message from origination about the issue being reported.
  */
-void ltem_notifyApp(uint8_t notifType, const char *msg)
+void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
-    PRINTF(DBGCOLOR_error, "\r\rLTEm1C FaultCd=%d - %s\r", notifType, msg);         // log to debugger if attached
+    PRINTF(DBGCOLOR_error, "\r\rLTEmC FaultCd=%d - %s\r", notifyType, notifyMsg);         // log to debugger if attached
 
     if (g_ltem->appNotifyCB != NULL)                                       
-        g_ltem->appNotifyCB(notifType, msg);                   // if app handler registered, it may/may not return
+        g_ltem->appNotifyCB(notifyType, notifyMsg);            // if app handler registered, it may/may not return
 
-    while (notifType > ltemNotifType__CATASTROPHIC) {}         // if notice is "fatal" loop forever and hope for a watchdog
+    while (notifyType > ltemNotifType__CATASTROPHIC) {}        // if notice is "fatal" loop forever and hope for a watchdog
 }
 
 
@@ -235,7 +234,7 @@ void ltem_notifyApp(uint8_t notifType, const char *msg)
 /**
  *	\brief Registers the address (void*) of your application yield callback handler.
  * 
- *  \param [in] customFaultHandler - Pointer to application provided fault handler.
+ *  \param yieldCb_func [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
 void ltem_setYieldCb(platform_yieldCB_func_t yieldCb_func)
 {

@@ -7,36 +7,10 @@ static uint16_t findJsonBlockLength(const char *blockStart, const char *jsonEnd,
 
 
 /**
- *  \brief Scans a C-String (char array) for the next delimeted token and null terminates it.
+ *  \brief Parses a HTTP style query string (key and value pairs), creating a dictionary overlay for the keys and values. 
  * 
- *  \param [in] source - Original char array to scan.
- *  \param [in] source - Original char array to scan.
- *  \param [in] source - Original char array to scan.
- *  \param [in] source - Original char array to scan.
- * 
- *  \return Struct with map (pointers) to the keys and values (within the source array)
-*/
-// char *lqc_grabToken(char *source, int delimiter, char *token, uint8_t tokenMax) 
-// {
-//     char *delimAt;
-//     if (source == NULL)
-//         return false;
-
-//     delimAt = strchr(source, delimiter);
-//     uint8_t tokenSz = delimAt - source;
-//     if (tokenSz == 0)
-//         return NULL;
-
-//     memset(token, 0, tokenMax);
-//     strncpy(token, source, MIN(tokenSz, tokenMax-1));
-//     return delimAt + 1;
-// }
-
-
-/**
- *  \brief Parses a HTTP style query string (key\value pairs) and creates a dictionary overlay for the keys and values. 
- * 
- *  \param [in] dictSrc - Char pointer to the c-string containing key value pairs to identify. NOTE: the source is mutated in the process, keys\values are NULL term'd.
+ *  \param dictSrc [in] - Char pointer to the c-string containing key value pairs to identify. 
+ *  NOTE: the source is mutated in the process, keys/values are NULL term'd.
  * 
  *  \return Struct with map (pointers) to the keys and values (within the source array)
 */
@@ -85,7 +59,8 @@ keyValueDict_t lqc_createDictFromQueryString(char *dictSrc)
 /**
  *  \brief Scans the qryProps struct for the a prop and returns the value from the underlying char array.
  * 
- *  \param [in] propsName - Char pointer to the c-string containing message properties passed in topic 
+ *  \param key [in] - Char pointer to the c-string to locate in the dictionary 
+ *  \param dict [in] - Dictionary to be searched 
  * 
  *  \return Struct with pointer arrays to the properties (name/value)
 */

@@ -18,7 +18,7 @@ You are encouraged to review the Release_V1-0.md file for specifics on the major
 * Changed NETWORK module PDP context handling
     * Changed internal active PDP table organization
     * Change (_ntwk) function signatures to better match behaviors
-    * Added reset to deactivate\activate all presently active PDP contexts
+    * Added reset to deactivate/activate all presently active PDP contexts
 * Change IOP PDP deactivated detect logic to match internal implementation in NETWORK module
 
 ## 0.4.2 (Dec 15, 2020)
@@ -44,7 +44,7 @@ Overhaul of the IOP buffering system.
 * Reduce code in ISR path, push processing to doWork() background path
 * Finishing MQTT support
     * Publish to topic
-    * Subscribe\unsubscribe to topics
+    * Subscribe/unsubscribe to topics
     * Support for C2D (cloud-to-device) topic based properties
     * Receiver events per subscription (subscriptions can share a receiver function or have distinct receiver functions)
 * Multiple fixes
@@ -58,7 +58,7 @@ Overhaul of the IOP buffering system.
 * FOTA partial support for DFOTA via HTTPS (file system FOTA is a roadmap feature )
 
 ## v0.1 - Initial publish
-First release of a functional LTEm1 driver. Supported sockets (TCP\UDP\SSL) and limited MQTT. 
+First release of a functional LTEm1 driver. Supported sockets (TCP/UDP/SSL) and limited MQTT. 
 * Pure C99
 * Hardware/platform abstraction. Tested on SAMD21 and Arduino foundation but adaptable to RTOS 
 * Abstraction of AT commands workflow, simple methods allow for invoke and await pattern
@@ -67,7 +67,7 @@ First release of a functional LTEm1 driver. Supported sockets (TCP\UDP\SSL) and 
 * Initial TCP/UDP send/recv (very small packets)
 * GNSS (GPS) support
 * Tests (VS Code Arduino) for above
-* Central IOP (input\output processor) to handle BGx communications and buffer management
-* Implements TCP\UDP\SSL clients using a Sockets pattern with receiver events
+* Central IOP (input/output processor) to handle BGx communications and buffer management
+* Implements TCP/UDP/SSL clients using a Sockets pattern with receiver events
 * Started MQTT support
 

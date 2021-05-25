@@ -22,6 +22,9 @@ static arduino_spi_t arduino_spi_settings;
 
 /**
  *	\brief Initialize and configure SPI resource.
+ *
+ *  \param chipSelLine [in] - GPIO for CS 
+ *  \return SPI device
  */
 spiDevice_t *spi_create(uint8_t chipSelLine)
 {
@@ -92,8 +95,8 @@ void spi_protectFromInterrupt(spiDevice_t *spi, int8_t irqNumber)
 /**
  *	\brief Transfer a byte to the NXP bridge.
  *
- *	\param[in] spi The SPI device for communications.
- *  \param[in\out] data The word to transfer to the NXP bridge.
+ *	\param spi [in] - The SPI device for communications.
+ *  \param data [in/out] - The word to transfer to the NXP bridge.
  * 
  *  \returns A 16-bit word received during the transfer.
  */
@@ -114,8 +117,8 @@ uint8_t spi_transferByte(spiDevice_t *spi, uint8_t data)
 /**
  *	\brief Transfer a word (16-bits) to the NXP bridge.
  *
- *	\param[in] spi The SPI device for communications.
- *  \param[in\out] data The word to transfer to the NXP bridge.
+ *	\param spi [in] - The SPI device for communications.
+ *  \param data [in/out] - The word to transfer to the NXP bridge.
  * 
  *  \returns A 16-bit word received during the transfer.
  */
@@ -149,10 +152,10 @@ uint16_t spi_transferWord(spiDevice_t *spi, uint16_t data)
 /**
  *	\brief Transfer a buffer to the NXP bridge.
  *
- *	\param[in] spi The SPI device for communications.
- *  \param[in] regAddrByte Bridge register address specifying the I/O to perform.
- *  \param[in\out] buf The character pointer to the buffer to transfer to/from.
- *  \param[in] xfer_len The number of characters to transfer.
+ *	\param spi [in] - The SPI device for communications.
+ *  \param regAddrByte [in] - Bridge register address specifying the I/O to perform.
+ *  \param buf [in/out] - The character pointer to the buffer to transfer to/from.
+ *  \param xfer_len [in] - The number of characters to transfer.
  */
 void spi_transferBuffer(spiDevice_t *spi, uint8_t regAddrByte, void* buf, size_t xfer_len)
 {

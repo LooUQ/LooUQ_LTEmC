@@ -39,17 +39,17 @@ Each test shows the process for initializing, starting services, and a loop exer
 | *mdminfo_* | Provides several common service functions for understanding the state of the modem and the network connection |
 | *gnss_* | The LTEm1 has a multi-constellation GNSS receiver (aka GPS is the US). The GNSS module provides support for accessing this functionality, like knowing exactly where your device is. |
 | *geo_* | The LTEm1 supports the creation of geo-fence outlines and monitoring of device positioning relative to the geo-fence boundary. Note: geo_ requires the gnss_ module be built into your project to use these functions. |
-| *sockets_* | This is the typical POSIX style sockets layer. Support if TCP\UDP\SSL clients are there. *Note:* server mode is not currently planned, all US networks I have worked with do not support incoming connections for cellular without add-on services like VPNs or other network constructs. I recommend alternatives to attempting direct connection to your device over cellular. |
+| *sockets_* | This is the typical POSIX style sockets layer. Support if TCP/UDP/SSL clients are there. *Note:* server mode is not currently planned, all US networks I have worked with do not support incoming connections for cellular without add-on services like VPNs or other network constructs. I recommend alternatives to attempting direct connection to your device over cellular. |
 | *mqtt_* | Support for MQTT client functionality is built here. Attach, connect, subscribe, unsubscribe and publish all are supported. Limited testing so far on QOS levels and advance features like clean and will. The MQTT module supports message properties appended to the topic and has a property parser available. |
 | *iop_* | Generally you won't directly interact with the iop_ subsystem. It performs the buffer management to/from hardware. It interfaces with the action_, sockets_, and mqtt_ subsystems to perform the necessary transfers.
 
 
 ## Future Directions
-If you have an opinion on any of these functions and their applicability to your product\project please let LooUQ know. Send your thoughts to answers@loouq.com.
+If you have an opinion on any of these functions and their applicability to your product/project please let LooUQ know. Send your thoughts to answers@loouq.com.
 * Power Management - Support for PSM, wake options, etc.
 * HTTP(S) - Support for HTTP client in driver (not using raw TCP)
 * FTP(S) - Support for FTP client in driver (not using raw TCP)
 * File System - Support for file storage on BGx via driver (BG96 has approx. 10MB available)
 * FOTA - Support for scheduled FOTA 
 
-**Stay Tuned, Greg@LooUQ**
+**Stay Tuned, Greg at LooUQ**

@@ -78,7 +78,6 @@ bool atcmd_tryInvoke(const char *cmdStr)
  *	\brief Invokes a BGx AT command with application specified action values. 
  *
  *	\param cmdStr [in] The command string to send to the BG96 module.
- *  \param retries [in] Number of retries to obtain action lock that should be attempted. 0 = no retries.
  *  \param timeout [in] Number of milliseconds the action can take. Use system default ACTION_TIMEOUTml or your value.
  *  \param taskCompleteParser [in] Custom command response parser to signal result is complete. NULL for std parser.
  * 
@@ -149,7 +148,7 @@ void atcmd_sendRawWithEOTs(const char *data, uint16_t dataSz, const char *eotPhr
 /**
  *	\brief Waits for an AT command result until completed response or timeout.
  *
- *  \param autCloseAction [in] USE WITH CAUTION - On result, close the action. The caller only needs the status code. 
+ *  \param autoCloseAction [in] USE WITH CAUTION - On result, close the action. The caller only needs the status code. 
  * 
  *  \return Action result. WARNING - the actionResult.response contents are undetermined after close. 
  */
