@@ -1,5 +1,4 @@
-Release 1.0
-
+# LTEmC Release 1.0
 Release 1.0 is a milestone for the LTEm1c software. The modem and the software have been used in 2 commercial projects and have evolved to support ideas presented in those projects. 
 
 # New\Changed Functionality
