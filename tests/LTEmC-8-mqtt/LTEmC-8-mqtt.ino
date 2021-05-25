@@ -29,7 +29,7 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -64,14 +64,14 @@
  * LQ Cloud or Azure IoTHub needs 3 provisioning elements: 
  *   -- The hub address, if you are using LQ Cloud for testing the MQTT_IOTHUB address below is valid. Otherwise supply your MQTT access point (no protocol prefix)
  *   -- A deviceId and 
- *   -- A SAS token (a timelimited password). For deviceId we recommend the modem's
+ *   -- A SAS token (a time-limited password). For deviceId we recommend the modem's IMEI
  * 
  * The Device ID is up to 40 characters long and we suggest using the modem's IMEI. An example of the SAS token is shown on the next line.  
  * 
  * "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2Fe8fdd7df-2ca2-4b64-95de-031c6b199299&sig=XbjrqvX4kQXOTefJIaw86jRhfkv1UMJwK%2FFDiWmfqFU%3D&se=1759244275"
  *
  * Your values will be different, update MQTT_IOTHUB_DEVICEID and MQTT_IOTHUB_SASTOKEN with your values. If you obtain the SAS Token from Azure IoT Explorer it will
- * be prefixed with additional information: Hostname, DeviceId and the SharedAccessSignature property keys, these must be removed for using MQTT directly.
+ * be prefixed with additional information: Hostname, DeviceId and the SharedAccessSignature property keys, these must be removed if using MQTT directly.
  * 
  * HostName=iothub-dev-pelogical.azure-devices.net;DeviceId=867198053158865;SharedAccessSignature=SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053158865&sig=YlW6PuH4MA93cINEhgstihwQxWt4Zr9iY9Tnkl%2BuQK4%3D&se=1608052225
  * ^^^                          REMOVE, NOT PART OF THE SAS TOKEN                              ^^^              KEEP ALL FOLLOWING '='
@@ -80,20 +80,27 @@
 #define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
 #define MQTT_PORT 8883
 
+/* put your AZ IoTHub info here, SAS Token is available by using the "Azure IoT explorer" (https://github.com/Azure/azure-iot-explorer/releases/tag/v0.10.16)
+ * Note that SAS tokens have an experiry from 5 minutes to years. Yes... the one below is expired. To cancel a published SAS Token with an extended expirery
+ * you will need to change the device key (primary or secondary) it was based on.
+ */
 #define MQTT_IOTHUB_DEVICEID "864508030074113"
 #define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/" MQTT_IOTHUB_DEVICEID "/?api-version=2018-06-30"
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F864508030074113&sig=bHV12YRyVnKJHtABYi%2BSGlnkvBCpRD0rb7Ak9rg2fxM%3D&se=2872679808"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F864508030074113&sig=GUTFgHfEGU4hoVmJpTHJwWimH2ItifUSxd4pI83r%2Boo%3D&se=1624939645"
+
+// before commit "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F864508030074113&sig=dSmmZUimMuMu%2BNQjKtqLkrrzaeucvmqNM8BHKJbtIw8%3D&se=1621939493"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
 #define MQTT_MSG_PROPERTIES "mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97"
-#define MQTT_MSG_BODY_TEMPLATE "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97"
+#define MQTT_MSG_BODY_TEMPLATE "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:%0.2f"
 
 
 // test setup
 #define CYCLE_INTERVAL 5000
 uint16_t loopCnt = 1;
 uint32_t lastCycle;
+
 
 // ltem1 variables
 socketResult_t result;
@@ -137,10 +144,11 @@ void setup() {
     ASSERT(mqtt_open(MQTT_IOTHUB, MQTT_PORT, sslVersion_tls12, mqttVersion_311) == RESULT_CODE_SUCCESS, "MQTT open failed.");
     ASSERT(mqtt_connect(MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN, mqttSession_cleanStart) == RESULT_CODE_SUCCESS,"MQTT connect failed.");
     ASSERT(mqtt_subscribe(MQTT_IOTHUB_C2D_TOPIC, mqttQos_1, mqttReceiver) == RESULT_CODE_SUCCESS, "MQTT subscribe to IoTHub C2D messages failed.");
+
+    lastCycle = lMillis();
 }
 
 
-bool publishToCloud = true;
 
 void loop() 
 {
@@ -148,14 +156,11 @@ void loop()
     {
         lastCycle = lMillis();
 
-        if (publishToCloud)
-        {
-            snprintf(mqttTopic, 200, MQTT_MSG_BODY_TEMPLATE, loopCnt);
-            snprintf(mqttMessage, 200, "MQTT message for loop=%d", loopCnt);
-            mqtt_publish(mqttTopic, mqttQos_1, mqttMessage);
-        }
-        else
-            PRINTF(DBGCOLOR_info, "Publish skipped, disabled\r");
+        double windspeed = random(0, 4999) * 0.01;
+
+        snprintf(mqttTopic, 200, MQTT_MSG_BODY_TEMPLATE, loopCnt, windspeed);
+        snprintf(mqttMessage, 200, "MQTT message for loop=%d", loopCnt);
+        mqtt_publish(mqttTopic, mqttQos_1, mqttMessage);
 
         loopCnt++;
         PRINTF(DBGCOLOR_magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);

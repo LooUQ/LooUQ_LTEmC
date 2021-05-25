@@ -114,28 +114,18 @@ void ltem_start(uint16_t protocolBitMap)
         //     ltem_notifyApp(ltemNotifType_hardFault, "HTTP noCreate");
     }
 
-    ltem__initIo();                            // set GPIO pins to operating state
+    ltem__initIo();                                             // set host GPIO pins and SPI interface to operating state
     spi_start(g_ltem->spi);
 
-    if (qbg_powerOn())                          // returns prior power-state
+    if (qbg_powerOn())                                          // power on BGx, returning prior power-state
     {
 		PRINTF(DBGCOLOR_info, "LTEm1 found powered on.\r\n");
-        g_ltem->qbgReadyState = qbg_readyState_appReady;
-
-        // power off/on if IRQ latched: previously fired and not serviced
-        gpioPinValue_t irqState = gpio_readPin(g_ltem->pinConfig.irqPin);
-        if (irqState == gpioValue_low)
-        {
-    		PRINTF(DBGCOLOR_warn, "Warning: LTEm1 IRQ invalid, reseting!\r\n");
-            sc16is741a_writeReg(SC16IS741A_UARTRST_ADDR, SC16IS741A_SW_RESET_MASK);
-        }
+        g_ltem->qbgReadyState = qbg_readyState_appReady;        // if already "ON", assume running and check for IRQ latched
     }
-    g_ltem->qbgReadyState = qbg_readyState_powerOn;
-
-    sc16is741a_start();     // start NXP SPI-UART bridge
+    sc16is741a_start();                                         // start (resets previously powered on) NXP SPI-UART bridge
     iop_start();
-    iop_awaitAppReady();    // wait for BGx to signal out firmware ready
-    qbg_start();            // initialize BGx operating settings
+    iop_awaitAppReady();                                        // wait for BGx to signal out firmware ready
+    qbg_start();                                                // initialize BGx operating settings
 }
 
 

@@ -67,22 +67,29 @@ bool qbg_powerOn()
 {
     if (gpio_readPin(g_ltem->pinConfig.statusPin))
     {
-        PRINTF(dbgColor_none, "LTEm1 already powered on.");
-        // return true;
+        PRINTF(DBGCOLOR_dGreen, "LTEm1 already powered on.");
+        g_ltem->qbgReadyState = qbg_readyState_powerOn;
+        return true;
     }
 
-    PRINTF(dbgColor_none, "Powering LTEm1 On...");
+    PRINTF(DBGCOLOR_dGreen, "Powering LTEm1 On...");
     gpio_writePin(g_ltem->pinConfig.powerkeyPin, gpioValue_high);
     lDelay(QBG_POWERON_DELAY);
     gpio_writePin(g_ltem->pinConfig.powerkeyPin, gpioValue_low);
 
-    // wait for status=ready
-    while (!gpio_readPin(g_ltem->pinConfig.statusPin))
+    uint8_t attempts = 0;
+    while (attempts++ < 10)             // wait for status=ready
     {
-        lDelay(500);          // allow background tasks to operate
+        if (gpio_readPin(g_ltem->pinConfig.statusPin))
+        {
+            g_ltem->qbgReadyState = qbg_readyState_powerOn;
+            PRINTF(DBGCOLOR_dGreen, "DONE\r");
+            return false;
+        }
+        lDelay(500);                    // allow background tasks to operate
     }
-    PRINTF(dbgColor_none, "DONE\r");
-    // return false;
+    PRINTF(DBGCOLOR_warn, "FAILED\r");
+    return false;
 }
 
 

@@ -29,7 +29,7 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -63,7 +63,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_red, "LTEmC Test1: platformIO \r\n");
+    PRINTF(DBGCOLOR_dRed, "LTEmC Test1: platformIO \r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     PRINTF(0, "LED pin = %i \r\n", LED_BUILTIN);
 

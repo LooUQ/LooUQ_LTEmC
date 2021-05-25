@@ -71,9 +71,9 @@ void setup() {
     spi_start(g_ltem->spi);
 
     if (qbg_powerOn())
-        PRINTF(0, "LTEm found already powered on.\r\n");
+        PRINTF(DBGCOLOR_dGreen, "LTEm found already powered on.\r\n");
     else
-        PRINTF(0, "Powered LTEm on.\r\n");
+        PRINTF(DBGCOLOR_dGreen, "Powered LTEm on.\r\n");
 
     sc16is741a_start();     // start NXP SPI-UART bridge
 }
@@ -119,18 +119,18 @@ void loop() {
     recvResponse(response);
 
     // test response v. expected 
-    // char* validResponse = "AT+GSN\r\r\n86450";
-    // uint8_t imeiPrefixTest = strncmp(validResponse, response, strlen(validResponse)); 
+    char* validResponse = "AT+GSN\r\r\n86";
+    uint8_t imeiPrefixTest = strncmp(validResponse, response, strlen(validResponse)); 
 
-    // PRINTF(0, "Expecting 32 chars response, got %d \r\n", strlen(response));
-    // PRINTF(0, "Got response: %s", response);  
+    PRINTF(0, "Expecting 32 chars response, got %d \r\n", strlen(response));
+    PRINTF(0, "Got response: %s", response);  
 
-    // if (loopCnt < 3 && strlen(response) == 43)
-    // {
-    //     PRINTF(DBGCOLOR_warn, "Received APP RDY from LTEm.\r\n");
-    // }
-    // else if (imeiPrefixTest != 0 || strlen(response) != 32)
-    //     indicateFailure("Unexpected IMEI value returned on cmd test... failed."); 
+    if (loopCnt < 3 && strlen(response) == 43)
+    {
+        PRINTF(DBGCOLOR_warn, "Received APP RDY from LTEm.\r\n");
+    }
+    else if (imeiPrefixTest != 0 || strlen(response) != 32)
+        indicateFailure("Unexpected IMEI value returned on cmd test... failed."); 
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -146,32 +146,14 @@ void sendCommand(const char* cmd)
 {
     size_t sendSz = strlen(cmd);
 
-    sc16is741a_write(cmd, strlen(cmd));                      // normally you are going to use buffered writes like here
+    //sc16is741a_write(cmd, strlen(cmd));                      // normally you are going to use buffered writes like here
 
-    // for (size_t i = 0; i < sendSz; i++)
-    // {
-    //     sc16is741a_writeReg(SC16IS741A_FIFO_ADDR, cmd[i]);      // without a small delay the register is not moved to FIFO before next byte\char
-    //     lDelay(1);                                              // this is NOT the typical write cycle
-    // }
-    lDelay(300);                                                // max response time per-Quectel specs, for this test we will wait
-
-
-
-    uint8_t lsrValue = 0;
-    uint8_t recvSz = 0;
-    uint8_t attempts = 0;
-    char response[64];
-
-    while (!(lsrValue & NXP_LSR_DATA_IN_RECVR))
+    for (size_t i = 0; i < sendSz; i++)
     {
-        lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
-        if (attempts == 20)
-            break;
-        lDelay(1);
-        attempts++;
+        sc16is741a_writeReg(SC16IS741A_FIFO_ADDR, cmd[i]);      // without a small delay the register is not moved to FIFO before next byte\char
+        lDelay(1);                                              // this is NOT the typical write cycle
     }
-    recvSz = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-    sc16is741a_read(response, recvSz);
+    lDelay(300);                                                // max response time per-Quectel specs, for this test we will wait
 }
 
 
@@ -184,9 +166,9 @@ void recvResponse(char *response)
     while (!(lsrValue & NXP_LSR_DATA_IN_RECVR))
     {
         lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
-        if (attempts == 20)
+        if (attempts == 5)
             break;
-        lDelay(1);
+        lDelay(10);
         attempts++;
     }
     recvSz = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);

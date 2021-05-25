@@ -59,7 +59,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_dRed, "LTEmC Test3: iop\r");
+    PRINTF(DBGCOLOR_red, "LTEmC Test3: iop\r");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
     randomSeed(analogRead(7));

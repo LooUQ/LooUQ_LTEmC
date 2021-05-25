@@ -56,7 +56,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_none, "LTEm1c test5-modemInfo\r\n");
+    PRINTF(DBGCOLOR_red, "LTEm1c test5-modemInfo\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
     randomSeed(analogRead(0));

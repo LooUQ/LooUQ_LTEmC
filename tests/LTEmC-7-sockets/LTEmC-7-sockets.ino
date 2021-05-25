@@ -27,7 +27,7 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -59,7 +59,7 @@
 #define CYCLE_INTERVAL 10000
 #define SEND_BUFFER_SZ 201
 #define TCPIP_TEST_PROTOCOL 1               // Define test protocol: TCP = 0, UDP = 1, SSL = 2
-#define TCPIP_TEST_SERVER "97.83.32.119"    // put your server information here 
+#define TCPIP_TEST_SERVER "24.247.65.244"   // put your server information here 
 #define TCPIP_TEST_SOCKET 9011              // and here
 
 uint16_t loopCnt = 0;
@@ -124,7 +124,7 @@ void loop()
 {
     if (lMillis() - lastCycle >= CYCLE_INTERVAL)
     {
-        // PRINTF(dbgColor_magenta, "SPIready=%d\r", sc16is741a_chkCommReady());
+        // PRINTF(DBGCOLOR_magenta, "SPIready=%d\r", sc16is741a_chkCommReady());
         lastCycle = lMillis();
         showStats();
 
@@ -167,7 +167,7 @@ void loop()
 
 uint16_t socketRecover()
 {
-    PRINTF(dbgColor_warn, "sgnl=%d, scktState=%d\r", mdminfo_rssi(), sckt_getState(0));
+    PRINTF(DBGCOLOR_warn, "sgnl=%d, scktState=%d\r", mdminfo_rssi(), sckt_getState(0));
     sckt_close(0);
     return sckt_open(0, (protocol_t)TCPIP_TEST_PROTOCOL, TCPIP_TEST_SERVER, TCPIP_TEST_SOCKET, 0, true, ipReceiver);
 }

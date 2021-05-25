@@ -57,7 +57,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_white, "\rLTEm1c Test6: gnss\r");
+    PRINTF(DBGCOLOR_red, "\rLTEm1c Test6: gnss\r");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
     
     randomSeed(analogRead(0));
