@@ -151,7 +151,7 @@ int16_t mdminfo_rssi()
             term = strstr(atResult.response + ASCII_szCRLF, "+CSQ");
             csq = strtol(term + 5, NULL, 10);
         }
-        rssi = (csq == 99) ? 0 : -113 + 2 * csq;        // raw=99: no signal, range -51 to -113
+        rssi = (csq == 99) ? -128 : csq * 2 -113;        // raw=99: no signal, range -51 to -113
         atcmd_close();
     }
     return rssi;

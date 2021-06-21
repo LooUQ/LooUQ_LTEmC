@@ -59,7 +59,21 @@ typedef enum protocol_tag
 
 
 /** 
- *  \brief Enum of the two common APN contexts provided by network carriers.
+ *  \brief Enum of the available data contexts for BGx (only SSL/TLS capable contexts are supported).
+*/
+typedef enum dataContextId_tag
+{
+    dataContextId_0 = 0,
+    dataContextId_1 = 1,
+    dataContextId_2 = 2,
+    dataContextId_3 = 3,
+    dataContextId_4 = 4,
+    dataContextId_5 = 5,
+} dataContextId_t;
+
+
+/** 
+ *  \brief Enum of the two available PDP contexts for BGx provided by network carriers.
 */
 typedef enum pdpCntxtIpType_tag
 {

@@ -102,7 +102,7 @@ networkOperator_t ntwk_awaitOperator(uint16_t waitDuration)
         ntwk = s_getNetworkOperator();
         if (ntwk.operName != 0)
             break;
-        lDelay(1000);
+        lDelay(1000);                               // this yields, allowing alternate execution
         endMillis = lMillis();
     } while (endMillis - startMillis < waitDuration || g_ltem->cancellationRequest);
     //       timed out waiting                      || global cancellation

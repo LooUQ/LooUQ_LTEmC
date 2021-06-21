@@ -28,7 +28,12 @@ void lYield()
 
 void lDelay(uint32_t delay_ms)
 {
-    delay(delay_ms);
+    for (size_t i = 0; i < delay_ms; i++)
+    {
+        yield();
+        delay(1);
+    }
+    //delay(delay_ms);
 }
 
 bool lTimerExpired(uint32_t timerStart, uint32_t timerTimeout)

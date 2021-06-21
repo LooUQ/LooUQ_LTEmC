@@ -60,10 +60,20 @@ const char* const qbg_initCmds[] =
 
 
 /**
+ *	\brief Check for BGx power status.
+ *  \returns BGx power state
+ */
+bool qbg_isPowerOn()
+{
+    return gpio_readPin(g_ltem->pinConfig.statusPin);
+}
+
+
+/**
  *	\brief Power on the BGx module.
  *  \returns Prior BGx power state: true=previously powered on
  */
-bool qbg_powerOn()
+void qbg_powerOn()
 {
     if (gpio_readPin(g_ltem->pinConfig.statusPin))
     {
@@ -126,6 +136,7 @@ void qbg_reset()
 }
 
 
+#define INIT_MAX_ATTEMPTS 2
 /**
  *	\brief Initializes the BGx module.
  */
@@ -148,7 +159,7 @@ void qbg_start()
         {
             if (atcmd_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
             {
-                if (attempts == 0)
+                while(attempts < INIT_MAX_ATTEMPTS)
                 {
                     attempts++;
                     PRINTF(dbgColor_warn, "BGx reseting: init failed!\r");

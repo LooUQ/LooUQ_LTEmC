@@ -37,9 +37,7 @@ extern "C"
 #include <stdbool.h>
 #endif // __cplusplus
 
-#include "lqTypes.h"
-
-
+#include "lq-types.h"
 
 #include "lqPlatform.h"
 #include "ltemc-nxp-sc16is.h"
@@ -52,14 +50,15 @@ extern "C"
 
 /* Optional services
  ------------------------------------------------------------------------------------- */
+#include "ltemc-tls.h"
 #include "ltemc-sockets.h"
 #include "ltemc-mqtt.h"
-//#include "ltemc-http.h"
+#include "ltemc-http.h"
 
 #include "ltemc-gnss.h"
 #include "ltemc-geo.h"
 
-#include <ltemc-filesys.h>
+//#include "ltemc-filesys.h"
 /* ----------------------------------------------------------------------------------- */
 
 

@@ -25,8 +25,8 @@
  * Global/base defines and typedefs
  *****************************************************************************/
 
-#ifndef __LQTYPES_H__
-#define __LQTYPES_H__
+#ifndef __LQ_TYPES_H__
+#define __LQ_TYPES_H__
 
 #define ASCII_cCR '\r'
 #define ASCII_sCR "\r"
@@ -151,4 +151,4 @@ typedef struct lqAppDiagnostic_tag
     uint32_t xpsr;
 } lqAppDiagnostic_t;
 
-#endif  /* !__LQTYPES_H__ */
+#endif  /* !__LQ_TYPES_H__ */

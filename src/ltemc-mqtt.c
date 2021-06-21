@@ -140,12 +140,12 @@ mqttStatus_t mqtt_status(const char *host, bool force)
  * 
  *  \param host [in] The host IP address or name of the remote server.
  *  \param port [in] The IP port number to use for the communications.
- *  \param useSslVersion [in] Specifies the version and options for use of SSL to protect communications.
+ *  \param useTls [in] Specifies if a SSL/TLS configuration has been applied to data context to protect communications.
  *  \param useMqttVersion [in] Specifies the MQTT protocol revision to use for communications.
  * 
  *  \returns A resultCode_t value indicating the success or type of failure.
 */
-resultCode_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion)
+resultCode_t mqtt_open(const char *host, uint16_t port, bool useTls, mqttVersion_t useMqttVersion)
 {
     // AT+QSSLCFG="sslversion",5,3
     // AT+QMTCFG="ssl",5,1,0
@@ -159,15 +159,8 @@ resultCode_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersi
     if (mqttPtr->state >= mqttStatus_open)        // already open+connected with server "host"
         return RESULT_CODE_SUCCESS;
 
-    if (useSslVersion != sslVersion_none)
+    if (useTls)
     {
-        snprintf(actionCmd, MQTT_ACTION_CMD_SZ, "AT+QSSLCFG=\"sslversion\",%d,%d", MQTT_SOCKET_ID, (uint8_t)useSslVersion);
-        if (atcmd_tryInvoke(actionCmd))
-        {
-            if (atcmd_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
-                return RESULT_CODE_ERROR;
-        }
-
         snprintf(actionCmd, MQTT_ACTION_CMD_SZ, "AT+QMTCFG=\"ssl\",%d,1,%d", MQTT_SOCKET_ID, MQTT_SOCKET_ID);
         if (atcmd_tryInvoke(actionCmd))
         {
@@ -197,24 +190,30 @@ resultCode_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersi
         // else
         //     return RESULT_CODE_ERROR;
 
-        switch (atResult.statusCode)
+
+        if (atResult.statusCode >= 200 && atResult.statusCode < 300)
         {
-            case RESULT_CODE_SUCCESS:
-                iopPtr->peerTypeMap.mqttConnection = 1;
-                mqttPtr->state = mqttStatus_open;
-                return RESULT_CODE_SUCCESS;
-            case 899:
-            case 903:
-            case 905:
-                return RESULT_CODE_GONE;
-            case 901:
-                return RESULT_CODE_BADREQUEST;
-            case 902:
-                return RESULT_CODE_CONFLICT;
-            case 904:
-                return RESULT_CODE_NOTFOUND;
-            default:
-                return RESULT_CODE_ERROR;
+            iopPtr->peerTypeMap.mqttConnection = 1;
+            mqttPtr->state = mqttStatus_open;
+            return RESULT_CODE_SUCCESS;
+        }
+        else
+        {
+            switch (atResult.statusCode)
+            {
+                case 899:
+                case 903:
+                case 905:
+                    return RESULT_CODE_GONE;
+                case 901:
+                    return RESULT_CODE_BADREQUEST;
+                case 902:
+                    return RESULT_CODE_CONFLICT;
+                case 904:
+                    return RESULT_CODE_NOTFOUND;
+                default:
+                    return RESULT_CODE_ERROR;
+            }
         }
     }
 }
@@ -292,24 +291,19 @@ resultCode_t mqtt_connect(const char *clientId, const char *username, const char
     if (atcmd_tryInvokeAdv(actionCmd, PERIOD_FROM_SECONDS(60), s_mqttConnectCompleteParser))
     {
         atResult = atcmd_awaitResult(true);
-
-        // if (atResult.statusCode == RESULT_CODE_SUCCESS)
-        //     iopPtr->peerTypeMap.mqttConnection = 2;
-        // return atResult.statusCode;
-
         switch (atResult.statusCode)
         {
             case RESULT_CODE_SUCCESS:
                 iopPtr->peerTypeMap.mqttConnection = 2;
                 mqttPtr->state = mqttStatus_connected;
                 return RESULT_CODE_SUCCESS;
-            case 901:
-            case 902:
-            case 904:
+            case 201:
+            case 202:
+            case 204:
                 return RESULT_CODE_BADREQUEST;
-            case 903:
+            case 203:
                 return RESULT_CODE_UNAVAILABLE;
-            case 905:
+            case 205:
                 return RESULT_CODE_FORBIDDEN;
             default:
                 return RESULT_CODE_ERROR;
@@ -614,7 +608,9 @@ static resultCode_t s_mqttConnectStatusParser(const char *response, char **endpt
 {
     // BGx +QMTCONN Read returns Status = 3 for connected, service parser returns success code == 203
     resultCode_t rslt = atcmd_serviceResponseParser(response, "+QMTCONN: ", 1, endptr);
-    return (rslt == RESULT_CODE_PENDING) ? RESULT_CODE_PENDING : (rslt == 203) ? RESULT_CODE_SUCCESS : RESULT_CODE_UNAVAILABLE;
+    if (rslt == RESULT_CODE_PENDING)
+        return RESULT_CODE_PENDING;
+    return (rslt == 203) ? RESULT_CODE_SUCCESS : RESULT_CODE_UNAVAILABLE;
 }
 
 

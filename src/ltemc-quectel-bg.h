@@ -84,7 +84,8 @@ extern "C"
 
 void qbg_start();
 
-bool qbg_powerOn();
+bool qbg_isPowerOn();
+void qbg_powerOn();
 void qbg_powerOff();
 void qbg_reset();
 
