@@ -48,7 +48,7 @@
 
 #include <ltemc.h>
 
-#include "lqc_collections.h"            // borrow LQCloud collections for this test
+#include <lq-collections.h>            // LooUQ Common collections for this test
 
 #define DEFAULT_NETWORK_CONTEXT 1
 #define XFRBUFFER_SZ 201
@@ -79,16 +79,16 @@
 
 #define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
 #define MQTT_PORT 8883
+#define MQTT_DATACONTEXT 5
 
 /* put your AZ IoTHub info here, SAS Token is available by using the "Azure IoT explorer" (https://github.com/Azure/azure-iot-explorer/releases/tag/v0.10.16)
- * Note that SAS tokens have an experiry from 5 minutes to years. Yes... the one below is expired. To cancel a published SAS Token with an extended expirery
- * you will need to change the device key (primary or secondary) it was based on.
+ * Note that SAS tokens have an experiry from 5 minutes to years. Yes... the one below is expired. 
+ * To cancel a published SAS Token with an extended expirery you will need to change the device key (primary or secondary) it was based on.
  */
-#define MQTT_IOTHUB_DEVICEID "864508030074113"
+#define MQTT_IOTHUB_DEVICEID "867198053224766"
 #define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/" MQTT_IOTHUB_DEVICEID "/?api-version=2018-06-30"
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F864508030074113&sig=GUTFgHfEGU4hoVmJpTHJwWimH2ItifUSxd4pI83r%2Boo%3D&se=1624939645"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F" MQTT_IOTHUB_DEVICEID "&sig=J0S6wK5yFEFcUcFpP84GRGeB%2FrIZRgjssfRs09kTeq0%3D&se=1624376687"
 
-// before commit "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F864508030074113&sig=dSmmZUimMuMu%2BNQjKtqLkrrzaeucvmqNM8BHKJbtIw8%3D&se=1621939493"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
@@ -119,7 +119,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_white, "\rLTEm1c test8-MQTT\r\n");
+    PRINTF(DBGCOLOR_red, "\rLTEm1c test8-MQTT\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
 
     ltem_create(ltem_pinConfig, appNotifyCB);
@@ -141,7 +141,10 @@ void setup() {
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
     */
 
-    ASSERT(mqtt_open(MQTT_IOTHUB, MQTT_PORT, sslVersion_tls12, mqttVersion_311) == RESULT_CODE_SUCCESS, "MQTT open failed.");
+    // Azure requires TLS 1.2, MQTT is fixed to data context 5
+    tls_configure(dataContextId_5, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+
+    ASSERT(mqtt_open(MQTT_IOTHUB, MQTT_PORT, true, mqttVersion_311) == RESULT_CODE_SUCCESS, "MQTT open failed.");
     ASSERT(mqtt_connect(MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN, mqttSession_cleanStart) == RESULT_CODE_SUCCESS,"MQTT connect failed.");
     ASSERT(mqtt_subscribe(MQTT_IOTHUB_C2D_TOPIC, mqttQos_1, mqttReceiver) == RESULT_CODE_SUCCESS, "MQTT subscribe to IoTHub C2D messages failed.");
 
@@ -180,7 +183,7 @@ void mqttReceiver(char *topic, char *topicProps, char *message)
     PRINTF(DBGCOLOR_cyan, "\rm(%d): %s", strlen(message), message);
 
     // use local copy of LQ Cloud query string processor
-    keyValueDict_t mqttProps = lqc_createDictFromQueryString(topicProps);
+    keyValueDict_t mqttProps = lq_createQryStrDictionary(topicProps, strlen(topicProps));
     PRINTF(DBGCOLOR_info, "\rProps(%d)\r", mqttProps.count);
     for (size_t i = 0; i < mqttProps.count; i++)
     {

@@ -1,6 +1,15 @@
 # LTEmC Version History
 #### Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
 
+## v1.1.0 - Added HTTP(S) functionality
+*   Added support for HTTP(S) GET\POST 
+*   Migrated TLS configuration for a connection into its own module ltemc-tls
+*   - Changed signature of mqtt_open() to only specify TLS enabled. User should configure TLS for Context_5 prior to open
+*   Enabling future IOP changes to remove fixed size internal receive buffering, migrating to application owned and managed buffers
+*   Enabling future multiple MQTT and HTTP(S) sessions per modem
+*   Enabling future decoupling of MQTT and HTTP(S) from fixed data contexts (currently: MQTT=5, HTTP=4).
+*   Misc fixes
+
 ## v1.0.0 - MAJOR RELEASE
 ### Version 1.0.0 is a major release with several breaking changes. This release is the 1st version fully vetted in commercial projects and sets the stage for future multiple LooUQ LTE modem models.
 You are encouraged to review the Release_V1-0.md file for specifics on the major changes and how to adapt your application code.

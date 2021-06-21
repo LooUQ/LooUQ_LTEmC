@@ -72,19 +72,6 @@ typedef enum mqttResult_tag
     mqttResult_failed = 2           ///< Publish failed.
 } mqttResult_t;
 
-/** 
- *  \brief Enum of available SSL version options for an SSL connection. 
-*/
-typedef enum sslVersion_tag 
-{
-    sslVersion_none = 255,          ///< Not set
-    sslVersion_ssl30 = 0,           ///< Require SSL v3.0 
-    sslVersion_tls10 = 1,           ///< Require TLS v1.0
-    sslVersion_tls11 = 2,           ///< Require TLS v1.1
-    sslVersion_tls12 = 3,           ///< Require TLS v1.2
-    sslVersion_any = 4              ///< Any SSL/TLS version is acceptable.
-} sslVersion_t;
-
 
 /** 
  *  \brief Enum of available MQTT protocol version options.
@@ -169,14 +156,12 @@ extern "C"
 {
 #endif // __cplusplus
 
-//mqtt_t *mqtt_create();
 void mqtt_create();
 
 mqttStatus_t mqtt_status(const char *host, bool force);
-resultCode_t mqtt_open(const char *host, uint16_t port, sslVersion_t useSslVersion, mqttVersion_t useMqttVersion);
+resultCode_t mqtt_open(const char *host, uint16_t port, bool useTls, mqttVersion_t useMqttVersion);
 resultCode_t mqtt_connect(const char *clientId, const char *username, const char *password, mqttSession_t cleanSession);
 void mqtt_close();
-
 
 resultCode_t mqtt_subscribe(const char *topic, mqttQos_t qos, mqtt_recvFunc_t rcvr_func);
 resultCode_t mqtt_unsubscribe(const char *topic);
@@ -184,10 +169,8 @@ resultCode_t mqtt_publish(const char *topic, mqttQos_t qos, const char *message)
 
 void mqtt_doWork();
 
-
 #ifdef __cplusplus
 }
 #endif // !__cplusplus
-
 
 #endif  /* !__MQTT_H__ */

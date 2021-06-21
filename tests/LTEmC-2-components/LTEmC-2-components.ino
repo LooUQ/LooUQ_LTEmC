@@ -48,7 +48,7 @@
 #include <ltemc.h>
 
 void setup() {
-    #ifdef SERIAL_OPT
+    #ifdef SERIAL_DBG
         Serial.begin(115200);
         #if (SERIAL_OPT > 0)
         while (!Serial) {}      // force wait for serial ready

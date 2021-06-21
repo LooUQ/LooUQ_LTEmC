@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file platform_spi.h
+ *  \file lqPlatform-spi.h
  *  \author Jensen Miller, Greg Terrell
  *  \license MIT License
  *
@@ -22,19 +22,16 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  *****************************************************************************/
-#ifndef __PLATFORM_SPI_H__
-#define __PLATFORM_SPI_H__
+#ifndef __LQPLATFORM_SPI_H__
+#define __LQPLATFORM_SPI_H__
 
 #ifdef __cplusplus
-extern "C"
-{
 #include <cstdint>
 #include <stddef.h>
 #else
 #include <stdint.h>
 #include <stddef.h>
-#endif // __cplusplus
-
+#endif
 
 #define SPI_NO_IRQ_PROTECTION -1
 
@@ -73,10 +70,17 @@ typedef struct spiConfig_tag
 
 typedef struct spiDevice_tag
 {
-	spiConfig_t *config;
+    spiConfig_t *config;
 } spiDevice_t;
 
 //typedef spi_device_t* spi_device;
+
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 
 spiDevice_t *spi_create(uint8_t chipSelLine);
 void spi_start(spiDevice_t *spi);
@@ -94,6 +98,4 @@ void spi_transferBuffer(spiDevice_t *spi, uint8_t regAddrByte, void* buf, size_t
 }
 #endif // __cplusplus
 
-
-
-#endif  /* !__PLATFORM_SPI_H__ */
+#endif  /* !__LQPLATFORM_SPI_H__ */

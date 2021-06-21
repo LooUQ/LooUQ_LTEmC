@@ -116,15 +116,21 @@ void ltem_start(uint16_t protocolBitMap)
     ltem__initIo();                                             // set host GPIO pins and SPI interface to operating state
     spi_start(g_ltem->spi);
 
-    if (qbg_powerOn())                                          // power on BGx, returning prior power-state
+    if (qbg_isPowerOn())                                        // power on BGx, returning prior power-state
     {
 		PRINTF(DBGCOLOR_info, "LTEm1 found powered on.\r\n");
         g_ltem->qbgReadyState = qbg_readyState_appReady;        // if already "ON", assume running and check for IRQ latched
     }
-    sc16is741a_start();                                         // start (resets previously powered on) NXP SPI-UART bridge
-    iop_start();
-    iop_awaitAppReady();                                        // wait for BGx to signal out firmware ready
-    qbg_start();                                                // initialize BGx operating settings
+    else
+        qbg_powerOn();
+        
+    if (qbg_isPowerOn())
+    {
+        sc16is741a_start();                                         // start (resets previously powered on) NXP SPI-UART bridge
+        iop_start();
+        iop_awaitAppReady();                                        // wait for BGx to signal out firmware ready
+        qbg_start();                                                // initialize BGx operating settings
+    }
 }
 
 
