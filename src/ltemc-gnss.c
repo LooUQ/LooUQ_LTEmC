@@ -27,15 +27,16 @@
 
 #define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+#if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
     #if _DEBUG == 1
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
-#define PRINTF(c_, f_, ...) ;
+#define PRINTF(c_, f_, ...) 
 #endif
 
 
@@ -72,11 +73,11 @@ static resultCode_t gnssLocCompleteParser(const char *response, char **endptr);
  */
 resultCode_t gnss_on()
 {
-    if (atcmd_tryInvokeAdv("AT+QGPS=1", GNSS_TIMEOUTml, NULL))
+    if (atcmd_tryInvoke("AT+QGPS=1"))
     {
-        return atcmd_awaitResult(true).statusCode;
+        return atcmd_awaitResult();
     }
-    return RESULT_CODE_CONFLICT;
+    return resultCode__conflict;
 }
 
 
@@ -88,11 +89,11 @@ resultCode_t gnss_on()
  */
 resultCode_t gnss_off()
 {
-    if (atcmd_tryInvokeAdv("AT+QGPSEND", GNSS_TIMEOUTml, NULL))
+    if (atcmd_tryInvoke("AT+QGPSEND"))
     {
-        return atcmd_awaitResult(true).statusCode;
+        return atcmd_awaitResult();
     }
-    return RESULT_CODE_CONFLICT;
+    return resultCode__conflict;
 }
 
 
@@ -103,52 +104,46 @@ resultCode_t gnss_off()
  */
 gnssLocation_t gnss_getLocation()
 {
-    #define TOKEN_BUF_SZ 12
-
-    char tokenBuf[TOKEN_BUF_SZ] = {0};
-    char *continueAt;
+    char tokenBuf[12] = {0};
     gnssLocation_t gnssResult;
 
     //atcmd_t *gnssCmd = atcmd_build("AT+QGPSLOC=2", GNSS_CMD_RESULTBUF_SZ, 500, gnssLocCompleteParser);
     
     // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08  + lineEnds and OK
 
-    if (atcmd_tryInvokeAdv("AT+QGPSLOC=2", ACTION_TIMEOUTml, gnssLocCompleteParser))
+    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, gnssLocCompleteParser);
+    if (atcmd_awaitLock(atcmd__useDefaultTimeout))
     {
-        atcmdResult_t atResult = atcmd_awaitResult(false);
+        atcmd_invokeReuseLock("AT+QGPSLOC=2");
+        resultCode_t atResult = atcmd_awaitResult();
 
-        gnssResult.statusCode = atResult.statusCode;
-        if (atResult.statusCode != RESULT_CODE_SUCCESS)
-        {
-            atcmd_close();
+        gnssResult.statusCode = atResult;
+        if (atResult != resultCode__success)                                            // return on failure, continue on success
             return gnssResult;
-        }
 
-        PRINTF(DBGCOLOR_warn, "getLocation(): parse starting...\r");
-
-        continueAt = atResult.response + GNSS_LOC_DATAOFFSET;                           // skip past +QGPSLOC: 
-        continueAt = atcmd_strToken(continueAt, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);        // grab 1st element as a string
-        if (continueAt != NULL)
+        PRINTF(dbgColor__warn, "getLocation(): parse starting...\r");
+        char *continuePtr = atcmd_getLastResponse()  + GNSS_LOC_DATAOFFSET;             // skip past "+QGPSLOC: "
+        continuePtr = atcmd_strToken(continuePtr, ',', tokenBuf, sizeof(tokenBuf));     // grab 1st element as a string
+        if (continuePtr != NULL)
             strncpy(gnssResult.utc, tokenBuf, 11);
-        gnssResult.lat.val = strtof(continueAt, &continueAt);                           // grab a float
-        gnssResult.lat.dir = ASCII_cSPACE;
-        gnssResult.lon.val = strtof(++continueAt, &continueAt);                         // ++continueAt, pre-incr to skip previous comma
-        gnssResult.lon.dir = ASCII_cSPACE;
-        gnssResult.hdop = strtof(++continueAt, &continueAt);
-        gnssResult.altitude = strtof(++continueAt, &continueAt);
-        gnssResult.fixType = strtol(++continueAt, &continueAt, 10);                     // grab an integer
-        gnssResult.course = strtof(++continueAt, &continueAt);
-        gnssResult.speedkm = strtof(++continueAt, &continueAt);
-        gnssResult.speedkn = strtof(++continueAt, &continueAt);
-        continueAt = atcmd_strToken(continueAt + 1, ASCII_cCOMMA, tokenBuf, TOKEN_BUF_SZ);
-        if (continueAt != NULL)
+        gnssResult.lat.val = strtof(continuePtr, &continuePtr);                         // grab a float
+        gnssResult.lat.dir = ' ';
+        gnssResult.lon.val = strtof(++continuePtr, &continuePtr);                       // ++continuePtr, pre-incr to skip previous comma
+        gnssResult.lon.dir = ' ';
+        gnssResult.hdop = strtof(++continuePtr, &continuePtr);
+        gnssResult.altitude = strtof(++continuePtr, &continuePtr);
+        gnssResult.fixType = strtol(++continuePtr, &continuePtr, 10);                   // grab an integer
+        gnssResult.course = strtof(++continuePtr, &continuePtr);
+        gnssResult.speedkm = strtof(++continuePtr, &continuePtr);
+        gnssResult.speedkn = strtof(++continuePtr, &continuePtr);
+        continuePtr = atcmd_strToken(continuePtr + 1, ',', tokenBuf, sizeof(tokenBuf));
+        if (continuePtr != NULL)
             strncpy(gnssResult.date, tokenBuf, 7);
-        gnssResult.nsat = strtol(continueAt, &continueAt, 10);
+        gnssResult.nsat = strtol(continuePtr, &continuePtr, 10);
         atcmd_close();
+
+        PRINTF(dbgColor__warn, "getLocation(): parse completed\r");
     }
-    PRINTF(DBGCOLOR_warn, "getLocation(): parse completed\r");
-
-
     return gnssResult;
 }
 
@@ -166,8 +161,7 @@ gnssLocation_t gnss_getLocation()
 static resultCode_t gnssLocCompleteParser(const char *response, char **endptr)
 {
     //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr
-    resultCode_t result = atcmd_tokenResultParser(response, "+QGPSLOC:", ASCII_cCOMMA, GNSS_LOC_EXPECTED_TOKENCOUNT, ASCII_sOK, endptr);
-
+    resultCode_t result = atcmd_tokenResultParser(response, "+QGPSLOC:", ',', GNSS_LOC_EXPECTED_TOKENCOUNT, "OK\r\n", endptr);
     PRINTF(0, "gnssParser(): result=%i\r", result);
     return result;
 }

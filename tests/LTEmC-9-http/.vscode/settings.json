@@ -23,8 +23,7 @@
         "ltemc-mqtt.h": "c",
         "ltemc-filecodes.h": "c",
         "ltemc-atcmd.h": "c",
-        "ltemc-streams.h": "c",
-        "array": "c",
-        "*.tcc": "c"
+        "jlinkrtt.h": "c",
+        "ltemc-nxp-sc16is.h": "c"
     }
 }

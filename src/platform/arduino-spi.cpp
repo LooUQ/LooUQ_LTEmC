@@ -6,10 +6,11 @@
 * Each platform function has a matching Arduino C++ free-function to wrap arduino functions.
 ------------------------------------------------------------------------------------------------------------------------- */
 
-#include "lqPlatform-spi.h"
-//#include <Arduino.h>
+#include <Arduino.h>
 //#include <Wire.h>
 #include <SPI.h>
+
+#include "lqPlatform-spi.h"
 
 typedef struct arduino_spi_tag
 {
@@ -26,29 +27,22 @@ static arduino_spi_t arduino_spi_settings;
  *  \param chipSelLine [in] - GPIO for CS 
  *  \return SPI device
  */
-spiDevice_t *spi_create(uint8_t chipSelLine)
+void *spi_create(uint8_t chipSelLine)
 {
-    //spi_settings = new SPISettings(config.dataRate, (BitOrder)config.bitOrder, config.dataMode);
+    // spi_settings = SPISettings(config.dataRate, (BitOrder)config.bitOrder, config.dataMode);
 
-    spiDevice_t *spi = (spiDevice_t*)malloc(sizeof(spiDevice_t));
+    spi_t *spi = (spi_t*)malloc(sizeof(spi_t));
 	if (spi == NULL)
 	{
 		return NULL;
 	}	
 
-    spi->config = (spiConfig_t*)malloc(sizeof(spiConfig_t));
-	if (spi->config == NULL)
-	{
-        free(spi);
-		return NULL;
-	}
+    spi->dataRate = 2000000U;
+    spi->dataMode = spiDataMode_0;
+    spi->bitOrder = spiBitOrder_msbFirst;
+    spi->csPin = chipSelLine;
 
-    spi->config->dataRate = 2000000U;
-    spi->config->dataMode = spiDataMode_0;
-    spi->config->bitOrder = spiBitOrder_msbFirst;
-    spi->config->csPin = chipSelLine;
-
-    arduino_spi_settings.nxpSettings = SPISettings(spi->config->dataRate, (BitOrder)spi->config->bitOrder, spi->config->dataMode);
+    arduino_spi_settings.nxpSettings = SPISettings(spi->dataRate, (BitOrder)spi->bitOrder, spi->dataMode);
     arduino_spi_settings.irqNumber = SPI_NO_IRQ_PROTECTION;
 
     return spi;
@@ -59,10 +53,11 @@ spiDevice_t *spi_create(uint8_t chipSelLine)
 /**
  *	\brief Start SPI facility.
  */
-void spi_start(spiDevice_t *spi)
+void spi_start(void *spi)
 {
-    digitalWrite(spi->config->csPin, HIGH);
-    pinMode(spi->config->csPin, OUTPUT);
+    spi_t *spiPtr = (spi_t*)spi;
+    digitalWrite(spiPtr->csPin, HIGH);
+    pinMode(spiPtr->csPin, OUTPUT);
 
     SPI.begin();
 }
@@ -72,7 +67,7 @@ void spi_start(spiDevice_t *spi)
 /**
  *	\brief Shutdown SPI facility.
  */
-void spi_stop(spiDevice_t *spi)
+void spi_stop(void *spi)
 {
     SPI.end();
 }
@@ -82,7 +77,7 @@ void spi_stop(spiDevice_t *spi)
 /**
  *	\brief Uninitialize and deallocate memory from the SPI resource.
  */
-void spi_protectFromInterrupt(spiDevice_t *spi, int8_t irqNumber)
+void spi_protectFromInterrupt(void *spi, int8_t irqNumber)
 {
     if (irqNumber == SPI_NO_IRQ_PROTECTION)
         SPI.notUsingInterrupt(irqNumber);
@@ -100,14 +95,16 @@ void spi_protectFromInterrupt(spiDevice_t *spi, int8_t irqNumber)
  * 
  *  \returns A 16-bit word received during the transfer.
  */
-uint8_t spi_transferByte(spiDevice_t *spi, uint8_t data)
+uint8_t spi_transferByte(void *spi, uint8_t data)
 {
-    digitalWrite(spi->config->csPin, LOW);
+    spi_t *spiPtr = (spi_t*)spi;
+
+    digitalWrite(spiPtr->csPin, LOW);
     SPI.beginTransaction(arduino_spi_settings.nxpSettings);
 
     uint8_t result = SPI.transfer(data);
 
-    digitalWrite(spi->config->csPin, HIGH);
+    digitalWrite(spiPtr->csPin, HIGH);
     SPI.endTransaction();
     return result;
 }
@@ -122,15 +119,16 @@ uint8_t spi_transferByte(spiDevice_t *spi, uint8_t data)
  * 
  *  \returns A 16-bit word received during the transfer.
  */
-uint16_t spi_transferWord(spiDevice_t *spi, uint16_t data)
+uint16_t spi_transferWord(void *spi, uint16_t data)
 {
     union { uint16_t val; struct { uint8_t msb; uint8_t lsb; }; } t;
+    spi_t *spiPtr = (spi_t*)spi;
 
-    digitalWrite(spi->config->csPin, LOW);
+    digitalWrite(spiPtr->csPin, LOW);
     SPI.beginTransaction(arduino_spi_settings.nxpSettings);
 
     t.val = data;
-    if (spi->config->bitOrder == spiBitOrder_msbFirst)
+    if (spiPtr->bitOrder == spiBitOrder_msbFirst)
     {
         t.msb = SPI.transfer(t.msb);
         t.lsb = SPI.transfer(t.lsb);
@@ -141,7 +139,7 @@ uint16_t spi_transferWord(spiDevice_t *spi, uint16_t data)
         t.msb = SPI.transfer(t.msb);
     }
     
-    digitalWrite(spi->config->csPin, HIGH);
+    digitalWrite(spiPtr->csPin, HIGH);
     SPI.endTransaction();
 
     return t.val;
@@ -157,15 +155,17 @@ uint16_t spi_transferWord(spiDevice_t *spi, uint16_t data)
  *  \param buf [in/out] - The character pointer to the buffer to transfer to/from.
  *  \param xfer_len [in] - The number of characters to transfer.
  */
-void spi_transferBuffer(spiDevice_t *spi, uint8_t regAddrByte, void* buf, size_t xfer_len)
+void spi_transferBuffer(void *spi, uint8_t regAddrByte, void* buf, size_t xfer_len)
 {
-    digitalWrite(spi->config->csPin, LOW);
+    spi_t *spiPtr = (spi_t*)spi;
+
+    digitalWrite(spiPtr->csPin, LOW);
     SPI.beginTransaction(arduino_spi_settings.nxpSettings);
 
     SPI.transfer(regAddrByte);
     SPI.transfer(buf, xfer_len);
 
-    digitalWrite(spi->config->csPin, HIGH);
+    digitalWrite(spiPtr->csPin, HIGH);
     SPI.endTransaction();
 }
 

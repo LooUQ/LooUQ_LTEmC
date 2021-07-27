@@ -49,13 +49,26 @@ extern "C"
 #include <stdint.h>
 #endif // __cplusplus
 
-uint32_t lMillis();
-void lYield();
+/* transition to new names 
+
+// uint32_t lMillis();
+// void lYield();
+
+// // platform implementation should support task switching here
+// void lDelay(uint32_t delay_ms);
+
+// bool lTimerExpired(uint32_t timerBase, uint32_t timerTimeout);
+*/
+
+
+uint32_t pMillis();
+void pYield();
 
 // platform implementation should support task switching here
-void lDelay(uint32_t delay_ms);
+void pDelay(uint32_t delay_ms);
 
-bool lTimerExpired(uint32_t timerBase, uint32_t timerTimeout);
+bool pElapsed(uint32_t timerBase, uint32_t timerTimeout);
+
 
 #ifdef __cplusplus
 }

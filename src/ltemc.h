@@ -26,70 +26,76 @@
 #ifndef __LTEMC_H__
 #define __LTEMC_H__
 
-#ifdef __cplusplus
-extern "C"
-#include <cstdint>
-#include <cstdlib>
-#include <cstdbool>
-#else
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#endif // __cplusplus
 
-#include "lq-types.h"
+// Internal static buffers you may need to change for your application. Contact LooUQ for details.
+// #define IOP_RX_COREBUF_SZ 256
+// #define IOP_TX_BUFFER_SZ 1460
 
-#include "lqPlatform.h"
-#include "ltemc-nxp-sc16is.h"
+#include <lq-types.h>
+#include <lq-assert.h>
+
+#include "lq-platform.h"
 #include "ltemc-quectel-bg.h"
-
 #include "ltemc-iop.h"
 #include "ltemc-atcmd.h"
 #include "ltemc-mdminfo.h"
 #include "ltemc-network.h"
 
-/* Optional services
- ------------------------------------------------------------------------------------- */
-#include "ltemc-tls.h"
-#include "ltemc-sockets.h"
-#include "ltemc-mqtt.h"
-#include "ltemc-http.h"
 
-#include "ltemc-gnss.h"
-#include "ltemc-geo.h"
+// // optional services
+// #include "ltemc-sckt.h"
+// #include "ltemc-mqtt.h"
+// #include "ltemc-http.h"
+// #include "ltemc-gnss.h"
+// #include "ltemc-geo.h"
 
-//#include "ltemc-filesys.h"
 /* ----------------------------------------------------------------------------------- */
 
-
-/** 
- *  \brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
- * 
- *  Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
-*/
-typedef struct ltemDevice_tag
-{
-    // ltem1Functionality_t funcLevel;  ///< Enum value indicating services enabled during ltemC startup.
-	ltemPinConfig_t pinConfig;          ///< GPIO pin configuration for required GPIO and SPI interfacing.
-    spiDevice_t *spi;                   ///< SPI device (methods signatures compatible with Arduino).
-    qbgReadyState_t qbgReadyState;      ///< Ready state of the BGx module
-    appNotify_func appNotifyCB;         ///< Notification callback to application
-    uint8_t dataContext;                ///< The primary APN context with the network carrier for application transfers.
-    volatile iop_t *iop;                ///< IOP subsystem controls.
-    atcmd_t *atcmd;                     ///< Action subsystem controls.
-    bool cancellationRequest;           ///< For RTOS implementations, token to request cancellation of long running task/action.
-	modemInfo_t *modemInfo;             ///< Data structure holding persistent information about application modem state.
-    network_t *network;                 ///< Data structure representing the cellular network.
-
-    /* optional services                only taking room for some pointers if not implemented */
-	void *sockets;                      ///< IP sockets subsystem (TCP/UDP/SSL).
-    void (*scktWork_func)();            ///< Sockets background do work function
-    void *mqtt;                         ///< MQTT protocol subsystem.
-    void (*mqttWork_func)();            ///< MQTT background do work function
-} ltemDevice_t;
+// typedef enum ltemcOptions_tag              // binary-OR'd list of buildable options
+// {
+//     ltemcOptions_none = 0x0000,         
+//     ltemcOptions_sockets = 0x0001,         
+//     ltemcOptions_mqtt = 0x0002,
+//     ltemcOptions_gnss = 0x0004,
+//     ltemcOptions_geofence = 0x0008,
+//     ltemcOptions_http = 0x0010,
+//     ltemcOptions_file = 0x0020
+// } ltemcOptions_t;
 
 
-extern ltemDevice_t *g_ltem;            ///< The LTEm "object". Since this is C99, like the instance object.
+
+// /** 
+//  *  \brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
+//  * 
+//  *  Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
+// */
+// typedef struct ltemDevice_tag
+// {
+//     // ltem1Functionality_t funcLevel;  ///< Enum value indicating services enabled during ltemC startup.
+// 	ltemPinConfig_t pinConfig;          ///< GPIO pin configuration for required GPIO and SPI interfacing.
+//     spiDevice_t *spi;                   ///< SPI device (methods signatures compatible with Arduino).
+//     // uint16_t faultCode;                 ///< debugging fault code set by driver ASSERT flows
+//     qbgReadyState_t qbgReadyState;      ///< Ready state of the BGx module
+//     appNotifyFunc_t appNotifyCB;         ///< Notification callback to application
+//     uint8_t pdpContext;                 ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.
+//     volatile iop_t *iop;                ///< IOP subsystem controls.
+//     atcmd_t *atcmd;                     ///< Action subsystem controls.
+// 	modemInfo_t *modemInfo;             ///< Data structure holding persistent information about application modem state.
+//     network_t *network;                 ///< Data structure representing the cellular network.
+//     bool cancellationRequest;           ///< For RTOS implementations, token to request cancellation of long running task/action.
+
+//     // /* optional services                only taking room for some pointers if not implemented */
+// 	// void *sockets;                      ///< IP sockets subsystem (TCP/UDP/SSL).
+//     // void (*scktWork_func)();            ///< Sockets background do work function
+//     // void *mqtt;                         ///< MQTT protocol subsystem.
+//     // void (*mqttWork_func)();            ///< MQTT background do work function
+
+//     // array of function pointers to each protocol doWork(), create protoCtrl factory will init()
+//     // needed for sockets, ...
+// } ltemDevice_t;
+
+
+// extern ltemDevice_t *g_ltem;            ///< The LTEm "object". Since this is C99, like the instance object.
 
 
 #ifdef __cplusplus
@@ -97,10 +103,10 @@ extern "C"
 {
 #endif // __cplusplus
 
-void ltem_create(const ltemPinConfig_t ltem_config, appNotify_func appNotifyCB);
+void ltem_create(const ltemPinConfig_t ltem_config, appNotifyFunc_t appNotifyCB);
 void ltem_destroy();
 
-void ltem_start(uint16_t protocolBitMap);
+void ltem_start();
 void ltem_stop();
 void ltem_reset();
 bool ltem_chkHwReady();
@@ -108,11 +114,8 @@ qbgReadyState_t ltem_getReadyState();
 
 void ltem_doWork();
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
+void ltem_notifyAssert(uint16_t faultCode)   __attribute__ ((noreturn));
 void ltem_setYieldCb(platform_yieldCB_func_t yieldCb_func);
-
-// semi-private functions, not intended for most application but not static for special needs
-void ltem__initIo();
-
 
 #ifdef __cplusplus
 }

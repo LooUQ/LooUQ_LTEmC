@@ -31,31 +31,33 @@
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+#if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #if _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #else
+    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-
-// define options for how to assemble this build
+                                        // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
 #include <ltemc.h>
-
-#include <lq-collections.h>            // LooUQ Common collections for this test
+#include <lq-assert.h>
+#include <lq-collections.h>             // using LooUQ collections with mqtt
+#include <ltemc-tls.h>
+#include <ltemc-mqtt.h>
 
 #define DEFAULT_NETWORK_CONTEXT 1
 #define XFRBUFFER_SZ 201
 #define SOCKET_ALREADYOPEN 563
 
-#define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
-#define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') appNotifyCB(255, failMsg)
+// #define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
+// #define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') appNotifyCB(255, failMsg)
 
 
 /* Test is designed for use with Azure IoTHub. If you do not have a Azure subscription you can get a free test account with a preloaded credit.
@@ -102,11 +104,12 @@ uint16_t loopCnt = 1;
 uint32_t lastCycle;
 
 
-// ltem1 variables
-socketResult_t result;
-socketId_t mqttConnectionId = 1;
-char mqttTopic[200];
-char mqttMessage[200];
+// LTEm variables
+mqttCtrl_t mqttCtrl;                // MQTT control, data to manage MQTT connection to server
+uint8_t recvBuf[640];               // Data buffer where received information is returned (can be local, global, or dynamic... your call)
+char mqttTopic[200];                // application buffer to craft MQTT topic
+char mqttMessage[200];              // application buffer to craft MQTT publish content (body)
+resultCode_t result;
 
 
 void setup() {
@@ -119,18 +122,18 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_red, "\rLTEm1c test8-MQTT\r\n");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
+    PRINTF(dbgColor__red, "\rLTEm1c test8-MQTT\r\n");
+
+    assert_init(NULL, appNotifyCB);
 
     ltem_create(ltem_pinConfig, appNotifyCB);
-    mqtt_create();
-    ltem_start(pdpProtocol_mqtt);
+    ltem_start();
 
-    PRINTF(DBGCOLOR_none, "Waiting on network...\r");
+    PRINTF(dbgColor__none, "Waiting on network...\r");
     networkOperator_t networkOp = ntwk_awaitOperator(30000);
     if (strlen(networkOp.operName) == 0)
         appNotifyCB(255, "Timout (30s) waiting for cellular network.");
-    PRINTF(DBGCOLOR_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
+    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     uint8_t cntxtCnt = ntwk_getActivePdpCntxtCnt();
     if (cntxtCnt == 0)
@@ -139,34 +142,38 @@ void setup() {
     }
 
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
-    */
+     * Azure requires TLS 1.2 and MQTT version 3.11 */
 
-    // Azure requires TLS 1.2, MQTT is fixed to data context 5
-    tls_configure(dataContextId_5, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    tls_configure(dataContext_5, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    mqtt_initControl(&mqttCtrl, dataContext_5, mqtt__useTls, mqttVersion_311, recvBuf, sizeof(recvBuf), mqttRecvCB);
 
-    ASSERT(mqtt_open(MQTT_IOTHUB, MQTT_PORT, true, mqttVersion_311) == RESULT_CODE_SUCCESS, "MQTT open failed.");
-    ASSERT(mqtt_connect(MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN, mqttSession_cleanStart) == RESULT_CODE_SUCCESS,"MQTT connect failed.");
-    ASSERT(mqtt_subscribe(MQTT_IOTHUB_C2D_TOPIC, mqttQos_1, mqttReceiver) == RESULT_CODE_SUCCESS, "MQTT subscribe to IoTHub C2D messages failed.");
+    if(mqtt_open(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT) != resultCode__success)
+        appNotifyCB(255, "MQTT open failed");
 
-    lastCycle = lMillis();
+    if(mqtt_connect(&mqttCtrl, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN, mqttSession_cleanStart) != resultCode__success)
+        appNotifyCB(255, "MQTT connect failed.");
+
+    if(mqtt_subscribe(&mqttCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1) != resultCode__success)
+        appNotifyCB(255, "MQTT subscribe to IoTHub C2D messages failed.");
+
+    lastCycle = pMillis() - CYCLE_INTERVAL;
 }
-
 
 
 void loop() 
 {
-    if (lTimerExpired(lastCycle, CYCLE_INTERVAL))
+    if (pElapsed(lastCycle, CYCLE_INTERVAL))
     {
-        lastCycle = lMillis();
+        lastCycle = pMillis();
 
         double windspeed = random(0, 4999) * 0.01;
 
         snprintf(mqttTopic, 200, MQTT_MSG_BODY_TEMPLATE, loopCnt, windspeed);
         snprintf(mqttMessage, 200, "MQTT message for loop=%d", loopCnt);
-        mqtt_publish(mqttTopic, mqttQos_1, mqttMessage);
+        mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage);
 
         loopCnt++;
-        PRINTF(DBGCOLOR_magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
+        PRINTF(dbgColor__magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
     }
 
     /* NOTE: ltem1_doWork() pipeline requires up to 3 invokes for each data receive. DoWork has no side effects 
@@ -174,20 +181,19 @@ void loop()
     ltem_doWork();
 }
 
-
-void mqttReceiver(char *topic, char *topicProps, char *message)
+void mqttRecvCB(dataContext_t cntxt, uint8_t topicIndx, char *topicProps, char *message, uint16_t messageSz)
 {
-    PRINTF(DBGCOLOR_info, "\r**MQTT--MSG** @tick=%d\r", lMillis());
-    PRINTF(DBGCOLOR_cyan, "\rt(%d): %s", strlen(topic), topic);
-    PRINTF(DBGCOLOR_cyan, "\rp(%d): %s", strlen(topicProps), topicProps);
-    PRINTF(DBGCOLOR_cyan, "\rm(%d): %s", strlen(message), message);
+    PRINTF(dbgColor__info, "\r**MQTT--MSG** @tick=%d\r", pMillis());
+    PRINTF(dbgColor__cyan, "\r topicId(%d): %d", topicIndx);
+    PRINTF(dbgColor__cyan, "\r   props(%d): %s", strlen(topicProps), topicProps);
+    PRINTF(dbgColor__cyan, "\r message(%d): %s", strlen(message), message);
 
     // use local copy of LQ Cloud query string processor
     keyValueDict_t mqttProps = lq_createQryStrDictionary(topicProps, strlen(topicProps));
-    PRINTF(DBGCOLOR_info, "\rProps(%d)\r", mqttProps.count);
+    PRINTF(dbgColor__info, "\rProps(%d)\r", mqttProps.count);
     for (size_t i = 0; i < mqttProps.count; i++)
     {
-        PRINTF(DBGCOLOR_cyan, "%s=%s\r", mqttProps.keys[i], mqttProps.values[i]);
+        PRINTF(dbgColor__cyan, "%s=%s\r", mqttProps.keys[i], mqttProps.values[i]);
     }
     PRINTF(0, "\r");
 }
@@ -199,8 +205,8 @@ void mqttReceiver(char *topic, char *topicProps, char *message)
 
 void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
-	PRINTF(DBGCOLOR_error, "\r\n** %s \r\n", notifMsg);
-    PRINTF(DBGCOLOR_error, "** Test Assertion Failed. \r\n");
+	PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
+    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
 
     int halt = 1;
     while (halt) {}

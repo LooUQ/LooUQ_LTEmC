@@ -28,6 +28,7 @@
 #ifndef __LTEMC_TLS_H__
 #define __LTEMC_TLS_H__
 
+#include "ltemc-streams.h"
 
 /** 
  *  \brief Enum of available SSL version options for an SSL connection. 
@@ -118,9 +119,9 @@ extern "C"
 {
 #endif // __cplusplus
 
-bool tls_configure(dataContextId_t contxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel);
+bool tls_configure(dataContext_t contxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel);
 
-tlsOptions_t tlsGetOptions(dataContextId_t cntxt);
+tlsOptions_t tlsGetOptions(dataContext_t cntxt);
 
 
 /* Maintenance of customer trustd root (TR) certificates requires the file_ module functionality (under developement Q3-2021)

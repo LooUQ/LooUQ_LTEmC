@@ -25,7 +25,7 @@
  * Manages module genaral and non-protocol cellular radio functions
  *****************************************************************************/
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -33,26 +33,37 @@
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
 
+#include "ltemc-quectel-bg.h"
+#include "ltemc-internal.h"
 
-#include "ltemc.h"
 
-#define BG96_INIT_COMMAND_COUNT 1
+enum
+{
+    BGX__initCommandCnt = 1,
+    BGX__initCommandAttempts = 2,
+    BGX__powerOnDelay = 500,
+    BGX__powerOffDelay = 1500,
+    BGX__resetDelay = 300,
+    BGX__baudRate = 115200
+};
+
 const char* const qbg_initCmds[] = 
 { 
     "ATE0",             // don't echo AT commands on serial
 };
 
-
-#pragma region private functions
-/* --------------------------------------------------------------------------------------------- */
+extern ltemDevice_t g_ltem;
 
 
-#pragma endregion
+/* Private static functions
+ --------------------------------------------------------------------------------------------- */
+bool S_issueStartCommand(const char *cmdStr);
 
 
 #pragma region public functions
@@ -65,7 +76,7 @@ const char* const qbg_initCmds[] =
  */
 bool qbg_isPowerOn()
 {
-    return gpio_readPin(g_ltem->pinConfig.statusPin);
+    return gpio_readPin(g_ltem.pinConfig.statusPin);
 }
 
 
@@ -75,30 +86,30 @@ bool qbg_isPowerOn()
  */
 void qbg_powerOn()
 {
-    if (gpio_readPin(g_ltem->pinConfig.statusPin))
+    if (gpio_readPin(g_ltem.pinConfig.statusPin))
     {
-        PRINTF(DBGCOLOR_dGreen, "LTEm1 already powered on.");
-        g_ltem->qbgReadyState = qbg_readyState_powerOn;
+        PRINTF(dbgColor__dGreen, "LTEm already powered on.");
+        g_ltem.qbgReadyState = qbg_readyState_powerOn;
         return true;
     }
 
-    PRINTF(DBGCOLOR_dGreen, "Powering LTEm1 On...");
-    gpio_writePin(g_ltem->pinConfig.powerkeyPin, gpioValue_high);
-    lDelay(QBG_POWERON_DELAY);
-    gpio_writePin(g_ltem->pinConfig.powerkeyPin, gpioValue_low);
+    PRINTF(dbgColor__dGreen, "Powering LTEm On...");
+    gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
+    pDelay(BGX__powerOnDelay);
+    gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
 
     uint8_t attempts = 0;
-    while (attempts++ < 10)             // wait for status=ready
+    while (attempts++ < 20)             // wait for status=ready
     {
-        if (gpio_readPin(g_ltem->pinConfig.statusPin))
+        if (gpio_readPin(g_ltem.pinConfig.statusPin))
         {
-            g_ltem->qbgReadyState = qbg_readyState_powerOn;
-            PRINTF(DBGCOLOR_dGreen, "DONE\r");
+            g_ltem.qbgReadyState = qbg_readyState_powerOn;
+            PRINTF(dbgColor__dGreen, "DONE\r");
             return false;
         }
-        lDelay(500);                    // allow background tasks to operate
+        pDelay(500);                    // allow background tasks to operate
     }
-    PRINTF(DBGCOLOR_warn, "FAILED\r");
+    PRINTF(dbgColor__warn, "FAILED\r");
     return false;
 }
 
@@ -108,14 +119,14 @@ void qbg_powerOn()
  */
 void qbg_powerOff()
 {
-    PRINTF(dbgColor_none, "Powering LTEm1 Off\r");
-	gpio_writePin(g_ltem->pinConfig.powerkeyPin, gpioValue_high);
-	lDelay(QBG_POWEROFF_DELAY);
-	gpio_writePin(g_ltem->pinConfig.powerkeyPin, gpioValue_low);
+    PRINTF(dbgColor__none, "Powering LTEm Off\r");
+	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
+	pDelay(BGX__powerOffDelay);
+	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
 
-    while (gpio_readPin(g_ltem->pinConfig.statusPin))
+    while (gpio_readPin(g_ltem.pinConfig.statusPin))
     {
-        lDelay(500);          // allow background tasks to operate
+        pDelay(500);          // allow background tasks to operate
     }
 }
 
@@ -125,55 +136,35 @@ void qbg_powerOff()
  */
 void qbg_reset()
 {
-    PRINTF(dbgColor_none, "Reseting LTEm1\r");
-    g_ltem->qbgReadyState = qbg_readyState_powerOn;
-    iop_txSend("AT\r", 3, true);
-    iop_txSend("AT+CFUN=1,1\r", 11, true);
-    while (!gpio_readPin(g_ltem->pinConfig.statusPin))
+    PRINTF(dbgColor__none, "Reseting LTEm\r");
+    g_ltem.qbgReadyState = qbg_readyState_powerOn;
+    IOP_txSend("AT\r", 3, true);
+    IOP_txSend("AT+CFUN=1,1\r", 11, true);
+    while (!gpio_readPin(g_ltem.pinConfig.statusPin))
     {
-        lDelay(500);          // allow background tasks to operate
+        pDelay(500);          // allow background tasks to operate
     }
 }
 
 
-#define INIT_MAX_ATTEMPTS 2
 /**
  *	\brief Initializes the BGx module.
  */
 void qbg_start()
 {
-    uint8_t attempts = 0;
-    atcmdResult_t atResult = {.statusCode = RESULT_CODE_TIMEOUT};
-
-    qbg_startRetry:
-
-    // toss out an empty AT command to flush any debris in the command channel
     atcmd_tryInvoke("AT");
-    atcmd_awaitResult(true);
+    atcmd_awaitResult();
 
     // init BGx state
-    for (size_t i = 0; i < BG96_INIT_COMMAND_COUNT; i++)
+    for (size_t i = 0; i < BGX__initCommandCnt; i++)                                                    // sequence through list of start cmds
     {
-
-        if (atcmd_tryInvoke(qbg_initCmds[i]))
+        if (!S_issueStartCommand(qbg_initCmds[i]))
         {
-            if (atcmd_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
-            {
-                while(attempts < INIT_MAX_ATTEMPTS)
-                {
-                    attempts++;
-                    PRINTF(dbgColor_warn, "BGx reseting: init failed!\r");
-                    qbg_powerOff();
-                    qbg_powerOn();
-                    iop_awaitAppReady();
-                    goto qbg_startRetry;
-                }
-                ltem_notifyApp(ltemNotifType_hwInitFailed, "qbg-start() init sequence failed");
-            }
+            ltem_notifyApp(lqNotificationType_lqDevice_hwFault, "qbg-start() init sequence failed");    // send notification, maybe app can recover
+            break;
         }
     }
 }
-
 
 
 /**
@@ -193,10 +184,8 @@ void qbg_setNwScanSeq(const char* sequence)
         0 Take effect after UE reboots
         1 Take effect immediately
     */
-    char atCmd[DFLT_ATBUFSZ] = {0};
-    snprintf(atCmd, DFLT_ATBUFSZ, "AT+QCFG=\"nwscanseq\",%s", sequence);
-    atcmd_tryInvoke(atCmd);
-    atcmd_awaitResult(true);
+    atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", sequence);
+    atcmd_awaitResult();
 }
 
 
@@ -215,12 +204,9 @@ void qbg_setNwScanMode(qbg_nw_scan_mode_t mode)
         0 Take effect after UE reboots
         1 Take effect immediately    
     */
-    char atCmd[DFLT_ATBUFSZ] = {0};
-    snprintf(atCmd, DFLT_ATBUFSZ, "AT+QCFG=\"nwscanmode\",%d", mode);
-    atcmd_tryInvoke(atCmd);
-    atcmd_awaitResult(true);
+    atcmd_tryInvokeDefault("AT+QCFG=\"nwscanmode\",%d", mode);
+    atcmd_awaitResult();
 }
-
 
 
 /** 
@@ -238,10 +224,30 @@ void qbg_setIotOpMode(qbg_nw_iot_mode_t mode)
         0 Take effect after UE reboots
         1 Take effect immediately
     */
-    char atCmd[DFLT_ATBUFSZ] = {0};
-    snprintf(atCmd, DFLT_ATBUFSZ, "AT+QCFG=\"iotopmode\",%d", mode);
-    atcmd_tryInvoke(atCmd);
-    atcmd_awaitResult(true);
+    atcmd_tryInvokeDefault("AT+QCFG=\"iotopmode\",%d", mode);
+    atcmd_awaitResult();
 }
 
 #pragma endregion
+
+
+bool S_issueStartCommand(const char *cmdStr)
+{
+    uint8_t attempts = 0;
+    do
+    {
+        if (atcmd_tryInvoke(cmdStr) && atcmd_awaitResult() == resultCode__success)
+            return true;
+
+        attempts++;
+        PRINTF(dbgColor__warn, "Reseting BGx and retrying start cmd: %s\r", cmdStr);
+        qbg_powerOff();                                                                 // power OFF\ON here to also reset SPI UART
+        qbg_powerOn();
+        IOP_awaitAppReady();
+        
+        atcmd_tryInvoke("AT");                                                  // toss out an empty AT command to flush any debris in the command channel
+        atcmd_awaitResult();
+    } while (attempts <= BGX__initCommandAttempts);
+
+    return false;
+}

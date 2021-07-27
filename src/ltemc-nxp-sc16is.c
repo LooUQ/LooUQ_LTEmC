@@ -27,7 +27,7 @@
 
 #define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+#if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
     #if _DEBUG == 1
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
@@ -35,59 +35,90 @@
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
     #endif
 #else
-#define PRINTF(c_, f_, ...) ;
+#define PRINTF(c_, f_, ...) 
 #endif
 
-
-#include "ltemc.h"
-// #include <string.h>
-
-#define REG_MODIFY(REG_NAME, MODIFY_ACTION) \
-REG_NAME REG_NAME##_reg = {0}; \
-REG_NAME##_reg.reg = sc16is741a_readReg(REG_NAME##_ADDR); \
-MODIFY_ACTION \
-sc16is741a_writeReg(REG_NAME##_ADDR, REG_NAME##_reg.reg);
+#include "ltemc-nxp-sc16is.h"
+#include "ltemc-internal.h"
+#include "lq-platform.h"
 
 
-// BG96 default baudrate is 115200, LTEm1 raw clock is 7.378MHz (SC16IS741a pg13)
-#define BAUDCLOCK_DIVISOR_DLL 0x04U
-#define BAUDCLOCK_DIVISOR_DLH 0x00U
-
-// Bridge<>BG96 UART framing - 8 data, no parity, 1 stop (bits)
-#define SC16IS741A_LCR_UART_FRAMING 0x03U
-//#define SC16IS741A_EFR_ENHANCED_FUNCTIONS 0x10U
-
-// [7:4] RX, [3:0] TX - level / 4 (buffer granularity is 4)
-#define SC16IS741A_TLR_TRIGGER_LEVELS 0x22U							// **!** testing value **!**
-//#define SC16IS741A_TLR_TRIGGER_LEVELS 0xFFU					    // 15 (*4) = 60 char buffer
-
-// fcr is a RdOnly register, flush and FIFO enable are both in this register 
-#define FCR_REGISTER_VALUE_BASIC_MODE 0xB7U
-#define FCR_REGISTER_VALUE_IOP_FIFO_ENABLE 0xB1U
-#define FCR_REGISTER_VALUE_IOP_RX_FLUSH 0x02U
-#define FCR_REGISTER_VALUE_IOP_TX_FLUSH 0x04U
+#define REG_MODIFY(REG_NAME, MODIFY_ACTION)                 \
+REG_NAME REG_NAME##_reg = {0};                              \
+REG_NAME##_reg.reg = SC16IS741A_readReg(REG_NAME##_ADDR);   \
+MODIFY_ACTION                                               \
+SC16IS741A_writeReg(REG_NAME##_ADDR, REG_NAME##_reg.reg);
 
 
+enum SC16IS741A__constants
+{
+    SC16IS741A__BAUDCLOCK_DIVISOR_DLL = 0x04U,
+    SC16IS741A__BAUDCLOCK_DIVISOR_DLH = 0x00U,
 
-/* Public fuctions
-------------------------------------------------------------------------------------------------------------------------- */
+    // Bridge<>BG96 UART framing - 8 data, no parity, 1 stop (bits)
+    SC16IS741A__SC16IS741A_LCR_UART_FRAMING = 0x03U,
+    //SC16IS741A__SC16IS741A_EFR_ENHANCED_FUNCTIONS = 0x10U
 
-#pragma region bridgeSetup
+    // [7:4] RX, [3:0] TX - level / 4 (buffer granularity is 4)
+    SC16IS741A__SC16IS741A_TLR_TRIGGER_LEVELS = 0x22U,						// **!** testing value **!**
+    //SC16IS741A__SC16IS741A_TLR_TRIGGER_LEVELS = 0xFFU					    // 15 (*4) = 60 char buffer
 
+    // fcr is a RdOnly register, flush and FIFO enable are both in this register 
+    SC16IS741A__FCR_REGISTER_VALUE_BASIC_MODE = 0xB7U,
+    SC16IS741A__FCR_REGISTER_VALUE_IOP_FIFO_ENABLE = 0xB1U,
+    SC16IS741A__FCR_REGISTER_VALUE_IOP_RX_FLUSH = 0x02U,
+    SC16IS741A__FCR_REGISTER_VALUE_IOP_TX_FLUSH = 0x04U
+};
+
+
+// // BG96 default baudrate is 115200, LTEm1 raw clock is 7.378MHz (SC16IS741a pg13)
+// #define BAUDCLOCK_DIVISOR_DLL 0x04U
+// #define BAUDCLOCK_DIVISOR_DLH 0x00U
+
+// // Bridge<>BG96 UART framing - 8 data, no parity, 1 stop (bits)
+// #define SC16IS741A_LCR_UART_FRAMING 0x03U
+// //#define SC16IS741A_EFR_ENHANCED_FUNCTIONS 0x10U
+
+// // [7:4] RX, [3:0] TX - level / 4 (buffer granularity is 4)
+// #define SC16IS741A_TLR_TRIGGER_LEVELS 0x22U							// **!** testing value **!**
+// //#define SC16IS741A_TLR_TRIGGER_LEVELS 0xFFU					    // 15 (*4) = 60 char buffer
+
+// // fcr is a RdOnly register, flush and FIFO enable are both in this register 
+// #define FCR_REGISTER_VALUE_BASIC_MODE 0xB7U
+// #define FCR_REGISTER_VALUE_IOP_FIFO_ENABLE 0xB1U
+// #define FCR_REGISTER_VALUE_IOP_RX_FLUSH 0x02U
+// #define FCR_REGISTER_VALUE_IOP_TX_FLUSH 0x04U
+
+extern ltemDevice_t g_ltem;
+
+
+#pragma region Public Functions
+/*-----------------------------------------------------------------------------------------------*/
+#pragma endregion
+
+
+#pragma region LTEm Internal Functions
+
+/* Static Local Functions Declarations
+------------------------------------------------------------------------------------------------ */
+void S_displayFifoStatus(const char *dispMsg);
+
+
+#pragma region Bridge Initialization
 
 /**
 *	\brief Configure NXP bridge HW in basic mode (no IRQ, no level triggering).
 */
-void sc16is741a_start()
+void SC16IS741A_start()
 {
     // start with a known state on NXP bridge, soft-reset bridge
-    sc16is741a_writeReg(SC16IS741A_UARTRST_ADDR, SC16IS741A_SW_RESET_MASK);
+    SC16IS741A_writeReg(SC16IS741A_UARTRST_ADDR, sc16is741a__LTEM_SW_resetMask);
 
 	//enableFifo(true);
     //Need EFR[4]=1 to enable bridge enhanced functions: TX trigger and TLR settings for IRQ
-    sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_ENHANCED);
+    SC16IS741A_writeReg(SC16IS741A_LCR_ADDR, sc16is741a__LTEM_RegSet_enhanced);
     REG_MODIFY(SC16IS741A_EFR, SC16IS741A_EFR_reg.ENHANCED_FNS_EN = 1;)
-    sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_GENERAL);
+    SC16IS741A_writeReg(SC16IS741A_LCR_ADDR, sc16is741a__LTEM_RegSet_general);
 
     /* Using FCR for trigger\interrupt generation 
             (NXP SC16IS741A manual section 8.13)
@@ -100,7 +131,7 @@ void sc16is741a_start()
 	fcrRegister.FIFO_EN = 1;
     fcrRegister.RX_TRIGGER_LVL = (int)RX_LVL_56CHARS;
     fcrRegister.TX_TRIGGER_LVL = (int)TX_LVL_56SPACES;
-	sc16is741a_writeReg(SC16IS741A_FCR_ADDR, fcrRegister.reg);
+	SC16IS741A_writeReg(SC16IS741A_FCR_ADDR, fcrRegister.reg);
 
  	// // // MCR[2] set(1) = TLR enable
 	// REG_MODIFY(SC16IS741A_MCR, SC16IS741A_MCR_reg.TCR_TLR_EN = 1;) 
@@ -111,42 +142,42 @@ void sc16is741a_start()
 	// SC16IS741A_TLR tlrSetting = {0};
 	// tlrSetting.RX_TRIGGER_LVL = 0x0C;                           // 48 chars (12x4)
 	// tlrSetting.TX_TRIGGER_LVL = 0x0C;                           // 48 spaces (12x4)
-	// sc16is741a_writeReg(SC16IS741A_TLR_ADDR, tlrSetting.reg);
+	// SC16IS741A_writeReg(SC16IS741A_TLR_ADDR, tlrSetting.reg);
 
     //startUart();
 	// set baudrate, starts clock and UART
-	sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_SPECIAL);
-	sc16is741a_writeReg(SC16IS741A_DLL_ADDR, BAUDCLOCK_DIVISOR_DLL);
-	sc16is741a_writeReg(SC16IS741A_DLH_ADDR, BAUDCLOCK_DIVISOR_DLH);
-	sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_REG_SET_GENERAL);
+	SC16IS741A_writeReg(SC16IS741A_LCR_ADDR, sc16is741a__LTEM_RegSet_special);
+	SC16IS741A_writeReg(SC16IS741A_DLL_ADDR, SC16IS741A__BAUDCLOCK_DIVISOR_DLL);
+	SC16IS741A_writeReg(SC16IS741A_DLH_ADDR, SC16IS741A__BAUDCLOCK_DIVISOR_DLH);
+	SC16IS741A_writeReg(SC16IS741A_LCR_ADDR, sc16is741a__LTEM_RegSet_general);
 
 	// set byte framing on the wire:  8 data, no parity, 1 stop required by BG96
-	sc16is741a_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A_LCR_UART_FRAMING);
+	SC16IS741A_writeReg(SC16IS741A_LCR_ADDR, SC16IS741A__SC16IS741A_LCR_UART_FRAMING);
 }
 
 
 /**
  *	\brief Enable IRQ servicing for communications between SC16IS741 and BG96.
  */
-void sc16is741a_enableIrqMode()
+void SC16IS741A_enableIrqMode()
 {
    	// IRQ Enabled: RX chars available, TX spaces available, UART framing error
 	SC16IS741A_IER ierSetting = {0};
 	ierSetting.RHR_DATA_AVAIL_INT_EN = 1;
 	ierSetting.THR_EMPTY_INT_EN = 1; 
     ierSetting.RECEIVE_LINE_STAT_INT_EN = 1;
-	sc16is741a_writeReg(SC16IS741A_IER_ADDR, ierSetting.reg);
+	SC16IS741A_writeReg(SC16IS741A_IER_ADDR, ierSetting.reg);
 }
 
 
 /**
  *	\brief Perform simple write/read using SC16IS741A scratchpad register. Used to test SPI communications.
  */
-bool sc16is741a_chkCommReady()
+bool SC16IS741A_chkCommReady()
 {
-    uint8_t wrVal = (uint8_t)(lMillis() & 0xFF);
-    sc16is741a_writeReg(SC16IS741A_SPR_ADDR, wrVal);
-    return sc16is741a_readReg(SC16IS741A_SPR_ADDR) == wrVal;
+    uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
+    SC16IS741A_writeReg(SC16IS741A_SPR_ADDR, wrVal);
+    return SC16IS741A_readReg(SC16IS741A_SPR_ADDR) == wrVal;
 }
 
 #pragma endregion
@@ -161,16 +192,15 @@ bool sc16is741a_chkCommReady()
  *	\param reg_addr [in] - The register address.
  *  \return reg_data - Byte of data read from register
  */
-uint8_t sc16is741a_readReg(uint8_t reg_addr)
+uint8_t SC16IS741A_readReg(uint8_t reg_addr)
 {
 	union __sc16is741a_reg_payload__ reg_payload = { 0 };
 	reg_payload.reg_addr.A = reg_addr;
-	reg_payload.reg_addr.RnW = SC16IS741A_FIFO_RnW_READ;	
+	reg_payload.reg_addr.RnW = sc16is741a__LTEM_FIFO_RnW_read;	
 
-	reg_payload.reg_payload = spi_transferWord(g_ltem->spi, reg_payload.reg_payload);
+	reg_payload.reg_payload = spi_transferWord(((spi_t*)g_ltem.spi), reg_payload.reg_payload);
 	return reg_payload.reg_data;
 }
-
 
 
 /**
@@ -179,14 +209,14 @@ uint8_t sc16is741a_readReg(uint8_t reg_addr)
  *	\param reg_addr [in] - The register address.
  *	\param reg_data [in] - Pointer to the data to write to the register.
  */
-void sc16is741a_writeReg(uint8_t reg_addr, uint8_t reg_data)
+void SC16IS741A_writeReg(uint8_t reg_addr, uint8_t reg_data)
 {
 	union __sc16is741a_reg_payload__ reg_payload = { 0 };
 	reg_payload.reg_addr.A = reg_addr;
-	reg_payload.reg_addr.RnW = SC16IS741A_FIFO_RnW_WRITE;
+	reg_payload.reg_addr.RnW = sc16is741a__LTEM_FIFO_RnW_write;
 	reg_payload.reg_data = reg_data;
 
-	spi_transferWord(g_ltem->spi, reg_payload.reg_payload);
+	spi_transferWord(((spi_t*)g_ltem.spi), reg_payload.reg_payload);
 }
 
 
@@ -197,13 +227,13 @@ void sc16is741a_writeReg(uint8_t reg_addr, uint8_t reg_data)
  *	\param dest [out] - The destination buffer.
  *	\param dest_len [in] - The length of the destination buffer.
  */
-void sc16is741a_read(void* dest, uint8_t dest_len)
+void SC16IS741A_read(void* dest, uint8_t dest_len)
 {
     union __sc16is741a_reg_addr_byte__ reg_addr = { 0 };
     reg_addr.A = SC16IS741A_FIFO_ADDR;
-    reg_addr.RnW = SC16IS741A_FIFO_RnW_READ;
+    reg_addr.RnW = sc16is741a__LTEM_FIFO_RnW_read;
 
-    spi_transferBuffer(g_ltem->spi, reg_addr.reg_address, dest, dest_len);
+    spi_transferBuffer(((spi_t*)g_ltem.spi), reg_addr.reg_address, dest, dest_len);
 }
 
 
@@ -214,13 +244,13 @@ void sc16is741a_read(void* dest, uint8_t dest_len)
  *	\param src [in] - The source data to write.
  *	\param src_len [in] - The length of the source.
  */
-void sc16is741a_write(const void* src, uint8_t src_len)
+void SC16IS741A_write(const void* src, uint8_t src_len)
 {
     union __sc16is741a_reg_addr_byte__ reg_addr = { 0 };
     reg_addr.A = SC16IS741A_FIFO_ADDR;
-    reg_addr.RnW = SC16IS741A_FIFO_RnW_WRITE;
+    reg_addr.RnW = sc16is741a__LTEM_FIFO_RnW_write;
 
-    spi_transferBuffer(g_ltem->spi, reg_addr.reg_address, src, src_len);
+    spi_transferBuffer(((spi_t*)g_ltem.spi), reg_addr.reg_address, src, src_len);
 }
 
 
@@ -230,10 +260,10 @@ void sc16is741a_write(const void* src, uint8_t src_len)
  *
  *  \param resetAction [in] - What to reset TX, RX or both.
  */
-void sc16is741a_resetFifo(resetFifo_action_t resetAction)
+void SC16IS741A_resetFifo(resetFifo_action_t resetAction)
 {
     // fcr is a RdOnly register, flush and FIFO enable are both in this register 
-    sc16is741a_writeReg(SC16IS741A_FCR_ADDR,  resetAction |= FCR_REGISTER_VALUE_IOP_FIFO_ENABLE);
+    SC16IS741A_writeReg(SC16IS741A_FCR_ADDR,  resetAction |= SC16IS741A__FCR_REGISTER_VALUE_IOP_FIFO_ENABLE);
 }
 
 
@@ -241,32 +271,33 @@ void sc16is741a_resetFifo(resetFifo_action_t resetAction)
 /**
  *	\brief Flush contents of RX FIFO.
  */
-void sc16is741a_flushRxFifo()
+void SC16IS741A_flushRxFifo()
 {
-    uint8_t rxFifoLvl = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-    uint8_t lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
+    uint8_t rxFifoLvl = SC16IS741A_readReg(SC16IS741A_RXLVL_ADDR);
+    uint8_t lsrValue = SC16IS741A_readReg(SC16IS741A_LSR_ADDR);
 
-    for (size_t i = 0; i < SC16IS741A_FIFO_BUFFER_SZ; i++)
+    for (size_t i = 0; i < sc16is741a__LTEM_FIFO_bufferSz; i++)
     {
-        uint8_t rxDiscard = sc16is741a_readReg(SC16IS741A_FIFO_ADDR);
+        uint8_t rxDiscard = SC16IS741A_readReg(SC16IS741A_FIFO_ADDR);
     }
-    rxFifoLvl = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-    lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
+    rxFifoLvl = SC16IS741A_readReg(SC16IS741A_RXLVL_ADDR);
+    lsrValue = SC16IS741A_readReg(SC16IS741A_LSR_ADDR);
 }
 
+#pragma endregion
 
 
 /**
  *	\brief Debug: Show FIFO buffers fill level.
  */
-void displayFifoStatus(const char *dispMsg)
+void SC16IS741A__displayFifoStatus(const char *dispMsg)
 {
     PRINTF(dbgColor_gray, "%s...\r\n", dispMsg);
-    uint8_t bufFill = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
+    uint8_t bufFill = SC16IS741A_readReg(SC16IS741A_RXLVL_ADDR);
     PRINTF(dbgColor_gray, "  -- RX buf level=%d\r\n", bufFill);
-    bufFill = sc16is741a_readReg(SC16IS741A_TXLVL_ADDR);
+    bufFill = SC16IS741A_readReg(SC16IS741A_TXLVL_ADDR);
     PRINTF(dbgColor_gray, "  -- TX buf level=%d\r\n", bufFill);
 }
 
 
-#pragma endregion
+#pragma endregion LTEm Internal Functions

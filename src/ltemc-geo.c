@@ -25,6 +25,20 @@
  * BGx Geo-Fence support (requires ltemc-gnss)
  *****************************************************************************/
 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
+#if _DEBUG > 0
+    asm(".global _printf_float");       // forces build to link in float support for printf
+    #if _DEBUG == 1
+    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
+    #elif _DEBUG == 2
+    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #endif
+#else
+#define PRINTF(c_, f_, ...) 
+#endif
+
 #include <stdlib.h>
 
 //#define _DEBUG
@@ -51,7 +65,7 @@ resultCode_t geo_add(uint8_t geoId, geo_mode_t mode, geo_shape_t shape, double l
     char cmdStr[CMDSZ] = {0};
 
     if (mode != geo_mode_noUrc)                                 // currently only supporting mode 0 (no event reporting)
-        return RESULT_CODE_BADREQUEST;
+        return resultCode__badRequest;
 
     //void floatToString(float fVal, char *buf, uint8_t bufSz, uint8_t precision)
     snprintf(cmdStr, CMDSZ, "AT+QCFGEXT=\"addgeo\",%d,0,%d,%4.6f,%4.6f,%4.6f", geoId, shape, lat1, lon1, lat2);
@@ -60,7 +74,7 @@ resultCode_t geo_add(uint8_t geoId, geo_mode_t mode, geo_shape_t shape, double l
         shape == geo_shape_circlept &&  (lat3 != 0 || lon3 != 0 || lat4 != 0 || lon4 != 0) ||
         shape == geo_shape_triangle &&  (lat4 != 0 || lon4 != 0))
     {
-        return RESULT_CODE_BADREQUEST;
+        return resultCode__badRequest;
     }
 
     if (shape >= geo_shape_circlept)
@@ -82,11 +96,11 @@ resultCode_t geo_add(uint8_t geoId, geo_mode_t mode, geo_shape_t shape, double l
         strcat(cmdStr, cmdChunk);
     }
 
-    if (atcmd_tryInvoke(cmdStr))
+    if (atcmd_tryInvokeDefaults(cmdStr))
     {
-        return atcmd_awaitResult(true).statusCode;
+        return atcmd_awaitResult();
     }
-    return RESULT_CODE_CONFLICT;
+    return resultCode__conflict;
 }
 
 
@@ -98,11 +112,11 @@ resultCode_t geo_delete(uint8_t geoId)
 {
     char cmdStr[28] = {0};
     snprintf(cmdStr, 80, "AT+QCFGEXT=\"deletegeo\",%d", geoId);
-    if (atcmd_tryInvoke(cmdStr))
+    if (atcmd_tryInvokeDefaults(cmdStr))
     {
-        return atcmd_awaitResult(true).statusCode;
+        return atcmd_awaitResult();
     }
-    return RESULT_CODE_CONFLICT;
+    return resultCode__conflict;
 }
 
 
@@ -112,17 +126,13 @@ resultCode_t geo_delete(uint8_t geoId)
  */
 geo_position_t geo_query(uint8_t geoId)
 {
-    char cmdStr[28] = {0};
-    snprintf(cmdStr, 80, "AT+QCFGEXT=\"querygeo\",%d", geoId);
-
-    if (atcmd_tryInvoke(cmdStr))
+    if (atcmd_tryInvoke("AT+QCFGEXT=\"querygeo\",%d", geoId))
     {
-        atcmdResult_t atResult = atcmd_awaitResult(true);
-        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+        if (atcmd_awaitResult() != resultCode__success)
             return geo_position_unknown;
-        return atResult.statusCode;
+        return resultCode__success;
     }
-    return RESULT_CODE_CONFLICT;
+    return resultCode__conflict;
 };
 
 

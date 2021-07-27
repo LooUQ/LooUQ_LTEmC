@@ -13,12 +13,45 @@
 platform_yieldCB_func_t platform_yieldCB_func;
 
 
-uint32_t lMillis()
+// uint32_t lMillis()
+// {
+//     return millis();
+// }
+
+// void lYield()
+// {
+//     yield();                            // allow for platform yield processing (ex: Arduino scheduler, ESPx, etc.)
+//     if (platform_yieldCB_func)          // allow for device application yield processing
+//         platform_yieldCB_func();
+// }
+
+
+// void lDelay(uint32_t delay_ms)
+// {
+//     for (size_t i = 0; i < delay_ms; i++)
+//     {
+//         yield();
+//         delay(1);
+//     }
+//     //delay(delay_ms);
+// }
+
+// bool lTimerExpired(uint32_t timerStart, uint32_t timerTimeout)
+// {
+//     return (timerStart == 0) ? 0 : millis() - timerStart > timerTimeout;
+// }
+
+
+/* NEW
+--------------------------------------------------------------------------*/
+
+uint32_t pMillis()
 {
     return millis();
 }
 
-void lYield()
+
+void pYield()
 {
     yield();                            // allow for platform yield processing (ex: Arduino scheduler, ESPx, etc.)
     if (platform_yieldCB_func)          // allow for device application yield processing
@@ -26,7 +59,7 @@ void lYield()
 }
 
 
-void lDelay(uint32_t delay_ms)
+void pDelay(uint32_t delay_ms)
 {
     for (size_t i = 0; i < delay_ms; i++)
     {
@@ -36,7 +69,8 @@ void lDelay(uint32_t delay_ms)
     //delay(delay_ms);
 }
 
-bool lTimerExpired(uint32_t timerStart, uint32_t timerTimeout)
+
+bool pElapsed(uint32_t timerStart, uint32_t timerTimeout)
 {
     return (timerStart == 0) ? 0 : millis() - timerStart > timerTimeout;
 }

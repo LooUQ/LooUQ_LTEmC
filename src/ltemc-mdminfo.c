@@ -33,13 +33,13 @@
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-
-#include "ltemc.h"
+#include "ltemc-internal.h"
 
 
 #define IMEI_OFFSET 2
@@ -48,8 +48,11 @@
 #define ICCID_SIZE 20
 
 
+extern ltemDevice_t g_ltem;
+
+
 // private local declarations
-static resultCode_t s_iccidCompleteParser(const char *response, char **endptr);
+static resultCode_t S_iccidCompleteParser(const char *response, char **endptr);
 
 
 /* Public functions
@@ -64,71 +67,63 @@ static resultCode_t s_iccidCompleteParser(const char *response, char **endptr);
 */
 modemInfo_t mdminfo_ltem()
 {
-    if (*g_ltem->modemInfo->imei == NULL)
+    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd__useDefaultOKCompletionParser);
+    if (!atcmd_awaitLock(atcmd__useDefaultTimeout))
     {
-        if (atcmd_tryInvoke("AT+GSN"))
+        return *((modemInfo_t*)g_ltem.modemInfo);
+    }
+
+    if (((modemInfo_t*)g_ltem.modemInfo)->imei[0] == 0)
+    {
+        atcmd_invokeReuseLock("AT+GSN");
+        if (atcmd_awaitResult() == resultCode__success)
         {
-            atcmdResult_t atResult = atcmd_awaitResult(false);
-            if (atResult.statusCode == RESULT_CODE_SUCCESS)
-            {
-                strncpy(g_ltem->modemInfo->imei, atResult.response + ASCII_szCRLF, IMEI_SIZE);
-            }
-            atcmd_close();
+            strncpy(((modemInfo_t*)g_ltem.modemInfo)->imei, atcmd_getLastResponse() + 2, IMEI_SIZE);        // skip leading /r/n
         }
     }
 
-    if (*g_ltem->modemInfo->iccid == NULL)                             // uses custom cmd str
+    if (((modemInfo_t*)g_ltem.modemInfo)->fwver[0] == 0)
     {
-        //atcmd_t *iccidCmd = atcmd_build("AT+ICCID\r", 41, 500, iccidCompleteParser);
-        if (atcmd_tryInvokeAdv("AT+ICCID", ACTION_TIMEOUTml, s_iccidCompleteParser))
+        atcmd_invokeReuseLock("AT+QGMR");
+        if (atcmd_awaitResult() == resultCode__success)
         {
-            atcmdResult_t atResult = atcmd_awaitResult(false);
-            if (atResult.statusCode == RESULT_CODE_SUCCESS)
-            {
-                strncpy(g_ltem->modemInfo->iccid, atResult.response + ICCID_OFFSET, ICCID_SIZE);
-            }
-            atcmd_close();
+            char *term;
+            term = strstr(atcmd_getLastResponse() + 2, "\r\n");
+            *term = '\0';
+            strcpy(((modemInfo_t*)g_ltem.modemInfo)->fwver, atcmd_getLastResponse() + 2);
+            term = strchr(((modemInfo_t*)g_ltem.modemInfo)->fwver, '_');
+            *term = ' ';
         }
     }
 
-    if (*g_ltem->modemInfo->fwver == NULL)
+    if (((modemInfo_t*)g_ltem.modemInfo)->mfgmodel[0] == 0)
     {
-        if (atcmd_tryInvoke("AT+QGMR"))
+        atcmd_invokeReuseLock("ATI");
+        if (atcmd_awaitResult() == resultCode__success)
         {
-            atcmdResult_t atResult = atcmd_awaitResult(false);
-            if (atResult.statusCode == RESULT_CODE_SUCCESS)
-            {
-                char *term;
-                term = strstr(atResult.response + ASCII_szCRLF, ASCII_sCRLF);
-                *term = '\0';
-                strcpy(g_ltem->modemInfo->fwver, atResult.response + ASCII_szCRLF);
-                term = strchr(g_ltem->modemInfo->fwver, '_');
-                *term = ' ';
-            }
-            atcmd_close();
+            char *term;
+            term = strstr(atcmd_getLastResponse() + 2, "\r\nRev");
+            *term = '\0';
+            strcpy(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, atcmd_getLastResponse() + 2);
+            term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\r');
+            *term = ':';
+            term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\n');
+            *term = ' ';
         }
     }
 
-    if (*g_ltem->modemInfo->mfgmodel == NULL)
+    if (((modemInfo_t*)g_ltem.modemInfo)->iccid[0] == 0)
     {
-        if (atcmd_tryInvoke("ATI"))
+        atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, S_iccidCompleteParser);
+        atcmd_invokeReuseLock("AT+ICCID");
+        if (atcmd_awaitResult() == resultCode__success)
         {
-            atcmdResult_t atResult = atcmd_awaitResult(false);
-            if (atResult.statusCode == RESULT_CODE_SUCCESS)
-            {
-                char *term;
-                term = strstr(atResult.response + ASCII_szCRLF, "\r\nRev");
-                *term = '\0';
-                strcpy(g_ltem->modemInfo->mfgmodel, atResult.response + ASCII_szCRLF);
-                term = strchr(g_ltem->modemInfo->mfgmodel, '\r');
-                *term = ':';
-                term = strchr(g_ltem->modemInfo->mfgmodel, '\n');
-                *term = ' ';
-            }
-            atcmd_close();
+            strncpy(((modemInfo_t*)g_ltem.modemInfo)->iccid, atcmd_getLastResponse() + ICCID_OFFSET, ICCID_SIZE);
         }
     }
-    return *g_ltem->modemInfo;
+
+    atcmd_close();
+    return *((modemInfo_t*)g_ltem.modemInfo);
 }
 
 
@@ -144,11 +139,11 @@ int16_t mdminfo_rssi()
 
     if (atcmd_tryInvoke("AT+CSQ"))
     {
-        atcmdResult_t atResult = atcmd_awaitResult(false);
-        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+        if (atcmd_awaitResult() == resultCode__success)
         {
             char *term;
-            term = strstr(atResult.response + ASCII_szCRLF, "+CSQ");
+            char *lastResponse = atcmd_getLastResponse();
+            term = strstr(atcmd_getLastResponse() + 2, "+CSQ");
             csq = strtol(term + 5, NULL, 10);
         }
         rssi = (csq == 99) ? -128 : csq * 2 -113;        // raw=99: no signal, range -51 to -113
@@ -182,9 +177,9 @@ uint8_t mdminfo_rssiBars(uint8_t numberOfBars)
 /**
  *	\brief Action response parser for iccid value request. 
  */
-static resultCode_t s_iccidCompleteParser(const char *response, char **endptr)
+static resultCode_t S_iccidCompleteParser(const char *response, char **endptr)
 {
-    return atcmd_defaultResultParser(response, "+ICCID: ", true, 20, ASCII_sOK, endptr);
+    return atcmd_defaultResultParser(response, "+ICCID: ", true, 20, "OK\r\n", endptr);
 }
 
 

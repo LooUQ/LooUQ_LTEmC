@@ -26,27 +26,41 @@
 #ifndef __LTEMC_ATCMD_H__
 #define __LTEMC_ATCMD_H__
 
-#include <stddef.h>
-#include <stdint.h>
+// #include <stddef.h>
+// #include <stdint.h>
+#include <ltemc.h>
+
+// #define ACTION_TIMEOUTms             500        ///< Default number of millis to wait for action to complete, can be overridden in action_tryInvokeAdv()
+
+// // structure sizing
+// #define ACTION_HISTRESPBUF_SZ        240        ///< Size of response captured by action history (action error diagnostics)
 
 
-#define ACTION_TIMEOUTml             500        ///< Default number of millis to wait for action to complete, can be overridden in action_tryInvokeAdv()
-#define RESULT_CODE_PENDING       0xFFFF        ///< Value returned from response parsers indicating a pattern match has not yet been detected
-
-// structure sizing
-#define ACTION_HISTRESPBUF_SZ        240        ///< Size of response captured by action history (action error diagnostics)
-
-
-/** 
- *  \brief Record of last action, NOTE: only set on action NON-SUCCESS.
-*/
-typedef struct atcmdHistory_tag
+enum
 {
-    char cmdStr[IOP_TX_BUFFER_SZ];              ///< AT command string to be passed to the BGx module.
-    char response[ACTION_HISTRESPBUF_SZ];       ///< The char c-string containing the full response from the BGx.
-    uint32_t duration;                          ///< Duration from AT invoke to action complete (or timeout)
-    resultCode_t statusCode;                    ///< The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
-} atcmdHistory_t;
+    atcmd__useDefaultTimeout = 0,
+    atcmd__useDefaultOKCompletionParser = 0,
+
+    atcmd__setLockModeManual = 0,
+    atcmd__setLockModeAuto = 1,
+
+    // LTEmC internal constants
+    ATCMD__defaultTimeoutMS = 800,
+    ATCMD__commandBufferSz = 256,
+    ATCMD__parserPendingResult = 0xFFFF      ///< private declaration; value returned from response parsers indicating a pattern match has not yet been detected
+};
+
+
+// /** 
+//  *  \brief Record of last action, NOTE: only set on action NON-SUCCESS.
+// */
+// typedef struct atcmdHistory_tag
+// {
+//     char cmdStr[atcmd__IcommandBufferSz];       ///< AT command string to be passed to the BGx module.
+//     char response[atcmd__IcommandBufferSz];     ///< The char c-string containing the full response from the BGx.
+//     uint32_t duration;                          ///< Duration from AT invoke to action complete (or timeout)
+//     resultCode_t statusCode;                    ///< The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
+// } atcmdHistory_t;
 
 
 /** 
@@ -54,14 +68,17 @@ typedef struct atcmdHistory_tag
 */
 typedef struct atcmd_tag
 {
-    char cmdStr[IOP_TX_BUFFER_SZ];      ///< AT command string to be passed to the BGx module.
-    bool isOpen;                        ///< True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
-    uint32_t invokedAt;                 ///< Tick value at the command invocation, used for timeout detection.
-    uint16_t resultCode;                ///< HTML type response code, 0 is special "pending" status, see ACTION_RESULT_* codes.
-    char *response;                     ///< The response to the command received from the BGx.
-    uint16_t timeoutMillis;             ///< Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
-    atcmdHistory_t *lastActionError;   ///< Struct containing information on last action response\result. NOTE: only set on NON-SUCCESS.
-    uint16_t (*taskCompleteParser_func)(const char *response, char **endptr);  ///< Function to parse the response looking for completion.
+    char cmdStr[ATCMD__commandBufferSz];      ///< AT command string to be passed to the BGx module.
+    uint32_t timeoutMS;                         ///< Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
+    bool autoLock;                              ///< next invoke should acquire lock (true), or reuse lock (false)
+    bool isOpenLocked;                          ///< True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
+    uint32_t invokedAt;                         ///< Tick value at the command invocation, used for timeout detection.
+    char *response;                             ///< The response to the command received from the BGx. Points into IOP core buffer
+    char *responseTail;                         ///< Pointer to the unparsed section of the response, beyond complete parser's match
+    uint32_t execDuration;                      ///< duration of command's execution in milliseconds
+    resultCode_t resultCode;
+
+    uint16_t (*completeParser_func)(const char *response, char **endptr);  ///< Function to parse the response looking for completion.
 } atcmd_t;
 
 
@@ -70,9 +87,9 @@ typedef struct atcmd_tag
 */
 typedef struct atcmdResult_tag
 {
-    resultCode_t statusCode;            ///< The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
-    char *response;                     ///< The char c-string containing the full response from the BGx.
-    uint16_t responseCode;              ///< Numeric response value from many "status" action parsers (suffixed with _rc)
+    resultCode_t statusCode;                    ///< The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
+    char *response;                             ///< The char c-string containing the full response from the BGx.
+    uint16_t responseCode;                      ///< Numeric response value from many "status" action parsers (suffixed with _rc)
 } atcmdResult_t;
 
 
@@ -81,28 +98,39 @@ typedef struct atcmdResult_tag
 extern "C" {
 #endif
 
-bool atcmd_tryInvoke(const char *cmdStr);
-bool atcmd_tryInvokeAdv(const char *cmdStr, uint16_t timeout, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr));
-void atcmd_sendRaw(const char *data, uint16_t dataSz, uint16_t timeoutMillis, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr));
-void atcmd_sendRawWithEOTs(const char *data, uint16_t dataSz, const char* eotPhrase, uint16_t timeoutMillis, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr));
+void atcmd_setOptions(bool lockModeAuto, uint32_t timeoutMS, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr));
+void atcmd_restoreOptionDefaults();
 
-atcmdResult_t atcmd_awaitResult(bool closeAction);
-atcmdResult_t atcmd_getResult(bool closeAction);
-bool actn_acquireLock(const char *cmdStr, uint8_t retries);
+bool atcmd_tryInvoke(const char *cmdStr, ...);
+bool atcmd_tryInvokeAutoLockWithOptions(const char *cmdStr, ...);
+void atcmd_invokeReuseLock(const char *cmdStr, ...);
+void atcmd_sendCmdData(const char *data, uint16_t dataSz, const char* eotPhrase);
+
+resultCode_t atcmd_awaitResult();
 void atcmd_close();
+
+resultCode_t atcmd_getLastResult();
+uint32_t atcmd_getLastDuration();
+char *atcmd_getLastResponse();
+
+bool atcmd_awaitLock(uint16_t waitMillis);
+bool atcmd_isLockActive();
+void atcmd_reset(bool releaseLock);
 
 void atcmd_exitTextMode();
 void atcmd_exitDataMode();
-//void atcmd_exitStreamMode(uint8_t fillValue);
 
 resultCode_t atcmd_okResultParser(const char *response, char** endptr);
 resultCode_t atcmd_defaultResultParser(const char *response, const char *landmark, bool landmarkReqd, uint8_t gap, const char *terminator, char** endptr);
 resultCode_t atcmd_tokenResultParser(const char *response, const char *landmark, char token, uint8_t reqdTokens, const char *terminator, char** endptr);
 resultCode_t atcmd_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx, char** endptr);
+
+resultCode_t atcmd_readyPromptParser(const char *response, const char *rdyPrompt, char **endptr);
+resultCode_t atcmd_txDataPromptParser(const char *response, char **endptr);
+resultCode_t atcmd_connectPromptParser(const char *response, char **endptr);
+
 char *atcmd_strToken(char *source, int delimiter, char *token, uint8_t tokenMax);
-
-
-bool atcmd__acquireLock(const char *cmdStr, uint8_t retries);
+void ATCMD_getResult();
 
 #ifdef __cplusplus
 }

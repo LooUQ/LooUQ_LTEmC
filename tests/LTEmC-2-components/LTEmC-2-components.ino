@@ -29,23 +29,25 @@
  *****************************************************************************/
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEmc will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
+#if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #if _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #else
+    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-
-// define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+                                                    // define options for how to assemble this build
+#define HOST_FEATHER_UXPLOR                         // specify the pin configuration
 
 #include <ltemc.h>
+#include <ltemc-internal.h>                         // not usually referenced in application, necessary to access non-public functions
+#include <ltemc-nxp-sc16is.h>
 
 void setup() {
     #ifdef SERIAL_DBG
@@ -57,25 +59,22 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_red, "LTEmC Test2: modem components\r\n");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
-    
+    PRINTF(dbgColor__red, "LTEmC Test2: modem components\r\n");
+    assert_init(NULL, appNotifyCB);                                 // configure ASSERTS to callback into application
+
+    ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
     randomSeed(analogRead(0));
 
-    //ltem_create(ltem_pinConfig, NULL);              // if application doesn't implement a notification callback, provide NULL
-    ltem_create(ltem_pinConfig, NULL);                // otherwise reference your application notification callback
-    // ltem_start(pdpProtocol_none);                      // no protocols configured (TCP\UDP\SSL, MQTT, etc.)
-
     // initialize GPIO, SPI, UART-Bridge, BGx power 
-    ltem__initIo();
-    spi_start(g_ltem->spi);
+    initIO();
+    spi_start(g_ltem.spi);
 
-    if (qbg_powerOn())
-        PRINTF(DBGCOLOR_dGreen, "LTEm found already powered on.\r\n");
+    if (qbg_isPowerOn())
+        PRINTF(dbgColor__dGreen, "LTEm found already powered on.\r\n");
     else
-        PRINTF(DBGCOLOR_dGreen, "Powered LTEm on.\r\n");
+        PRINTF(dbgColor__dGreen, "Powered LTEm on.\r\n");
 
-    sc16is741a_start();     // start NXP SPI-UART bridge
+    SC16IS741A_start();     // start NXP SPI-UART bridge
 }
 
 
@@ -90,8 +89,8 @@ void loop() {
     txBuffer_reg = testPattern;
     // rxBuffer doesn't matter prior to read
     
-    sc16is741a_writeReg(SC16IS741A_SPR_ADDR, txBuffer_reg);
-    rxBuffer_reg = sc16is741a_readReg(SC16IS741A_SPR_ADDR);
+    SC16IS741A_writeReg(SC16IS741A_SPR_ADDR, txBuffer_reg);
+    rxBuffer_reg = SC16IS741A_readReg(SC16IS741A_SPR_ADDR);
 
     if (testPattern != rxBuffer_reg)
         indicateFailure("Scratchpad write/read failed (write/read register)."); 
@@ -107,7 +106,7 @@ void loop() {
     */
 
     uint8_t regValue = 0;
-    char cmd[] = "AT+GSN\r\0";
+    char cmd[] = "ATI\r\0";
     //char cmd[] = "AT+QPOWD=0\r\0";
     PRINTF(0, "Invoking cmd: %s \r\n", cmd);
 
@@ -118,19 +117,30 @@ void loop() {
 
     recvResponse(response);
 
+//\r\nQuectel\r\nBG96\r\nRevision: BG96MAR02A07M1G\r\n\r\nOK\r\n", 
+
     // test response v. expected 
-    char* validResponse = "AT+GSN\r\r\n86";
-    uint8_t imeiPrefixTest = strncmp(validResponse, response, strlen(validResponse)); 
+    const char* validResponse = "\r\nQuectel\r\nBG";                                              // initial characters in response
 
-    PRINTF(0, "Expecting 32 chars response, got %d \r\n", strlen(response));
-    PRINTF(0, "Got response: %s", response);  
-
-    if (loopCnt < 3 && strlen(response) == 43)
+    if (strstr(response, "\r\nAPP RDY"))
     {
-        PRINTF(DBGCOLOR_warn, "Received APP RDY from LTEm.\r\n");
+        PRINTF(dbgColor__warn, "Received APP RDY from LTEm.\r\n");
     }
-    else if (imeiPrefixTest != 0 || strlen(response) != 32)
-        indicateFailure("Unexpected IMEI value returned on cmd test... failed."); 
+    else
+    {
+        char* tailAt = NULL;
+        if (strstr(response, validResponse))
+        {
+            tailAt = strstr(response, "OK\r\n");
+
+            if (tailAt != NULL)
+                PRINTF(0, "Got correctly formed response: \r\n%s", response);  
+            else
+                PRINTF(dbgColor__error, "Missing final OK in response.\r");
+        }
+        else if (tailAt == NULL)
+            indicateFailure("Unexpected device information returned on cmd test... failed."); 
+    }
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -150,10 +160,10 @@ void sendCommand(const char* cmd)
 
     for (size_t i = 0; i < sendSz; i++)
     {
-        sc16is741a_writeReg(SC16IS741A_FIFO_ADDR, cmd[i]);      // without a small delay the register is not moved to FIFO before next byte\char
-        lDelay(1);                                              // this is NOT the typical write cycle
+        SC16IS741A_writeReg(SC16IS741A_FIFO_ADDR, cmd[i]);      // without a small delay the register is not moved to FIFO before next byte\char
+        pDelay(1);                                              // this is NOT the typical write cycle
     }
-    lDelay(300);                                                // max response time per-Quectel specs, for this test we will wait
+    pDelay(300);                                                // max response time per-Quectel specs, for this test we will wait
 }
 
 
@@ -163,16 +173,16 @@ void recvResponse(char *response)
     uint8_t recvSz = 0;
     uint8_t attempts = 0;
 
-    while (!(lsrValue & NXP_LSR_DATA_IN_RECVR))
+    while (!(lsrValue & nxp__lsr_DataInReceiver))
     {
-        lsrValue = sc16is741a_readReg(SC16IS741A_LSR_ADDR);
+        lsrValue = SC16IS741A_readReg(SC16IS741A_LSR_ADDR);
         if (attempts == 5)
             break;
-        lDelay(10);
+        pDelay(10);
         attempts++;
     }
-    recvSz = sc16is741a_readReg(SC16IS741A_RXLVL_ADDR);
-    sc16is741a_read(response, recvSz);
+    recvSz = SC16IS741A_readReg(SC16IS741A_RXLVL_ADDR);
+    SC16IS741A_read(response, recvSz);
 }
 
 
@@ -204,17 +214,17 @@ void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
     if (notifType > 200)
     {
-        PRINTF(DBGCOLOR_error, "LQCloud-HardFault: %s\r", notifMsg);
+        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
         while (1) {}
     }
-    PRINTF(DBGCOLOR_info, "LQCloud Info: %s\r", notifMsg);
+    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
     return;
 }
 
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(DBGCOLOR_info, "Loop: %i \r\n", loopCnt);
+    PRINTF(dbgColor__info, "Loop: %i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -224,7 +234,7 @@ void indicateLoop(int loopCnt, int waitNext)
         delay(50);
     }
 
-    PRINTF(DBGCOLOR_magenta, "Free memory: %u \r\n", getFreeMemory());
+    PRINTF(dbgColor__magenta, "Free memory: %u \r\n", getFreeMemory());
     PRINTF(0, "Next test in (millis): %i\r\n\r\n", waitNext);
     delay(waitNext);
 }
@@ -232,11 +242,11 @@ void indicateLoop(int loopCnt, int waitNext)
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(DBGCOLOR_error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(DBGCOLOR_error, "** Test Assertion Failed. \r\n");
+	PRINTF(dbgColor__error, "\r\n** %s \r\n", failureMsg);
+    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
 
     int halt = 1;
-    PRINTF(DBGCOLOR_error, "** Halting Execution \r\n");
+    PRINTF(dbgColor__error, "** Halting Execution \r\n");
     while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
@@ -246,6 +256,20 @@ void indicateFailure(char failureMsg[])
     }
 }
 
+void initIO()
+{
+	// on Arduino, ensure pin is in default "logical" state prior to opening
+	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
+	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
+
+	gpio_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	gpio_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	gpio_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+
+	gpio_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
+	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
+}
 
 /* Check free memory (stack-heap) 
  * - Remove if not needed for production
