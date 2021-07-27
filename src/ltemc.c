@@ -34,22 +34,39 @@
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-
-#include "ltemc.h"
+#include "ltemc-internal.h"
 
 /* ------------------------------------------------------------------------------------------------
- * GLOBAL LTEm1 Device Object, One LTEm1 supported
+ * GLOBAL LTEm1 Device Objects, One LTEmX supported
  * --------------------------------------------------------------------------------------------- */
-ltemDevice_t *g_ltem;
+// ltemDevice_t *g_ltem;
+
+// ltemPinConfig_t g_ltemPinConfig;         ///< GPIO pin configuration for required GPIO and SPI interfacing.
+// spiDevice_t *g_ltemSpiPtr;               ///< SPI device (methods signatures compatible with Arduino).
+// qbgReadyState_t g_ltemQbgReadyState;     ///< Ready state of the BGx module
+// appNotifyFunc_t g_ltemAppNotifyCB;       ///< Notification callback to application
+// uint8_t g_ltemPdpContext;                ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.
+// volatile iop_t *g_ltemIopPtr;            ///< IOP subsystem controls.
+// atcmd_t *g_ltemAtcmdPtr;                 ///< Action subsystem controls.
+// modemInfo_t *g_ltemModemInfoPtr;         ///< Data structure holding persistent information about application modem state.
+// network_t *g_ltemNetworkPtr;             ///< Data structure representing the cellular network.
+// bool g_ltemCancellationRequest;          ///< For RTOS implementations, token to request cancellation of long running task/action.
+
+ltemDevice_t g_ltem;
+
+/* Static Function Declarations
+------------------------------------------------------------------------------------------------ */
+static void S_initIo();
 
 
-#pragma region public functions
-
+#pragma region Public Functions
+/*-----------------------------------------------------------------------------------------------*/
 
 /**
  *	\brief Initialize the LTEm1 modem.
@@ -57,38 +74,31 @@ ltemDevice_t *g_ltem;
  *	\param ltem_config [in] - The LTE modem gpio pin configuration.
  *  \param appNotifyCB [in] - If supplied (not NULL), this function will be invoked for significant LTEm1 events.
  */
-void ltem_create(const ltemPinConfig_t ltem_config, appNotify_func appNotifyCB)
+void ltem_create(const ltemPinConfig_t ltem_config, appNotifyFunc_t appNotifyCB)
 {
-	g_ltem = calloc(1, sizeof(ltemDevice_t));
-	if (g_ltem == NULL)
-	{
-        if (appNotifyCB != NULL)                                       
-            appNotifyCB(ltemNotifType_memoryAllocFault, "ltem1-could not alloc ltem1 object");
-	}
+	// g_ltem = calloc(1, sizeof(ltemDevice_t));
+	// if (g_ltem == NULL)
+	// {
+    //     if (appNotifyCB != NULL)                                       
+    //         appNotifyCB(ltemNotifType_memoryAllocFault, "ltem1-could not alloc ltem1 object");
+	// }
 
-	g_ltem->pinConfig = ltem_config;
-    g_ltem->spi = spi_create(g_ltem->pinConfig.spiCsPin);
+	g_ltem.pinConfig = ltem_config;
+    g_ltem.spi = spi_create(g_ltem.pinConfig.spiCsPin);
     //g_ltem->spi = createSpiConfig(g_ltem->gpio->spiCsPin, LTEM1_SPI_DATARATE, BG96_BAUDRATE_DEFAULT);
 
-    g_ltem->modemInfo = calloc(1, sizeof(modemInfo_t));
-	if (g_ltem->modemInfo == NULL)
-	{
-        if (appNotifyCB != NULL)                                       
-            appNotifyCB(ltemNotifType_memoryAllocFault, "ltem1-could not alloc ltem1 modem info object");
-	}
+    g_ltem.modemInfo = calloc(1, sizeof(modemInfo_t));
+    ASSERT(g_ltem.modemInfo != NULL, srcfile_ltemc_c);
+    g_ltem.pdpContext = 1;
 
-    g_ltem->dataContext = 1;
+    IOP_create();
+    g_ltem.atcmd = calloc(1, sizeof(atcmd_t));
+    atcmd_setOptions(atcmd__setLockModeAuto, ATCMD__defaultTimeoutMS, atcmd_okResultParser);
+    atcmd_reset(true);
+    g_ltem.cancellationRequest = false;
 
-    g_ltem->atcmd = calloc(1, sizeof(atcmd_t));
-    g_ltem->atcmd->lastActionError = calloc(1, sizeof(atcmdHistory_t));
-    g_ltem->atcmd->isOpen = false;
-    g_ltem->cancellationRequest = false;
-    g_ltem->appNotifyCB = appNotifyCB;
-
-    iop_create();
     ntwk_create();
-
-    return g_ltem;
+    g_ltem.appNotifyCB = appNotifyCB;
 }
 
 
@@ -98,38 +108,25 @@ void ltem_create(const ltemPinConfig_t ltem_config, appNotify_func appNotifyCB)
  * 
  *  \param protocolBitMap [in] - Binary-OR'd list of expected protocol services to validate inclusion and start.
  */
-void ltem_start(uint16_t protocolBitMap)
+void ltem_start()
 {
-    // validate create
-    if (protocolBitMap != pdpProtocol_none)
-    {
-        if (protocolBitMap & pdpProtocol_sockets && g_ltem->sockets == NULL)
-            ltem_notifyApp(ltemNotifType_hardFault, "No sckt_create()");
-
-        if (protocolBitMap & pdpProtocol_mqtt && g_ltem->mqtt == NULL)
-            ltem_notifyApp(ltemNotifType_hardFault, "No mqtt_create()");
-
-        // if (protos & ltem1Proto_http && g_ltem->http == NULL)
-        //     ltem_notifyApp(ltemNotifType_hardFault, "HTTP noCreate");
-    }
-
-    ltem__initIo();                                             // set host GPIO pins and SPI interface to operating state
-    spi_start(g_ltem->spi);
+    S_initIo();                                                 // set host GPIO pins and SPI interface to operating state
+    spi_start(g_ltem.spi);
 
     if (qbg_isPowerOn())                                        // power on BGx, returning prior power-state
     {
-		PRINTF(DBGCOLOR_info, "LTEm1 found powered on.\r\n");
-        g_ltem->qbgReadyState = qbg_readyState_appReady;        // if already "ON", assume running and check for IRQ latched
+		PRINTF(dbgColor__info, "LTEm1 found powered on.\r\n");
+        g_ltem.qbgReadyState = qbg_readyState_appReady;         // if already "ON", assume running and check for IRQ latched
     }
     else
         qbg_powerOn();
-        
+
     if (qbg_isPowerOn())
     {
-        sc16is741a_start();                                         // start (resets previously powered on) NXP SPI-UART bridge
-        iop_start();
-        iop_awaitAppReady();                                        // wait for BGx to signal out firmware ready
-        qbg_start();                                                // initialize BGx operating settings
+        SC16IS741A_start();                                     // start (resets previously powered on) NXP SPI-UART bridge
+        IOP_start();
+        IOP_awaitAppReady();                                    // wait for BGx to signal out firmware ready
+        qbg_start();                                            // initialize BGx operating settings
     }
 }
 
@@ -141,7 +138,7 @@ void ltem_start(uint16_t protocolBitMap)
 void ltem_reset()
 {
     qbg_reset();
-    ltem_start(pdpProtocol_none);
+    ltem_start();
 }
 
 
@@ -153,7 +150,7 @@ void ltem_reset()
  */
 bool ltem_chkHwReady()
 {
-	return gpio_readPin(g_ltem->pinConfig.statusPin);
+	return gpio_readPin(g_ltem.pinConfig.statusPin);
 }
 
 
@@ -163,7 +160,7 @@ bool ltem_chkHwReady()
  */
 qbgReadyState_t ltem_getReadyState()
 {
-    return g_ltem->qbgReadyState;
+    return g_ltem.qbgReadyState;
 }
 
 
@@ -173,8 +170,8 @@ qbgReadyState_t ltem_getReadyState()
  */
 void ltem_stop()
 {
-    g_ltem->qbgReadyState = qbg_readyState_powerOff;
-    bg96_powerOff();
+    g_ltem.qbgReadyState = qbg_readyState_powerOff;
+    qbg_powerOff();
 }
 
 
@@ -186,16 +183,15 @@ void ltem_destroy()
 {
 	ltem_stop();
 
-	gpio_pinClose(g_ltem->pinConfig.irqPin);
-	gpio_pinClose(g_ltem->pinConfig.powerkeyPin);
-	gpio_pinClose(g_ltem->pinConfig.resetPin);
-	gpio_pinClose(g_ltem->pinConfig.statusPin);
+	gpio_pinClose(g_ltem.pinConfig.irqPin);
+	gpio_pinClose(g_ltem.pinConfig.powerkeyPin);
+	gpio_pinClose(g_ltem.pinConfig.resetPin);
+	gpio_pinClose(g_ltem.pinConfig.statusPin);
 
     ip_destroy();
-    free(g_ltem->atcmd);
+    free(g_ltem.atcmd);
     iop_destroy();
-    spi_destroy(g_ltem->spi);
-	free(g_ltem);
+    spi_destroy(g_ltem.spi);
 }
 
 
@@ -206,15 +202,12 @@ void ltem_destroy()
 void ltem_doWork()
 {
     if (!ltem_chkHwReady())
-        ltem_notifyApp(ltemNotifType_hwNotReady, "LTEm1 I/O Error");
+        ltem_notifyApp(lqNotificationType_lqDevice_hwFault, "LTEm1 I/O Error");
 
-    if (g_ltem->scktWork_func != NULL)
+    for (size_t i = 0; i < sizeof(g_ltem.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)  // each stream with a doWork() register it at OPEN (removed if last CLOSE)
     {
-        g_ltem->scktWork_func();
-    }
-    if (g_ltem->mqttWork_func != NULL)
-    {
-        g_ltem->mqttWork_func();
+        if (g_ltem.streamWorkers[i] != NULL)
+            (g_ltem.streamWorkers[i])();
     }
 }
 
@@ -227,12 +220,8 @@ void ltem_doWork()
  */
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
-    PRINTF(DBGCOLOR_error, "\r\rLTEmC FaultCd=%d - %s\r", notifyType, notifyMsg);         // log to debugger if attached
-
-    if (g_ltem->appNotifyCB != NULL)                                       
-        g_ltem->appNotifyCB(notifyType, notifyMsg);            // if app handler registered, it may/may not return
-
-    while (notifyType > ltemNotifType__CATASTROPHIC) {}        // if notice is "fatal" loop forever and hope for a watchdog
+    if (g_ltem.appNotifyCB != NULL)                                       
+        (g_ltem.appNotifyCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
 }
 
 
@@ -247,32 +236,59 @@ void ltem_setYieldCb(platform_yieldCB_func_t yieldCb_func)
     platform_yieldCB_func = yieldCb_func;
 }
 
+#pragma endregion
+
+#pragma region LTEmC Internal Functions
+/*-----------------------------------------------------------------------------------------------*/
+
+void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker)
+{
+    bool found = false;
+    for (size_t i = 0; i < sizeof(g_ltem.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)     // wireup sckt_doWork into g_ltemc worker array
+    {
+        if (g_ltem.streamWorkers[i] == doWorker)
+        {
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+    {
+        for (size_t i = 0; i < sizeof(g_ltem.streamWorkers); i++)           // not there, find and empty slot
+        {
+            if (g_ltem.streamWorkers[i] == NULL)
+            {
+                g_ltem.streamWorkers[i] = doWorker;
+                break;
+            }
+        }
+    }
+}
+
+
+#pragma endregion
+
+
+#pragma region Static Function Definitions
 
 /**
  *	\brief Initialize the modems IO.
  *
  *	\param[in] modem The LTE modem.
  */
-void ltem__initIo()
+static void S_initIo()
 {
 	// on Arduino, ensure pin is in default "logical" state prior to opening
-	gpio_writePin(g_ltem->pinConfig.powerkeyPin, gpioValue_low);
-	gpio_writePin(g_ltem->pinConfig.resetPin, gpioValue_low);
-	gpio_writePin(g_ltem->pinConfig.spiCsPin, gpioValue_high);
+	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
+	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
 
-	gpio_openPin(g_ltem->pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	gpio_openPin(g_ltem->pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	gpio_openPin(g_ltem->pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	gpio_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	gpio_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	gpio_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
 
-	gpio_openPin(g_ltem->pinConfig.statusPin, gpioMode_input);
-	gpio_openPin(g_ltem->pinConfig.irqPin, gpioMode_inputPullUp);
+	gpio_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
+	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
 }
-
-
-#pragma endregion
-
-/* private (static) functions
- * --------------------------------------------------------------------------------------------- */
-#pragma region private functions
 
 #pragma endregion

@@ -69,3 +69,7 @@ uint8_t cbuf_pop(cbuf_t *bufStruct, uint8_t *data)
     return 1;
 }
 
+uint8_t cbub_available(cbuf_t *bufStruct)
+{
+
+}

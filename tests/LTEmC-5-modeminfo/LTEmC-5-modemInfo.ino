@@ -29,21 +29,24 @@
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+#if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #if _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #else
+    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
 
+
 // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
 #include <ltemc.h>
+#include <lq-assert.h>
 
 
 void setup() {
@@ -56,13 +59,13 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_red, "LTEm1c test5-modemInfo\r\n");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
+    PRINTF(dbgColor__red, "LTEm1c test5-modemInfo\r\n");
     
     randomSeed(analogRead(0));
+    assert_init(NULL, appNotifyCB);                                 // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifyCB);
-    ltem_start(pdpProtocol_none);                   // binary-OR protocols implemented, <proto>_create() required for each.
+    ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
+    ltem_start();                                                   // ... and start it
 }
 
 
@@ -73,13 +76,13 @@ modemInfo_t modemInfo;
 void loop() {
     modemInfo = mdminfo_ltem();
 
-    PRINTF(DBGCOLOR_cyan, "\rModem Information\r");
-    PRINTF(DBGCOLOR_cyan, "IMEI = %s \r", modemInfo.imei);
-    PRINTF(DBGCOLOR_cyan, "ICCID = %s \r", modemInfo.iccid);
-    PRINTF(DBGCOLOR_cyan, "Firmware = %s \r", modemInfo.fwver);
-    PRINTF(DBGCOLOR_cyan, "Mfg/Model = %s \r", modemInfo.mfgmodel);
+    PRINTF(dbgColor__cyan, "\rModem Information\r");
+    PRINTF(dbgColor__cyan, "IMEI = %s \r", modemInfo.imei);
+    PRINTF(dbgColor__cyan, "ICCID = %s \r", modemInfo.iccid);
+    PRINTF(dbgColor__cyan, "Firmware = %s \r", modemInfo.fwver);
+    PRINTF(dbgColor__cyan, "Mfg/Model = %s \r", modemInfo.mfgmodel);
 
-    PRINTF(DBGCOLOR_info, "\rRSSI = %d dBm \r",mdminfo_rssi());
+    PRINTF(dbgColor__info, "\rRSSI = %d dBm \r",mdminfo_rssi());
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -94,44 +97,44 @@ void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
     if (notifType > 200)
     {
-        PRINTF(DBGCOLOR_error, "LQCloud-HardFault: %s\r", notifMsg);
+        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
         while (1) {}
     }
-    PRINTF(DBGCOLOR_info, "LQCloud Info: %s\r", notifMsg);
+    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
     return;
 }
 
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(DBGCOLOR_magenta, "\r\nLoop=%i \r\n", loopCnt);
+    PRINTF(dbgColor__magenta, "\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        lDelay(50);
+        pDelay(50);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        lDelay(50);
+        pDelay(50);
     }
 
-    PRINTF(DBGCOLOR_gray, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(DBGCOLOR_gray, "NextTest (millis)=%i\r\r", waitNext);
-    lDelay(waitNext);
+    PRINTF(dbgColor__gray, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTF(dbgColor__gray, "NextTest (millis)=%i\r\r", waitNext);
+    pDelay(waitNext);
 }
 
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(DBGCOLOR_error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(DBGCOLOR_error, "** Test Assertion Failed. \r\n");
+	PRINTF(dbgColor__error, "\r\n** %s \r\n", failureMsg);
+    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
 
     uint8_t halt = 1;
     while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        lDelay(1000);
+        pDelay(1000);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        lDelay(100);
+        pDelay(100);
     }
 }
 

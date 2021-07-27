@@ -42,20 +42,34 @@
 
 #pragma region structures
 
-#define SC16IS741A_FIFO_BUFFER_SZ   0x40
-#define SC16IS741A_FIFO_RnW_READ    0x01
-#define SC16IS741A_FIFO_RnW_WRITE   0x00
+enum sc16is741a__LTEM_constants
+{
+    sc16is741a__LTEM_FIFO_bufferSz = 0x40,
+    sc16is741a__LTEM_FIFO_RnW_read = 0x01,
+    sc16is741a__LTEM_FIFO_RnW_write = 0x00,
 
-#define NXP_TX_FIFOSZ 0x40
-#define NXP_RX_FIFOSZ 0x40
+    sc16is741a__LTEM_RegSet_general = 0x00,
+    sc16is741a__LTEM_RegSet_special = 0x80,
+    sc16is741a__LTEM_RegSet_enhanced = 0xBF,
 
-// NXP Bridge register set selector values (applied to LCR register)
-#define SC16IS741A_REG_SET_GENERAL  0x00
-#define SC16IS741A_REG_SET_SPECIAL  0x80
-#define SC16IS741A_REG_SET_ENHANCED 0xBF
+    sc16is741a__LTEM_HW_resetDelay = 1U,
+    sc16is741a__LTEM_SW_resetMask = 0x08
+};
 
-#define SC16IS741A_HW_RESET_DELAY      1U
-#define SC16IS741A_SW_RESET_MASK       0x08
+// #define SC16IS741A_FIFO_BUFFER_SZ   0x40
+// #define SC16IS741A_FIFO_RnW_READ    0x01
+// #define SC16IS741A_FIFO_RnW_WRITE   0x00
+
+// #define NXP_TX_FIFOSZ 0x40
+// #define NXP_RX_FIFOSZ 0x40
+
+// // NXP Bridge register set selector values (applied to LCR register)
+// #define SC16IS741A_REG_SET_GENERAL  0x00
+// #define SC16IS741A_REG_SET_SPECIAL  0x80
+// #define SC16IS741A_REG_SET_ENHANCED 0xBF
+
+// #define SC16IS741A_HW_RESET_DELAY      1U
+// #define SC16IS741A_SW_RESET_MASK       0x08
 
 
 typedef const uint8_t ro8;
@@ -273,9 +287,16 @@ DEF_SC16IS741A_REG(LSR,
     ro8 FIFO_DATA_ERROR : 1;
 )
 
-#define NXP_LSR_DATA_IN_RECVR 0x01U
-#define NXP_LSR_THR_EMPTY 0x02U
-#define NXP_LSR_FIFO_DATA_ERROR 0x80U
+enum 
+{
+    nxp__lsr_DataInReceiver = 0x01U,
+    nxp__lsr_THR_empty = 0x02U,
+    nxp__lsr_FIFO_dataError = 0x80U
+};
+
+// #define NXP_LSR_DATA_IN_RECVR 0x01U
+// #define NXP_LSR_THR_EMPTY 0x02U
+// #define NXP_LSR_FIFO_DATA_ERROR 0x80U
 
 /**
  *  \brief Modem status register.
@@ -356,28 +377,24 @@ extern "C"
 {
 #endif // __cplusplus
 
+// private
+void SC16IS741A_start();
+void SC16IS741A_enableIrqMode();
+bool SC16IS741A_chkCommReady();
 
-// sc16is741a_device_t *sc16is741a_create(uint8_t chipSelLine, uint32_t spiClockSpeed, uint32_t uartBaudrate);
-// void sc16is741a_uninit();
-void sc16is741a_start();
-void sc16is741a_enableIrqMode();
-bool sc16is741a_chkCommReady();
+void SC16IS741A_write(const void * src, uint8_t src_len);
+void SC16IS741A_read(void* dest, uint8_t dest_len);
+void SC16IS741A_writeReg(uint8_t reg_addr, uint8_t reg_data);
+uint8_t SC16IS741A_readReg(uint8_t reg_addr);
 
-void sc16is741a_write(const void * src, uint8_t src_len);
-void sc16is741a_read(void* dest, uint8_t dest_len);
+void SC16IS741A_resetFifo(resetFifo_action_t resetAction);
+void SC16IS741A_flushRxFifo();
 
-void sc16is741a_writeReg(uint8_t reg_addr, uint8_t reg_data);
-uint8_t sc16is741a_readReg(uint8_t reg_addr);
-
-void sc16is741a_resetFifo(resetFifo_action_t resetAction);
-void sc16is741a_flushRxFifo();
-
-void displayFifoStatus(const char *dispMsg);
-
+// diagnostics
+void SC16IS741A__displayFifoStatus(const char *dispMsg);
 
 #ifdef __cplusplus
 }
 #endif // __cplusplus
-
 
 #endif  /* !__LTEMC_NXP_SC16IS_H__ */

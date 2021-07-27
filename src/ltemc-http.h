@@ -28,67 +28,35 @@
 #ifndef __LTEMC_HTTP_H__
 #define __LTEMC_HTTP_H__
 
-#include "ltemc.h"
+//#include "ltemc-httpTypes.h"
+// #include "ltemc.h"
 
-#define HTTP_URL_SZ 128
-#define HTTP_CUSTOMHEADERS_SZ 480
-
-
-/** 
- *  \brief typedef for the http data receiver function.
-*/
-typedef void (*httpReceiver_func_t)(void *recvData, uint16_t dataSz);
+#include <lq-types.h>
+#include "ltemc-streams.h"
+#include "ltemc-internal.h"
 
 
-/** 
- *  \brief HTTP session type.
-*/
-typedef enum httpSessionType_tag
+enum http__constants
 {
-    httpSession_stdHeaders = 0,
-    httpSession_customHeaders = 1
-} httpSessionType_t;
+    http__noResponseHeaders = 0, 
+    http__returnResponseHeaders = 1, 
+    http__useDefaultTimeout = 0,
+
+    http__urlHostSz = 128
+};
 
 
 /** 
- *  \brief HTTP session struct, controls a HTTP session (one or more) of GET and POST requests, without custom headers.
+ *  \brief Callback function for data received event. Notifies application that new data is available and needs serviced.
+ * 
+ *  The *data and dataSz values are for convenience, since the application supplied the buffer to LTEmC.
+ * 
+ *  \param dataCntxt [in] Data peer (data context or filesys) 
+ *  \param httpRslt [in] HTTP status code found in the page result headers
+ *  \param data [in] Pointer to received data buffer
+ *  \param dataSz [in] The number of bytes available
 */
-typedef struct httpSessionStandardHdrs_tag
-{
-    uint8_t sessionType;
-    char url[HTTP_URL_SZ];
-    httpReceiver_func_t fileRecvr_func;
-    uint16_t bufSz;
-    char *recvBuf_1;
-    char *recvBuf_2;
-    tlsOptions_t tlsOptions;
-} httpSessionStandardHdrs_t;
-
-
-/** 
- *  \brief HTTP session struct, controls a HTTP session (one or more) of GET and POST requests, with custom headers.
-*/
-typedef struct httpSessionCustomHdrs_tag
-{
-    uint8_t sessionType;
-    char url[HTTP_URL_SZ];
-    char customHdrs[HTTP_CUSTOMHEADERS_SZ];
-    httpReceiver_func_t fileRecvr_func;
-    uint16_t bufSz;
-    char *recvBuf_1;
-    char *recvBuf_2;
-    tlsOptions_t tlsOptions;
-} httpSessionCustomHdrs_t;
-
-
-/** 
- *  \brief HTTP session struct union.
-*/
-typedef union httpSession_tag
-{
-    httpSessionStandardHdrs_t standardHdrSession;
-    httpSessionCustomHdrs_t customHdrSession;
-} httpSession_t;
+typedef void (*httpRecvFunc_t)(dataContext_t dataCntxt, uint16_t httpRslt, char *data, uint16_t dataSz);
 
 
 /** 
@@ -100,34 +68,73 @@ typedef enum httpHeaderMap_tag              // bit-map to indicate headers to cr
     httpHeaderMap_userAgent = 0x0002,
     httpHeaderMap_connection = 0x0004,
     httpHeaderMap_contentType = 0x0008,
-    httpHeaderMap_contentLenght = 0x0010
+    httpHeaderMap_contentLenght = 0x0010,
+    httpHeaderMap_all = 0xFFFF
 } httpHeaderMap_t;
 
 
+typedef enum httpState_tag
+{
+    httpState_idle = 0,
+    httpState_requestComplete,
+    httpState_readingData
+} httpState_t;
+
+
+typedef struct httpCtrl_tag
+{
+    uint8_t ctrlMagic;                      ///< magic flag to validate incoming requests 
+    dataContext_t dataCntxt;                ///< Data context where this control operates
+    protocol_t protocol;                    ///< Socket's protocol : UDP/TCP/SSL.
+    bool useTls;                            ///< flag indicating SSL/TLS applied to stream
+    rxDataBufferCtrl_t recvBufCtrl;         ///< RX smart buffer 
+
+    httpRecvFunc_t dataRecvCB;              ///< callback to application, signals data ready
+    uint32_t bufPageSwapTck;                ///< last check for URC\dataPending
+    uint32_t bufPageTimeout;                ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
+    char urlHost[http__urlHostSz];          ///< host portion of URL for GET/POST requests
+    bool returnResponseHdrs;                ///< if set true, response headers are included in the returned response
+    char *cstmHdrs;                         ///< custom header content, optional buffer provided by application
+    uint16_t cstmHdrsSz;                    ///< size of custom header buffer
+    char requestType;                       ///< type of current\last request: 'G'=GET, 'P'=POST
+    httpState_t requestState;               ///< current state machine variable for HTTP request
+    uint16_t bgxError;                      ///< BGx sprecific error code returned from GET\POST
+    uint16_t httpStatus;                    ///< set to 0 during a request, initialized to 0xFFFF before any request
+    uint32_t pageSize;                      ///< if provided in page response, the page size 
+    uint32_t pageRemaining;                 ///< set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
+    bool pageCancellation;                  ///< set to abandon further page loading
+} httpCtrl_t;
+
+
 #ifdef __cplusplus
-extern "C" {
+extern "C" 
+{
 #endif
 
 // Session settings factory methods to create options for a series of GET/POST operations
 
-httpSession_t http_createSession(httpSessionType_t sessionType, char *recvBuf_1, char *recvBuf_2, uint16_t recvBufSz, httpReceiver_func_t fileRecvr_func);
+void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataContext, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
 
-// httpSession_t http_createSession(const char *url, tlsOptions_t tlsOptions, char *recvBuf_1, char *recvBuf_2, uint16_t recvBufSz, httpReceiver_func_t fileRecvr_func);
-// httpSessionCustomHdrs_t http_createSessionCustomHdrs(const char *url, char *recvBuf_1, char *recvBuf_2, uint16_t recvBufSz, httpReceiver_func_t fileRecvr_func);
+void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *hdrBuffer, uint16_t hdrBufferSz);
+void http_addDefaultHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap);
+void http_addBasicAuthHdr(httpCtrl_t *httpCtrl, const char *user, const char *pw);
 
-// // Options for HTTP(s) session and helpers for custom headers session
-// tlsOptions_t ltem_createTlsOptions(tlsVersion_t version, tlsCipher_t cipher, tlsCertExpiration_t certExpCheck, tlsSecurityLevel_t securityLevel);
+resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, uint8_t timeoutSec);
+resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, const char* postData, uint16_t dataSz, uint8_t timeoutSec);
 
-void http_addDefaultHdrs(httpSessionCustomHdrs_t session, void *httpSession, uint16_t headerMap);
-void http_addBasicAuthHdr(httpSessionCustomHdrs_t session, const char *user, const char *pw);
-void http_addContentLengthHdr(httpSessionCustomHdrs_t session, uint16_t contentSz);
+resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec);
+void http_cancelPage(httpCtrl_t *httpCtrl);
 
-resultCode_t http_get(void *httpSession, const char* url);
-resultCode_t http_post(void *httpSession, const char* url, const char* postData, uint16_t dataSz);
+// resultCode_t http_checkResult(httpCtrl_t *httpCtrl);
+// resultCode_t http_getFinalResult(httpCtrl_t *httpCtrl);
+// resultCode_t http_awaitResult(httpCtrl_t *httpCtrl, uint8_t timeoutSec);
 
-// // future support for fileSystem destinations, requires file_ module under development
-// resultCode_t http_getFile(void *httpSession, const char* url, const char* filename);
-// resultCode_t http_postFile(void *httpSession, const char* url, const char* filename);
+// future support for fileSystem destinations, requires file_ module still under development planned for v2.1
+/*
+resultCode_t http_getFileResponse(void *httpSession, const char* url, const char* filename);
+resultCode_t http_postFileResponse(void *httpSession, const char* url, const char* filename);
+resultCode_t http_readFileResponse(httpCtrl_t *httpCtrl, char *response, uint16_t responseSz);
+*/
 
 #ifdef __cplusplus
 }

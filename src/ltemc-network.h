@@ -25,51 +25,17 @@
  * PDP network support
  *****************************************************************************/
 
-#ifndef __PROTOCOLS_H__
-#define __PROTOCOLS_H__
+#ifndef __NETWORK_H__
+#define __NETWORK_H__
 
 #include "ltemc.h"
 
 
-#define BGX_PDPCONTEXT_COUNT 3
-#define NTWK_DEFAULT_CONTEXT 255
-
-/** 
- *  \brief Enum of protocols available on the modem. 
- * 
- *  Note: all of the protocols are clients, while the BGx line of modules support server mode the network carriers generally don't
-*/
-typedef enum protocol_tag
+enum 
 {
-    protocol_tcp = 0x00,                ///< TCP client.
-    protocol_udp = 0x01,                ///< UDP client.
-    //protocol_tcpListener = 0x02,
-    //protocol_udpService = 0x03,
-    protocol_ssl = 0x02,                ///< SSL client.
-    protocol_AnyIP = 0x02,              ///< special value that includes any of the above IP basic transport protocols.
-
-    protocol_http = 0x20,               ///< HTTP client.
-    protocol_https = 0x21,              ///< HTTPS client, HTTP over SSL.
-
-    protocol_mqtt = 0x30,               ///< MQTT messaging client.
-    protocol_mqtts = 0x31,              ///< MQTT over SSL.
-
-    protocol_void = 0xFF                ///< No protocol, used in code to generally signal a null condition.
-} protocol_t;
-
-
-/** 
- *  \brief Enum of the available data contexts for BGx (only SSL/TLS capable contexts are supported).
-*/
-typedef enum dataContextId_tag
-{
-    dataContextId_0 = 0,
-    dataContextId_1 = 1,
-    dataContextId_2 = 2,
-    dataContextId_3 = 3,
-    dataContextId_4 = 4,
-    dataContextId_5 = 5,
-} dataContextId_t;
+    NTWK__pdpContextCnt = 3,
+    NTWK__operatorNameSz = 20
+};
 
 
 /** 
@@ -124,7 +90,7 @@ typedef struct pdpCntxt_tag
 typedef struct network_tag
 {
     networkOperator_t *networkOperator;             ///< Network operator name and protocol
-    pdpCntxt_t pdpCntxts[BGX_PDPCONTEXT_COUNT];   ///< Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
+    pdpCntxt_t pdpCntxts[NTWK__pdpContextCnt];      ///< Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
 } network_t;
 
 
@@ -136,7 +102,7 @@ extern "C"
 
 void ntwk_create();
 
-networkOperator_t ntwk_awaitOperator(uint16_t waitDuration);
+networkOperator_t ntwk_awaitOperator(uint16_t waitDurSeconds);
 uint8_t ntwk_getActivePdpCntxtCnt();
 void ntwk_configPdpCntxt(uint8_t contxtId, pdpCntxtIpType_t ipType, const char *userId, const char *pw, pdpCntxtAuthMethods_t authMethod);
 pdpCntxt_t *ntwk_getPdpCntxt(uint8_t contxtId);
@@ -150,4 +116,4 @@ void ntwk_resetPdpContexts();
 }
 #endif // !__cplusplus
 
-#endif  /* !__PROTOCOLS_H__ */
+#endif  /* !__NETWORK_H__ */

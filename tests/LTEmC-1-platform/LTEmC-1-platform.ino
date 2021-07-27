@@ -31,12 +31,13 @@
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+#if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #if _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #else
+    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
@@ -44,13 +45,15 @@
 
 
 // define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+#define HOST_FEATHER_UXPLOR                                 // specify the pin configuration
 
 #include <ltemc.h>
+#include <lq-assert.h>
+#include <ltemc-nxp-sc16is.h>                               // need internal references, low-level test here
 
 // this test has no reference to global g_ltem1 variable
 // so we need a surrogate spi pointer here to test locally 
-spiDevice_t *spi; 
+spi_t *spi; 
 
 
 void setup() {
@@ -63,9 +66,8 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_dRed, "LTEmC Test1: platformIO \r\n");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
-    PRINTF(0, "LED pin = %i \r\n", LED_BUILTIN);
+    PRINTF(dbgColor__dRed, "LTEmC Test1: platform I/O \r\n");
+    PRINTF(dbgColor__none, "LED pin = %i \r\n", LED_BUILTIN);           // could have used 0 as color code, rather than enum dbgColor__none
 
     randomSeed(analogRead(7));
 
@@ -77,7 +79,7 @@ void setup() {
 	
     powerModemOn();
 
-	spi = spi_create(ltem_pinConfig.spiCsPin);
+	spi = (spi_t*)spi_create(ltem_pinConfig.spiCsPin);
 	if (spi == NULL)
 	{
         indicateFailure("SPI create failed."); 
@@ -133,11 +135,11 @@ void powerModemOn()
 	{
 		PRINTF(0, "Powering LTEm1 On...");
 		gpio_writePin(ltem_pinConfig.powerkeyPin, gpioValue_high);
-		lDelay(QBG_POWERON_DELAY);
+		pDelay(800);
 		gpio_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
 		while (!gpio_readPin(ltem_pinConfig.statusPin))
 		{
-			lDelay(500);
+			pDelay(500);
 		}
 		PRINTF(0, "DONE.\r\n");
 	}
@@ -154,37 +156,37 @@ void powerModemOn()
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(DBGCOLOR_info, "Loop: %i \r\n", loopCnt);
-    PRINTF(DBGCOLOR_info, "      Tx: %i \r\n", testPattern);
-    PRINTF(DBGCOLOR_info, "      Rx: %i \r\n", rxBuffer.lsb);
+    PRINTF(dbgColor__info, "Loop: %i \r\n", loopCnt);
+    PRINTF(dbgColor__info, "      Tx: %i \r\n", testPattern);
+    PRINTF(dbgColor__info, "      Rx: %i \r\n", rxBuffer.lsb);
 
     for (int i = 0; i < 6; i++)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        lDelay(50);
+        pDelay(50);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        lDelay(50);
+        pDelay(50);
     }
 
-    PRINTF(DBGCOLOR_magenta, "Free memory: %u \r\n", getFreeMemory());
+    PRINTF(dbgColor__magenta, "Free memory: %u \r\n", getFreeMemory());
     PRINTF(0, "Next test in (millis): %i\r\n\r\n", waitNext);
-    lDelay(waitNext);
+    pDelay(waitNext);
 }
 
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(DBGCOLOR_error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(DBGCOLOR_error, "** Test Assertion Failed. \r\n");
+	PRINTF(dbgColor__error, "\r\n** %s \r\n", failureMsg);
+    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
 
     int halt = 1;
-    PRINTF(DBGCOLOR_error, "** Halting Execution \r\n");
+    PRINTF(dbgColor__error, "** Halting Execution \r\n");
     while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        lDelay(1000);
+        pDelay(1000);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        lDelay(100);
+        pDelay(100);
     }
 }
 

@@ -32,10 +32,10 @@
 #include <stdbool.h>
 
 // Quectel_QBG_Hardware_Design_V1.2.pdf
-#define QBG_POWERON_DELAY      500U
-#define QBG_POWEROFF_DELAY     1500U
-#define QBG_RESET_DELAY        300U
-#define QBG_BAUDRATE_DEFAULT   115200U
+// #define QBG_POWERON_DELAY      500U
+// #define QBG_POWEROFF_DELAY     1500U
+// #define QBG_RESET_DELAY        300U
+// #define QBG_BAUDRATE_DEFAULT   115200U
 
 #define QBG_RATSEQ_AUTO    "00"
 #define QBG_RATSEQ_GSM     "01"

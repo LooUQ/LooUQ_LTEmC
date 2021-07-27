@@ -38,45 +38,38 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
+#include <lq-types.h>
+#include "ltemc-tls.h"
+#include "ltemc-atcmd.h"
+#include <lq-assert.h>
 
-#include "ltemc.h"
 
 
-bool tls_configure(dataContextId_t context, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
+bool tls_configure(dataContext_t context, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
 {
-    #define ACTION_CMD_SZ 40
-    char actionCmd[ACTION_CMD_SZ];
-
-    // set SSL/TLS version
-    if (version != tlsVersion_doNotChange)
+    if (version != tlsVersion_doNotChange)                              // set SSL/TLS version
     {
-        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QSSLCFG=\"sslversion\",%d,%d", context, version);
-        if (atcmd_tryInvoke(actionCmd))
+        if (atcmd_tryInvokeDefaults("AT+QSSLCFG=\"sslversion\",%d,%d", context, version))
         {
-            if (atcmd_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
+            if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
                 return false;
         }
     }
-
     // set cipher suite
     if (cipherSuite != tlsCipher_doNotChange)
     {
-        char actionCmd[40];
-        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QSSLCFG=\"ciphersuite\",%d,0X%X", context, cipherSuite);
-        if (atcmd_tryInvoke(actionCmd))
+        if (atcmd_tryInvokeDefaults("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", context, cipherSuite))
         {
-            if (atcmd_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
+            if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
                 return false;
         }
     }
-
     // set certificate expiration check
     if (certExpirationCheck != tlsCertExpiration_doNotChange)
     {
-        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QSSLCFG=\"ignorelocaltime\",%d,%d", context, certExpirationCheck);
-        if (atcmd_tryInvoke(actionCmd))
+        if (atcmd_tryInvokeDefaults("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", context, certExpirationCheck))
         {
-            if (atcmd_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
+            if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
                 return false;
         }
     }
@@ -84,10 +77,9 @@ bool tls_configure(dataContextId_t context, tlsVersion_t version, tlsCipher_t ci
     // set security level
     if (securityLevel != tlsSecurityLevel_doNotChange)
     {
-        snprintf(actionCmd, ACTION_CMD_SZ, "AT+QSSLCFG=\"seclevel\",%d,%d", context, securityLevel);
-        if (atcmd_tryInvoke(actionCmd))
+        if (atcmd_tryInvokeDefaults("AT+QSSLCFG=\"seclevel\",%d,%d", context, securityLevel))
         {
-            if (atcmd_awaitResult(true).statusCode != RESULT_CODE_SUCCESS)
+            if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
                 return false;
         }
     }
@@ -96,24 +88,18 @@ bool tls_configure(dataContextId_t context, tlsVersion_t version, tlsCipher_t ci
 
 
 
-tlsOptions_t tlsGetOptions(dataContextId_t context)
+tlsOptions_t tlsGetOptions(dataContext_t context)
 {
-    #define ACTION_CMD_SZ 40
-    char actionCmd[ACTION_CMD_SZ];
     tlsOptions_t result = {0};
 
-    // get SSL/TLS version
-    snprintf(actionCmd, ACTION_CMD_SZ, "AT+QSSLCFG=\"sslversion\",%d", (uint8_t)context);
-    if (atcmd_tryInvoke(actionCmd))
+    if (atcmd_tryInvokeDefaults("AT+QSSLCFG=\"sslversion\",%d", (uint8_t)context))    // get SSL\TLS version
     {   
-        atcmdResult_t atResult = atcmd_awaitResult(false);
-        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+        if (atcmd_awaitResult() == resultCode__success)
         {
-            PRINTF(0, "%s", atResult.response);
+            PRINTF(0, "%s", atcmd_getLastResponse());
             // strncpy(result.version, atResult.response);
         }
         atcmd_close();
     }
-
     return result;
 }
