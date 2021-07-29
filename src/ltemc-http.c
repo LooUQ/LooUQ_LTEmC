@@ -55,6 +55,7 @@ extern ltemDevice_t g_ltem;
 ------------------------------------------------------------------------------------------------------------------------- */
 // static void S_httpDoWork();
 static uint16_t S_parseRequestResponse(httpCtrl_t *httpCtrl, const char *responseTail);
+static uint16_t S_setUrl(const char *url, uint16_t timeoutSec);
 static char *strnstr(char *haystack, char *needle, size_t length);
 static resultCode_t S_httpGetStatusParser(const char *response, char **endptr);
 static resultCode_t S_httpPostStatusParser(const char *response, char **endptr);
@@ -97,7 +98,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataCntxt, const char*
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(httpCtrl->recvBufCtrl), recvBuf, recvBufSz);
     ASSERT_W(recvBufSz == bufferSz, srcfile_http_c, "RxBufSz != multiple of 128B");
     ASSERT(bufferSz > 64, srcfile_http_c);
-    httpCtrl->bufPageTimeout = (uint32_t)(httpCtrl->recvBufCtrl._pageSz / IOP__uartFIFOBufferSz * IOP__uartFIFO_fillMS);
+    httpCtrl->bufPageTimeout = (uint32_t)(httpCtrl->recvBufCtrl._pageSz / IOP__uartFIFOBufferSz * IOP__uartFIFO_fillMS * 1.25);
 
     httpCtrl->dataRecvCB = recvCallback;
     httpCtrl->cstmHdrs = NULL;
@@ -213,134 +214,11 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
     httpCtrl->httpStatus = resultCode__unknown;
 
     timeoutSec = (timeoutSec == 0) ? http__LTEM_defaultTimeoutBGxSec : timeoutSec;
-    uint32_t timeoutMS = timeoutSec * 1000;
+    // uint32_t timeoutMS = timeoutSec * 1000;
     resultCode_t atResult;
 
     atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd__useDefaultOKCompletionParser);
-    if (!atcmd_awaitLock(timeoutMS))
-        return resultCode__timeout;
-
-    if (returnResponseHdrs)
-    {
-        atcmd_tryInvokeOptions("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs));
-        atResult = atcmd_awaitResult();
-        if (atResult != resultCode__success)
-        {
-            atcmd_close();
-            return atResult;
-        }
-    }
-
-    if (httpCtrl->useTls)
-    {
-        // AT+QHTTPCFG="sslctxid",<httpCtrl->dataCntxt>
-        atcmd_tryInvokeOptions("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt);
-        atResult = atcmd_awaitResult();
-        if (atResult != resultCode__success)
-        {
-            atcmd_close();
-            return atResult;
-        }
-    }
-
-    /* SET URL FOR REQUEST
-     * set BGx HTTP URL: AT+QHTTPURL=<urlLength>,timeoutSec  (BGx default timeout is 60, if not specified)
-     * wait for CONNECT prompt, then output <URL>, /r/n/r/nOK
-     * 
-     * NOTE: there is only 1 URL in the BGx at a time
-     *---------------------------------------------------------------------------------------------------------------*/
-    if (strlen(relativeUrl) > 0 && relativeUrl[0] != '/')
-        return resultCode__badRequest;
-
-    char url[240];                                                              // need to get length of URL prior to cmd
-    strcpy(url, &httpCtrl->urlHost);
-    strcat(url, relativeUrl);
-    PRINTF(dbgColor__dGreen, "URL(%d)=%s \r", strlen(url), url);
-
-    atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(10), atcmd_connectPromptParser);
-    if (atcmd_awaitLock(http__useDefaultTimeout))
-    {
-        atcmd_tryOptionsInvoke("AT+QHTTPURL=%d,%d", strlen(url), timeoutMS);
-        atResult = atcmd_awaitResult();                                         // waiting for URL prompt "CONNECT"
-        if (atResult == resultCode__success)
-        {
-            atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(10), atcmd__useDefaultOKCompletionParser); 
-            atcmd_sendCmdData(url, strlen(url), "");                            // wait for BGx OK (send complete) 
-            atResult = atcmd_awaitResult();
-            if (atResult != resultCode__success)
-            {
-                PRINTF(dbgColor__warn, "Failed set URL (%d)\r", atResult);
-                atcmd_close();
-                return atResult;
-            }
-        }
-    }
-
-    /* INVOKE HTTP GET METHOD
-     * BGx responds with OK immediately upon acceptance of cmd, then later (up to timeout) with "+QHTTPGET: " string
-     * After "OK" we switch IOP to data mode and return. S_httpDoWork() handles the parsing of the page response and
-     * if successful, the issue of the AT+QHTTPREAD command to start the page data stream
-     * 
-     * This allows other application tasks to be performed while waiting for page. No LTEm commands can be invoked
-     * but non-LTEm tasks like reading sensors can continue.
-     *---------------------------------------------------------------------------------------------------------------*/
-
-    ATCMD_reset(false);                                                         // reset atCmd control struct WITHOUT clearing lock
-    atcmd_setOptions(atcmd__setLockModeManual, 2000, S_httpGetStatusParser);
-    if (ATCMD_awaitLock(http__useDefaultTimeout))
-    {
-        char httpRequestCmd[20];
-        snprintf(httpRequestCmd, sizeof(httpRequestCmd), "AT+QHTTPGET=%d", timeoutSec);
-        atcmd_sendCmdData(httpRequestCmd, strlen(httpRequestCmd), "\r");               
-
-        atResult = atcmd_awaitResult();                                         // wait for "+QHTTPGET trailer
-        if (atResult == resultCode__success)
-        {
-            // ((iop_t*)g_ltem.iop)->streamPeers[httpCtrl->dataCntxt] = httpCtrl;
-            // ((iop_t*)g_ltem.iop)->rxStreamCtrl = httpCtrl;                      // set IOP to DATA-MODE using this control
-
-            httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastResponseTail());
-            if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
-                httpCtrl->requestState = httpState_requestComplete;                 // update httpState, got GET/POST response
-        }
-        else
-        {
-            httpCtrl->requestState = httpState_idle;
-            httpCtrl->httpStatus = resultCode__internalError + atResult;
-            PRINTF(dbgColor__warn, "Closed failed GET request, status=%d\r", httpCtrl->httpStatus);
-        }
-    }
-    atcmd_close();
-    return httpCtrl->httpStatus;
-}
-
-
-/**
- *	\brief Performs a HTTP POST page web request.
- *
- *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	\param relativeUrl [in] - URL, relative to the host. If none, can be provided as "" or "/" ()
- *  \param returnResponseHdrs [in] - if requested (true) the page response stream will prefix the page data
- *  \param postData [in] - Pointer to char buffer with POST content
- *  \param postDataSz [in] - Size of the POST content reference by *postData
- *	\param timeoutSec [in] - the number of seconds to wait (blocking) for a page response
- *
- *  \return true if POST request completed
- */
-resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, const char* postData, uint16_t postDataSz, uint8_t timeoutSec)
-{
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_http_c);
-
-    httpCtrl->requestState = httpState_idle;
-    httpCtrl->requestType = 'P';
-    httpCtrl->httpStatus = resultCode__unknown;
-
-    timeoutSec = (timeoutSec == 0) ? http__LTEM_defaultTimeoutBGxSec : timeoutSec;
-    uint32_t timeoutMS = timeoutSec * 1000;
-    resultCode_t atResult;
-
-    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd__useDefaultOKCompletionParser);
-    if (atcmd_awaitLock(timeoutMS))
+    if (atcmd_awaitLock(PERIOD_FROM_SECONDS(timeoutSec)))
     {
         if (returnResponseHdrs)
         {
@@ -379,28 +257,119 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
         strcat(url, relativeUrl);
         PRINTF(dbgColor__dGreen, "URL(%d)=%s \r", strlen(url), url);
 
-        atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(10), atcmd_connectPromptParser);
-        atcmd_invokeReuseLock("AT+QHTTPURL=%d,%d", strlen(url), timeoutSec);
-        atResult = atcmd_awaitResult();
-        if (atResult == resultCode__success)                                        // waiting for URL prompt "CONNECT"
-        {
-            atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(10), atcmd__useDefaultOKCompletionParser); 
-            atcmd_sendCmdData(url, strlen(url), "");                                    // wait for BGx OK (send complete) 
-            atResult = atcmd_awaitResult();
-            if (atResult != resultCode__success)
-            {
-                PRINTF(dbgColor__warn, "Failed set URL (%d)\r", atResult);
-                atcmd_close();
-                return atResult;
-            }
-        }
-        else
+        if (S_setUrl(url, timeoutSec) != resultCode__success)
         {
             PRINTF(dbgColor__warn, "Failed set URL (%d)\r", atResult);
             atcmd_close();
             return atResult;
         }
 
+        /* INVOKE HTTP GET METHOD
+        * BGx responds with OK immediately upon acceptance of cmd, then later (up to timeout) with "+QHTTPGET: " string
+        * After "OK" we switch IOP to data mode and return. S_httpDoWork() handles the parsing of the page response and
+        * if successful, the issue of the AT+QHTTPREAD command to start the page data stream
+        * 
+        * This allows other application tasks to be performed while waiting for page. No LTEm commands can be invoked
+        * but non-LTEm tasks like reading sensors can continue.
+        *---------------------------------------------------------------------------------------------------------------*/
+        atcmd_reset(false);                                                         // reset atCmd control struct WITHOUT clearing lock
+        atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(timeoutSec), S_httpGetStatusParser);
+
+        char httpRequestCmd[20];
+        snprintf(httpRequestCmd, sizeof(httpRequestCmd), "AT+QHTTPGET=%d", timeoutSec);
+        atcmd_sendCmdData(httpRequestCmd, strlen(httpRequestCmd), "\r");               
+
+        atResult = atcmd_awaitResult();                                         // wait for "+QHTTPGET trailer
+        if (atResult == resultCode__success)
+        {
+            httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastResponseTail());
+            if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
+                httpCtrl->requestState = httpState_requestComplete;                 // update httpState, got GET/POST response
+        }
+        else
+        {
+            httpCtrl->requestState = httpState_idle;
+            httpCtrl->httpStatus = atResult;
+            PRINTF(dbgColor__warn, "Closed failed GET request, status=%d\r", httpCtrl->httpStatus);
+        }
+        atcmd_close();
+        return httpCtrl->httpStatus;
+    }
+    return resultCode__timeout;
+}   // http_get()
+
+
+
+/**
+ *	\brief Performs a HTTP POST page web request.
+ *
+ *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ *	\param relativeUrl [in] - URL, relative to the host. If none, can be provided as "" or "/" ()
+ *  \param returnResponseHdrs [in] - if requested (true) the page response stream will prefix the page data
+ *  \param postData [in] - Pointer to char buffer with POST content
+ *  \param postDataSz [in] - Size of the POST content reference by *postData
+ *	\param timeoutSec [in] - the number of seconds to wait (blocking) for a page response
+ *
+ *  \return true if POST request completed
+ */
+resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, const char* postData, uint16_t postDataSz, uint8_t timeoutSec)
+{
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_http_c);
+
+    httpCtrl->requestState = httpState_idle;
+    httpCtrl->requestType = 'P';
+    httpCtrl->httpStatus = resultCode__unknown;
+
+    timeoutSec = (timeoutSec == 0) ? http__LTEM_defaultTimeoutBGxSec : timeoutSec;
+    // uint32_t timeoutMS = timeoutSec * 1000;
+    resultCode_t atResult;
+
+    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd__useDefaultOKCompletionParser);
+    if (atcmd_awaitLock(PERIOD_FROM_SECONDS(timeoutSec)))
+    {
+        if (returnResponseHdrs)
+        {
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs));
+            atResult = atcmd_awaitResult();
+            if (atResult != resultCode__success)
+            {
+                atcmd_close();
+                return atResult;
+            }
+        }
+
+        if (httpCtrl->useTls)
+        {
+            // AT+QHTTPCFG="sslctxid",<httpCtrl->dataCntxt>
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt);
+            atResult = atcmd_awaitResult();
+            if (atResult != resultCode__success)
+            {
+                atcmd_close();
+                return atResult;
+            }
+        }
+
+        /* SET URL FOR REQUEST
+        * set BGx HTTP URL: AT+QHTTPURL=<urlLength>,timeoutSec  (BGx default timeout is 60, if not specified)
+        * wait for CONNECT prompt, then output <URL>, /r/n/r/nOK
+        * 
+        * NOTE: there is only 1 URL in the BGx at a time
+        *---------------------------------------------------------------------------------------------------------------*/
+        if (strlen(relativeUrl) > 0 && relativeUrl[0] != '/')
+            return resultCode__badRequest;
+
+        char url[240];                                                              // need to get length of URL prior to cmd
+        strcpy(url, &httpCtrl->urlHost);
+        strcat(url, relativeUrl);
+        PRINTF(dbgColor__dGreen, "URL(%d)=%s \r", strlen(url), url);
+
+        if (S_setUrl(url, timeoutSec) != resultCode__success)
+        {
+            PRINTF(dbgColor__warn, "Failed set URL (%d)\r", atResult);
+            atcmd_close();
+            return atResult;
+        }
 
         /* INVOKE HTTP ** POST ** METHOD
         * BGx responds with OK immediately upon acceptance of cmd, then later (up to timeout) with "+QHTTPPOST: " string
@@ -410,9 +379,8 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
         * This allows other application tasks to be performed while waiting for page. No LTEm commands can be invoked
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
-
         atcmd_reset(false);                                                                     // reset atCmd control struct WITHOUT clearing lock
-        atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(2), atcmd_connectPromptParser);
+        atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(timeoutSec), atcmd_connectPromptParser);
 
         char httpRequestCmd[40];
         uint16_t httpRequestLength = postDataSz;
@@ -423,14 +391,11 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
 
         if (atcmd_awaitResult() == resultCode__success)                                 // wait for "CONNECT", the status result can be 5,10 seconds or longer
         {
-            atcmd_setOptions(atcmd__setLockModeManual, timeoutMS, S_httpPostStatusParser);
+            atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(timeoutSec), S_httpPostStatusParser);
             atcmd_sendCmdData(postData, postDataSz, "");
             atResult = atcmd_awaitResult();
-            if (atResult == resultCode__success)                                            // wait for "+QHTTPPOST trailer
+            if (atResult == resultCode__success)                                        // wait for "+QHTTPPOST trailer
             {
-                // ((iop_t*)g_ltem.iop)->streamPeers[httpCtrl->dataCntxt] = httpCtrl;
-                // ((iop_t*)g_ltem.iop)->rxStreamCtrl = httpCtrl;                      // set IOP to DATA-MODE using this control
-
                 httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastResponseTail());
                 if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                     httpCtrl->requestState = httpState_requestComplete;                 // update httpState, got GET/POST response
@@ -438,15 +403,15 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
             else
             {
                 httpCtrl->requestState = httpState_idle;
-                httpCtrl->httpStatus = resultCode__internalError + atResult;
-                PRINTF(dbgColor__warn, "Closed failed GET request, status=%d\r", httpCtrl->httpStatus);
+                httpCtrl->httpStatus = atResult;
+                PRINTF(dbgColor__warn, "Closed failed HTTP request, status=%d\r", httpCtrl->httpStatus);
             }
         }
         atcmd_close();
         return httpCtrl->httpStatus;
     }                                                                           // master awaitLock() over transaction
     return resultCode__timeout;
-}
+}   // http_post()
 
 
 resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
@@ -458,19 +423,18 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
 
     /* PROCESS ACTIVE DATA STREAM FLOW 
      *-------------------------------------------------------------------------------------------*/
-    // if (iopPtr->rxStreamCtrl != httpCtrl ||                                         // active receive stream peer is not httpCtrl param
-    //     ((baseCtrl_t *)iopPtr->rxStreamCtrl)->protocol == protocol_http)            // OR it is not HTTP
-    if (httpCtrl->requestState != httpState_requestComplete)
-        return resultCode__badRequest;
+    if (httpCtrl->requestState != httpState_requestComplete)        // readPage() only valid after 
+        return resultCode__badRequest;                              // a completed GET\PUT
 
-    // readability vars
-    httpCtrl_t *httpPtr = ((httpCtrl_t *)iopPtr->rxStreamCtrl);
-    rxDataBufferCtrl_t *bufPtr = &(httpPtr->recvBufCtrl);                           // smart-buffer for this operation
-    ASSERT(httpPtr == iopPtr->streamPeers[httpPtr->dataCntxt], srcfile_http_c);     // ASSERT dataCntxt cross-links are still valid
-    ASSERT(!bufPtr->_overflow, srcfile_http_c);                                     // ASSERT no buffer overflow
+    // readability var
+    rxDataBufferCtrl_t *bufPtr = &(httpCtrl->recvBufCtrl);          // smart-buffer for this operation
+
+    IOP_resetRxDataBufferPage(bufPtr, 0);                           // reset data buffers for flow
+    IOP_resetRxDataBufferPage(bufPtr, 1);
+    bufPtr->iopPg = 0;
+
 
     // PRINTF(dbgColor__dGreen, "httpDoWork-iopPg=%d, [0]=%d, [1]=%d\r", bufPtr->iopPg, rxPageDataAvailable(bufPtr, 0), rxPageDataAvailable(bufPtr, 1));
-
 
     /* once read is invoked page data buffered in BGx will stream VERY quickly. If the page is
     * large, there may be a pause for BGx to retrieve more data. At this point the device
@@ -490,78 +454,86 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
         char atCmdStr[30];
         snprintf(atCmdStr, sizeof(atCmdStr), "AT+QHTTPREAD=%d", timeoutMS);
         atcmd_sendCmdData(atCmdStr, strlen(atCmdStr), "\r");
-
+        httpCtrl->bufPageSwapTck = pMillis();                                                           // set the page timeout start time
 
         /* process page data 
         *-----------------------------------------------------------------------------------*/
         uint16_t dataAvailable;
         do
         {
-            if (httpPtr->pageCancellation)
-                httpPtr->httpStatus = resultCode__cancelled;
-
             dataAvailable = rxPageDataAvailable(bufPtr, !bufPtr->iopPg);
 
             /* skip "CONNECT"   (9 chars with \r\n) */
-            if (httpCtrl->requestState != httpState_readingData && dataAvailable > 9)
+            if (httpCtrl->requestState < httpState_readingData && dataAvailable > 16)
             {
-                char *continuePtr = strnstr(bufPtr->pages[!bufPtr->iopPg]._buffer, "CONNECT\r\n", 9);
+                char *continuePtr = strnstr(bufPtr->pages[!bufPtr->iopPg]._buffer, "CONNECT\r\n", 16);
                 if (continuePtr == NULL)
                     return resultCode__internalError;
                 httpCtrl->requestState = httpState_readingData;
                 bufPtr->pages[!bufPtr->iopPg].tail = continuePtr + 9;
-                httpCtrl->bufPageSwapTck = pMillis();                                               // set the page timeout start time
             }
 
             /* Check for end-of-page (EOP), stop sending app data at "+QHTTPREAD: <err>" 
              *-------------------------------------------------------------------------------*/
-            char *trailerPtr = strstr(bufPtr->pages[!bufPtr->iopPg].tail, "+QHTTPREAD: ");        // stop at QHTTPREAD suffix, if found
+            char *trailerSearchPtr = bufPtr->pages[!bufPtr->iopPg].head - 30;
+            char *trailerPtr = strnstr(trailerSearchPtr, "\r\nOK\r\n\r\n+QHTTPREAD: ", 30);         // stop at QHTTPREAD suffix, if found
             if (trailerPtr != NULL)
             {
-                uint16_t bgxError = strtol(trailerPtr + 12, NULL, 10);
+                uint16_t bgxError = strtol(trailerPtr + 20, NULL, 10);
                 if (bgxError != 0)
-                    httpPtr->httpStatus = resultCode__internalError + bgxError;
+                    httpCtrl->httpStatus = resultCode__internalError + bgxError;
 
-                PRINTF(dbgColor__dGreen, "Closing reqst %d, status=%d\r", httpPtr->dataCntxt, httpPtr->httpStatus);
-                httpCtrl->requestState = httpState_idle;
+                PRINTF(dbgColor__dGreen, "Closing reqst %d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+                httpCtrl->requestState = httpState_closing;
                 httpCtrl->httpStatus = resultCode__success;
                 iopPtr->rxStreamCtrl = NULL;
-                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg, true);                    // delivered, reset buffer and reset ready
             }
 
             /* Forward data to app
              *-------------------------------------------------------------------------------*/
             uint16_t appAvailable = (trailerPtr == NULL) ? rxPageDataAvailable(bufPtr, !bufPtr->iopPg) :
                                                            trailerPtr - bufPtr->pages[!bufPtr->iopPg].tail;
-            if (appAvailable && !httpPtr->pageCancellation)
-                httpPtr->dataRecvCB(httpPtr->dataCntxt, httpPtr->httpStatus, bufPtr->pages[!bufPtr->iopPg].tail, appAvailable);
-
-            /* Check for buffer page timeout to pull last partial buffer in from IOP
+                                      
+            if (httpCtrl->requestState >= httpState_readingData && appAvailable > 0)
+            {
+                if (!httpCtrl->pageCancellation)
+                {
+                    httpCtrl->dataRecvCB(httpCtrl->dataCntxt, httpCtrl->httpStatus, bufPtr->pages[!bufPtr->iopPg].tail, appAvailable);
+                }
+                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);                          // delivered, reset buffer and reset ready
+                httpCtrl->bufPageSwapTck = pMillis();
+            }
+            
+            /* Check for buffer PAGE TIMEOUT to pull last partial buffer in from IOP
              *-------------------------------------------------------------------------------*/
             if (pElapsed(httpCtrl->bufPageSwapTck, httpCtrl->bufPageTimeout))
             {
                 if (rxPageDataAvailable(bufPtr, bufPtr->iopPg) > 0)
                 {
+                    PRINTF(dbgColor__cyan, "PageTO-BSwapOut:%d> ", bufPtr->iopPg);
                     IOP_swapRxBufferPage(bufPtr);
-                    httpCtrl->bufPageSwapTck = pMillis();
                 }
             }
 
-            if (httpCtrl->httpStatus == httpState_idle)                                     // if page trailer detected
-                break;                                                                      // exit now, after app data delivered
-
-            /* catch REQUEST timeout here, so we don't wait forever.
+            /* catch REQUEST TIMEOUT here, so we don't wait forever.
             *-----------------------------------------------------------------------------------------------------------*/
             if (pElapsed(((atcmd_t*)g_ltem.atcmd)->invokedAt, timeoutMS))                  // if check for request timeout
             {
-                httpCtrl->requestState = httpState_idle;
+                httpCtrl->requestState = httpState_closing;
                 httpCtrl->httpStatus = resultCode__timeout;
+            }
+
+            if (httpCtrl->requestState == httpState_closing)                                // if page trailer detected
+            {
+                httpCtrl->requestState = httpState_idle;
                 iopPtr->rxStreamCtrl = NULL;
-                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg, true);                    // delivered, reset buffer and reset ready
                 break;
             }
 
         } while (true);
+
+        if (httpCtrl->pageCancellation)
+            httpCtrl->httpStatus = resultCode__cancelled;
 
         atcmd_close();                                                                      // close the GET\POST request and release atcmd lock
         return httpCtrl->httpStatus;
@@ -591,6 +563,26 @@ static uint16_t S_parseRequestResponse(httpCtrl_t *httpCtrl, const char *respons
     return httpCtrl->httpStatus;
 }
 
+
+static uint16_t S_setUrl(const char *url, uint16_t timeoutSec)
+{
+    uint16_t atResult;
+
+    atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(10), atcmd_connectPromptParser);
+    uint8_t urlState = 0;
+    atcmd_invokeReuseLock("AT+QHTTPURL=%d,%d", strlen(url), timeoutSec);
+    atResult = atcmd_awaitResult();
+    if (atResult == resultCode__success)                                            // waiting for URL prompt "CONNECT"
+    {
+        urlState++;
+        atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(10), atcmd__useDefaultOKCompletionParser); 
+        atcmd_sendCmdData(url, strlen(url), "");                                    // wait for BGx OK (send complete) 
+        atResult = atcmd_awaitResult();
+        if (atResult == resultCode__success)
+            urlState++;
+    }
+    return (urlState == 2) ? resultCode__success : atResult;
+}
 
 
 static resultCode_t S_httpGetStatusParser(const char *response, char **endptr) 

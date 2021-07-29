@@ -49,7 +49,7 @@ bool tls_configure(dataContext_t context, tlsVersion_t version, tlsCipher_t ciph
 {
     if (version != tlsVersion_doNotChange)                              // set SSL/TLS version
     {
-        if (atcmd_tryInvokeDefaults("AT+QSSLCFG=\"sslversion\",%d,%d", context, version))
+        if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d,%d", context, version))
         {
             if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
                 return false;
@@ -58,7 +58,7 @@ bool tls_configure(dataContext_t context, tlsVersion_t version, tlsCipher_t ciph
     // set cipher suite
     if (cipherSuite != tlsCipher_doNotChange)
     {
-        if (atcmd_tryInvokeDefaults("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", context, cipherSuite))
+        if (atcmd_tryInvoke("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", context, cipherSuite))
         {
             if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
                 return false;
@@ -67,7 +67,7 @@ bool tls_configure(dataContext_t context, tlsVersion_t version, tlsCipher_t ciph
     // set certificate expiration check
     if (certExpirationCheck != tlsCertExpiration_doNotChange)
     {
-        if (atcmd_tryInvokeDefaults("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", context, certExpirationCheck))
+        if (atcmd_tryInvoke("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", context, certExpirationCheck))
         {
             if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
                 return false;
@@ -77,7 +77,7 @@ bool tls_configure(dataContext_t context, tlsVersion_t version, tlsCipher_t ciph
     // set security level
     if (securityLevel != tlsSecurityLevel_doNotChange)
     {
-        if (atcmd_tryInvokeDefaults("AT+QSSLCFG=\"seclevel\",%d,%d", context, securityLevel))
+        if (atcmd_tryInvoke("AT+QSSLCFG=\"seclevel\",%d,%d", context, securityLevel))
         {
             if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
                 return false;
@@ -92,7 +92,7 @@ tlsOptions_t tlsGetOptions(dataContext_t context)
 {
     tlsOptions_t result = {0};
 
-    if (atcmd_tryInvokeDefaults("AT+QSSLCFG=\"sslversion\",%d", (uint8_t)context))    // get SSL\TLS version
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d", (uint8_t)context))    // get SSL\TLS version
     {   
         if (atcmd_awaitResult() == resultCode__success)
         {

@@ -604,8 +604,9 @@ S_processReceivedMessage(dataContext_t dataCntxt)
         }
     }
     discardBuffer:
-    IOP_resetRxDataBufferPage(bufPtr, 0, true);               // delivered, clear buffer
-    IOP_resetRxDataBufferPage(bufPtr, 1, true);               // delivered, clear buffer
+    IOP_resetRxDataBufferPage(bufPtr, 0);               // delivered, clear buffer
+    IOP_resetRxDataBufferPage(bufPtr, 1);               // delivered, clear buffer
+    bufPtr->iopPg = 0;
     iopPtr->rxStreamCtrl = NULL;
 }
 

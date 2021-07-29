@@ -100,7 +100,7 @@ void IOP_resetCoreRxBuffer();
 
 uint16_t IOP_initRxBufferCtrl(rxDataBufferCtrl_t *bufCtrl, uint8_t *rxBuf, uint16_t rxBufSz);
 void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufPtr);
-void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page, bool streamEot);
+void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page);
 
 void IOP_registerStream(streamPeer_t stream, iopStreamCtrl_t *streamCtrl);
 

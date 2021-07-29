@@ -99,7 +99,7 @@ inline void atcmd_restoreOptionDefaults()
  * 
  *  \return True if action was invoked, false if not
  */
-bool atcmd_tryInvokeDefaults(const char *cmdStrTemplate, ...)
+bool atcmd_tryInvoke(const char *cmdStrTemplate, ...)
 {
     if (((atcmd_t*)g_ltem.atcmd)->isOpenLocked)
         return false;
@@ -131,7 +131,7 @@ bool atcmd_tryInvokeDefaults(const char *cmdStrTemplate, ...)
  * 
  *  \return True if action was invoked, false if not
  */
-bool atcmd_tryInvokeOptions(const char *cmdStrTemplate, ...)
+bool atcmd_tryInvokeAutoLockWithOptions(const char *cmdStrTemplate, ...)
 {
     if (((atcmd_t*)g_ltem.atcmd)->isOpenLocked)
         return false;

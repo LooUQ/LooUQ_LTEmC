@@ -133,16 +133,16 @@ resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uin
     {
     case protocol_udp:
         atcmd_setOptions(atcmd__setLockModeAuto, sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
-        atcmd_tryInvokeOptions("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
+        atcmd_tryInvokeAutoLockWithOptions("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
         break;
   case protocol_tcp:
         atcmd_setOptions(atcmd__setLockModeAuto, sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
-        atcmd_tryInvokeOptions("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
+        atcmd_tryInvokeAutoLockWithOptions("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
         break;
 
     case protocol_ssl:
         atcmd_setOptions(atcmd__setLockModeAuto, sckt__defaultOpenTimeoutMS, S_sslOpenCompleteParser);
-        atcmd_tryInvokeOptions("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
+        atcmd_tryInvokeAutoLockWithOptions("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
         break;
     }
     // await result of open from inside switch() above
@@ -356,7 +356,7 @@ void S_scktDoWork()
                     scktPtr->dataRecvCB(dataCntxt, bufPtr->pages[!bufPtr->iopPg].tail, applAvailable);
                     scktPtr->irdRemaining -= applAvailable;
                 }
-                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg, false);               // delivered, clear buffer page
+                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);                  // delivered, clear buffer page
             }
 
             if (scktPtr->irdRemaining == 0)                                         // IRD segement complete
@@ -368,7 +368,7 @@ void S_scktDoWork()
                 scktPtr->dataPending = false;
                 scktPtr->flushing = false;
                 scktPtr->doWorkLastTck = pMillis();                                 // leaving URC\IRD servicing, restart URC cycle
-                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg, false);           // IRD response buffer processed, clear buffer page
+                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);                  // IRD response buffer processed, clear buffer page
                 atcmd_close();                                                      // close IRD request action and release action lock
                 break;
             }

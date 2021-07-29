@@ -77,7 +77,8 @@ typedef enum httpState_tag
 {
     httpState_idle = 0,
     httpState_requestComplete,
-    httpState_readingData
+    httpState_readingData,
+    httpState_closing
 } httpState_t;
 
 

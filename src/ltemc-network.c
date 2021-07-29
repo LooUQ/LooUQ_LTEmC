@@ -197,14 +197,12 @@ pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
 void ntwk_activatePdpContext(uint8_t cntxtId)
 {
     atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, s_contextStatusCompleteParser);
-    if (atcmd_awaitLock(atcmd__useDefaultTimeout))
+
+    if (atcmd_tryInvokeAutoLockWithOptions("AT+QIACT=%d\r", cntxtId))
     {
-        if (atcmd_tryInvokeOptions("AT+QIACT=%d\r", cntxtId))
-        {
-            resultCode_t atResult = atcmd_awaitResult();
-            if ( atResult == resultCode__success)
-                ntwk_getActivePdpCntxtCnt();
-        }
+        resultCode_t atResult = atcmd_awaitResult();
+        if ( atResult == resultCode__success)
+            ntwk_getActivePdpCntxtCnt();
     }
     atcmd_close();
 }

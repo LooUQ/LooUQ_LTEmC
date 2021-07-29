@@ -152,7 +152,7 @@ void qbg_reset()
  */
 void qbg_start()
 {
-    atcmd_tryInvokeDefaults("AT");
+    atcmd_tryInvoke("AT");
     atcmd_awaitResult();
 
     // init BGx state
@@ -236,7 +236,7 @@ bool S_issueStartCommand(const char *cmdStr)
     uint8_t attempts = 0;
     do
     {
-        if (atcmd_tryInvokeDefaults(cmdStr) && atcmd_awaitResult() == resultCode__success)
+        if (atcmd_tryInvoke(cmdStr) && atcmd_awaitResult() == resultCode__success)
             return true;
 
         attempts++;
@@ -245,7 +245,7 @@ bool S_issueStartCommand(const char *cmdStr)
         qbg_powerOn();
         IOP_awaitAppReady();
         
-        atcmd_tryInvokeDefaults("AT");                                                  // toss out an empty AT command to flush any debris in the command channel
+        atcmd_tryInvoke("AT");                                                  // toss out an empty AT command to flush any debris in the command channel
         atcmd_awaitResult();
     } while (attempts <= BGX__initCommandAttempts);
 

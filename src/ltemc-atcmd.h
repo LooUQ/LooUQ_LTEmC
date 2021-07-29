@@ -101,8 +101,8 @@ extern "C" {
 void atcmd_setOptions(bool lockModeAuto, uint32_t timeoutMS, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr));
 void atcmd_restoreOptionDefaults();
 
-bool atcmd_tryInvokeDefaults(const char *cmdStr, ...);
-bool atcmd_tryInvokeOptions(const char *cmdStr, ...);
+bool atcmd_tryInvoke(const char *cmdStr, ...);
+bool atcmd_tryInvokeAutoLockWithOptions(const char *cmdStr, ...);
 void atcmd_invokeReuseLock(const char *cmdStr, ...);
 void atcmd_sendCmdData(const char *data, uint16_t dataSz, const char* eotPhrase);
 

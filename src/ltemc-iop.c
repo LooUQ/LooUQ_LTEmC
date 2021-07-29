@@ -265,7 +265,7 @@ uint16_t IOP_initRxBufferCtrl(rxDataBufferCtrl_t *bufCtrl, uint8_t *rxBuf, uint1
  *
  *  \param bufCtrl [in] RX data buffer to sync.
  * 
- *  \return Index of consumer (to empty) page following swap
+ *  \return True if overflow detected: buffer being assigned to IOP for filling is not empty
  */
 void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufCtrl)
 {
@@ -273,7 +273,7 @@ void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufCtrl)
     ((iop_t*)g_ltem.iop)->rxLastRecvTck = 0;
 
     bufCtrl->_nextIopPg = !bufCtrl->iopPg;     // set intent, used to check state if swap interrupted
-    bufCtrl->bufferSync = true;                // set bufferSync, IOP ISR will not enter critical buffer section
+    bufCtrl->bufferSync = true;                // set bufferSync, IOP ISR will finish swap if interrupted
 
     if (bufCtrl->iopPg != bufCtrl->_nextIopPg)
         bufCtrl->iopPg = bufCtrl->_nextIopPg;
@@ -316,12 +316,10 @@ static inline uint8_t S_convertToContextId(const char cntxtChar)
  *  \param page [in] Index to buffer page to be reset
  *  \param streamEot [in] True if the stream has complete and the "completion" check fields should also be cleared
  */
-void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page, bool streamEot)
+void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page)
 {
     //memset(bufPtr->pages[page]._buffer, 0, (bufPtr->pages[page].head - bufPtr->pages[page]._buffer));
     bufPtr->pages[page].head = bufPtr->pages[page].prevHead = bufPtr->pages[page].tail = bufPtr->pages[page]._buffer;
-    if (streamEot)
-        bufPtr->iopPg = 0;
 }
 
 
@@ -608,8 +606,10 @@ static void S_interruptCallbackISR()
                     PRINTF(dbgColor__cyan, "-data(%d:%d) ", iopPg, fillLevel);
                     if (fillLevel > dataBufCtrl->_pageSz - IOP__uartFIFOBufferSz)
                     {
+                        PRINTF(dbgColor__cyan, "-BSw-%d> ", iopPg);
                         IOP_swapRxBufferPage(dataBufCtrl);
-                        dataBufCtrl->_overflow = dataBufCtrl->pages[iopPg].head != dataBufCtrl->pages[iopPg]._buffer;   // data in swapped in buffer: OVERFLOW
+                        // check buffer page swapped in for head past page start: OVERFLOW
+                        dataBufCtrl->_overflow =  dataBufCtrl->pages[dataBufCtrl->_nextIopPg].head != dataBufCtrl->pages[dataBufCtrl->_nextIopPg]._buffer;
                     }
                 }
                 else                                                                            // in COMMAND\EVENT mode (aka not data mode), use core buffer

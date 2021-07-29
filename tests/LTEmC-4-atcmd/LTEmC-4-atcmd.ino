@@ -87,7 +87,7 @@ void loop()
     char cmdStr[] = "ATI\r\0";
     PRINTF(dbgColor__none, "Invoking cmd: %s \r\n", cmdStr);
 
-    if (atcmd_tryInvokeDefaults(cmdStr))
+    if (atcmd_tryInvoke(cmdStr))
     {
         resultCode_t atResult = atcmd_awaitResult();
         

@@ -67,9 +67,7 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEmC Test 6: GNSS\r");
-   
     randomSeed(analogRead(0));
-
     assert_init(NULL, appNotifyCB);                                 // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem

@@ -137,7 +137,7 @@ int16_t mdminfo_rssi()
     uint8_t csq = 0;
     int8_t rssi;
 
-    if (atcmd_tryInvokeDefaults("AT+CSQ"))
+    if (atcmd_tryInvoke("AT+CSQ"))
     {
         if (atcmd_awaitResult() == resultCode__success)
         {

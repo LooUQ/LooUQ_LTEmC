@@ -73,7 +73,7 @@ static resultCode_t gnssLocCompleteParser(const char *response, char **endptr);
  */
 resultCode_t gnss_on()
 {
-    if (atcmd_tryInvokeDefaults("AT+QGPS=1"))
+    if (atcmd_tryInvoke("AT+QGPS=1"))
     {
         return atcmd_awaitResult();
     }

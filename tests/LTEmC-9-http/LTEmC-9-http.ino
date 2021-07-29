@@ -60,8 +60,12 @@ uint16_t loopCnt = 1;
 uint32_t lastCycle;
 
 // ltem1 variables
-static httpCtrl_t httpCtrl;
-static httpCtrl_t *httpPtr = &httpCtrl;
+/* To avoid having to prefix httpCtrl1 with & in calls below, you can create a pointer
+ * variable with: "httpCtrl_t *httpCtrl1 = &httpCtrl;"   */
+httpCtrl_t httpCtrl1;                    
+httpCtrl_t httpCtrl2;
+httpCtrl_t *httpPtr;                            // used for common READ 
+
 static char webPageBuf[1024];
 //char cstmHdrs[256];                           // if you use custom HTTP headers then create a buffer to hold them
 
@@ -114,12 +118,15 @@ void setup() {
      * -- https://forecast.weather.gov/obslocal.php?warnzone=MIZ026&local_place=Traverse%20City%20MI&zoneid=EDT&offset=14400
      */
 
-    // // create a control for talking to the website
-    // http_initControl(httpPtr, dataContext_0, "https://api.weather.gov", webPageBuf, sizeof(webPageBuf), httpRecvCB);
-    // PRINTF(dbgColor__dGreen, "URL Host=%s\r", httpCtrl.urlHost);
+    // create a control for talking to the website
+    http_initControl(&httpCtrl1, dataContext_0, "https://api.weather.gov", webPageBuf, sizeof(webPageBuf), httpRecvCB);
+    PRINTF(dbgColor__dGreen, "URL Host1=%s\r", httpCtrl1.urlHost);
 
-    http_initControl(httpPtr, dataContext_0, "http://httpbin.org", webPageBuf, sizeof(webPageBuf), httpRecvCB);
-    PRINTF(dbgColor__dGreen, "URL Host=%s\r", httpCtrl.urlHost);
+    // you can use httpPtr or &httpCtrl in the line above to pass reference, below the &httpCtrl2 style is required
+    // since there is no "ptr" variable created (around line 65) to use here
+
+    http_initControl(&httpCtrl2, dataContext_1, "http://httpbin.org", webPageBuf, sizeof(webPageBuf), httpRecvCB);
+    PRINTF(dbgColor__dGreen, "URL Host2=%s\r", httpCtrl2.urlHost);
 }
 
 resultCode_t rslt;
@@ -135,30 +142,37 @@ void loop()
         lastCycle = pMillis();
         pageChars = 0;
 
-        // // resultCode_t http_get(httpCtrl_t *httpCtrl, const char* url, uint8_t timeoutSeconds);
-        // rslt = http_get(httpPtr, "/points/44.7582,-85.6022", http__noResponseHeaders, http__useDefaultTimeout);
-        // if (rslt == resultCode__success)
-        // {
-        //     PRINTF(dbgColor__info, "GET invoked successfully\r");
-        // }
-        // else
-        //     PRINTF(dbgColor__warn, "HTTP request failed\r");
-
-
-        char postData[] = "{ \"field1\": 1, \"field2\": \"field2\" }";
-
-        // resultCode_t http_post(httpCtrl_t *httpCtrl, const char* url, const char* postData, uint16_t dataSz, uint8_t timeoutSeconds);
-        rslt = http_post(httpPtr, "/anything", http__noResponseHeaders, postData, strlen(postData), http__useDefaultTimeout);
-        if (rslt == resultCode__success)
+        if (loopCnt % 2 == 1)
         {
-            PRINTF(dbgColor__info, "POST invoked successfully\r");
+            // resultCode_t http_get(httpCtrl_t *httpCtrl, const char* url, uint8_t timeoutSeconds);
+            // default HTTP timeout is 60 seconds
+            rslt = http_get(&httpCtrl1, "/points/44.7582,-85.6022", http__noResponseHeaders, http__useDefaultTimeout);
+            if (rslt == resultCode__success)
+            {
+                httpPtr = &httpCtrl1;
+                PRINTF(dbgColor__info, "GET invoked successfully\r");
+            }
+            else
+                PRINTF(dbgColor__warn, "HTTP GET failed, status=%d\r", rslt);
         }
         else
-            PRINTF(dbgColor__warn, "HTTP request failed\r");
+        {
+            char postData[] = "{ \"field1\": 1, \"field2\": \"field2\" }";
+
+            // resultCode_t http_post(httpCtrl_t *httpCtrl, const char* url, const char* postData, uint16_t dataSz, uint8_t timeoutSeconds);
+            rslt = http_post(&httpCtrl2, "/anything", http__noResponseHeaders, postData, strlen(postData), http__useDefaultTimeout);
+            if (rslt == resultCode__success)
+            {
+                httpPtr = &httpCtrl2;
+                PRINTF(dbgColor__info, "POST invoked successfully\r");
+            }
+            else
+                PRINTF(dbgColor__warn, "HTTP POST failed, status=%d\r", rslt);
+        }
 
 
-        /* The page request (GET\POST) has completed at this point and all or most of the web content has be retrieved
-         * to the LTEm modem device. If all you care about is the status (200, 400, 404 etc.), your done.
+        /* The page request (GET\POST) has completed at this point and all or most of the web content has been
+         * retrieved to the LTEm modem device. If all you care about is the status (200, 400, 404 etc.), your done.
          *
          * If you want to read the web content returned use the http_readPage() function to initiate a background
          * stream to your HTTP callback function. The http_readPage() returns when the background processing has
@@ -185,32 +199,12 @@ void loop()
                     break;
                 
                 default:
+                    PRINTF(dbgColor__warn, "Problem reading page contents, result=%d.", rslt);
                     break;
                 }
             }
         }
-
-
-        // rslt = http_awaitResult(httpPtr, 5);                         // block here (there a yields() behind the scenes)
-
-        // -OR-
-
-        // uint32_t ckCnt = 1;
-        // rslt = http_getFinalResult(httpPtr);
-        // while (rslt == 0)              // perform other application duties in a loop
-        // {
-        //     PRINTF(dbgColor__gray, ".", ckCnt);
-        //     lDelay(1000);
-        //     ckCnt++;
-        //     /* do something else */
-        //     rslt = http_getFinalResult(httpPtr);
-        // }
-
-        // PRINTF(dbgColor__info, "Web request completed with status=%d\r", rslt);
-
-        // -OR-
-
-        // do nothing to retrieve status, if you don't care. Callback func() will receive data until page cancelled or complete
+        loopCnt++;
     }
 
     /* NOTE: Advance data pipeline, ltem_doWork(). DoWork has no side effects other than taking a small amount of
@@ -225,13 +219,16 @@ void httpRecvCB(dataContext_t cntxt, uint16_t httpStatus, char *recvData, uint16
 {
     // recvData[dataSz-1] = '\0';
     // PRINTF(dbgColor__info, "(%d) %s", httpStatus, recvData);
+    
     memcpy(pageBuffer + pageChars, recvData, dataSz);
     pageChars += dataSz;
 
-    if (loopCnt % 2 == 1 && pageChars >= 1000)
-    {
-        http_cancelPage(httpPtr);
-    }
+    PRINTF(dbgColor__green, "\rAppRecv'd %d new chars, total page sz=%d\r", dataSz, strlen(pageBuffer));
+
+    // if (loopCnt % 2 == 1 && pageChars >= 1000)
+    // {
+    //     http_cancelPage(httpPtr);
+    // }
 }
 
 
