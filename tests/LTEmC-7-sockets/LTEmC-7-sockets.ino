@@ -91,7 +91,7 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEmC Test:7 Sockets\r\n");
-    assert_init(NULL, appNotifyCB);                                 // configure ASSERTS to callback into application
+    assert_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
     ltem_start();                                                   // ... and start it

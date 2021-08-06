@@ -54,19 +54,6 @@
 // #include "ltemc-geo.h"
 
 
-enum ltem__constants
-{
-    /* can be reduced based on you protocol selections and your data segment sizes */
-    LTEM__txBufferSize = 1800,              // size should be equal or greater than length of largest data transmission
-
-    /* recommended that values below not be adjusted */
-    LTEM__rxCoreBufferSize = 256           // the RX buffer that handles atCmd responses AND async BGx events
-
-    // To adjust the size of the AT command buffer (outgoing longest command see ltemc-atcmd.h). The AT cmd buffer needs 
-    // to be at least 384 if using MQTT (MQTT connect command)
-};
-
-
 
 /* LTEmC global fields/properties as Singleton 
  * Kept internal here, future support for multiple LTEmC instances would replace this with function calls to serve instances

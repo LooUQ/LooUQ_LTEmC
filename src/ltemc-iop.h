@@ -29,7 +29,7 @@
 #ifndef __LTEMC_IOP_H__
 #define __LTEMC_IOP_H__
 
-#include "ltemc-internal.h"
+//#include "ltemc-internal.h"
 #include "ltemc-cbuf.h"
 #include "ltemc-streams.h"
 #include "ltemc-nxp-sc16is.h"
@@ -37,6 +37,10 @@
 
 enum
 {
+    /* can be reduced based on you protocol selections and your data segment sizes */
+    IOP__txBufferSize = 1800,              // size should be equal or greater than length of largest data transmission
+    IOP__rxCoreBufferSize = 192,
+
     IOP__uartFIFOBufferSz = 64,
     IOP__uartFIFO_fillMS = 6
 };

@@ -176,7 +176,7 @@ typedef struct mqttTopicSub_tag
  *  \param data [in] Pointer to received data buffer
  *  \param dataSz [in] The number of bytes available
 */
-typedef void (*mqttRecvFunc_t)(dataContext_t dataCntxt, uint8_t topicIndx, char *topicProps, char *message, uint16_t messageSz);
+typedef void (*mqttRecvFunc_t)(dataContext_t dataCntxt, uint16_t msgId, const char *topic, char *topicProps, char *message, uint16_t messageSz);
 
 
 /** 
@@ -188,13 +188,16 @@ typedef struct mqttCtrl_tag
     dataContext_t dataCntxt;                    ///< Data context where this control operates
     protocol_t protocol;                        ///< Control's protocol : UDP/TCP/SSL, MQTT, HTTP, etc.
     bool useTls;                                ///< flag indicating SSL/TLS applied to stream
-    rxDataBufferCtrl_t *recvBufCtrl;            ///< RX smart buffer 
+    rxDataBufferCtrl_t recvBufCtrl;             ///< RX smart buffer 
 
     mqttRecvFunc_t dataRecvCB;                  ///< callback to application, signals data ready
     mqttVersion_t useMqttVersion;
     mqttStatus_t state;                         ///< Current state of the MQTT protocol services on device.
     uint16_t msgId;                             ///< MQTT in-flight message ID, automatically incremented, rolls at max value.
-    mqttTopicSub_t topicSubs[MQTT_TOPIC_CNT];   ///< Array of MQTT topic subscriptions.
+    mqttTopicSub_t topicSubs[mqtt__topicCnt];   ///< Array of MQTT topic subscriptions.
+    uint32_t doWorkLastTck;                     ///< last check for URC\dataPending
+    uint32_t doWorkTimeout;                     ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
+    uint16_t lastBufferReqd;                    ///< last receive buffer required size, provides feedback to developer to minimize buffer sizing     
 } mqttCtrl_t;
 
 
@@ -214,6 +217,8 @@ void mqtt_close(mqttCtrl_t *mqttCtrl);
 uint8_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos);
 resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic);
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message);
+
+uint16_t mqtt_getLastBufferReqd(mqttCtrl_t *mqttCtrl);
 
 #ifdef __cplusplus
 }
