@@ -26,15 +26,7 @@
 #ifndef __LTEMC_ATCMD_H__
 #define __LTEMC_ATCMD_H__
 
-// #include <stddef.h>
-// #include <stdint.h>
-#include <ltemc.h>
-
-// #define ACTION_TIMEOUTms             500        ///< Default number of millis to wait for action to complete, can be overridden in action_tryInvokeAdv()
-
-// // structure sizing
-// #define ACTION_HISTRESPBUF_SZ        240        ///< Size of response captured by action history (action error diagnostics)
-
+#include "ltemc-iop.h"
 
 enum
 {
@@ -44,9 +36,8 @@ enum
     atcmd__setLockModeManual = 0,
     atcmd__setLockModeAuto = 1,
 
-    // LTEmC internal constants
+    /* recommended that values below not be adjusted */
     ATCMD__defaultTimeoutMS = 800,
-    ATCMD__commandBufferSz = 256,
     ATCMD__parserPendingResult = 0xFFFF      ///< private declaration; value returned from response parsers indicating a pattern match has not yet been detected
 };
 
@@ -68,7 +59,7 @@ enum
 */
 typedef struct atcmd_tag
 {
-    char cmdStr[ATCMD__commandBufferSz];      ///< AT command string to be passed to the BGx module.
+    char cmdStr[IOP__rxCoreBufferSize];         ///< AT command string to be passed to the BGx module.
     uint32_t timeoutMS;                         ///< Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
     bool autoLock;                              ///< next invoke should acquire lock (true), or reuse lock (false)
     bool isOpenLocked;                          ///< True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.

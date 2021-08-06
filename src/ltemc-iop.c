@@ -82,6 +82,10 @@
 
 extern ltemDevice_t g_ltem;
 
+// debuggin temporary
+uint8_t dbg_urcInCmdLock = 0;
+
+
 /* Static Local Functions Declarations
 ------------------------------------------------------------------------------------------------ */
 static cbuf_t *S_createTxBuffer();
@@ -113,7 +117,7 @@ void IOP_create()
     ASSERT(g_ltem.iop != NULL, srcfile_iop_c);
 
     ((iop_t*)g_ltem.iop)->txBuf = S_createTxBuffer();
-    ((iop_t*)g_ltem.iop)->rxCBuffer = S_createRxCoreBuffer(LTEM__rxCoreBufferSize);        // create cmd/default RX buffer
+    ((iop_t*)g_ltem.iop)->rxCBuffer = S_createRxCoreBuffer(IOP__rxCoreBufferSize);        // create cmd/default RX buffer
     ((iop_t*)g_ltem.iop)->scktMap = 0;
     ((iop_t*)g_ltem.iop)->scktLstWrk = 0;
     ((iop_t*)g_ltem.iop)->mqttMap = 0;
@@ -338,13 +342,13 @@ static cbuf_t *S_createTxBuffer()
     if (txBuf == NULL)
         return NULL;
 
-    txBuf->buffer = calloc(1, LTEM__txBufferSize);
+    txBuf->buffer = calloc(1, IOP__txBufferSize);
     if (txBuf->buffer == NULL)
     {
         free(txBuf);
         return NULL;
     }
-    txBuf->maxlen = LTEM__txBufferSize;
+    txBuf->maxlen = IOP__txBufferSize;
     return txBuf;
 }
 
@@ -451,12 +455,12 @@ static uint16_t S_takeTx(char *data, uint16_t dataSz)
  *  
  *  Internal only function. Dependency in atcmd
  */
-void IOP_rxParseForEvents()
+void IOP_rxParseForUrcEvents()
 {
-    char *urcPrefix = memchr(((iop_t*)g_ltem.iop)->rxCBuffer->prevHead, '+', 6);             // all URC start with '+', skip leading \r\n 
-    if (urcPrefix)
+    char *urcStartPtr = memchr(((iop_t*)g_ltem.iop)->rxCBuffer->prevHead, '+', 6);             // all URC start with '+', skip leading \r\n 
+    if (urcStartPtr)
     {
-        if (((iop_t*)g_ltem.iop)->scktMap > 0 && memcmp("+QSSLURC: \"recv", urcPrefix, strlen("+QSSLURC: \"recv")) == 0)    // shortcircuit if no sockets
+        if (((iop_t*)g_ltem.iop)->scktMap > 0 && memcmp("+QSSLURC: \"recv", urcStartPtr, strlen("+QSSLURC: \"recv")) == 0)    // shortcircuit if no sockets
         {
             PRINTF(dbgColor__cyan, "-p=sslURC");
             char *connIdPtr = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead + strlen("+QSSLURC: \"recv");
@@ -467,7 +471,7 @@ void IOP_rxParseForEvents()
             ((iop_t*)g_ltem.iop)->rxCBuffer->head = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead;
         }
 
-        else if (((iop_t*)g_ltem.iop)->scktMap && memcmp("+QIURC: \"recv", urcPrefix, strlen("+QIURC: \"recv")) == 0)       // shortcircuit if no sockets
+        else if (((iop_t*)g_ltem.iop)->scktMap && memcmp("+QIURC: \"recv", urcStartPtr, strlen("+QIURC: \"recv")) == 0)       // shortcircuit if no sockets
         {
             PRINTF(dbgColor__cyan, "-p=ipURC");
             char *cntxIdPtr = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead + strlen("+QIURC: \"recv");
@@ -478,32 +482,29 @@ void IOP_rxParseForEvents()
             ((iop_t*)g_ltem.iop)->rxCBuffer->head = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead;
         }
 
-        else if (((iop_t*)g_ltem.iop)->mqttMap && memcmp("+QMTRECV:", urcPrefix, strlen("+QMTRECV")) == 0)
+        else if (((iop_t*)g_ltem.iop)->mqttMap && memcmp("+QMTRECV:", urcStartPtr, strlen("+QMTRECV")) == 0)
         {
             PRINTF(dbgColor__cyan, "-p=mqttR");
-            char *cntxIdPtr = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead + strlen("+QMTRECV: ");
-            char *endPtr = NULL;
-            //uint8_t cntxtId = (uint8_t)strtol(cntxIdPtr, &endPtr, 10);
-            uint8_t cntxtId = S_convertToContextId(*cntxIdPtr);
-
+            //char *endPtr = NULL;
+            char *continuePtr = urcStartPtr + strlen("+QMTRECV: ");
+            uint8_t cntxtId = S_convertToContextId(*continuePtr);
             ASSERT(((iop_t*)g_ltem.iop)->rxStreamCtrl == NULL, srcfile_iop_c);                                  // should not be inside another stream recv
 
+            dbg_urcInCmdLock += ((atcmd_t*)g_ltem.atcmd)->isOpenLocked;
+
             // this chunk, contains both meta data for receive and the data, need to copy this chunk to start of rxDataBuffer for context
-            rxDataBufferCtrl_t *dataBuf = &(((baseCtrl_t*)((iop_t*)g_ltem.iop)->rxStreamCtrl)->recvBufCtrl);
             ((iop_t*)g_ltem.iop)->rxStreamCtrl = ((mqttCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[cntxtId]);    // put IOP in datamode for context new recv as data
+            rxDataBufferCtrl_t *dBufPtr = &(((baseCtrl_t*)((iop_t*)g_ltem.iop)->rxStreamCtrl)->recvBufCtrl);    // get reference to context specific data RX buffer
 
+            // move received from core\cmd buffer to context data buffer, preserving prefix text for overflow detection (prefix & trailer text must be in same buffer)
+            memcpy(dBufPtr->pages[dBufPtr->iopPg]._buffer, urcStartPtr, ((iop_t*)g_ltem.iop)->rxCBuffer->head - urcStartPtr);
+            dBufPtr->pages[dBufPtr->iopPg].head += ((iop_t*)g_ltem.iop)->rxCBuffer->head - urcStartPtr;
+            // memcpy(dBufPtr->_buffer, continuePtr, ((iop_t*)g_ltem.iop)->rxCBuffer->head - continuePtr);     // move to data buffer (from cmd\core)
 
-
-// check pointer here, skip prefix and data context + ","
-// keep starting at msgID
-
-
-
-            memcpy(dataBuf->_buffer, urcPrefix, ((iop_t*)g_ltem.iop)->rxCBuffer->head - urcPrefix);             // move to data buffer (from cmd\core)
             ((iop_t*)g_ltem.iop)->rxCBuffer->head = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead;                  // drop recv'd from cmd\core buffer, processed here
         }
 
-        else if (((iop_t*)g_ltem.iop)->mqttMap && memcmp("+QMTSTAT:", urcPrefix, strlen("+QMTSTAT:")) == 0)
+        else if (((iop_t*)g_ltem.iop)->mqttMap && memcmp("+QMTSTAT:", urcStartPtr, strlen("+QMTSTAT:")) == 0)
         {
             PRINTF(dbgColor__cyan, "-p=mqttS");
             char *cntxIdPtr = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead + strlen("+QIURC: \"recv");
@@ -512,7 +513,7 @@ void IOP_rxParseForEvents()
             ((mqttCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[cntxId])->state = mqttStatus_closed;
         }
 
-        else if (memcmp("+QIURC: \"pdpdeact", urcPrefix, strlen("+QIURC: \"pdpdeact")) == 0)
+        else if (memcmp("+QIURC: \"pdpdeact", urcStartPtr, strlen("+QIURC: \"pdpdeact")) == 0)
         {
             PRINTF(dbgColor__cyan, "-p=pdpD");
 
@@ -595,21 +596,21 @@ static void S_interruptCallbackISR()
                 iop_t *iopPtr = ((iop_t*)g_ltem.iop);
                 if (iopPtr->rxStreamCtrl != NULL)                                               // in DATA mode
                 {
-                    rxDataBufferCtrl_t *dataBufCtrl = S_isrCheckRxBufferSync();                         // check and get rxStream's data buffer control
-                    uint8_t iopPg = dataBufCtrl->iopPg;
-                    SC16IS741A_read(dataBufCtrl->pages[iopPg].head, rxLevel);
-                    dataBufCtrl->pages[iopPg].head += rxLevel;
+                    rxDataBufferCtrl_t *dBufPtr = S_isrCheckRxBufferSync();                         // check and get rxStream's data buffer control
+                    uint8_t iopPg = dBufPtr->iopPg;
+                    SC16IS741A_read(dBufPtr->pages[iopPg].head, rxLevel);
+                    dBufPtr->pages[iopPg].head += rxLevel;
 
-                    uint16_t fillLevel = dataBufCtrl->pages[iopPg].head - dataBufCtrl->pages[iopPg]._buffer;
+                    uint16_t fillLevel = dBufPtr->pages[iopPg].head - dBufPtr->pages[iopPg]._buffer;
                     iopPtr->rxLastRecvTck = pMillis();
 
                     PRINTF(dbgColor__cyan, "-data(%d:%d) ", iopPg, fillLevel);
-                    if (fillLevel > dataBufCtrl->_pageSz - IOP__uartFIFOBufferSz)
+                    if (fillLevel > dBufPtr->_pageSz - IOP__uartFIFOBufferSz)
                     {
                         PRINTF(dbgColor__cyan, "-BSw-%d> ", iopPg);
-                        IOP_swapRxBufferPage(dataBufCtrl);
+                        IOP_swapRxBufferPage(dBufPtr);
                         // check buffer page swapped in for head past page start: OVERFLOW
-                        dataBufCtrl->_overflow =  dataBufCtrl->pages[dataBufCtrl->_nextIopPg].head != dataBufCtrl->pages[dataBufCtrl->_nextIopPg]._buffer;
+                        dBufPtr->_overflow =  dBufPtr->pages[dBufPtr->_nextIopPg].head != dBufPtr->pages[dBufPtr->_nextIopPg]._buffer;
                     }
                 }
                 else                                                                            // in COMMAND\EVENT mode (aka not data mode), use core buffer
@@ -618,7 +619,7 @@ static void S_interruptCallbackISR()
                     SC16IS741A_read(((iop_t*)g_ltem.iop)->rxCBuffer->head, rxLevel);
                     ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead = ((iop_t*)g_ltem.iop)->rxCBuffer->head;  // save last head if RX moved/discarded
                     ((iop_t*)g_ltem.iop)->rxCBuffer->head += rxLevel;
-                    IOP_rxParseForEvents();                                                             // parse recv'd for events or immediate processing and discard
+                    IOP_rxParseForUrcEvents();                                                          // parse recv'd for events or immediate processing and discard
                 }
             }
         }

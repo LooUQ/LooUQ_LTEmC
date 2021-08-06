@@ -101,7 +101,7 @@ inline void atcmd_restoreOptionDefaults()
  */
 bool atcmd_tryInvoke(const char *cmdStrTemplate, ...)
 {
-    if (((atcmd_t*)g_ltem.atcmd)->isOpenLocked)
+    if (((atcmd_t*)g_ltem.atcmd)->isOpenLocked || ((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)
         return false;
 
     atcmd_reset(false);                                                 // clear atCmd control, no need to release lock as it is not set (above)
@@ -133,7 +133,7 @@ bool atcmd_tryInvoke(const char *cmdStrTemplate, ...)
  */
 bool atcmd_tryInvokeAutoLockWithOptions(const char *cmdStrTemplate, ...)
 {
-    if (((atcmd_t*)g_ltem.atcmd)->isOpenLocked)
+    if (((atcmd_t*)g_ltem.atcmd)->isOpenLocked || ((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)
         return false;
 
     atcmd_reset(false);                                                 // clear atCmd control, no need to release lock as it is not set (above)
@@ -349,7 +349,7 @@ void ATCMD_getResult()
         atcmdPtr->responseTail = endptr;
                                                                         // if parser left data trailing parsed content in cmd buffer: 
         if (iopPtr->rxCBuffer->tail < iopPtr->rxCBuffer->head)          // - need to parseImmediate() for URCs, as if they just arrived
-            IOP_rxParseForEvents();
+            IOP_rxParseForUrcEvents();
     }
 
     if (atcmdPtr->resultCode <= resultCode__successMax)                 // parser completed with success code
@@ -435,24 +435,45 @@ char *atcmd_getLastResponseTail()
 bool atcmd_awaitLock(uint16_t timeoutMS)
 {
     timeoutMS = (timeoutMS == atcmd__useDefaultTimeout) ? ATCMD__defaultTimeoutMS : timeoutMS;
+    uint32_t waitNow, waitStart = pMillis();
 
-    if (((atcmd_t*)g_ltem.atcmd)->isOpenLocked)
+    while (((atcmd_t*)g_ltem.atcmd)->isOpenLocked ||            // can set lock if... atCmd not open\locked
+           ((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)          // and... IOP is not in data mode (handling a receive)
     {
-        uint32_t waitNow, waitStart = pMillis();
-        do
-        {
-            pYield();
-            if (!((atcmd_t*)g_ltem.atcmd)->isOpenLocked)      // break out on atCmd (!open)
-            {
-                ((atcmd_t*)g_ltem.atcmd)->isOpenLocked = true;
-                return true;
-            }
-            waitNow = pMillis();
-        } while (waitNow - waitStart < timeoutMS);
-        return false;
+        pYield();                                               // call back to platform yield() in case there is work there
+        if (((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)
+            ltem_doWork();                                      // if data receive is blocking, give doWork an opportunity to resolve
+
+        if (waitNow - waitStart > timeoutMS)
+            return false;                                       // timed out waiting for lock
+
+        waitNow = pMillis();
     }
     ((atcmd_t*)g_ltem.atcmd)->isOpenLocked = true;
     return true;
+
+    // if (((atcmd_t*)g_ltem.atcmd)->isOpenLocked)
+    // {
+    //     uint32_t waitNow, waitStart = pMillis();
+    //     do
+    //     {
+    //         if (!((atcmd_t*)g_ltem.atcmd)->isOpenLocked &&      // can set lock if... atCmd not open\locked
+    //             ((iop_t*)g_ltem.iop)->rxStreamCtrl == NULL)     
+    //         {
+    //             ((atcmd_t*)g_ltem.atcmd)->isOpenLocked = true;
+    //             return true;
+    //         }
+    //         waitNow = pMillis();
+
+    //         pYield();                                           // call back to platform yield() in case there is work there
+    //         if (((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)
+    //             ltem_doWork();                                  // if data receive is blocking, give doWork an opportunity to resolve
+
+    //     } while (waitNow - waitStart < timeoutMS);
+    //     return false;
+    // }
+    // ((atcmd_t*)g_ltem.atcmd)->isOpenLocked = true;
+    // return true;
 }
 
 
@@ -478,7 +499,7 @@ void atcmd_reset(bool releaseOpenLock)
         ((atcmd_t*)g_ltem.atcmd)->isOpenLocked = false;                         // reset current lock
     }
 
-    memset(((atcmd_t*)g_ltem.atcmd)->cmdStr, 0, ATCMD__commandBufferSz);
+    memset(((atcmd_t*)g_ltem.atcmd)->cmdStr, 0, IOP__rxCoreBufferSize);
     // strncpy(((atcmd_t*)g_ltem.atcmd)->cmdStr, cmdStr, strlen(cmdStr));
     ((atcmd_t*)g_ltem.atcmd)->resultCode = ATCMD__parserPendingResult;
     ((atcmd_t*)g_ltem.atcmd)->invokedAt = 0;

@@ -22,6 +22,7 @@
         "cmath": "c",
         "ltemc-mqtt.h": "c",
         "ltemc-filecodes.h": "c",
-        "ltemc-atcmd.h": "c"
+        "ltemc-atcmd.h": "c",
+        "lq-str.h": "c"
     }
 }

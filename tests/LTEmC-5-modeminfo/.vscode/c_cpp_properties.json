@@ -12,7 +12,6 @@
                 "C:/Users/GregTerrell/AppData/Local/Arduino15/packages/arduino/tools/arm-none-eabi-gcc/7-2017q4/lib/gcc/arm-none-eabi/7.2.1/include-fixed",
                 "C:/Users/GregTerrell/AppData/Local/Arduino15/packages/arduino/tools/CMSIS-Atmel/1.2.0/CMSIS/Device/ATMEL",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\tools\\**",
-                "C:\\Program Files (x86)\\Arduino\\libraries\\**",
                 "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\**",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.2\\**"
             ],
@@ -55,7 +54,7 @@
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.2\\variants\\feather_m0_express",
                 "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\JLinkRTT\\src",
                 "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\LooUQ-LTEmC\\src",
-                "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\LooUQ-Common\\src",
+                "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\LooUQ-DeviceCommon\\src",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.2\\libraries\\SPI",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.2\\libraries\\Adafruit_ZeroDMA",
                 "c:\\users\\gregterrell\\appdata\\local\\arduino15\\packages\\adafruit\\tools\\arm-none-eabi-gcc\\9-2019q4\\arm-none-eabi\\include\\c++\\9.2.1",

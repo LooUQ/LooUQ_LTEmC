@@ -97,11 +97,12 @@ void sckt_initControl(scktCtrl_t *scktCtrl, dataContext_t dataCntxt, protocol_t 
     scktCtrl->dataCntxt = dataCntxt;
     scktCtrl->protocol = protocol;
     scktCtrl->useTls = protocol == protocol_ssl;
+
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(scktCtrl->recvBufCtrl), recvBuf, recvBufSz);
     ASSERT_W(recvBufSz == bufferSz, srcfile_sckt_c, "RxBufSz != multiple of 128bytes");
     ASSERT(bufferSz >= 128, srcfile_sckt_c);
+    
     scktCtrl->doWorkTimeout = (uint32_t)(scktCtrl->recvBufCtrl._bufferSz / IOP__uartFIFOBufferSz * IOP__uartFIFO_fillMS * 0.8);
-
     scktCtrl->dataRecvCB = recvCallback;
     scktCtrl->dataPending = false;
     scktCtrl->flushing = false;

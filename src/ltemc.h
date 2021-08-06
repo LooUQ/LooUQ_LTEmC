@@ -42,6 +42,13 @@
 #include "ltemc-network.h"
 
 
+/* LTEmC uses 2 global buffers: the IOP transmit buffer and the ATCMD cmd\core buffer.
+ * These are sized in the ltemc-iop.h and ltemc-atcmd.h header files respectively.
+ * LooUQ set defaults sizes are:
+ *      IOP__txBufferSize = 1800
+ *      ATCMD__commandBufferSz = 256
+ */
+
 // // optional services
 // #include "ltemc-sckt.h"
 // #include "ltemc-mqtt.h"

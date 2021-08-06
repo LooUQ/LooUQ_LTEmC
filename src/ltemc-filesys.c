@@ -26,7 +26,7 @@
  *****************************************************************************/
 
 //#define _DEBUG
-#include "ltemc.h"
+#include "ltemc-internal.h"
 #include "ltemc-filesys.h"
 
 #define FILE_CMD_SZ             81

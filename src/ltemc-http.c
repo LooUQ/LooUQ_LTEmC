@@ -56,7 +56,6 @@ extern ltemDevice_t g_ltem;
 // static void S_httpDoWork();
 static uint16_t S_parseRequestResponse(httpCtrl_t *httpCtrl, const char *responseTail);
 static uint16_t S_setUrl(const char *url, uint16_t timeoutSec);
-static char *strnstr(char *haystack, char *needle, size_t length);
 static resultCode_t S_httpGetStatusParser(const char *response, char **endptr);
 static resultCode_t S_httpPostStatusParser(const char *response, char **endptr);
 
@@ -466,7 +465,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
             /* skip "CONNECT"   (9 chars with \r\n) */
             if (httpCtrl->requestState < httpState_readingData && dataAvailable > 16)
             {
-                char *continuePtr = strnstr(bufPtr->pages[!bufPtr->iopPg]._buffer, "CONNECT\r\n", 16);
+                char *continuePtr = lq_strnstr(bufPtr->pages[!bufPtr->iopPg]._buffer, "CONNECT\r\n", 16);
                 if (continuePtr == NULL)
                     return resultCode__internalError;
                 httpCtrl->requestState = httpState_readingData;
@@ -476,7 +475,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
             /* Check for end-of-page (EOP), stop sending app data at "+QHTTPREAD: <err>" 
              *-------------------------------------------------------------------------------*/
             char *trailerSearchPtr = bufPtr->pages[!bufPtr->iopPg].head - 30;
-            char *trailerPtr = strnstr(trailerSearchPtr, "\r\nOK\r\n\r\n+QHTTPREAD: ", 30);         // stop at QHTTPREAD suffix, if found
+            char *trailerPtr = lq_strnstr(trailerSearchPtr, "\r\nOK\r\n\r\n+QHTTPREAD: ", 30);         // stop at QHTTPREAD suffix, if found
             if (trailerPtr != NULL)
             {
                 uint16_t bgxError = strtol(trailerPtr + 20, NULL, 10);
@@ -596,20 +595,3 @@ static resultCode_t S_httpPostStatusParser(const char *response, char **endptr)
     // successful parsing returns 200 (success) + code at position 0, 
     return atcmd_serviceResponseParser(response, "+QHTTPPOST: ", 0, endptr);
 }
-
-
-static char *strnstr(char *haystack, char *needle, size_t length)
-{
-    size_t needle_length = strlen(needle);
-    size_t i;
-    for (i = 0; i < length; i++) {
-        if (i + needle_length > length) {
-            return NULL;
-        }
-        if (strncmp(&haystack[i], needle, needle_length) == 0) {
-            return &haystack[i];
-        }
-    }
-    return NULL;
-}
-
