@@ -53,7 +53,7 @@
 
 #pragma region Header
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -159,7 +159,7 @@ void IOP_awaitAppReady()
     {
         pYield();
         if (apprdyWaitStart + QBG_APPREADY_MILLISMAX < pMillis())
-        ltem_notifyApp(lqNotificationType_lqDevice_hwFault,  "qbg-BGx module failed to start in the allowed time");
+        ltem_notifyApp(lqNotifType_lqDevice_hwFault,  "qbg-BGx module failed to start in the allowed time");
     }
 }
 

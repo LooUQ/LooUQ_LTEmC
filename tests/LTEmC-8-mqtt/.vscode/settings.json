@@ -24,5 +24,6 @@
         "ltemc-filecodes.h": "c",
         "ltemc-atcmd.h": "c",
         "lq-str.h": "c"
-    }
+    },
+    "C_Cpp.loggingLevel": "Debug"
 }

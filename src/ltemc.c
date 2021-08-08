@@ -202,7 +202,7 @@ void ltem_destroy()
 void ltem_doWork()
 {
     if (!ltem_chkHwReady())
-        ltem_notifyApp(lqNotificationType_lqDevice_hwFault, "LTEm1 I/O Error");
+        ltem_notifyApp(lqNotifType_lqDevice_hwFault, "LTEm1 I/O Error");
 
     for (size_t i = 0; i < sizeof(g_ltem.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)  // each stream with a doWork() register it at OPEN (removed if last CLOSE)
     {

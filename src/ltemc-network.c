@@ -25,7 +25,7 @@
  * PDP network support
  *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -101,7 +101,7 @@ networkOperator_t ntwk_awaitOperator(uint16_t waitDurSeconds)
 
     //       timed out waiting                      || global cancellation
     } while (endMillis - startMillis < waitDuration || g_ltem.cancellationRequest);
-    PRINTF(dbgColor__dMagenta, "Wait for ntwkOp=%d sec\r", (endMillis - startMillis) / 1000);
+    PRINTF(dbgColor__dMagenta, "ntwkOp returned in %d ms\r", (endMillis - startMillis) / 1000);
     return ntwk;
 }
 
@@ -124,11 +124,12 @@ uint8_t ntwk_getActivePdpCntxtCnt()
         atcmd_invokeReuseLock("AT+QIACT?");
         resultCode_t atResult = atcmd_awaitResult();
 
-        for (size_t i = 0; i < NTWK__pdpContextCnt; i++)         // empty context table return and if success refill from parsing
-        {
-            ((network_t*)g_ltem.network)->pdpCntxts[i].contextId = 0;
-            ((network_t*)g_ltem.network)->pdpCntxts[i].ipAddress[0] = 0;
-        }
+        memset(&((network_t*)g_ltem.network)->pdpCntxts, 0, sizeof(pdpCntxt_t) * NTWK__pdpContextCnt);    // empty context table for return, if success refill from parsing
+        // for (size_t i = 0; i < NTWK__pdpContextCnt; i++)         // empty context table return and if success refill from parsing
+        // {
+        //     ((network_t*)g_ltem.network)->pdpCntxts[i].contextId = 0;
+        //     ((network_t*)g_ltem.network)->pdpCntxts[i].ipAddress[0] = 0;
+        // }
 
         if (atResult != resultCode__success)
         {
@@ -194,8 +195,11 @@ pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
  * 
  *  \param cntxtId [in] - The APN to operate on. Typically 0 or 1
  */
-void ntwk_activatePdpContext(uint8_t cntxtId)
+bool ntwk_activatePdpContext(uint8_t cntxtId)
 {
+    if (ntwk_getPdpCntxt(cntxtId) != NULL)
+        return true;
+
     atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, s_contextStatusCompleteParser);
 
     if (atcmd_tryInvokeAutoLockWithOptions("AT+QIACT=%d\r", cntxtId))
@@ -205,6 +209,10 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
             ntwk_getActivePdpCntxtCnt();
     }
     atcmd_close();
+
+    if (ntwk_getPdpCntxt(cntxtId) != NULL)
+        return true;
+    return false;
 }
 
 

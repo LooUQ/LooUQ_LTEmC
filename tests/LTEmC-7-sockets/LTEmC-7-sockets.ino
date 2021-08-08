@@ -49,7 +49,7 @@
 
 #include <ltemc.h>
 #include <ltemc-sckt.h>
-#include <lq-assert.h>
+#include <lq-diagnostics.h>
 
 
 /* ----------------------------------------------------------------------------
@@ -91,7 +91,7 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEmC Test:7 Sockets\r\n");
-    assert_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
     ltem_start();                                                   // ... and start it
@@ -232,7 +232,7 @@ void showStats()
 
 void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
-    if (notifType <= lqNotificationType__LQDEVICE)
+    if (notifType <= lqNotifType__LQDEVICE)
     {
         PRINTF(dbgColor__info, "\r\n** %s \r\n", notifMsg);
         return;
@@ -240,19 +240,19 @@ void appNotifyCB(uint8_t notifType, const char *notifMsg)
 
     switch (notifType)
     {
-    case lqNotificationType_assertWarning:
+    case lqNotifType_assertWarning:
         PRINTF(dbgColor__warn, "%s\r\n", notifMsg);
         return;
-    case lqNotificationType_lqDevice_recvOverflow:
+    case lqNotifType_lqDevice_recvOverflow:
         PRINTF(dbgColor__warn, "ProtocolError: %s\r", notifMsg);
         return;
-    case lqNotificationType_lqDevice_hwFault:
+    case lqNotifType_lqDevice_hwFault:
         PRINTF(dbgColor__warn, "HardwareError: %s\r", notifMsg);
         break;
-    case lqNotificationType_lqDevice_ntwkFault:
+    case lqNotifType_lqDevice_ntwkFault:
         PRINTF(dbgColor__warn, "NetworkError: %s\r", notifMsg);
         break;
-    case lqNotificationType_lqDevice_streamFault:
+    case lqNotifType_lqDevice_streamFault:
         PRINTF(dbgColor__warn, "ProtocolError: %s\r", notifMsg);
     default:
         PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);

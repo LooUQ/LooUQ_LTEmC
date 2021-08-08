@@ -46,7 +46,6 @@
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
 #include <ltemc.h>
-#include <lq-assert.h>
 
 
 void setup() 
@@ -61,7 +60,7 @@ void setup()
     #endif
 
     PRINTF(dbgColor__red, "LTEmC test4: AT Commands\r");
-    assert_init(NULL, appNotifyCB);                               // configure ASSERTS to callback into application
+    lqDiag_registerNotifCallback(appNotifyCB);                    // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, appNotifyCB);                     // create LTEmC modem
     ltem_start();                                                 // ... and start it

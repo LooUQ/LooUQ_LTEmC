@@ -46,9 +46,8 @@
                                         // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
-#include <ltemc.h>
+//#include <ltemc.h>
 #include <ltemc-internal.h>             // this appl performs tests on internal, non-public API components 
-#include <lq-assert.h>
 
 #include <ltemc-iop.h>
 
@@ -67,12 +66,12 @@ void setup() {
 
     PRINTF(dbgColor__red, "LTEmC Test3: iop\r");
     randomSeed(analogRead(7));
-    assert_init(NULL, appNotifyCB);                                 // configure ASSERTS to callback into application
+    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
     startLTEm();                                                    // local initialize\start can't use ltem_start() yet
 
-    cmdBuf = ((iop_t*)g_ltem.iop)->rxCBuffer->buffer;               // readability var
+    cmdBuf = ((iop_t*)g_ltem.iop)->rxCBuffer->_buffer;              // readability var
 }
 
 
@@ -87,7 +86,7 @@ void loop()
     PRINTF(0, "Invoking cmd: %s \r\n", cmd);
 
     IOP_resetCoreRxBuffer();                                // send command
-    IOP_txSend(cmd, strlen(cmd), true);
+    IOP_sendTx(cmd, strlen(cmd), true);
     PRINTF(0, "Command sent\r\n");
 
     pDelay(1000);                                           // give BGx time to respond

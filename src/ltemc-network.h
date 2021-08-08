@@ -107,7 +107,7 @@ uint8_t ntwk_getActivePdpCntxtCnt();
 void ntwk_configPdpCntxt(uint8_t contxtId, pdpCntxtIpType_t ipType, const char *userId, const char *pw, pdpCntxtAuthMethods_t authMethod);
 pdpCntxt_t *ntwk_getPdpCntxt(uint8_t contxtId);
 
-void ntwk_activatePdpContext(uint8_t contxtId);
+bool ntwk_activatePdpContext(uint8_t contxtId);
 void ntwk_deactivatePdpContext(uint8_t contxtId);
 void ntwk_resetPdpContexts();
 

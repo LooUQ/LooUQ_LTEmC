@@ -36,17 +36,18 @@ enum mqtt__constants
     mqtt__useTls = 1,
     mqtt__notUsingTls = 0,
     mqtt__publishTimeout = 2500,
-    mqtt__messageSz = 1548,
-    mqtt__topicOffset = 24,
 
-    mqtt__topic_nameSz = 90,                                        ///< Azure IoTHub typically 50-70 chars
-    mqtt__topic_propsSz = 320,                                      ///< typically 250-300 bytes
-    mqtt__topic_SZ = (mqtt__topic_nameSz + mqtt__topic_propsSz),    ///< Total topic size (name+props) for buffer sizing
-    mqtt__topic_publishCmdOvrhdSz = 27,                             ///< when publishing, number of extra chars in outgoing buffer added to AT cmd
-    mqtt__topic_publishCmdSz = (mqtt__topic_SZ + mqtt__topic_publishCmdOvrhdSz),
+    mqtt__messageSz = 1548,                                             ///< Maximum message size for BGx family (BG96, BG95, BG77)
 
-    mqtt__topicCnt = 2,                                             ///< number of slots for MQTT service subscriptions (reduce for mem conservation)
-    mqtt__propertiesCnt = 12                                        ///< Azure IoTHub 3-sysProps, 3-props, plus your application
+    mqtt__topic_offset = 24,
+    mqtt__topic_nameSz = 90,                                            ///< Azure IoTHub typically 50-70 chars
+    mqtt__topic_propsSz = 320,                                          ///< typically 250-300 bytes
+    mqtt__topic_publishCmdOvrhdSz = 27,                                 ///< when publishing, number of extra chars in outgoing buffer added to AT cmd
+    mqtt__topic_subscriptionCnt = 2,                                    ///< number of slots for MQTT service subscriptions (reduce for mem conservation)
+    mqtt__topic_bufferSz = (mqtt__topic_nameSz + mqtt__topic_propsSz),  ///< Total topic size (name+props) for buffer sizing
+    mqtt__topic_publishCmdSz = (mqtt__topic_bufferSz + mqtt__topic_publishCmdOvrhdSz),
+
+    mqtt__propertiesCnt = 12                                            ///< Azure IoTHub 3-sysProps, 3-props, plus your application
 };
 
 // #define MQTT_PUBLISH_TIMEOUT 2500                                   ///< in millis, BGx documentation says 15s but in practice this is typically
@@ -60,15 +61,15 @@ enum mqtt__constants
  BGx documentation doesn't state a max for topic length. The information below is
  derived from the topic's construction for AZURE IoTHub connectivity.build
  ------------------------------------------------------------------*/
-#define MQTT_TOPIC_NAME_SZ 90                                       ///< Azure IoTHub typically 50-70 chars
-#define MQTT_TOPIC_PROPS_SZ 320                                     ///< typically 250-300 bytes
-#define MQTT_TOPIC_SZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ)    ///< Total topic size (name+props) for buffer sizing
-#define MQTT_TOPIC_PUBCMD_OVRHD_SZ 27                               ///< when publishing, number of extra chars in outgoing buffer added to AT cmd
-#define MQTT_TOPIC_PUBBUF_SZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ + MQTT_TOPIC_PUBCMD_OVRHD_SZ)
+// #define MQTT_TOPIC_NAME_SZ 90                                       ///< Azure IoTHub typically 50-70 chars
+// #define MQTT_TOPIC_PROPS_SZ 320                                     ///< typically 250-300 bytes
+// #define MQTT_TOPIC_SZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ)    ///< Total topic size (name+props) for buffer sizing
+// #define MQTT_TOPIC_PUBCMD_OVRHD_SZ 27                               ///< when publishing, number of extra chars in outgoing buffer added to AT cmd
+// #define MQTT_TOPIC_PUBBUF_SZ (MQTT_TOPIC_NAME_SZ + MQTT_TOPIC_PROPS_SZ + MQTT_TOPIC_PUBCMD_OVRHD_SZ)
 
-#define MQTT_TOPIC_CNT 2                                            ///< number of slots for MQTT service subscriptions (reduce for mem conservation)
-// #define MQTT_SOCKET_ID 5                                            ///< MQTT assigned BGx socket (this is behind-the-scenes and not readily visible)
-#define MQTT_PROPERTIES_CNT 12                                      ///< Azure IoTHub 3-sysProps, 3-props, plus your application
+// #define MQTT_TOPIC_CNT 2                                            ///< number of slots for MQTT service subscriptions (reduce for mem conservation)
+// // #define MQTT_SOCKET_ID 5                                            ///< MQTT assigned BGx socket (this is behind-the-scenes and not readily visible)
+// #define MQTT_PROPERTIES_CNT 12                                      ///< Azure IoTHub 3-sysProps, 3-props, plus your application
 
 
 /* Example connection strings key/SAS token
@@ -131,7 +132,9 @@ typedef enum mqttStatus_tag
 {
     mqttStatus_closed = 0,          ///< MQTT is idle, not active.
     mqttStatus_open = 1,            ///< MQTT is open, open but not connected.
-    mqttStatus_connected = 2        ///< MQTT is connected, in session with server.
+    mqttStatus_connected = 2,       ///< MQTT is connected, in session with server.
+    mqttStatus_pending = 200,       ///< MQTT is attempting connect (BGx MQTT problem area that needs to be detected, reset BGx if stays here).
+    mqttStatus_invalidHost = 201
 } mqttStatus_t;
 
 
@@ -146,7 +149,7 @@ typedef enum mqttStatus_tag
 */
 typedef struct mqttTopicSub_tag
 {
-    char topicName[MQTT_TOPIC_NAME_SZ];     ///< Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
+    char topicName[mqtt__topic_nameSz];     ///< Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
     char wildcard;                          ///< Set to '#' if multilevel wildcard specified when subscribing to topic.
 } mqttTopicSub_t;
 
@@ -184,20 +187,20 @@ typedef void (*mqttRecvFunc_t)(dataContext_t dataCntxt, uint16_t msgId, const ch
 */
 typedef struct mqttCtrl_tag
 {
-    uint8_t ctrlMagic;                          ///< magic flag to validate incoming requests 
-    dataContext_t dataCntxt;                    ///< Data context where this control operates
-    protocol_t protocol;                        ///< Control's protocol : UDP/TCP/SSL, MQTT, HTTP, etc.
-    bool useTls;                                ///< flag indicating SSL/TLS applied to stream
-    rxDataBufferCtrl_t recvBufCtrl;             ///< RX smart buffer 
+    uint8_t ctrlMagic;                                      ///< magic flag to validate incoming requests 
+    dataContext_t dataCntxt;                                ///< Data context where this control operates
+    protocol_t protocol;                                    ///< Control's protocol : UDP/TCP/SSL, MQTT, HTTP, etc.
+    bool useTls;                                            ///< flag indicating SSL/TLS applied to stream
+    rxDataBufferCtrl_t recvBufCtrl;                         ///< RX smart buffer 
 
-    mqttRecvFunc_t dataRecvCB;                  ///< callback to application, signals data ready
+    mqttRecvFunc_t dataRecvCB;                              ///< callback to application, signals data ready
     mqttVersion_t useMqttVersion;
-    mqttStatus_t state;                         ///< Current state of the MQTT protocol services on device.
-    uint16_t msgId;                             ///< MQTT in-flight message ID, automatically incremented, rolls at max value.
-    mqttTopicSub_t topicSubs[mqtt__topicCnt];   ///< Array of MQTT topic subscriptions.
-    uint32_t doWorkLastTck;                     ///< last check for URC\dataPending
-    uint32_t doWorkTimeout;                     ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
-    uint16_t lastBufferReqd;                    ///< last receive buffer required size, provides feedback to developer to minimize buffer sizing     
+    mqttStatus_t state;                                     ///< Current state of the MQTT protocol services on device.
+    uint16_t msgId;                                         ///< MQTT message ID for QOS, automatically incremented, rolls at max value.
+    mqttTopicSub_t topicSubs[mqtt__topic_subscriptionCnt];  ///< Array of MQTT topic subscriptions.
+    uint32_t doWorkLastTck;                                 ///< last check for URC\dataPending
+    uint32_t doWorkTimeout;                                 ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
+    uint16_t lastBufferReqd;                                ///< last receive buffer required size, provides feedback to developer to minimize buffer sizing     
 } mqttCtrl_t;
 
 
@@ -209,13 +212,15 @@ extern "C"
 //void mqtt_create();
 void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataContext_t dataCntxt, bool useTls, mqttVersion_t useMqttVersion, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback);
 
-mqttStatus_t mqtt_status(mqttCtrl_t *mqttCtrl, const char *host, bool force);
 resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port);
 resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, const char *clientId, const char *username, const char *password, mqttSession_t cleanSession);
 void mqtt_close(mqttCtrl_t *mqttCtrl);
-
 uint8_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos);
 resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic);
+
+mqttStatus_t mqtt_getStatus(mqttCtrl_t *mqttCtrl, const char *host);
+uint16_t mqtt_getMsgId(mqttCtrl_t *mqttCtrl);
+
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message);
 
 uint16_t mqtt_getLastBufferReqd(mqttCtrl_t *mqttCtrl);

@@ -42,10 +42,10 @@ const ltemPinConfig_t ltem_pinConfig =
 {
     spiCsPin : 13,
     irqPin : 12,
-    statusPin : 6,
-    powerkeyPin : 11,
-    resetPin : 10,
-    ringUrcPin : 0,
+    statusPin : 6,                  ///< HIGH indicates ON
+    powerkeyPin : 11,               ///< toggle HIGH to change state
+    resetPin : 10,                  ///< reset active HIGH
+    ringUrcPin : 0,                 
     wakePin : 0
 };
 #endif

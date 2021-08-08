@@ -60,7 +60,7 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "LTEmC Test2: modem components\r\n");
-    assert_init(NULL, appNotifyCB);                                 // configure ASSERTS to callback into application
+    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
     randomSeed(analogRead(0));
