@@ -59,7 +59,7 @@ enum
 /* Local Function Declarations
  ----------------------------------------------------------------------------------------------- */
 
-static bool S_updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscription, const char *topic);
+static void S_updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscription, const char *topic);
 static void S_mqttDoWork();
 static void S_urlDecode(char *src, int len);
 
@@ -87,7 +87,7 @@ static resultCode_t S_mqttPublishCompleteParser(const char *response, char **end
 */
 void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataContext_t dataCntxt, bool useTls, mqttVersion_t useMqttVersion, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback)
 {
-    ASSERT(mqttCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_sckt_c);
+    ASSERT(mqttCtrl != NULL && recvBuf != NULL, srcfile_sckt_c);
     ASSERT(dataCntxt < dataContext_cnt, srcfile_sckt_c);
 
     memset(mqttCtrl, 0, sizeof(mqttCtrl_t));
@@ -452,7 +452,7 @@ uint16_t mqtt_getLastBufferReqd(mqttCtrl_t *mqttCtrl)
 #pragma region private functions
 
 
-static bool S_updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscription, const char *topic)
+static void S_updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscription, const char *topic)
 {
     uint8_t topicSz = strlen(topic);
     bool wildcard = *(topic + topicSz - 1) == '#';      // test for MQTT multilevel wildcard, store separately for future topic parsing on recv
@@ -460,13 +460,13 @@ static bool S_updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscriptio
     char topicEntryName[mqtt__topic_nameSz] = {0};
     memcpy(topicEntryName, topic, wildcard ? topicSz - 1 : topicSz);
 
-    for (size_t i = 0; i < mqtt__topicCnt; i++)
+    for (size_t i = 0; i < mqtt__topic_subscriptionCnt; i++)
     {
         if (strcmp(mqttCtrl->topicSubs[i].topicName, topicEntryName) == 0)
         {
             if (!addSubscription)
                 mqttCtrl->topicSubs[i].topicName[0] = '\0';
-            return true;
+            return;
         }
     }
 
@@ -479,11 +479,11 @@ static bool S_updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscriptio
                 strncpy(mqttCtrl->topicSubs[i].topicName, topicEntryName, strlen(topicEntryName)+1);
                 if (wildcard)
                     mqttCtrl->topicSubs[i].wildcard = '#';
-                return true;
+                return;
             }
         }
     }
-    return false;
+    ASSERT(false, srcfile_mqtt_c);                                              // if got here subscription failed and appl is likely unstable
 }
 
 
@@ -514,7 +514,7 @@ static void S_mqttDoWork()
         {
             if (pElapsed(mqttPtr->doWorkLastTck, mqttPtr->doWorkTimeout))                       // timeout is failure
             {
-                ltem_notifyApp(lqNotificationType_lqDevice_streamFault, "MQTT message truncated\\timeout");
+                ltem_notifyApp(lqNotifType_lqDevice_streamFault, "MQTT message truncated\\timeout");
                 IOP_resetRxDataBufferPage(dBufPtr, dBufPtr->iopPg);                             // clear partial page recv content
                 goto finally;
             }
@@ -535,7 +535,7 @@ static void S_mqttDoWork()
         ASSERT(continuePtr != NULL, srcfile_mqtt_c);
 
         uint16_t msgId = atol(continuePtr + 12);
-        topicPtr = memchr(dBufPtr->pages[thisPage].tail, '"', mqtt__topicOffset);
+        topicPtr = memchr(dBufPtr->pages[thisPage].tail, '"', mqtt__topic_offset);
         if (topicPtr == NULL)                                                                   // malformed
             goto finally;
         dBufPtr->pages[thisPage].tail = ++topicPtr;                                             // point past opening dblQuote
@@ -548,7 +548,7 @@ static void S_mqttDoWork()
         *trailerPtr = '\0';                                                                     // null term the message (remove BGx trailing "\r\n)
 
         /* find topic in subscriptions array & invoke application receiver */
-        for (size_t i = 0; i < mqtt__topicCnt; i++)
+        for (size_t i = 0; i < mqtt__topic_subscriptionCnt; i++)
         {
             uint16_t topicSz = strlen(mqttPtr->topicSubs[i].topicName);
             if (topicSz > 0 && strncmp(mqttPtr->topicSubs[i].topicName, topicPtr, topicSz) == 0)

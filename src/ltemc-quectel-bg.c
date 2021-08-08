@@ -25,7 +25,7 @@
  * Manages module genaral and non-protocol cellular radio functions
  *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -138,8 +138,8 @@ void qbg_reset()
 {
     PRINTF(dbgColor__none, "Reseting LTEm\r");
     g_ltem.qbgReadyState = qbg_readyState_powerOn;
-    IOP_txSend("AT\r", 3, true);
-    IOP_txSend("AT+CFUN=1,1\r", 11, true);
+    IOP_sendTx("AT\r", 3, true);
+    IOP_sendTx("AT+CFUN=1,1\r", 11, true);
     while (!gpio_readPin(g_ltem.pinConfig.statusPin))
     {
         pDelay(500);          // allow background tasks to operate
@@ -160,7 +160,7 @@ void qbg_start()
     {
         if (!S_issueStartCommand(qbg_initCmds[i]))
         {
-            ltem_notifyApp(lqNotificationType_lqDevice_hwFault, "qbg-start() init sequence failed");    // send notification, maybe app can recover
+            ltem_notifyApp(lqNotifType_lqDevice_hwFault, "qbg-start() init sequence failed");    // send notification, maybe app can recover
             break;
         }
     }

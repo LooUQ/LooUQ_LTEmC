@@ -46,7 +46,7 @@
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
 #include <ltemc.h>
-#include <lq-assert.h>
+#include <lq-diagnostics.h>
 #include <ltemc-gnss.h>
 
 
@@ -68,7 +68,7 @@ void setup() {
 
     PRINTF(dbgColor__red, "\rLTEmC Test 6: GNSS\r");
     randomSeed(analogRead(0));
-    assert_init(NULL, appNotifyCB);                                 // configure ASSERTS to callback into application
+    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
     ltem_start();                                                   // ... and start it

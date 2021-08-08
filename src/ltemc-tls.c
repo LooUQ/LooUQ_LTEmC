@@ -41,48 +41,36 @@
 #include <lq-types.h>
 #include "ltemc-tls.h"
 #include "ltemc-atcmd.h"
-#include <lq-assert.h>
 
 
 
 bool tls_configure(dataContext_t context, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
 {
-    if (version != tlsVersion_doNotChange)                              // set SSL/TLS version
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d,%d", context, version))                   // set SSL/TLS version
     {
-        if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d,%d", context, version))
-        {
-            if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
-                return false;
-        }
-    }
-    // set cipher suite
-    if (cipherSuite != tlsCipher_doNotChange)
-    {
-        if (atcmd_tryInvoke("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", context, cipherSuite))
-        {
-            if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
-                return false;
-        }
-    }
-    // set certificate expiration check
-    if (certExpirationCheck != tlsCertExpiration_doNotChange)
-    {
-        if (atcmd_tryInvoke("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", context, certExpirationCheck))
-        {
-            if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
-                return false;
-        }
+        if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
+            return false;
     }
 
-    // set security level
-    if (securityLevel != tlsSecurityLevel_doNotChange)
+
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", context, cipherSuite))            // set cipher suite
     {
-        if (atcmd_tryInvoke("AT+QSSLCFG=\"seclevel\",%d,%d", context, securityLevel))
-        {
-            if (atcmd_awaitResult() != resultCode__success)             // return on failure, continue on success
-                return false;
-        }
+        if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
+            return false;
     }
+
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", context, certExpirationCheck))  // set certificate expiration check
+    {
+        if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
+            return false;
+    }
+
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"seclevel\",%d,%d", context, securityLevel))               // set security level, aka what is checked
+    {
+        if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
+            return false;
+    }
+
     return true;
 }
 

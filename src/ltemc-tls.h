@@ -29,6 +29,7 @@
 #define __LTEMC_TLS_H__
 
 #include "ltemc-streams.h"
+#include <lq-diagnostics.h>
 
 /** 
  *  \brief Enum of available SSL version options for an SSL connection. 
@@ -42,8 +43,7 @@ typedef enum tlsVersion_tag
     tlsVersion_tls12 = 3,
     tlsVersion_any = 4,                                 // BGx default
 
-    tlsVersion_default = 4,
-    tlsVersion_doNotChange = 255
+    tlsVersion_default = 4
 } tlsVersion_t;
 
 
@@ -69,8 +69,7 @@ typedef enum tlsCipher_tag
 
     tlsCipher_any = 0xFFFF,                             // BGx default
 
-    tlsCipher_default = 0xFFFF,
-    tlsCipher_doNotChange = 0x0
+    tlsCipher_default = 0xFFFF
 } tlsCipher_t;
 
 
@@ -82,8 +81,7 @@ typedef enum tlsCertExpiration_tag
     tlsCertExpiration_check = 0,
     tlsCertExpiration_ignore = 1,                 // BGx default
 
-    tlsCertExpiration_default = 1,
-    tlsCertExpiration_doNotChange = 255
+    tlsCertExpiration_default = 1
 } tlsCertExpiration_t;
 
 
@@ -96,8 +94,7 @@ typedef enum tlsSecurityLevel_tag
     tlsSecurityLevel_serverAuthentication = 1,
     tlsSecurityLevel_serverClientAuthentication = 2,
 
-    tlsSecurityLevel_default = 0,
-    tlsSecurityLevel_doNotChange = 255
+    tlsSecurityLevel_default = 0
 } tlsSecurityLevel_t;
 
 

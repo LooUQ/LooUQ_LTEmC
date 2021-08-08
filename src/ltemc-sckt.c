@@ -26,7 +26,7 @@
  *****************************************************************************/
 
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -393,7 +393,7 @@ void S_scktDoWork()
         {
             iopPtr->txSendStartTck = 0;                                             // no longer waiting for IRD response
             atcmd_close();                                                          // release action lock
-            ltem_notifyApp(lqNotificationType_lqDevice_streamFault, "IRD timeout");
+            ltem_notifyApp(lqNotifType_lqDevice_streamFault, "IRD timeout");
         }
     }
 

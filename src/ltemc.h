@@ -32,8 +32,9 @@
 // #define IOP_TX_BUFFER_SZ 1460
 
 #include <lq-types.h>
-#include <lq-assert.h>
+#include <lq-diagnostics.h>
 
+#include "ltemc-filecodes.h"
 #include "lq-platform.h"
 #include "ltemc-quectel-bg.h"
 #include "ltemc-iop.h"

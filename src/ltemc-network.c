@@ -25,7 +25,7 @@
  * PDP network support
  *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -101,7 +101,7 @@ networkOperator_t ntwk_awaitOperator(uint16_t waitDurSeconds)
 
     //       timed out waiting                      || global cancellation
     } while (endMillis - startMillis < waitDuration || g_ltem.cancellationRequest);
-    PRINTF(dbgColor__dMagenta, "Wait for ntwkOp=%d sec\r", (endMillis - startMillis) / 1000);
+    PRINTF(dbgColor__dMagenta, "ntwkOp returned in %d ms\r", (endMillis - startMillis) / 1000);
     return ntwk;
 }
 

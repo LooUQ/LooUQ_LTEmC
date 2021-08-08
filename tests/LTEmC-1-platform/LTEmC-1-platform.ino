@@ -48,7 +48,6 @@
 #define HOST_FEATHER_UXPLOR                                 // specify the pin configuration
 
 #include <ltemc.h>
-#include <lq-assert.h>
 #include <ltemc-nxp-sc16is.h>                               // need internal references, low-level test here
 
 // this test has no reference to global g_ltem1 variable

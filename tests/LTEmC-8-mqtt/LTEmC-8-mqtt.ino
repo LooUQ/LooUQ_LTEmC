@@ -47,18 +47,13 @@
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
 #include <ltemc.h>
-#include <lq-assert.h>
+#include <lq-diagnostics.h>
 #include <lq-collections.h>             // using LooUQ collections with mqtt
 #include <lq-str.h>
 #include <ltemc-tls.h>
 #include <ltemc-mqtt.h>
 
 #define DEFAULT_NETWORK_CONTEXT 1
-#define XFRBUFFER_SZ 201
-#define SOCKET_ALREADYOPEN 563
-
-// #define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
-// #define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') appNotifyCB(255, failMsg)
 
 
 /* Test is designed for use with Azure IoTHub. If you do not have a Azure subscription you can get a free test account with a preloaded credit.
@@ -92,8 +87,9 @@
  */
 #define MQTT_IOTHUB_DEVICEID "867198053224766"
 #define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/" MQTT_IOTHUB_DEVICEID "/?api-version=2018-06-30"
+
 //#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F" MQTT_IOTHUB_DEVICEID "&sig=J0S6wK5yFEFcUcFpP84GRGeB%2FrIZRgjssfRs09kTeq0%3D&se=1624376687"
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053224766&sig=BDLY2efw%2FK2RObTFoS8EeJSWahuzgzDUKTv2IrVmDwE%3D&se=1628260335"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053224766&sig=zlkmqXDdb9ebeRBOMssHj0XHOSllIpXc5zKdBFgSTec%3D&se=1628439070"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
@@ -127,9 +123,9 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEm1c test8-MQTT\r\n");
-    assert_registerNotifCallback(appNotifyCB);
+    lqDiag_registerNotifCallback(appNotifyCB);
 
-    lqDiagnosticInfo_t *diags = assert_getDiagInfoPtr();
+    diagnosticInfo_t *diags = lqDiag_getDiagnosticsInfo();
 
     ltem_create(ltem_pinConfig, appNotifyCB);
     ltem_start();
