@@ -117,27 +117,26 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataContext_t dataCntxt, bool useTls
  * 
  *  \returns A mqttStatus_t value indicating the state of the MQTT connection.
 */
-mqttStatus_t mqtt_status(mqttCtrl_t *mqtt, const char *host, bool force)
+mqttStatus_t mqtt_getStatus(mqttCtrl_t *mqtt, const char *host)
 {
     // See BG96_MQTT_Application_Note: AT+QMTOPEN? and AT+QMTCONN?
 
-    ASSERT(mqtt->ctrlMagic == streams__ctrlMagic, srcfile_mqtt_c);   // check for bad pointer in
-
-    if (!force && *host == 0)                                       // if not forcing host verification, return current memory value
-        return mqtt->state;
+    ASSERT(mqtt->ctrlMagic == streams__ctrlMagic, srcfile_mqtt_c);      // check for bad pointer into MQTT control
 
     mqtt->state = mqttStatus_closed;
 
-    // connect check first to short-circuit efforts
+    // connect check first to short-circuit open test
     atcmd_setOptions(atcmd__setLockModeAuto, PERIOD_FROM_SECONDS(5), S_mqttConnectStatusParser);
     if (atcmd_tryInvokeAutoLockWithOptions("AT+QMTCONN?"))
     {
         resultCode_t atResult = atcmd_awaitResult();
-        if (atResult == resultCode__success)
+        if (atResult == 203)
             mqtt->state = mqttStatus_connected;
+        else if (atResult == 201 || atResult == 202)
+            mqtt->state = mqttStatus_pending;
     }
 
-    if (mqtt->state != mqttStatus_connected || *host != 0)             // if not connected or need host verification: check open
+    if (mqtt->state != mqttStatus_connected || *host != '\0')       // if not connected or need host verification: check open
     {
         atcmd_setOptions(atcmd__setLockModeAuto, PERIOD_FROM_SECONDS(5), S_mqttOpenStatusParser);
         if (atcmd_tryInvokeAutoLockWithOptions("AT+QMTOPEN?"))
@@ -146,7 +145,7 @@ mqttStatus_t mqtt_status(mqttCtrl_t *mqtt, const char *host, bool force)
             if (atResult == resultCode__success)
             {
                 mqtt->state = mqttStatus_open;
-                if (*host != 0)                                // host matching requested, check modem response host == requested host
+                if (*host != '\0')                                  // host matching requested, check modem response host == requested host
                 {
                     char *hostNamePtr = strchr(atcmd_getLastResponse(), '"');
                     mqtt->state = (hostNamePtr != NULL && strncmp(hostNamePtr + 1, host, strlen(host)) == 0) ? mqttStatus_open : mqttStatus_closed;
@@ -176,9 +175,9 @@ resultCode_t mqtt_open(mqttCtrl_t *mqtt, const char *host, uint16_t port)
 
     atcmdResult_t atResult;
 
-    mqtt->state = mqtt_status(mqtt, host, true);        // refresh state, state must be not open for config changes
-    if (mqtt->state >= mqttStatus_open)                     // already open+connected with server "host"
-        return resultCode__success;
+    mqtt->state = mqtt_getStatus(mqtt, host);               // get MQTT state, state must be not open for config changes
+    if (mqtt->state >= mqttStatus_open)                     // already open or connected
+        return resultCode__preConditionFailed;
 
     if (mqtt->useTls)
     {
@@ -280,8 +279,9 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqtt, const char *clientId, const char *us
     // char actionCmd[MQTT_CONNECT_CMD_SZ] = {0};
     resultCode_t atResult;
 
-    if (mqtt->state == mqttStatus_connected)       // already connected, trusting internal state as this is likely immediately after open
-        return resultCode__success;                // mqtt_open forces mqtt state sync with BGx
+    mqtt->state = mqtt_getStatus(mqtt, "");                    // get MQTT state, state must be not open for config changes
+    if (mqtt->state == mqttStatus_connected)
+        return resultCode__preConditionFailed;
 
     if (atcmd_tryInvoke("AT+QMTCFG=\"session\",%d,%d", mqtt->dataCntxt, (uint8_t)cleanSession))
     {
@@ -289,7 +289,6 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqtt, const char *clientId, const char *us
             return resultCode__internalError;
     }
 
-    // snprintf(actionCmd, MQTT_CONNECT_CMD_SZ, "AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqtt->dataCntxt, clientId, username, password);
     atcmd_setOptions(atcmd__setLockModeAuto, PERIOD_FROM_SECONDS(60), S_mqttConnectCompleteParser);
 
     /* MQTT connect command can be quite large, using local buffer here rather than bloat global cmd\core buffer */
@@ -300,15 +299,13 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqtt, const char *clientId, const char *us
     {
         atcmd_sendCmdData(connectCmd, strlen(connectCmd), "\r");
         atResult = atcmd_awaitResult();                             // in autolock mode, so this will release lock
+
         if (atResult == resultCode__success)
         {
-            ((iop_t*)g_ltem.iop)->mqttMap &= 0x01 << mqtt->dataCntxt;
             mqtt->state = mqttStatus_connected;
             return resultCode__success;
         }
-
-
-        if (atResult == resultCode__timeout)                        // assume got a +QMTSTAT back not +QMTCONN
+        else if (atResult == resultCode__timeout)                        // assume got a +QMTSTAT back not +QMTCONN
         {
             char *continuePtr = strstr(atcmd_getLastResponse(), "+QMTSTAT: ");
             if (continuePtr != NULL)
@@ -317,19 +314,22 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqtt, const char *clientId, const char *us
                 atResult = atol(continuePtr) + 200;
             }
         }
-        switch (atResult)
+        else
         {
-            case 201:
-                return resultCode__methodNotAllowed;        // invalid protocol version 
-            case 202:               
-            case 204:
-                return resultCode__unauthorized;            // bad user ID or password
-            case 203:
-                return resultCode__unavailable;             // server unavailable
-            case 205:
-                return resultCode__forbidden;               // refused, not authorized
-            default:
-                return resultCode__internalError;
+            switch (atResult)
+            {
+                case 201:
+                    return resultCode__methodNotAllowed;        // invalid protocol version 
+                case 202:               
+                case 204:
+                    return resultCode__unauthorized;            // bad user ID or password
+                case 203:
+                    return resultCode__unavailable;             // server unavailable
+                case 205:
+                    return resultCode__forbidden;               // refused, not authorized
+                default:
+                    return resultCode__internalError;
+            }
         }
     }
     return resultCode__badRequest;          // bad parameters assumed
@@ -616,12 +616,8 @@ static resultCode_t S_mqttOpenCompleteParser(const char *response, char **endptr
  */
 static resultCode_t S_mqttConnectStatusParser(const char *response, char **endptr) 
 {
-    // BGx +QMTCONN Read returns Status = 3 for connected, service parser returns success code == 203
-    resultCode_t rslt = atcmd_serviceResponseParser(response, "+QMTCONN: ", 1, endptr);
-    if (rslt == 0xFFFF)
-        return 0XFFFF;
-
-    return (rslt == 203) ? resultCode__success : resultCode__unavailable;
+    // BGx +QMTCONN Returns status: 1 = connecting, 3 = connected. Service parser returns 200 + status.
+    return atcmd_serviceResponseParser(response, "+QMTCONN: ", 1, endptr);
 }
 
 
