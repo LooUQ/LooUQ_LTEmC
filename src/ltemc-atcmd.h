@@ -113,8 +113,9 @@ void atcmd_exitDataMode();
 
 resultCode_t atcmd_okResultParser(const char *response, char** endptr);
 resultCode_t atcmd_defaultResultParser(const char *response, const char *landmark, bool landmarkReqd, uint8_t gap, const char *terminator, char** endptr);
-resultCode_t atcmd_tokenResultParser(const char *response, const char *landmark, char token, uint8_t reqdTokens, const char *terminator, char** endptr);
+resultCode_t atcmd_tokenResultParser(const char *response, const char *landmark, char separator, uint8_t reqdTokens, const char *terminator, char** endptr);
 resultCode_t atcmd_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx, char** endptr);
+resultCode_t atcmd_serviceResponseParserTerm(const char *response, const char *landmark, uint8_t resultIndx, const char *terminator, char** endptr);
 
 resultCode_t atcmd_readyPromptParser(const char *response, const char *rdyPrompt, char **endptr);
 resultCode_t atcmd_txDataPromptParser(const char *response, char **endptr);

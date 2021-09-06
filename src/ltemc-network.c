@@ -124,11 +124,12 @@ uint8_t ntwk_getActivePdpCntxtCnt()
         atcmd_invokeReuseLock("AT+QIACT?");
         resultCode_t atResult = atcmd_awaitResult();
 
-        for (size_t i = 0; i < NTWK__pdpContextCnt; i++)         // empty context table return and if success refill from parsing
-        {
-            ((network_t*)g_ltem.network)->pdpCntxts[i].contextId = 0;
-            ((network_t*)g_ltem.network)->pdpCntxts[i].ipAddress[0] = 0;
-        }
+        memset(&((network_t*)g_ltem.network)->pdpCntxts, 0, sizeof(pdpCntxt_t) * NTWK__pdpContextCnt);    // empty context table for return, if success refill from parsing
+        // for (size_t i = 0; i < NTWK__pdpContextCnt; i++)         // empty context table return and if success refill from parsing
+        // {
+        //     ((network_t*)g_ltem.network)->pdpCntxts[i].contextId = 0;
+        //     ((network_t*)g_ltem.network)->pdpCntxts[i].ipAddress[0] = 0;
+        // }
 
         if (atResult != resultCode__success)
         {
@@ -194,8 +195,11 @@ pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
  * 
  *  \param cntxtId [in] - The APN to operate on. Typically 0 or 1
  */
-void ntwk_activatePdpContext(uint8_t cntxtId)
+bool ntwk_activatePdpContext(uint8_t cntxtId)
 {
+    if (ntwk_getPdpCntxt(cntxtId) != NULL)
+        return true;
+
     atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, s_contextStatusCompleteParser);
 
     if (atcmd_tryInvokeAutoLockWithOptions("AT+QIACT=%d\r", cntxtId))
@@ -205,6 +209,10 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
             ntwk_getActivePdpCntxtCnt();
     }
     atcmd_close();
+
+    if (ntwk_getPdpCntxt(cntxtId) != NULL)
+        return true;
+    return false;
 }
 
 

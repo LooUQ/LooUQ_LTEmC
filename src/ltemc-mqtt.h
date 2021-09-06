@@ -132,8 +132,9 @@ typedef enum mqttStatus_tag
 {
     mqttStatus_closed = 0,          ///< MQTT is idle, not active.
     mqttStatus_open = 1,            ///< MQTT is open, open but not connected.
-    mqttStatus_pending = 2,         ///< MQTT is attempting connect (BGx MQTT problem area that needs to be detected, reset BGx if stays here).
-    mqttStatus_connected = 3        ///< MQTT is connected, in session with server.
+    mqttStatus_connected = 2,       ///< MQTT is connected, in session with server.
+    mqttStatus_pending = 200,       ///< MQTT is attempting connect (BGx MQTT problem area that needs to be detected, reset BGx if stays here).
+    mqttStatus_invalidHost = 201
 } mqttStatus_t;
 
 
@@ -195,7 +196,7 @@ typedef struct mqttCtrl_tag
     mqttRecvFunc_t dataRecvCB;                              ///< callback to application, signals data ready
     mqttVersion_t useMqttVersion;
     mqttStatus_t state;                                     ///< Current state of the MQTT protocol services on device.
-    uint16_t msgId;                                         ///< MQTT in-flight message ID, automatically incremented, rolls at max value.
+    uint16_t msgId;                                         ///< MQTT message ID for QOS, automatically incremented, rolls at max value.
     mqttTopicSub_t topicSubs[mqtt__topic_subscriptionCnt];  ///< Array of MQTT topic subscriptions.
     uint32_t doWorkLastTck;                                 ///< last check for URC\dataPending
     uint32_t doWorkTimeout;                                 ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
@@ -211,13 +212,15 @@ extern "C"
 //void mqtt_create();
 void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataContext_t dataCntxt, bool useTls, mqttVersion_t useMqttVersion, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback);
 
-mqttStatus_t mqtt_getStatus(mqttCtrl_t *mqttCtrl, const char *host);
 resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port);
 resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, const char *clientId, const char *username, const char *password, mqttSession_t cleanSession);
 void mqtt_close(mqttCtrl_t *mqttCtrl);
-
 uint8_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos);
 resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic);
+
+mqttStatus_t mqtt_getStatus(mqttCtrl_t *mqttCtrl, const char *host);
+uint16_t mqtt_getMsgId(mqttCtrl_t *mqttCtrl);
+
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message);
 
 uint16_t mqtt_getLastBufferReqd(mqttCtrl_t *mqttCtrl);

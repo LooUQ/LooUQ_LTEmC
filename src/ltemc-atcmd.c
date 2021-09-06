@@ -371,7 +371,7 @@ void ATCMD_getResult()
  */
 void atcmd_exitTextMode()
 {
-    IOP_sendTx("\x1B", 1, true);            // send ESC - 0x1B
+    IOP_sendTx("\x1A", 1, true);            // send ^Z - 0x1A
 }
 
 
@@ -675,22 +675,25 @@ resultCode_t atcmd_okResultParser(const char *response, char** endptr)
 
 /**
  *	\brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
+ *
+ *  Expected form: +<landmark>: <otherInfo>,<RESULT_CODE>,<otherInfo><EOL>
+ * 
  *  \param response [in] - Pointer to the command response received from the BGx.
  *  \param preamble [in] - Pointer to a landmark phrase to look for in the response
  *  \param resultIndx [in] - Zero based index after landmark of numeric fields to find result
  *  \param endptr [out] - Pointer to character in response following parser match
+ *
+ *  \return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code
  */
-resultCode_t atcmd_serviceResponseParser(const char *response, const char *preamble, uint8_t resultIndx, char** endptr) 
+resultCode_t atcmd_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx, char** endptr) 
 {
-    char *next = strstr(response, preamble);
+    char *next = strstr(response, landmark);
     if (next == NULL)
         return ATCMD__parserPendingResult;
 
-    next += strlen(preamble);
+    next += strlen(landmark);
     int16_t resultVal;
 
-    // expected form: +<preamble>: <some other info>,<RESULT_CODE>
-    // return (200 + RESULT_CODE)
     for (size_t i = 0; i < resultIndx; i++)
     {
         if (next == NULL)
@@ -703,6 +706,45 @@ resultCode_t atcmd_serviceResponseParser(const char *response, const char *pream
 
     // return a success value 200 + result (range: 200 - 300)
     return  (resultVal < 99) ? resultCode__success + resultVal : resultVal;
+}
+
+
+/**
+ *	\brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
+ *
+ *  Expected form: +<landmark>: <otherInfo>,<RESULT_CODE>,<otherInfo><EOL>
+ *  \param response [in] - Pointer to the command response received from the BGx.
+ *  \param preamble [in] - Pointer to a landmark phrase to look for in the response
+ *  \param resultIndx [in] - Zero based index after landmark of numeric fields to find result
+ *  \param endptr [out] - Pointer to character in response following parser match
+ *
+ *  \return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code
+ */
+resultCode_t atcmd_serviceResponseParserTerm(const char *response, const char *landmark, uint8_t resultIndx, const char *terminator, char** endptr) 
+{
+    char *next = strstr(response, landmark);
+    if (next == NULL)
+        return ATCMD__parserPendingResult;
+
+    next += strlen(landmark);
+    int16_t resultVal;
+
+    uint8_t respSz = strlen(next);                                                  // check for terminator, usually CR/LF
+    char * termChk = next + strlen(next) - strlen(terminator);
+    if (strstr(termChk, terminator) == NULL)
+        return ATCMD__parserPendingResult;                                          
+
+    for (size_t i = 0; i < resultIndx; i++)
+    {
+        if (next == NULL)
+            break;
+        next = strchr(next, ',');
+        next++;                                                                     // point past comma
+    }
+    if (next != NULL)
+        resultVal = (uint16_t)strtol(next, endptr, 10);
+
+    return  (resultVal < 99) ? resultCode__success + resultVal : resultVal;         // return a success value 200 + result (range: 200 - 300)
 }
 
 
