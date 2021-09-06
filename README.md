@@ -17,8 +17,7 @@ The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LT
 [LTEmC Documentation](https://loouq.github.io/sites/ltemc_doxy/html/index.html)
 
 ----
-![](https://github.com/LooUQ/CircuitRiver-LTEmC/blob/master/LTEmC%20Stack.pdf)
-\image html "LTEmC Stack.pdf"
+![LTEmC Stack](https://github.com/LooUQ/CircuitRiver-LTEmC/blob/master/LTEmC%20Stack.pdf)
 
 All of the core (blue) subsystems are functional. Extension subsystems (copper, with wide-borders) are optional and can be built into the application, or omitted to reduced code size. Grey boxes indicate future feature areas. 
 
