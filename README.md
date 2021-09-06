@@ -4,7 +4,7 @@ LooUQ Circuit River
 LTEm1 modem driver implemented in C99 for portability and a small footprint.
 
 
-The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LTEm1 is designed to allow for cost-effective cellular communications in embedded systems by supporting LTE CAT-M1 and LTE CAT-NB1 (NB-IOT) communications. The LTEm1 is certified for use on the Verizon network and a registered device for the T-Mobile (formerly Sprint) Curiosity Network. It is also fully tested and supported using Hologram SIMs.
+The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LTEm1 is designed to allow for cost-effective cellular communications in embedded systems by supporting LTE CAT-M1 and LTE CAT-NB1 (NB-IOT) communications. The LTEm1 is certified for use on the Verizon network. Tested on all major US networks and fully compatible with Hologram SIMs.
 
 [LTEm1 Getting Started Guide](https://answers.loouq.com/en/support/solutions/articles/43000605438-ltem1-cellular-modem-starting-at-the-beginning)
 
@@ -18,7 +18,7 @@ The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LT
 
 ----
 ![](https://github.com/LooUQ/CircuitRiver-LTEmC/blob/master/LTEmC%20Stack.pdf)
-\image html "LTEmC Stack.png"
+\image html "LTEmC Stack.pdf"
 
 All of the core (blue) subsystems are functional. Extension subsystems (copper, with wide-borders) are optional and can be built into the application, or omitted to reduced code size. Grey boxes indicate future feature areas. 
 
