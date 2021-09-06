@@ -10,7 +10,7 @@
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\tools\\**",
                 "C:\\Program Files (x86)\\Arduino\\libraries\\**",
                 "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\**",
-                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.2\\**"
+                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.4\\**"
             ],
             "defines": [
                 "_DEBUG",
@@ -24,7 +24,7 @@
             "cppStandard": "c++11",
             "intelliSenseMode": "gcc-arm",
             "forcedInclude": [
-                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.2\\cores\\arduino\\Arduino.h"
+                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.4\\cores\\arduino\\Arduino.h"
             ]
         }
     ],

@@ -178,24 +178,22 @@ resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uin
  */
 void sckt_close(scktCtrl_t *scktCtrl)
 {
-    ASSERT(sckt->ctrlMagic != streams__ctrlMagic, 0xFE30);
+    ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic, 0xFE30);
 
     char closeCmd[20] = {0};
-    uint8_t socketBitMask = 0x01 << scktscktCtrl->dataCntxt;
-    scktCtrl_t *thisSckt = (scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[scktscktCtrl->dataCntxt];             // for readability
+    uint8_t socketBitMask = 0x01 << scktCtrl->dataCntxt;
+    scktCtrl_t *thisSckt = (scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[scktCtrl->dataCntxt];    // for readability
 
     if (thisSckt == 0)                           // not open
         return;
 
     if (thisSckt->useTls)
     {
-        snprintf(closeCmd, 20, "AT+QSSLCLOSE=%d", sckt->dataCntxt);                        // BGx syntax different for SSL
-        // ((iop_t*)g_ltem.iop)->peerTypeMap.sslSocket = ((iop_t*)g_ltem.iop)->peerTypeMap.sslSocket & ~socketBitMap;  
+        snprintf(closeCmd, 20, "AT+QSSLCLOSE=%d", scktCtrl->dataCntxt);                                 // BGx syntax different for SSL
     }
     else
     {
-        snprintf(closeCmd, 20, "AT+QICLOSE=%d", sckt->dataCntxt);                          // BGx syntax different for TCP/UDP
-        // ((iop_t*)g_ltem.iop)->peerTypeMap.tcpudpSocket = ((iop_t*)g_ltem.iop)->peerTypeMap.tcpudpSocket & ~socketBitMap;    // mask off closed socket bit to remove 
+        snprintf(closeCmd, 20, "AT+QICLOSE=%d", scktCtrl->dataCntxt);                                   // BGx syntax different for TCP/UDP
     }
     
     if (atcmd_tryInvokeDefaults(closeCmd))
