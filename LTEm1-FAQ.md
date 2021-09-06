@@ -7,7 +7,7 @@
 > The BG96 has gained wide respect and acceptance by the network carriers and offers both LTE IoT specific protocols: CAT-M1 and NB-IOT and fallback to 2G where necessary. Additionally the BG96 has a rich feature set including SSL/TLS, MQTT, HTTP(S), GNSS, geo-fencing, and even a persistant file store. LooUQ has coupled the BG96 with an SPI interface for high-speed communications without the burden of character-by-character host interrupts. For Raspberry PI applications, the LTEm1 and BG96 support access via USB (micro-USB connector).
 
 **Is there software for the LTEm1?**
-> Yes indeed. This repository, the LTEmC library is LooUQ's open-source driver written in C99 to support the LTEm1 and future LooUQ LTE modem hardware with POSIX style functionality.
+> Yes indeed. This repository is the LTEmC library is LooUQ's open-source driver written in C99 to support the LTEm1 and future LooUQ LTE modem hardware with POSIX style functionality.
 
 **What are the physical characteristics of the LTEm1?**
 > The LTEm1 measures 40mm x 48mm and under 9mm in height. The device requires standard power source of 3.7 volts (LiPo battery). For hosts with ample surge capacity the LTEm1 can run directly from the regulated supply. For most hosts, LooUQ recommends incorporating a small 3.7v LiPo for instantaneous current demands (like turn on), but also to power the LTEm1 in a power failure for a short period time, this allows alerts on the power condition to be sent out to the devices owner. Connections to the LTE and GNSS antennas are via standard U.FL/IPEX connectors.

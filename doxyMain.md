@@ -1,8 +1,8 @@
 \mainpage
 # Circuit River - LTEmC
-## Release Status: v2.0.0 
+## Latest Release: v2.0.0 
 
-LTEm1 modem driver implemented in C99 for portability and a small footprint.
+LTEm1 modem driver implemented in C for portability and a small footprint.
 
 The LooUQ LTEmC driver supports the LooUQ Circuit River LTEm1 LTE modem. The LTEm1 is designed to allow for cost-effective cellular communications in embedded systems by supporting LTE CAT-M1 and LTE CAT-NB1 (NB-IOT) communications. The LTEm1 is certified for use on the Verizon network. It is also fully tested and supported using Hologram SIMs and several US carriers.
 
@@ -43,8 +43,7 @@ All of the core (blue) subsystems are functional. Extension subsystems (copper, 
 
 ## Future Directions
 If you have an opinion on any of these functions and their applicability to your product/project please let LooUQ know. Send your thoughts to answers@loouq.com.
-* Power Management - Support for PSM, wake options, etc.
-* HTTP(S) - Support for HTTP client in driver (planned for July 2021)
-* FTP(S) - Support for FTP client in BGx firmware without application FTP stack
+* Support for BG95 and BG77
+* Power Management - Support for PSM, eDRX, etc.
 * File System - Support for file storage on BGx via driver (BG96 has approx. 3MB available)
 * FOTA - Support for scheduled FOTA 
