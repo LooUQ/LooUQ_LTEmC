@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file platform_spi.h
+ *  \file lqPlatform-spi.h
  *  \author Jensen Miller, Greg Terrell
  *  \license MIT License
  *
@@ -22,19 +22,16 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  *****************************************************************************/
-#ifndef __PLATFORM_SPI_H__
-#define __PLATFORM_SPI_H__
+#ifndef __LQPLATFORM_spi_H__
+#define __LQPLATFORM_spi_H__
 
 #ifdef __cplusplus
-extern "C"
-{
 #include <cstdint>
 #include <stddef.h>
 #else
 #include <stdint.h>
 #include <stddef.h>
-#endif // __cplusplus
-
+#endif
 
 #define SPI_NO_IRQ_PROTECTION -1
 
@@ -47,10 +44,10 @@ typedef enum
 
 
 /* Arduino SPI
-#define SPI_MODE0 0x02
-#define SPI_MODE1 0x00
-#define SPI_MODE2 0x03
-#define SPI_MODE3 0x01
+#define spi_MODE0 0x02
+#define spi_MODE1 0x00
+#define spi_MODE2 0x03
+#define spi_MODE3 0x01
 */
 
 typedef enum
@@ -62,38 +59,42 @@ typedef enum
 } spiDataMode_t;
 
 
-typedef struct spiConfig_tag
+typedef struct spi_tag
 {
+    // need spi reference for multiple SPI interface platforms
     uint32_t dataRate;
     spiDataMode_t dataMode;
     spiBitOrder_t bitOrder;
     uint8_t csPin;
-} spiConfig_t;
+} spi_t;
 
 
-typedef struct spiDevice_tag
-{
-	spiConfig_t *config;
-} spiDevice_t;
+// typedef struct spi_tag
+// {
+//     spiConfig_t *config;
+// } spi_t;
 
 //typedef spi_device_t* spi_device;
 
-spiDevice_t *spi_create(uint8_t chipSelLine);
-void spi_start(spiDevice_t *spi);
-void spi_stop(spiDevice_t *spi);
 
-void spi_protectFromInterrupt(spiDevice_t *spi, int8_t irqNumber);
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
-uint8_t spi_transferByte(spiDevice_t *spi, uint8_t writeVal);
-uint16_t spi_transferWord(spiDevice_t *spi, uint16_t writeVal);
+void *spi_create(uint8_t chipSelLine);
+void spi_start(void *spi);
+void spi_stop(void *spi);
 
-void spi_transferBuffer(spiDevice_t *spi, uint8_t regAddrByte, void* buf, size_t xfer_len);
+void spi_protectFromInterrupt(void *spi, int8_t irqNumber);
 
+uint8_t spi_transferByte(void *spi, uint8_t writeVal);
+uint16_t spi_transferWord(void *spi, uint16_t writeVal);
+
+void spi_transferBuffer(void *spi, uint8_t regAddrByte, void* buf, size_t xfer_len);
 
 #ifdef __cplusplus
 }
 #endif // __cplusplus
 
-
-
-#endif  /* !__PLATFORM_SPI_H__ */
+#endif  /* !__LQPLATFORM_spi_H__ */

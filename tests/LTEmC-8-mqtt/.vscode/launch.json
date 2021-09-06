@@ -11,9 +11,17 @@
             "executable": ".//.build/ltemc-8-mqtt.ino.elf",
             "request": "launch",
             "servertype": "jlink",
-            "interface": "swd",
             "device": "ATSAMD21G18",
             "runToMain": true
+        },
+        {
+            "name": "Cortex Debug (attach)",
+            "type": "cortex-debug",
+            "cwd": "${workspaceRoot}",
+            "executable": ".//.build/ltemc-8-mqtt.ino.elf",
+            "request": "attach",
+            "servertype": "jlink",
+            "device": "ATSAMD21G18"
         }
     ]
 }

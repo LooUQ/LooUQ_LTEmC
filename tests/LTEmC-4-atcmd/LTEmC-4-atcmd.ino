@@ -29,12 +29,13 @@
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+#if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #if _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #else
+    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
@@ -58,15 +59,11 @@ void setup()
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_dRed, "LTEmC test4: AT Commands\r");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
-    
-    randomSeed(analogRead(7));
+    PRINTF(dbgColor__red, "LTEmC test4: AT Commands\r");
+    lqDiag_registerNotifCallback(appNotifyCB);                    // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifyCB);
-    ltem_start(pdpProtocol_none);                      /* the pdpProtocol_<proto> bitmask specifies protocols to (validate and) start. They must be
-                                                        * included in the project with <proto>_create, like mqtt_create()
-                                                        * the list of bit masks is found in lqTypes.h */
+    ltem_create(ltem_pinConfig, appNotifyCB);                     // create LTEmC modem
+    ltem_start();                                                 // ... and start it
 }
 
 
@@ -87,33 +84,34 @@ void loop()
 
     uint8_t regValue = 0;
     char cmdStr[] = "ATI\r\0";
-    PRINTF(DBGCOLOR_none, "Invoking cmd: %s \r\n", cmdStr);
+    PRINTF(dbgColor__none, "Invoking cmd: %s \r\n", cmdStr);
 
     if (atcmd_tryInvoke(cmdStr))
     {
-        atcmdResult_t atResult = atcmd_awaitResult(false);
+        resultCode_t atResult = atcmd_awaitResult();
         
-        if (atResult.statusCode == RESULT_CODE_SUCCESS)         // statusCode == 200 (similar to HTTP codes)
+        if (atResult == resultCode__success)                                                // statusCode == 200 (similar to HTTP codes)
         {
-            PRINTF(DBGCOLOR_info, "Got %d chars\r", strlen(atResult.response));
-            PRINTF(DBGCOLOR_cyan, "Resp: %s\r", atResult.response);
-
-            // test response v. expected 
-            char* validResponse = "\r\nQuectel";
-            uint8_t responseTest = strncmp(validResponse, atResult.response, strlen(validResponse)); 
-
-            if (responseTest != 0)
+            char *response = atcmd_getLastResponse();
+            PRINTF(dbgColor__info, "Got %d chars\r", strlen(response));
+            PRINTF(dbgColor__cyan, "Resp: %s\r", response);
+                                                                                            // test response v. expected 
+            char *validResponse = "\r\nQuectel\r\nBG";                                      // near beginning (depends on BGx echo)
+            char *trailer = response + (strlen(response) - 4);
+            if (!( strstr(response, validResponse) && strncmp(trailer, "OK\r\n", 4) == 0 ))        // should end with OK
                 indicateFailure("Unexpected command response... failed."); 
         }
         else
         {
-            PRINTF(DBGCOLOR_error, "atResult=%d \r", atResult);
+            PRINTF(dbgColor__error, "atResult=%d \r", atResult);
             // indicateFailure("Unexpected command response... failed."); 
         }
-        atcmd_close();                                         // done with response, close action and release action lock
+
+        /* atcmd_close();       Not needed here since tryInvokeDefaults(). 
+                                With options and manual lock, required when done with response to close action and release action lock */
     }
     else
-        PRINTF(DBGCOLOR_warn, "Unable to get action lock.\r");
+        PRINTF(dbgColor__warn, "Unable to get action lock.\r");
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -146,28 +144,28 @@ void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
     if (notifType > 200)
     {
-        PRINTF(DBGCOLOR_error, "LQCloud-HardFault: %s\r", notifMsg);
+        PRINTF( dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
         while (1) {}
     }
-    PRINTF(DBGCOLOR_info, "LQCloud Info: %s\r", notifMsg);
+    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
     return;
 }
 
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(DBGCOLOR_error, "\r\n** %s \r", failureMsg);
-    PRINTF(DBGCOLOR_error, "** Test Assertion Failed. \r");
+	PRINTF(dbgColor__error, "\r\n** %s \r", failureMsg);
+    PRINTF(dbgColor__error, "** Test Assertion Failed. \r");
 
     #if 1
-    PRINTF(DBGCOLOR_error, "** Halting Execution \r\n");
+    PRINTF(dbgColor__error, "** Halting Execution \r\n");
     bool halt = true;
     while (halt)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        lDelay(1000);
+        pDelay(1000);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        lDelay(100);
+        pDelay(100);
     }
     #endif
 }
@@ -175,19 +173,19 @@ void indicateFailure(char failureMsg[])
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(DBGCOLOR_info, "\r\nLoop=%i \r\n", loopCnt);
+    PRINTF(dbgColor__info, "\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        lDelay(50);
+        pDelay(50);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        lDelay(50);
+        pDelay(50);
     }
 
-    PRINTF(DBGCOLOR_magenta, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(DBGCOLOR_none, "NextTest (millis)=%i\r\r", waitNext);
-    lDelay(waitNext);
+    PRINTF(dbgColor__magenta, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTF(dbgColor__none, "NextTest (millis)=%i\r\r", waitNext);
+    pDelay(waitNext);
 }
 
 

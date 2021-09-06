@@ -30,23 +30,28 @@
  *****************************************************************************/
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEmC will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
+#if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #if _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #else
+    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-
-// define options for how to assemble this build
+                                        // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
-#include <ltemc.h>
+//#include <ltemc.h>
+#include <ltemc-internal.h>             // this appl performs tests on internal, non-public API components 
+
+#include <ltemc-iop.h>
+
+char *cmdBuf;
 
 
 void setup() {
@@ -59,45 +64,39 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_red, "LTEmC Test3: iop\r");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
-    
+    PRINTF(dbgColor__red, "LTEmC Test3: iop\r");
     randomSeed(analogRead(7));
+    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
-    PRINTF(DBGCOLOR_info, "Base: FreeMem=%u\r", getFreeMemory());
+    ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
+    startLTEm();                                                    // local initialize\start can't use ltem_start() yet
 
-    ltem_create(ltem_pinConfig, appNotifyCB);           // otherwise reference your application notification callback
-    //ltem_create(ltem_pinConfig, NULL);                // if application doesn't implement a notification callback, provide NULL
-    ltem_start(pdpProtocol_none);                       // start LTEm with only IOP configured, AT commands but no protocols. 
-
-    PRINTF(DBGCOLOR_info, "LTEm Initialized: FreeMem=%u\r\n", getFreeMemory());
+    cmdBuf = ((iop_t*)g_ltem.iop)->rxCBuffer->_buffer;              // readability var
 }
+
 
 int loopCnt = 0;
 
 void loop() 
 {
-    uint8_t regValue = 0;
-    // char cmd[] = "AT+GSN\r\0";                           // short response (contained in 1 rxCtrlBlock)
-    char cmd[] = "AT+GSN;+QCCID;+GSN;+QCCID\r\0";           // long response (requires multiple rxCtrlBlocks)
-    // char cmd[] = "at+cgpaddr\r\0";                       // long response (requires multiple rxCtrlBlocks)
-    // char cmd[] = "AT+QIDNSGIP=1,\"www.loouq.com\"\r\0";
-    // char cmd[] = "AT+QPOWD\r\0";                         // something is wrong! Is is rx or tx (tx works if BG powers down)
+    // const char *cmd = "AT+GSN\r\0";                           // short response (contained in 1 rxCtrlBlock)
+    const char *cmd = "AT+GSN;+QCCID;+GSN;+QCCID\r\0";           // long response (requires multiple rxCtrlBlocks)
+    // const char *cmd = "AT+QPOWD\r\0";                         // something is wrong! Is is rx or tx (tx works if BG powers down)
+
     PRINTF(0, "Invoking cmd: %s \r\n", cmd);
 
-    iop_resetCmdBuffer();                                   // send command
-    iop_txSend(cmd, strlen(cmd), true);
-    PRINTF(0, "CmdSent\r\n");
+    IOP_resetCoreRxBuffer();                                // send command
+    IOP_sendTx(cmd, strlen(cmd), true);
+    PRINTF(0, "Command sent\r\n");
 
-    lDelay(100);                                            // give BGx time to respond
-    // timing_delay(5000);                                  // give BGx time to respond, longer for network
+    pDelay(1000);                                           // give BGx time to respond
 
-    int len = strlen(g_ltem->iop->rxCmdBuf->buffer);
-    PRINTF(DBGCOLOR_green, "Got %d chars (so far)\r", len);
-    PRINTF(DBGCOLOR_cyan, "Resp: %s\r", g_ltem->iop->rxCmdBuf->buffer);  
+    PRINTF(dbgColor__green, "Got %d chars (so far)\r", strlen(cmdBuf));
+    PRINTF(dbgColor__cyan, "Resp: %s\r", cmdBuf);  
 
     loopCnt ++;
     indicateLoop(loopCnt, 1000);      // BG reference says 300mS cmd response time, we will wait 1000
+    PRINTF(dbgColor__magenta, "FreeMem=%u\r", getFreeMemory());
 }
 
 
@@ -105,40 +104,70 @@ void loop()
 /* test helpers
 ========================================================================================================================= */
 
+void startLTEm()
+{
+	// on Arduino, ensure pin is in default "logical" state prior to opening
+	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
+	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
+
+	gpio_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	gpio_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	gpio_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+
+	gpio_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
+	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
+
+    spi_start(g_ltem.spi);
+
+    if (qbg_isPowerOn())                                        // power on BGx, returning prior power-state
+    {
+		PRINTF(dbgColor__info, "LTEm1 found powered on.\r\n");
+        g_ltem.qbgReadyState = qbg_readyState_appReady;         // if already "ON", assume running and check for IRQ latched
+    }
+    else
+        qbg_powerOn();
+
+    SC16IS741A_start();                                         // start (resets previously powered on) NXP SPI-UART bridge
+    IOP_start();
+    IOP_awaitAppReady();                                        // wait for BGx to signal out firmware ready
+}
+
+
 void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
     if (notifType > 200)
     {
-        PRINTF(DBGCOLOR_error, "LQCloud-HardFault: %s\r", notifMsg);
+        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
         while (1) {}
     }
-    PRINTF(DBGCOLOR_info, "LQCloud Info: %s\r", notifMsg);
+    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
     return;
 }
 
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(DBGCOLOR_info, "\r\nLoop=%i \r\n", loopCnt);
-    PRINTF(0, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(0, "NextTest (millis)=%i\r\r", waitNext);
-    lDelay(waitNext);
+    PRINTF(dbgColor__info, "\r\nLoop=%i \r\n", loopCnt);
+    PRINTF(dbgColor__none, "FreeMem=%u\r\n", getFreeMemory());
+    PRINTF(dbgColor__none, "NextTest (millis)=%i\r\r", waitNext);
+    pDelay(waitNext);
 }
 
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(DBGCOLOR_error, "\r\n** %s \r", failureMsg);
-    PRINTF(DBGCOLOR_error, "** Test Assertion Failed. \r");
+	PRINTF(dbgColor__error, "\r\n** %s \r", failureMsg);
+    PRINTF(dbgColor__error, "** Test Assertion Failed. \r");
 
     #if 1
-    PRINTF(DBGCOLOR_error, "** Halting Execution \r");
+    PRINTF(dbgColor__error, "** Halting Execution \r");
     while (1)
     {
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        lDelay(1000);
+        pDelay(1000);
         gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        lDelay(100);
+        pDelay(100);
     }
     #endif
 }

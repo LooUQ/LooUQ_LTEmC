@@ -31,31 +31,29 @@
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+#if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #if _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #else
+    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-
-// define options for how to assemble this build
+                                        // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
 #include <ltemc.h>
-
-#include "lqc_collections.h"            // borrow LQCloud collections for this test
+#include <lq-diagnostics.h>
+#include <lq-collections.h>             // using LooUQ collections with mqtt
+#include <lq-str.h>
+#include <ltemc-tls.h>
+#include <ltemc-mqtt.h>
 
 #define DEFAULT_NETWORK_CONTEXT 1
-#define XFRBUFFER_SZ 201
-#define SOCKET_ALREADYOPEN 563
-
-#define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
-#define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') appNotifyCB(255, failMsg)
 
 
 /* Test is designed for use with Azure IoTHub. If you do not have a Azure subscription you can get a free test account with a preloaded credit.
@@ -79,16 +77,19 @@
 
 #define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
 #define MQTT_PORT 8883
+#define MQTT_DATACONTEXT 5
 
 /* put your AZ IoTHub info here, SAS Token is available by using the "Azure IoT explorer" (https://github.com/Azure/azure-iot-explorer/releases/tag/v0.10.16)
- * Note that SAS tokens have an experiry from 5 minutes to years. Yes... the one below is expired. To cancel a published SAS Token with an extended expirery
- * you will need to change the device key (primary or secondary) it was based on.
+ * Note that SAS tokens have an experiry from 5 minutes to years. Yes... the one below is expired. 
+ * To cancel a published SAS Token with an extended expirery you will need to change the device key (primary or secondary) it was based on.
+ * 
+ * If you are a LQCloud user get your SAS token from the Devices..Device Details panel.
  */
-#define MQTT_IOTHUB_DEVICEID "864508030074113"
+#define MQTT_IOTHUB_DEVICEID "867198053224766"
 #define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/" MQTT_IOTHUB_DEVICEID "/?api-version=2018-06-30"
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F864508030074113&sig=GUTFgHfEGU4hoVmJpTHJwWimH2ItifUSxd4pI83r%2Boo%3D&se=1624939645"
 
-// before commit "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F864508030074113&sig=dSmmZUimMuMu%2BNQjKtqLkrrzaeucvmqNM8BHKJbtIw8%3D&se=1621939493"
+//#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F" MQTT_IOTHUB_DEVICEID "&sig=J0S6wK5yFEFcUcFpP84GRGeB%2FrIZRgjssfRs09kTeq0%3D&se=1624376687"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053224766&sig=zlkmqXDdb9ebeRBOMssHj0XHOSllIpXc5zKdBFgSTec%3D&se=1628439070"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
@@ -97,16 +98,18 @@
 
 
 // test setup
-#define CYCLE_INTERVAL 5000
-uint16_t loopCnt = 1;
+uint16_t cycle_interval = 15000;
+uint16_t loopCnt = 0;
 uint32_t lastCycle;
 
 
-// ltem1 variables
-socketResult_t result;
-socketId_t mqttConnectionId = 1;
-char mqttTopic[200];
-char mqttMessage[200];
+// LTEm variables
+mqttCtrl_t mqttCtrl;                // MQTT control, data to manage MQTT connection to server
+uint8_t receiveBuffer[640];         // Data buffer where received information is returned (can be local, global, or dynamic... your call)
+
+char mqttTopic[200];                // application buffer to craft TX MQTT topic
+char mqttMessage[200];              // application buffer to craft TX MQTT publish content (body)
+resultCode_t result;
 
 
 void setup() {
@@ -119,18 +122,19 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_white, "\rLTEm1c test8-MQTT\r\n");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
+    PRINTF(dbgColor__red, "\rLTEm1c test8-MQTT\r\n");
+    lqDiag_registerNotifCallback(appNotifyCB);
+
+    diagnosticInfo_t *diags = lqDiag_getDiagnosticsInfo();
 
     ltem_create(ltem_pinConfig, appNotifyCB);
-    mqtt_create();
-    ltem_start(pdpProtocol_mqtt);
+    ltem_start();
 
-    PRINTF(DBGCOLOR_none, "Waiting on network...\r");
+    PRINTF(dbgColor__none, "Waiting on network...\r");
     networkOperator_t networkOp = ntwk_awaitOperator(30000);
     if (strlen(networkOp.operName) == 0)
         appNotifyCB(255, "Timout (30s) waiting for cellular network.");
-    PRINTF(DBGCOLOR_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
+    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     uint8_t cntxtCnt = ntwk_getActivePdpCntxtCnt();
     if (cntxtCnt == 0)
@@ -139,31 +143,72 @@ void setup() {
     }
 
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
-    */
+     * Azure requires TLS 1.2 and MQTT version 3.11 */
 
-    ASSERT(mqtt_open(MQTT_IOTHUB, MQTT_PORT, sslVersion_tls12, mqttVersion_311) == RESULT_CODE_SUCCESS, "MQTT open failed.");
-    ASSERT(mqtt_connect(MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN, mqttSession_cleanStart) == RESULT_CODE_SUCCESS,"MQTT connect failed.");
-    ASSERT(mqtt_subscribe(MQTT_IOTHUB_C2D_TOPIC, mqttQos_1, mqttReceiver) == RESULT_CODE_SUCCESS, "MQTT subscribe to IoTHub C2D messages failed.");
+    tls_configure(dataContext_5, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    mqtt_initControl(&mqttCtrl, dataContext_5, mqtt__useTls, mqttVersion_311, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
 
-    lastCycle = lMillis();
+    resultCode_t rslt;
+
+    rslt = mqtt_open(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT);
+    if (rslt != resultCode__success)
+    {
+        PRINTF(dbgColor__warn, "Open fail status=%d\r", rslt);
+        appNotifyCB(255, "MQTT open failed");
+    }
+    rslt = mqtt_connect(&mqttCtrl, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN, mqttSession_cleanStart);
+    if (rslt != resultCode__success)
+    {
+        PRINTF(dbgColor__warn, "Connect fail status=%d\r", rslt);
+        appNotifyCB(255, "MQTT connect failed.");
+    }
+    rslt = mqtt_subscribe(&mqttCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1);
+    if (rslt != resultCode__success)
+    {
+        PRINTF(dbgColor__warn, "Subscribe fail status=%d\r", rslt);
+        appNotifyCB(255, "MQTT subscribe to IoTHub C2D messages failed.");
+    }
+    lastCycle = pMillis() - cycle_interval;
 }
-
 
 
 void loop() 
 {
-    if (lTimerExpired(lastCycle, CYCLE_INTERVAL))
+    if (pElapsed(lastCycle, cycle_interval))
     {
-        lastCycle = lMillis();
+        lastCycle = pMillis();
 
         double windspeed = random(0, 4999) * 0.01;
 
         snprintf(mqttTopic, 200, MQTT_MSG_BODY_TEMPLATE, loopCnt, windspeed);
         snprintf(mqttMessage, 200, "MQTT message for loop=%d", loopCnt);
-        mqtt_publish(mqttTopic, mqttQos_1, mqttMessage);
+
+        resultCode_t rslt;
+
+        // /* no retry */
+        // rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage);
+
+        // if (rslt != resultCode__success)
+        //     PRINTF(dbgColor__warn, "Publish failed!\r");
+
+
+        /* retry until timeout */
+        uint32_t publishTck = pMillis();
+        do
+        {
+            rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage);
+            if (pElapsed(publishTck, PERIOD_FROM_SECONDS(1)))
+            {
+                PRINTF(dbgColor__warn, "Publish attempts timed out, Publish Failed!\r");
+                break;
+            }
+            /* if the publish is being blocked by a recv, critical that doWork() given opportunity to finish IO */
+            ltem_doWork();                                                              
+
+        } while (rslt != resultCode__success);
 
         loopCnt++;
-        PRINTF(DBGCOLOR_magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
+        PRINTF(dbgColor__magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
     }
 
     /* NOTE: ltem1_doWork() pipeline requires up to 3 invokes for each data receive. DoWork has no side effects 
@@ -172,19 +217,22 @@ void loop()
 }
 
 
-void mqttReceiver(char *topic, char *topicProps, char *message)
+void mqttRecvCB(dataContext_t cntxt, uint16_t msgId, const char *topic, char *topicVar, char *message, uint16_t messageSz)
 {
-    PRINTF(DBGCOLOR_info, "\r**MQTT--MSG** @tick=%d\r", lMillis());
-    PRINTF(DBGCOLOR_cyan, "\rt(%d): %s", strlen(topic), topic);
-    PRINTF(DBGCOLOR_cyan, "\rp(%d): %s", strlen(topicProps), topicProps);
-    PRINTF(DBGCOLOR_cyan, "\rm(%d): %s", strlen(message), message);
+    uint16_t newLen = lq_strUriDecode(topicVar, message - topicVar);        // Azure IoTHub URI encodes properties sent as topic suffix 
 
-    // use local copy of LQ Cloud query string processor
-    keyValueDict_t mqttProps = lqc_createDictFromQueryString(topicProps);
-    PRINTF(DBGCOLOR_info, "\rProps(%d)\r", mqttProps.count);
+    PRINTF(dbgColor__info, "\r**MQTT--MSG** @tick=%d BufferSz=%d\r", pMillis(), mqtt_getLastBufferReqd(&mqttCtrl));
+    PRINTF(dbgColor__cyan, "   msgId:=%d   topicSz=%d, propsSz=%d, messageSz=%d\r", msgId, strlen(topic), strlen(topicVar), strlen(message));
+    PRINTF(dbgColor__cyan, "   topic: %s\r", topic);
+    PRINTF(dbgColor__cyan, "   props: %s\r", topicVar);
+    PRINTF(dbgColor__cyan, " message: %s\r", message);
+
+    // Azure IoTHub appends properties collection to the topic (that is why Azure requires wildcard topic)
+    keyValueDict_t mqttProps = lq_createQryStrDictionary(topicVar, strlen(topicVar));
+    PRINTF(dbgColor__info, "Props(%d)\r", mqttProps.count);
     for (size_t i = 0; i < mqttProps.count; i++)
     {
-        PRINTF(DBGCOLOR_cyan, "%s=%s\r", mqttProps.keys[i], mqttProps.values[i]);
+        PRINTF(dbgColor__cyan, "%s=%s\r", mqttProps.keys[i], mqttProps.values[i]);
     }
     PRINTF(0, "\r");
 }
@@ -196,8 +244,8 @@ void mqttReceiver(char *topic, char *topicProps, char *message)
 
 void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
-	PRINTF(DBGCOLOR_error, "\r\n** %s \r\n", notifMsg);
-    PRINTF(DBGCOLOR_error, "** Test Assertion Failed. \r\n");
+	PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
+    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
 
     int halt = 1;
     while (halt) {}

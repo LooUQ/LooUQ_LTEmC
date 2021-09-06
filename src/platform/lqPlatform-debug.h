@@ -29,8 +29,7 @@
 #define DBGBUFFER_SZ 120
 
 #ifdef _DEBUG 
-    #ifndef DBCCOLOR_none
-    #define DBGCOLOR_none 13
+    #ifndef DBCCOLOR_dflt
     #define DBGCOLOR_dflt 13
     #define DBGCOLOR_info 15
     #define DBGCOLOR_warn 17

@@ -3,6 +3,6 @@
     "port": "COM22",
     "board": "adafruit:samd:adafruit_feather_m0_express",
     "output": ".//.build",
-    "configuration": "usbstack=arduino,debug=off",
+    "configuration": "opt=none,usbstack=arduino,debug=on",
     "debugger": "jlink"
 }

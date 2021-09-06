@@ -40,33 +40,33 @@
 #ifdef HOST_FEATHER_UXPLOR
 const ltemPinConfig_t ltem_pinConfig =
 {
-  spiCsPin : 13,
-  irqPin : 12,
-  statusPin : 6,
-  powerkeyPin : 11,
-  resetPin : 10,
-  ringUrcPin : 0,
-  wakePin : 0
+    spiCsPin : 13,
+    irqPin : 12,
+    statusPin : 6,                  ///< HIGH indicates ON
+    powerkeyPin : 11,               ///< toggle HIGH to change state
+    resetPin : 10,                  ///< reset active HIGH
+    ringUrcPin : 0,                 
+    wakePin : 0
 };
 #endif
 
 #ifdef HOST_FEATHER_BASIC
 const ltemPinConfig_t ltem_pinConfig =
 {
-  spiCsPin : 13,
-  irqPin : 12,
-  statusPin : 6,
-  powerkeyPin : 11,
-  resetPin : 19,
-  ringUrcPin : 5,
-  wakePin : 10
+    spiCsPin : 13,
+    irqPin : 12,
+    statusPin : 6,
+    powerkeyPin : 11,
+    resetPin : 19,
+    ringUrcPin : 5,
+    wakePin : 10
 };
 #endif
 
 #ifdef HOST_RASPI_UXPLOR
 const ltemPinConfig_t ltem_pinConfig = 
 {
-	.spiCsPin = 0, 			//< J8_24
+    .spiCsPin = 0, 			//< J8_24
 	.irqPin = 22U,		    //< J8_15
 	.statusPin = 13U,		//< J8_22
 	.powerkeyPin = 24U,		//< J8_18

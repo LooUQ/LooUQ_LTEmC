@@ -27,28 +27,30 @@
 
 #define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+#if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #if _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #else
+    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
 
 
-#include "ltemc.h"
+#include "ltemc-internal.h"
 
 #define PROTOCOLS_CMD_BUFFER_SZ 80
 #define MIN(x, y) (((x)<(y)) ? (x):(y))
 
-#pragma region Static Local Function Declarations
+
+extern ltemDevice_t g_ltem;
+
+// local static functions
 static resultCode_t s_contextStatusCompleteParser(const char *response, char **endptr);
 static networkOperator_t s_getNetworkOperator();
-static char *s_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
-#pragma endregion
+static char *S_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
 
 
 /* public tcpip functions
@@ -60,52 +62,46 @@ static char *s_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t to
  */
 void ntwk_create()
 {
-    network_t *networkPtr = calloc(1, sizeof(network_t));
-	if (networkPtr == NULL)
-	{
-        ltem_notifyApp(ltemNotifType_memoryAllocFault,  "Could not alloc network struct");
-	}
+    network_t *networkPtr = (network_t*)calloc(1, sizeof(network_t));
+    ASSERT(networkPtr != NULL, srcfile_network_c);
 
     networkPtr->networkOperator = calloc(1, sizeof(networkOperator_t));
-    pdpCntxt_t *context = calloc(BGX_PDPCONTEXT_COUNT, sizeof(pdpCntxt_t));
-	if (context == NULL)
-	{
-        ltem_notifyApp(ltemNotifType_memoryAllocFault, "Could not alloc PDP context struct");
-        free(networkPtr);
-	}
+    pdpCntxt_t *context = calloc(NTWK__pdpContextCnt, sizeof(pdpCntxt_t));
+    ASSERT(context != NULL, srcfile_network_c);
 
-    for (size_t i = 0; i < IOP_SOCKET_COUNT; i++)
+    for (size_t i = 0; i < sizeof(networkPtr->pdpCntxts)/sizeof(pdpCntxt_t); i++)
     {   
         networkPtr->pdpCntxts[i].ipType = pdpCntxtIpType_IPV4;
     }
-    g_ltem->network = networkPtr;
+    g_ltem.network = networkPtr;
 }
-
 
 
 /**
  *   \brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
  * 
- *   \param waitDuration [in] Number of seconds to wait for a network. Supply 0 for no wait.
+ *   \param waitDurSeconds [in] Number of seconds to wait for a network. Supply 0 for no wait.
  * 
  *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-networkOperator_t ntwk_awaitOperator(uint16_t waitDuration)
+networkOperator_t ntwk_awaitOperator(uint16_t waitDurSeconds)
 {
     networkOperator_t ntwk;
-    unsigned long startMillis, endMillis;
+    uint32_t startMillis, endMillis;
+    startMillis = endMillis = pMillis();
+    uint32_t waitDuration = (waitDurSeconds > 300) ? 300000 : waitDurSeconds * 1000;    // max is 5 minutes
 
-    startMillis = lMillis();
-    waitDuration = waitDuration * 1000;
     do 
     {
         ntwk = s_getNetworkOperator();
-        if (ntwk.operName != 0)
+        if (*ntwk.operName != 0)
             break;
-        lDelay(1000);
-        endMillis = lMillis();
-    } while (endMillis - startMillis < waitDuration || g_ltem->cancellationRequest);
+        pDelay(1000);                               // this yields, allowing alternate execution
+        endMillis = pMillis();
+
     //       timed out waiting                      || global cancellation
+    } while (endMillis - startMillis < waitDuration || g_ltem.cancellationRequest);
+    PRINTF(dbgColor__dMagenta, "ntwkOp returned in %d ms\r", (endMillis - startMillis) / 1000);
     return ntwk;
 }
 
@@ -120,52 +116,59 @@ uint8_t ntwk_getActivePdpCntxtCnt()
 {
     #define IP_QIACT_SZ 8
 
-    atcmd_tryInvokeAdv("AT+QIACT?", ACTION_TIMEOUTml, s_contextStatusCompleteParser);
-    atcmdResult_t atResult = atcmd_awaitResult(false);
-
-    for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)         // empty context table return and if success refill from parsing
-    {
-        g_ltem->network->pdpCntxts[i].contextId = 0;
-        g_ltem->network->pdpCntxts[i].ipAddress[0] = 0;
-    }
-
-    if (atResult.statusCode != RESULT_CODE_SUCCESS)
-    {
-        atcmd_close();
-        return 0;
-    }
-
     uint8_t apnIndx = 0;
-    if (strlen(atResult.response) > IP_QIACT_SZ)
+
+    atcmd_setOptions(atcmd__setLockModeManual,  atcmd__useDefaultTimeout, s_contextStatusCompleteParser);
+    if (atcmd_awaitLock(atcmd__useDefaultTimeout))
     {
-        #define TOKEN_BUF_SZ 16
-        char *nextContext;
-        char *landmarkAt;
-        char *continueAt;
-        uint8_t landmarkSz = IP_QIACT_SZ;
-        char tokenBuf[TOKEN_BUF_SZ];
+        atcmd_invokeReuseLock("AT+QIACT?");
+        resultCode_t atResult = atcmd_awaitResult();
 
-        nextContext = strstr(atResult.response, "+QIACT: ");
+        memset(&((network_t*)g_ltem.network)->pdpCntxts, 0, sizeof(pdpCntxt_t) * NTWK__pdpContextCnt);    // empty context table for return, if success refill from parsing
+        // for (size_t i = 0; i < NTWK__pdpContextCnt; i++)         // empty context table return and if success refill from parsing
+        // {
+        //     ((network_t*)g_ltem.network)->pdpCntxts[i].contextId = 0;
+        //     ((network_t*)g_ltem.network)->pdpCntxts[i].ipAddress[0] = 0;
+        // }
 
-        // no contexts returned = none active (only active contexts are returned)
-        while (nextContext != NULL)                             // now parse each pdp context entry
+        if (atResult != resultCode__success)
         {
-            landmarkAt = nextContext;
-            g_ltem->network->pdpCntxts[apnIndx].contextId = strtol(landmarkAt + landmarkSz, &continueAt, 10);
-            continueAt = strchr(++continueAt, ',');             // skip context_state: always 1
-            g_ltem->network->pdpCntxts[apnIndx].ipType = (int)strtol(continueAt + 1, &continueAt, 10);
+            apnIndx = 0xFF;
+            goto finally;
+        }
 
-            continueAt = s_grabToken(continueAt + 2, ASCII_cDBLQUOTE, tokenBuf, TOKEN_BUF_SZ);
-            if (continueAt != NULL)
+        if (strlen(atcmd_getLastResponse()) > IP_QIACT_SZ)
+        {
+            #define TOKEN_BUF_SZ 16
+            char *nextContext;
+            char *landmarkAt;
+            char *continuePtr;
+            uint8_t landmarkSz = IP_QIACT_SZ;
+            char tokenBuf[TOKEN_BUF_SZ];
+
+            nextContext = strstr(atcmd_getLastResponse(), "+QIACT: ");
+
+            // no contexts returned = none active (only active contexts are returned)
+            while (nextContext != NULL)                             // now parse each pdp context entry
             {
-                strncpy(g_ltem->network->pdpCntxts[apnIndx].ipAddress, tokenBuf, TOKEN_BUF_SZ);
+                landmarkAt = nextContext;
+                ((network_t*)g_ltem.network)->pdpCntxts[apnIndx].contextId = strtol(landmarkAt + landmarkSz, &continuePtr, 10);
+                continuePtr = strchr(++continuePtr, ',');             // skip context_state: always 1
+                ((network_t*)g_ltem.network)->pdpCntxts[apnIndx].ipType = (int)strtol(continuePtr + 1, &continuePtr, 10);
+
+                continuePtr = S_grabToken(continuePtr + 2, '"', tokenBuf, TOKEN_BUF_SZ);
+                if (continuePtr != NULL)
+                {
+                    strncpy(((network_t*)g_ltem.network)->pdpCntxts[apnIndx].ipAddress, tokenBuf, TOKEN_BUF_SZ);
+                }
+                nextContext = strstr(nextContext + landmarkSz, "+QIACT: ");
+                apnIndx++;
             }
-            nextContext = strstr(nextContext + landmarkSz, "+QIACT: ");
-            apnIndx++;
         }
     }
-    atcmd_close();
-    return apnIndx;
+    finally:
+        atcmd_close();
+        return apnIndx;
 }
 
 
@@ -178,10 +181,10 @@ uint8_t ntwk_getActivePdpCntxtCnt()
  */
 pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
 {
-    for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)
+    for (size_t i = 0; i < NTWK__pdpContextCnt; i++)
     {
-        if(g_ltem->network->pdpCntxts[i].contextId != 0)
-            return &g_ltem->network->pdpCntxts[i];
+        if(((network_t*)g_ltem.network)->pdpCntxts[i].contextId != 0)
+            return &((network_t*)g_ltem.network)->pdpCntxts[i];
     }
     return NULL;
 }
@@ -192,17 +195,24 @@ pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
  * 
  *  \param cntxtId [in] - The APN to operate on. Typically 0 or 1
  */
-void ntwk_activatePdpContext(uint8_t cntxtId)
+bool ntwk_activatePdpContext(uint8_t cntxtId)
 {
-    char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
+    if (ntwk_getPdpCntxt(cntxtId) != NULL)
+        return true;
 
-    snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIACT=%d\r", cntxtId);
-    if (atcmd_tryInvokeAdv(atCmd, ACTION_TIMEOUTml, s_contextStatusCompleteParser))
+    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, s_contextStatusCompleteParser);
+
+    if (atcmd_tryInvokeAutoLockWithOptions("AT+QIACT=%d\r", cntxtId))
     {
-        resultCode_t atResult = atcmd_awaitResult(true).statusCode;
-        if ( atResult == RESULT_CODE_SUCCESS)
+        resultCode_t atResult = atcmd_awaitResult();
+        if ( atResult == resultCode__success)
             ntwk_getActivePdpCntxtCnt();
     }
+    atcmd_close();
+
+    if (ntwk_getPdpCntxt(cntxtId) != NULL)
+        return true;
+    return false;
 }
 
 
@@ -214,14 +224,15 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
  */
 void ntwk_deactivatePdpContext(uint8_t cntxtId)
 {
-    char atCmd[PROTOCOLS_CMD_BUFFER_SZ] = {0};
-    snprintf(atCmd, PROTOCOLS_CMD_BUFFER_SZ, "AT+QIDEACT=%d\r", cntxtId);
-
-    if (atcmd_tryInvokeAdv(atCmd, ACTION_TIMEOUTml, s_contextStatusCompleteParser))
+    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, s_contextStatusCompleteParser);
+    if (atcmd_awaitLock(atcmd__useDefaultTimeout))
     {
-        resultCode_t atResult = atcmd_awaitResult(true).statusCode;
-        if ( atResult == RESULT_CODE_SUCCESS)
-            ntwk_getActivePdpContexts();
+        if (atcmd_tryInvokeOptions("AT+QIDEACT=%d\r", cntxtId))
+        {
+            resultCode_t atResult = atcmd_awaitResult();
+            if ( atResult == resultCode__success)
+                ntwk_getActivePdpContexts();
+        }
     }
 }
 
@@ -233,14 +244,14 @@ void ntwk_deactivatePdpContext(uint8_t cntxtId)
  */
 void ntwk_resetPdpContexts()
 {
-    uint8_t activeIds[BGX_PDPCONTEXT_COUNT] = {0};
+    uint8_t activeIds[NTWK__pdpContextCnt] = {0};
 
-    for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)                         // preserve initial active APN list
+    for (size_t i = 0; i < NTWK__pdpContextCnt; i++)                         // preserve initial active APN list
     {
-        if(g_ltem->network->pdpCntxts[i].contextId != 0)
-            activeIds[i] = g_ltem->network->pdpCntxts[i].contextId;
+        if(((network_t*)g_ltem.network)->pdpCntxts[i].contextId != 0)
+            activeIds[i] = ((network_t*)g_ltem.network)->pdpCntxts[i].contextId;
     }
-    for (size_t i = 0; i < BGX_PDPCONTEXT_COUNT; i++)                         // now, cycle the active contexts
+    for (size_t i = 0; i < NTWK__pdpContextCnt; i++)                         // now, cycle the active contexts
     {
         if(activeIds[i] != 0)
         {
@@ -265,7 +276,7 @@ void ntwk_resetPdpContexts()
 */
 static resultCode_t s_contextStatusCompleteParser(const char *response, char **endptr)
 {
-    return atcmd_defaultResultParser(response, "+QIACT: ", false, 2, ASCII_sOK, endptr);
+    return atcmd_defaultResultParser(response, "+QIACT: ", false, 2, "OK\r\n", endptr);
 }
 
 
@@ -277,35 +288,38 @@ static resultCode_t s_contextStatusCompleteParser(const char *response, char **e
 */
 static networkOperator_t s_getNetworkOperator()
 {
-    if (*g_ltem->network->networkOperator->operName != 0)
-        return *g_ltem->network->networkOperator;
+    if (*((network_t*)g_ltem.network)->networkOperator->operName != 0)
+        return *((network_t*)g_ltem.network)->networkOperator;
 
-    if (atcmd_tryInvoke("AT+COPS?"))
+    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd__useDefaultOKCompletionParser);
+    if (!atcmd_awaitLock(atcmd__useDefaultTimeout))
+        goto finally;
+
+    atcmd_invokeReuseLock("AT+COPS?");
+    if (atcmd_awaitResult() == resultCode__success)
     {
-        atcmdResult_t atResult = atcmd_awaitResult(false);
-        if (atResult.statusCode == RESULT_CODE_SUCCESS)
+        char *continuePtr;
+        continuePtr = strchr(atcmd_getLastResponse(), '"');
+        if (continuePtr != NULL)
         {
-            char *continueAt;
-            uint8_t ntwkMode;
-            continueAt = strchr(atResult.response, ASCII_cDBLQUOTE);
-            if (continueAt != NULL)
-            {
-                continueAt = s_grabToken(continueAt + 1, ASCII_cDBLQUOTE, g_ltem->network->networkOperator->operName, NTWKOPERATOR_OPERNAME_SZ);
-                ntwkMode = (uint8_t)strtol(continueAt + 1, &continueAt, 10);
-                if (ntwkMode == 8)
-                    strcpy(g_ltem->network->networkOperator->ntwkMode, "CAT-M1");
-                else
-                    strcpy(g_ltem->network->networkOperator->ntwkMode, "CAT-NB1");
-            }
-        }
-        else
-        {
-            g_ltem->network->networkOperator->operName[0] = 0;
-            g_ltem->network->networkOperator->ntwkMode[0] = 0;
+            continuePtr = S_grabToken(continuePtr + 1, '"', ((network_t*)g_ltem.network)->networkOperator->operName, NTWK__operatorNameSz);
+
+            uint8_t ntwkMode = (uint8_t)strtol(continuePtr + 1, &continuePtr, 10);
+            if (ntwkMode == 8)
+                strcpy(((network_t*)g_ltem.network)->networkOperator->ntwkMode, "CAT-M1");
+            else
+                strcpy(((network_t*)g_ltem.network)->networkOperator->ntwkMode, "CAT-NB1");
         }
     }
-    atcmd_close();
-    return *g_ltem->network->networkOperator;
+    else
+    {
+        ((network_t*)g_ltem.network)->networkOperator->operName[0] = 0;
+        ((network_t*)g_ltem.network)->networkOperator->ntwkMode[0] = 0;
+    }
+
+    finally:
+        atcmd_close();
+        return *((network_t*)g_ltem.network)->networkOperator;
 }
 
 /**
@@ -318,7 +332,7 @@ static networkOperator_t s_getNetworkOperator()
  * 
  *  \return Pointer to the location in the source string immediately following the token.
 */
-static char *s_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz) 
+static char *S_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz) 
 {
     char *delimAt;
     if (source == NULL)

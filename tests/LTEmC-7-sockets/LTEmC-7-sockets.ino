@@ -22,22 +22,25 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  ******************************************************************************
- * Test IP protocol client send/receive.
+ * Test IP sockets protocol client send/receive.
  * 
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
+//#include <jlinkRtt.h>
+
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
+#if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #if _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #else
+    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
 #else
-#define PRINTF(c_, f_, ...) ;
+#define PRINTF(c_, f_, ...)
 #endif
 
 
@@ -45,32 +48,37 @@
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 
 #include <ltemc.h>
+#include <ltemc-sckt.h>
+#include <lq-diagnostics.h>
+
 
 /* ----------------------------------------------------------------------------
  * For testing TCP\UDP\SSL LooUQ utilizes PacketSender from NAGLECODE.
  * See https://packetsender.com/documentation for more information.
  * ------------------------------------------------------------------------- */
 
-#if LTEM1_MQTT == 1
-#define success
-#endif
+// #if LTEM1_MQTT == 1
+// #define success
+// #endif
 
 // test setup
 #define CYCLE_INTERVAL 10000
 #define SEND_BUFFER_SZ 201
-#define TCPIP_TEST_PROTOCOL 1               // Define test protocol: TCP = 0, UDP = 1, SSL = 2
-#define TCPIP_TEST_SERVER "24.247.65.244"   // put your server information here 
-#define TCPIP_TEST_SOCKET 9011              // and here
+#define SCKTTEST_PROTOCOL 1             // Define test protocol: TCP = 0, UDP = 1, SSL = 2
+#define SCKTTEST_HOST "24.247.65.244"   // put your server information here 
+#define SCKTTEST_PORT 9011              // and here
+
+#define SCKTTEST_RXBUFSZ 256
 
 uint16_t loopCnt = 0;
 uint32_t lastCycle;
 
+
 // ltem1c 
 #define DEFAULT_NETWORK_CONTEXT 1
-socketId_t scktNm;
-socketResult_t scktResult;
-char sendBuf[SEND_BUFFER_SZ] = {0};
 
+static scktCtrl_t scktCtrl;                     // handle for socket operations
+static uint8_t receiveBuffer[SCKTTEST_RXBUFSZ]; // appl creates a rxBuffer for protocols, sized to your expected flows (will be incorporated into scktCtrl)
 
 void setup() {
     #ifdef SERIAL_OPT
@@ -82,19 +90,18 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_error, "\rLTEm1c Test: 7-Sockets\r\n");
-    //gpio_openPin(LED_BUILTIN, gpioMode_output);                   // use on-board LED to signal activity
+    PRINTF(dbgColor__red, "\rLTEmC Test:7 Sockets\r\n");
+    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifRecvr);                     // create base modem object
-    sckt_create();                                                  // add optional services: here sockets (TCP/UDP/SSL)
-    ltem_start(pdpProtocol_sockets);                                // now start modem
+    ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
+    ltem_start();                                                   // ... and start it
 
-    PRINTF(DBGCOLOR_none, "Waiting on network...\r");
-    networkOperator_t networkOp = ntwk_awaitOperator(120 * 1000);
+    PRINTF(dbgColor__dflt, "Waiting on network...\r");
+    networkOperator_t networkOp = ntwk_awaitOperator(120);
     if (strlen(networkOp.operName) == 0)
-        appNotifRecvr(255, "Timeout (120s) waiting for cellular network.");
+        appNotifyCB(255, "Timeout (120s) waiting for cellular network.");
 
-    PRINTF(DBGCOLOR_info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
+    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     uint8_t cntxtCnt = ntwk_getActivePdpCntxtCnt();
     if (cntxtCnt == 0)
@@ -102,37 +109,34 @@ void setup() {
         ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT);
     }
 
-    // open socket
-    scktResult = sckt_open(0, (protocol_t)TCPIP_TEST_PROTOCOL, TCPIP_TEST_SERVER, TCPIP_TEST_SOCKET, 0, true, ipReceiver);
-    if (scktResult == SOCKET_RESULT_PREVOPEN)
+    // create a socket control and open it
+    sckt_initControl(&scktCtrl, dataContext_0, (protocol_t)SCKTTEST_PROTOCOL, receiveBuffer, sizeof(receiveBuffer), scktRecvCB);
+    resultCode_t scktResult = sckt_open(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0, true);
+
+    if (scktResult == resultCode__previouslyOpened)
     {
-        PRINTF(DBGCOLOR_warn, "Socket 0 found already open!\r");
+        PRINTF(dbgColor__warn, "Socket 0 found already open!\r");
     }
-    else if (scktResult != RESULT_CODE_SUCCESS)
+    else if (scktResult != resultCode__success)
     {
-        PRINTF(DBGCOLOR_error, "Socket 0 open failed, resultCode=%d\r", scktResult);
-        appNotifRecvr(255, "Failed to open socket.");
+        PRINTF(dbgColor__error, "Socket 0 open failed, resultCode=%d\r", scktResult);
+        appNotifyCB(255, "Failed to open socket.");
     }
 }
 
-uint16_t txCnt = 0;
-uint16_t rxCnt = 0;
-uint16_t drops = 0;
-uint16_t prevRx = 0;
 
 void loop() 
 {
-    if (lMillis() - lastCycle >= CYCLE_INTERVAL)
+    if (pMillis() - lastCycle >= CYCLE_INTERVAL)
     {
-        // PRINTF(DBGCOLOR_magenta, "SPIready=%d\r", sc16is741a_chkCommReady());
-        lastCycle = lMillis();
+        lastCycle = pMillis();
         showStats();
 
         #define SEND_TEST 0
 
-        #if SEND_TEST == 0
+        #if SEND_TEST == 1
         /* test for short-send, fits is 1 TX chunk */
-        snprintf(sendBuf, SEND_BUFFER_SZ, "%d-%lu drops=%d  ABCDEFGHIJKLMNOPQRSTUVWXYZ", loopCnt, lMillis(), drops);
+        snprintf(sendBuf, SEND_BUFFER_SZ, "%d-%lu drops=%d  ABCDEFGHIJKLMNOPQRSTUVWXYZ", loopCnt, pMillis(), drops);
         uint16_t sendSz = strlen(sendBuf);
         #elif SEND_TEST == 1
         /* test for longer, 2+ tx chunks */
@@ -140,20 +144,22 @@ void loop()
         uint16_t sendSz = strlen(sendBuf);
         #else
         /* test for transparent data, sockets should allow binary and ignore embedded \0 */
-        memcpy(sendBuf, "0123456789\0ABCDEFGHIJKLMNOPQRSTUVWXYZ\0abcdefghijklmnopqrstuvwxyz", 64); 
-        uint16_t sendSz = 64;
+        char sendBuf[] = "01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ0abcdefghijklmnopqrstuvwxyz";
+        uint16_t sendSz = strlen(sendBuf) - 1;
+        sendBuf[25] = 0;                                                // test for data transparency, embedded NULL
         #endif
 
+        resultCode_t sendResult = sckt_send(&scktCtrl, sendBuf, sendSz);
 
-        scktResult = sckt_send(scktNm, sendBuf, sendSz);
-
-        if (scktResult != RESULT_CODE_SUCCESS)
-        {
-            if (socketRecover() == RESULT_CODE_SUCCESS)                 // attempt recovery: close/reopen socket if network closed it remotely
-                scktResult = sckt_send(scktNm, sendBuf, sendSz);
-        }
-        txCnt = (scktResult == RESULT_CODE_SUCCESS) ? ++txCnt : txCnt;
-        PRINTF((scktResult == RESULT_CODE_SUCCESS) ? DBGCOLOR_cyan : DBGCOLOR_warn, "Send Loop %d, sendRslt=%d \r", loopCnt, scktResult);
+        PRINTF(dbgColor__info, "Send result=%d\r", sendResult);
+        
+        // if (sendResult != resultCode__success)
+        // {
+        //     if (scktRecover() == resultCode__success)                 // attempt recovery: close/reopen socket if network closed it remotely
+        //         sendResult = sckt_send(&scktCtrl, sendBuf, sendSz);
+        // }
+        // txCnt = (sendResult == resultCode__success) ? ++txCnt : txCnt;
+        // PRINTF((sendResult == resultCode__success) ? dbgColor__cyan : dbgColor__warn, "Send Loop %d, sendRslt=%d \r", loopCnt, sendResult);
 
         loopCnt++;
     }
@@ -165,11 +171,11 @@ void loop()
 }
 
 
-uint16_t socketRecover()
+uint16_t scktRecover()
 {
-    PRINTF(DBGCOLOR_warn, "sgnl=%d, scktState=%d\r", mdminfo_rssi(), sckt_getState(0));
-    sckt_close(0);
-    return sckt_open(0, (protocol_t)TCPIP_TEST_PROTOCOL, TCPIP_TEST_SERVER, TCPIP_TEST_SOCKET, 0, true, ipReceiver);
+    PRINTF(dbgColor__warn, "sgnl=%d, scktState=%d\r", mdminfo_rssi(), sckt_getState(&scktCtrl));
+    sckt_close(&scktCtrl);
+    return sckt_open(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0, true);
 }
 
 
@@ -179,7 +185,7 @@ uint16_t socketRecover()
  *  \param [in] socketId  Numeric identifier for the socket receiving the data
  *  \param [in] data  Pointer to character received data ()
 */
-void ipReceiver(socketId_t socketId, void *data, uint16_t dataSz)
+void scktRecvCB(streamPeer_t socketId, void *data, uint16_t dataSz)
 {
     // char recvBuf[XFRBUFFER_SZ] = {0};
     // uint16_t recvdSz;
@@ -192,8 +198,7 @@ void ipReceiver(socketId_t socketId, void *data, uint16_t dataSz)
     memcpy(temp, data, dataSz);
     temp[dataSz] = '\0';
 
-    rxCnt++;
-    PRINTF(DBGCOLOR_info, "appRcvd (@tick=%d) %s\r", lMillis(), temp);
+    PRINTF(dbgColor__info, "appRcvd %d chars: %s\r", dataSz, temp);
 }
 
 
@@ -209,41 +214,51 @@ void showStats()
     static uint16_t lastRx = 0;
     static uint16_t lastDrops = 0;
 
-    // for (int i = 0; i < 5; i++)                                          // optional show activity via on-board LED
-    // {
-    //     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-    //     lDelay(50);
-    //     gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-    //     lDelay(50);
-    // }
+    // uint16_t newTxCnt = txCnt - lastTx;
+    // uint16_t newRxCnt = rxCnt - lastRx;
+    // if (newRxCnt < newTxCnt)
+    //     drops++;
 
-    uint16_t newTxCnt = txCnt - lastTx;
-    uint16_t newRxCnt = rxCnt - lastRx;
-    if (newRxCnt < newTxCnt)
-        drops++;
+    // PRINTF((lastDrops == drops) ? dbgColor__magenta : dbgColor__warn, "\rTX=%d, RX=%d \r", scktCtrl.statsRxCnt, scktCtrl.statsRxCnt);
 
-    PRINTF((lastDrops == drops) ? DBGCOLOR_magenta : DBGCOLOR_warn, "\rTx=%d, Rx=%d (d=%d)\r", txCnt, rxCnt, drops);
-    PRINTF(DBGCOLOR_magenta, "FreeMem=%u  Loop=%d\r", getFreeMemory(), loopCnt);
+    PRINTF(dbgColor__magenta, "\rTX=%d, RX=%d \r", scktCtrl.statsRxCnt, scktCtrl.statsRxCnt);
+    PRINTF(dbgColor__magenta, "FreeMem=%u  Loop=%d\r", getFreeMemory(), loopCnt);
 
-    lastTx = txCnt;
-    lastRx = rxCnt;
-    lastDrops = drops;
+    // lastTx = txCnt;
+    // lastRx = rxCnt;
+    // lastDrops = drops;
 }
 
 
-void appNotifRecvr(uint8_t notifType, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
-    if (notifType == ltemNotifType_scktError)
+    if (notifType <= lqNotifType__LQDEVICE)
     {
-        PRINTF(DBGCOLOR_error, "Socket Error: %s\r", notifMsg);
-        brk();
+        PRINTF(dbgColor__info, "\r\n** %s \r\n", notifMsg);
+        return;
     }
 
-	PRINTF(DBGCOLOR_error, "\r\n** %s \r\n", notifMsg);
-    PRINTF(DBGCOLOR_error, "** Test Assertion Failed. \r\n");
-    gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-
-    while (1) {}
+    switch (notifType)
+    {
+    case lqNotifType_assertWarning:
+        PRINTF(dbgColor__warn, "%s\r\n", notifMsg);
+        return;
+    case lqNotifType_lqDevice_recvOverflow:
+        PRINTF(dbgColor__warn, "ProtocolError: %s\r", notifMsg);
+        return;
+    case lqNotifType_lqDevice_hwFault:
+        PRINTF(dbgColor__warn, "HardwareError: %s\r", notifMsg);
+        break;
+    case lqNotifType_lqDevice_ntwkFault:
+        PRINTF(dbgColor__warn, "NetworkError: %s\r", notifMsg);
+        break;
+    case lqNotifType_lqDevice_streamFault:
+        PRINTF(dbgColor__warn, "ProtocolError: %s\r", notifMsg);
+    default:
+        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
+        break;
+    }
+    do {} while (1);
 }
 
 
