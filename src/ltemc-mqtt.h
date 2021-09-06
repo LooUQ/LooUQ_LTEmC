@@ -198,7 +198,7 @@ typedef struct mqttCtrl_tag
     mqttStatus_t state;                                     ///< Current state of the MQTT protocol services on device.
     uint16_t msgId;                                         ///< MQTT message ID for QOS, automatically incremented, rolls at max value.
     mqttTopicSub_t topicSubs[mqtt__topic_subscriptionCnt];  ///< Array of MQTT topic subscriptions.
-    uint32_t doWorkLastTck;                                 ///< last check for URC\dataPending
+    uint32_t doWorkLastTck;                                 ///< last check for URC/dataPending
     uint32_t doWorkTimeout;                                 ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
     uint16_t lastBufferReqd;                                ///< last receive buffer required size, provides feedback to developer to minimize buffer sizing     
 } mqttCtrl_t;

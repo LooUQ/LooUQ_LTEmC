@@ -76,12 +76,12 @@ void S_scktDoWork();
 /**
  *	\brief Create a socket data control(TCP/UDP/SSL).
  *
- *  \param sckt [in/out] Pointer to socket control structure
- *	\param dataCntx [in] - Data context (0-5) to host socket.
+ *  \param scktCtrl [in/out] Pointer to socket control structure
+ *	\param dataCntxt [in] - Data context (0-5) to host socket.
  *	\param protocol [in] - The IP protocol to use for the connection (TCP/UDP/SSL clients).
  *  \param recvBuf [in] - Pointer to application created receive buffer
  *  \param recvBufSz [in] - Size of allocated receive buffer
- *  \param recvCb [in] - The callback function in your application to be notified of received data ready.
+ *  \param recvCallback [in] - The callback function in your application to be notified of received data ready.
  * 
  *  \return socket result code similar to http status code, OK = 200
  */
@@ -174,15 +174,15 @@ resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uin
 /**
  *	\brief Close an established (open) connection socket.
  *
- *	\param dataCntx [in] - The socket to close.
+ *	\param scktCtrl [in] - Pointer to socket control struct governing the sending socket's operation.
  */
-void sckt_close(scktCtrl_t *sckt)
+void sckt_close(scktCtrl_t *scktCtrl)
 {
     ASSERT(sckt->ctrlMagic != streams__ctrlMagic, 0xFE30);
 
     char closeCmd[20] = {0};
-    uint8_t socketBitMask = 0x01 << sckt->dataCntxt;
-    scktCtrl_t *thisSckt = (scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[sckt->dataCntxt];             // for readability
+    uint8_t socketBitMask = 0x01 << scktscktCtrl->dataCntxt;
+    scktCtrl_t *thisSckt = (scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[scktscktCtrl->dataCntxt];             // for readability
 
     if (thisSckt == 0)                           // not open
         return;
@@ -212,20 +212,20 @@ void sckt_close(scktCtrl_t *sckt)
 /**
  *	\brief Reset open socket connection. This function drains the connection's data pipeline. 
  *
- *	\param dataCntx [in] - The connection socket to reset.
+ *	\param scktCtrl [in] - Pointer to socket control struct governing the sending socket's operation.
  *
  *  \return True if flush socket data initiated.
  */
-bool sckt_flush(scktCtrl_t *sckt)
+bool sckt_flush(scktCtrl_t *scktCtrl)
 {
-    ASSERT(sckt->ctrlMagic != streams__ctrlMagic, 0xFE30);
+    ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic, 0xFE30);
 
-    if ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[sckt->dataCntxt] == NULL)       // not open
+    if ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[scktCtrl->dataCntxt] == NULL)       // not open
         return;
 
-    if (s_requestIrdData(sckt->dataCntxt, sckt->recvBufCtrl._bufferSz, true))        // initiate an IRD flow
+    if (s_requestIrdData(scktCtrl->dataCntxt, scktCtrl->recvBufCtrl._bufferSz, true))        // initiate an IRD flow
     {
-        sckt->flushing = true;
+        scktCtrl->flushing = true;
         return true;
     }
     return false;                                                                       // unable to obtain action lock
@@ -262,7 +262,7 @@ bool sckt_getState(scktCtrl_t *sckt)
 /**
  *	\brief Send data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
  *
- *	\param dataCntx [in] - The connection socket returned from open.
+ *	\param scktCtrl [in] - Pointer to socket control struct governing the sending socket's operation.
  *	\param data [in] - A character pointer containing the data to send.
  *  \param dataSz [in] - The size of the buffer (< 1501 bytes).
  */

@@ -28,9 +28,6 @@
 #ifndef __LTEMC_HTTP_H__
 #define __LTEMC_HTTP_H__
 
-//#include "ltemc-httpTypes.h"
-// #include "ltemc.h"
-
 #include <lq-types.h>
 #include "ltemc-streams.h"
 #include "ltemc-internal.h"
@@ -91,15 +88,15 @@ typedef struct httpCtrl_tag
     rxDataBufferCtrl_t recvBufCtrl;         ///< RX smart buffer 
 
     httpRecvFunc_t dataRecvCB;              ///< callback to application, signals data ready
-    uint32_t bufPageSwapTck;                ///< last check for URC\dataPending
+    uint32_t bufPageSwapTck;                ///< last check for URC/dataPending
     uint32_t bufPageTimeout;                ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
     char urlHost[http__urlHostSz];          ///< host portion of URL for GET/POST requests
     bool returnResponseHdrs;                ///< if set true, response headers are included in the returned response
     char *cstmHdrs;                         ///< custom header content, optional buffer provided by application
     uint16_t cstmHdrsSz;                    ///< size of custom header buffer
-    char requestType;                       ///< type of current\last request: 'G'=GET, 'P'=POST
+    char requestType;                       ///< type of current/last request: 'G'=GET, 'P'=POST
     httpState_t requestState;               ///< current state machine variable for HTTP request
-    uint16_t bgxError;                      ///< BGx sprecific error code returned from GET\POST
+    uint16_t bgxError;                      ///< BGx sprecific error code returned from GET/POST
     uint16_t httpStatus;                    ///< set to 0 during a request, initialized to 0xFFFF before any request
     uint32_t pageSize;                      ///< if provided in page response, the page size 
     uint32_t pageRemaining;                 ///< set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
@@ -114,7 +111,7 @@ extern "C"
 
 // Session settings factory methods to create options for a series of GET/POST operations
 
-void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataContext, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
+void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataCntxt, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
 
 void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *hdrBuffer, uint16_t hdrBufferSz);
 void http_addDefaultHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap);

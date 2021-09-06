@@ -66,14 +66,12 @@ static resultCode_t S_httpPostStatusParser(const char *response, char **endptr);
 /**
  *	\brief Create a HTTP(s) control structure to manage web communications. 
  *
- *  \param http [in] HTTP control structure pointer, struct defines parameters of communications with web server
- *	\param dataContext [in] The data context (0-5) to use for this communications.
- *  \param urlHost [in] The host portion of the web server URL 
- *  \param useTls [in] If true, the previously configured TLS settings for this context will be bound (dataCntxt must equal == SSL context)
- *  \param recvBuf [in] Pointer to application provided char buffer 
- *  \param recvBufSz [in]
- *  \param httpRecvFunc_t [in]
- *  \param recvCallback [in]
+ *  \param httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
+ *	\param dataCntxt [in] The data context (0-5) to use for this communications.
+ *  \param urlHost [in] The host portion of the web server URL.
+ *  \param recvBuf [in] Pointer to application provided char buffer.
+ *  \param recvBufSz [in] Size of the receive buffer.
+ *  \param recvCallback [in] Callback function to receive incoming page data.
  * 
  *  \return True if action was invoked, false if not
  */
@@ -111,7 +109,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataCntxt, const char*
 /**
  *	\brief Registers custom headers (char) buffer with HTTP control.
  *
- *  \param http [in] - Pointer to the control block for HTTP communications.
+ *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
  *	\param headerBuf [in] - pointer to header buffer  created by application
  *  \param headerBufSz [in] - size of the header buffer
  */
@@ -129,36 +127,36 @@ void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t heade
 /**
  *	\brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
  *
- *  \param http [in] - Pointer to the control block for HTTP communications.
- *	\param user [in] - User name.
- *  \param pw [in] - Password/secret for header.
+ *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ *	\param headerMap [in] - Bitmap for which standard headers to use.
  */
-void http_addDefaultHdrs(httpCtrl_t *http, httpHeaderMap_t headerMap)
+void http_addDefaultHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
 {
-    ASSERT(http->ctrlMagic == streams__ctrlMagic, srcfile_http_c);
-    ASSERT(http->cstmHdrs != NULL, srcfile_http_c);
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_http_c);
+    ASSERT(httpCtrl->cstmHdrs != NULL, srcfile_http_c);
 
     if (headerMap & httpHeaderMap_accept > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(http->cstmHdrs) + 13 < http->cstmHdrsSz)
-            strcat(http->cstmHdrs, "Accept: */*\r\n");
+        if (strlen(httpCtrl->cstmHdrs) + 13 < httpCtrl->cstmHdrsSz)
+            strcat(httpCtrl->cstmHdrs, "Accept: */*\r\n");
     }
     if (headerMap & httpHeaderMap_userAgent > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(http->cstmHdrs) + 25 < http->cstmHdrsSz)
-            strcat(http->cstmHdrs, "User-Agent: QUECTEL_BGx\r\n");
+        if (strlen(httpCtrl->cstmHdrs) + 25 < httpCtrl->cstmHdrsSz)
+            strcat(httpCtrl->cstmHdrs, "User-Agent: QUECTEL_BGx\r\n");
     }
     if (headerMap & httpHeaderMap_connection > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(http->cstmHdrs) + 24 < http->cstmHdrsSz)
-            strcat(http->cstmHdrs, "Connection: Keep-Alive\r\n");
+        if (strlen(httpCtrl->cstmHdrs) + 24 < httpCtrl->cstmHdrsSz)
+            strcat(httpCtrl->cstmHdrs, "Connection: Keep-Alive\r\n");
     }
     if (headerMap & httpHeaderMap_contentType > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(http->cstmHdrs) + 40 < http->cstmHdrsSz)
-            strcat(http->cstmHdrs, "Content-Type: application/octet-stream\r\n");
+        if (strlen(httpCtrl->cstmHdrs) + 40 < httpCtrl->cstmHdrsSz)
+            strcat(httpCtrl->cstmHdrs, "Content-Type: application/octet-stream\r\n");
     }
 }
+
 
 /**
  *	\brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.

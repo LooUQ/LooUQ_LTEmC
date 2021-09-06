@@ -7,7 +7,7 @@
     - {module_name}_ prefix indicates a public function intended for consumption by the device application.
     - S_ is a static local function scoped to the current compilation unit
     - {MODULE_NAME}_ prefix indicates internal to LTEmC and not intended for application use. *These are being rounded up for a future move to the ltemc-internal.h header.*
-* Source files attempt to use #pragma regions to keep major blocks identifiable.
+* Source files attempt to use pragma regions to keep major blocks identifiable.
     - Regions in all files (wip) are: "LTEm Internal Functions", "Public Functions", "Static Function Definitions"
 * **Code cleanup to adhere to these conventions is a focus for the version 2.1 release in July 2021**
 
@@ -24,7 +24,7 @@ The LTEmC software was designed to be a subsystem within your application.
 ### ASSERTS
 ASSERTs are macro constructs that signal a serious, and likely unrecoverable condition. They should stay in production code to prevent "weird" errors downstream of the problem. ASSERTS use the ltem_notifyApp() function if it is registered at application start. ASSERTs can also, optionally write a lqDiagnostics_t information block with information about the file, line and conditions of the failed ASSERT. To fully disable ASSERTs, you will need to define the NO_ASSERTS macro in your make workflow or in the lq-assert.h header file (part of LooUQ-Common library).
 
-The lqDiagnostics_t information block can be configured to survive a device reset (provided power stays on to memory). This allows for collection and reporting of this information remotely on reset. For information on how to accomplish this see the article on *lqDiagnostics* available on https://answers.loouq.com. For a working example, the LQCloud client automatically reports this information for a system or watchdog reset; there is a working example in examples\LQCloudTest in the LQCloud Client repository on GitHub.
+The lqDiagnostics_t information block can be configured to survive a device reset (provided power stays on to memory). This allows for collection and reporting of this information remotely on reset. For information on how to accomplish this see the article on *lqDiagnostics* available on https://answers.loouq.com. For a working example, the LQCloud client automatically reports this information for a system or watchdog reset; there is a working example in examples/LQCloudTest in the LQCloud Client repository on GitHub.
 
 ### WARNING 
 WARNINGs are macro constructs that are intended for use during development. They won't break code if accidently left on in production but they will occupy code space. In the few spots where these are implemented they are there to check for non-optimal parameters in a function call. Example: a buffer size that will create unused, but allocate memory.

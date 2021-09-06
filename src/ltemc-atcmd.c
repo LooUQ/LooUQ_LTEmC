@@ -60,9 +60,9 @@ extern ltemDevice_t g_ltem;
 /**
  *	\brief Sets options for BGx AT command control (atcmd). 
  *
- *	\param autoLock [in] - Enable autolocking mode (default).
+ *	\param lockModeAuto [in] - Enable autolocking mode (default).
  *  \param timeoutMS [in] Number of milliseconds the action can take. Use system default ACTION_TIMEOUTms or your value.
- *  \param taskCompleteParser [in] Custom command response parser to signal result is complete. NULL for std parser.
+ *  \param customCmdCompleteParser_func [in] Custom command response parser to signal result is complete. NULL for std parser.
  * 
  *  \return True if action was invoked, false if not
  */
@@ -192,8 +192,7 @@ void atcmd_close()
 
  *  \param data [in] - Pointer to the block of binary data to send.
  *  \param dataSz [in] - The size of the data block. 
- *  \param timeoutMillis [in] - Timeout period (in millisecs) for send to complete.
- *  \param taskCompleteParser_func [in] - Function pointer to parser looking for task completion
+ *  \param eotPhrase [in] - Char string that indicates that the action has completed.
  */
 void atcmd_sendCmdData(const char *data, uint16_t dataSz, const char* eotPhrase)
 {
@@ -427,8 +426,7 @@ char *atcmd_getLastResponseTail()
 /**
  *  \brief Awaits exclusive access to QBG module command interface.
  * 
- *  \param cmdStr [in] - The AT command text.
- *  \param waitMillis [in] - Number of milliseconds to wait for a lock.
+ *  \param timeoutMS [in] - Number of milliseconds to wait for a lock.
  * 
  *  \return true if lock aquired prior to the timeout period.
 */
@@ -676,10 +674,10 @@ resultCode_t atcmd_okResultParser(const char *response, char** endptr)
 /**
  *	\brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
  *
- *  Expected form: +<landmark>: <otherInfo>,<RESULT_CODE>,<otherInfo><EOL>
+ *  Expected form: +[landmark]: [otherInfo],[RESULT_CODE],[otherInfo][EOL]
  * 
  *  \param response [in] - Pointer to the command response received from the BGx.
- *  \param preamble [in] - Pointer to a landmark phrase to look for in the response
+ *  \param landmark [in] - Pointer to a landmark phrase to look for in the response
  *  \param resultIndx [in] - Zero based index after landmark of numeric fields to find result
  *  \param endptr [out] - Pointer to character in response following parser match
  *
@@ -712,13 +710,14 @@ resultCode_t atcmd_serviceResponseParser(const char *response, const char *landm
 /**
  *	\brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
  *
- *  Expected form: +<landmark>: <otherInfo>,<RESULT_CODE>,<otherInfo><EOL>
+ *  Expected form: +[landmark]: [otherInfo],[RESULT_CODE],[otherInfo][EOL]
  *  \param response [in] - Pointer to the command response received from the BGx.
- *  \param preamble [in] - Pointer to a landmark phrase to look for in the response
- *  \param resultIndx [in] - Zero based index after landmark of numeric fields to find result
- *  \param endptr [out] - Pointer to character in response following parser match
+ *  \param landmark [in] - Pointer to a landmark phrase to look for in the response.
+ *  \param resultIndx [in] - Zero based index after landmark of numeric fields to find result.
+ *  \param terminator [in] - Character string signaling then end of action response parsing.
+ *  \param endptr [out] - Pointer to character in response following parser match.
  *
- *  \return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code
+ *  \return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code.
  */
 resultCode_t atcmd_serviceResponseParserTerm(const char *response, const char *landmark, uint8_t resultIndx, const char *terminator, char** endptr) 
 {
@@ -752,7 +751,8 @@ resultCode_t atcmd_serviceResponseParserTerm(const char *response, const char *l
  *	\brief Response parser looking for "ready-to-proceed" prompt in order to send to network
  *
  *  \param response [in] The character string received from BGx (so far, may not be complete).
- *  \param rdyPropmpt [in] Prompt text to check for.
+ *  \param rdyPrompt [in] Prompt text to check for.
+ *  \param endptr [out] Pointer to the char after match.
  * 
  *  \return Result code enum value (http status code)
  */

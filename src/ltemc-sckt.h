@@ -58,13 +58,13 @@ typedef struct scktCtrl_tag
     rxDataBufferCtrl_t recvBufCtrl;     ///< RX smart buffer 
 
     scktRecvFunc_t dataRecvCB;          ///< callback to application, signals data ready
-    uint32_t doWorkLastTck;             ///< last check for URC\dataPending
+    uint32_t doWorkLastTck;             ///< last check for URC/dataPending
     uint32_t doWorkTimeout;             ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
     bool flushing;                      ///< True if the socket was opened with cleanSession and the socket was found already open.
     bool dataPending;                   ///< The data pipeline has data (or the likelihood of data), triggered when BGx reports data pending (URC "recv").
     int16_t irdRemaining;               ///< SIGNED number of outstanding IRD bytes to receive, -1 is unset value
     uint32_t statsTxCnt;                ///< Number of atomic TX sends
-    uint32_t statsRxCnt;                ///< Number of atomic RX segments (URC\IRD)
+    uint32_t statsRxCnt;                ///< Number of atomic RX segments (URC/IRD)
     
 } scktCtrl_t;
 

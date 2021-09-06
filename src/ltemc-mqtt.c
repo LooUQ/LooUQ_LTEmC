@@ -79,9 +79,14 @@ static resultCode_t S_mqttPublishCompleteParser(const char *response, char **end
 /**
  *  \brief Query the status of the MQTT server state.
  * 
+ *  \param mqttCtrl [in] Pointer to MQTT control structure governing communications.
  *  \param dataCntxt [in] Data context to host this protocol stream.
  *  \param useTls [in] Specifies if a SSL/TLS configuration has been applied to data context to protect communications.
  *  \param useMqttVersion [in] Specifies the MQTT protocol revision to use for communications.
+
+ *  \param recvBuf [in] Pointer to application provided receive data buffer.
+ *  \param recvBufSz [in] Size of provided data buffer.
+ *  \param recvCallback [in] Callback function to be invoked when received data is ready.
  * 
  *  \returns A mqtt object to govern operations for this protocol stream value indicating the state of the MQTT connection.
 */
@@ -111,9 +116,8 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataContext_t dataCntxt, bool useTls
 /**
  *  \brief Query the status of the MQTT server state.
  * 
- *  \param mqtt [in] Pointer to MQTT type stream control to operate on.
+ *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
  *  \param host [in] A char string to match with the currently connected server. Host is not checked if empty string passed.
- *  \param force [in] If true query BGx for current state, otherwise return internal property value
  * 
  *  \returns A mqttStatus_t value indicating the state of the MQTT connection.
 */
@@ -165,7 +169,7 @@ uint16_t mqtt_getMsgId(mqttCtrl_t *mqttCtrl)
 /**
  *  \brief Open a remote MQTT server for use.
  * 
- *  \param mqtt [in] MQTT type stream control to operate on.
+ *  \param mqttCtrl [in] MQTT type stream control to operate on.
  *  \param host [in] The host IP address or name of the remote server.
  *  \param port [in] The IP port number to use for the communications.
  * 
@@ -238,7 +242,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port)
 /**
  *  \brief Disconnect and close a connection to a MQTT server
  * 
- *  \param mqtt [in] Pointer to MQTT type stream control to operate on.
+ *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
 */
 void mqtt_close(mqttCtrl_t *mqttCtrl)
 {
@@ -271,7 +275,7 @@ void mqtt_close(mqttCtrl_t *mqttCtrl)
 /**
  *  \brief Connect (authenticate) to a MQTT server.
  * 
- *  \param mqtt [in] Pointer to MQTT type stream control to operate on.
+ *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
  *  \param clientId [in] - The client or device identifier for the connection.
  *  \param username [in] - The user identifier or name for the connection to authenticate.
  *  \param password [in] - The secret string or phrase to authenticate the connection.
@@ -344,7 +348,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, const char *clientId, const char
 /**
  *  \brief Subscribe to a topic on the MQTT server.
  * 
- *  \param mqtt [in] Pointer to MQTT type stream control to operate on.
+ *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
  *  \param topic [in] - The messaging topic to subscribe to.
  *  \param qos [in] - The MQTT QOS level for messages subscribed to.
  * 
@@ -380,7 +384,7 @@ uint8_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos)
 /**
  *  \brief Unsubscribe to a topic on the MQTT server.
  * 
- *  \param mqtt [in] Pointer to MQTT type stream control to operate on.
+ *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
  *  \param topic [in] - The messaging topic to unsubscribe from.
  * 
  *  \returns A resultCode_t (http status type) value indicating the success or type of failure, OK = 200.
@@ -411,7 +415,7 @@ resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic)
 /**
  *  \brief Publish a message to server.
  * 
- *  \param mqtt [in] Pointer to MQTT type stream control to operate on.
+ *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
  *  \param topic [in] - Pointer to the message topic (see your server for topic formatting details).
  *  \param qos [in] - The MQTT QOS to be assigned to sent message.
  *  \param message [in] - Pointer to message to be sent.

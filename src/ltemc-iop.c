@@ -170,7 +170,7 @@ void IOP_awaitAppReady()
  *
  *  \param sendData [in] - Pointer to char data to send out, input buffer can be discarded following call.
  *  \param sendSz [in] - The number of characters to send.
- *  \param sendReady [in] - If true, queue sendData then initiate the actual send process. If false continue queueing and wait to send.
+ *  \param sendImmediate [in] - If true: queue sendData then initiate the actual send process. If false: continue queueing and wait to send.
  * 
  *  \return Number of characters queued for sending.
  */
@@ -229,7 +229,7 @@ bool IOP_detectRxIdle()
 
 
 /**
- *	\brief Clear receive COMMAND\CORE response buffer.
+ *	\brief Clear receive COMMAND/CORE response buffer.
  */
 void IOP_resetCoreRxBuffer()
 {
@@ -317,8 +317,7 @@ static inline uint8_t S_convertToContextId(const char cntxtChar)
  *	\brief Reset a receive buffer for reuse.
  *
  *  \param bufPtr [in] Pointer to the buffer struct.
- *  \param page [in] Index to buffer page to be reset
- *  \param streamEot [in] True if the stream has complete and the "completion" check fields should also be cleared
+ *  \param page [in] Index to buffer page to be reset.
  */
 void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page)
 {

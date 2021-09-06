@@ -2,7 +2,7 @@
 #### Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
 
 ## v1.1.0 - Added HTTP(S) functionality
-*   Added support for HTTP(S) GET\POST 
+*   Added support for HTTP(S) GET/POST 
 *   Migrated TLS configuration for a connection into its own module ltemc-tls
 *   - Changed signature of mqtt_open() to only specify TLS enabled. User should configure TLS for Context_5 prior to open
 *   Enabling future IOP changes to remove fixed size internal receive buffering, migrating to application owned and managed buffers
