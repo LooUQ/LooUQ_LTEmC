@@ -7,7 +7,7 @@
 *   Changed signature for LTEmC create and execute
 *   Added granular locking and general usability enhancements to ATCMD module
 *   Migrated TLS configuration for a connection into its own module ltemc-tls
-*   - Changed signature of mqtt_open() to only specify TLS enabled. User should configure TLS for Context_5 prior to open
+*   Changed signature of mqtt_open() to only specify TLS enabled.
 *   IOP was re-architected to streamline buffer only operations. Application now provides and owns receive data buffers, allowing for more flexibility and minimum memory usage base on your application's requirements.
 *   Support for multiple MQTT and HTTP(S) sessions per modem
 *   Decoupled MQTT from fixed data context number 5, HTTP created without fixed data context coupling.
