@@ -87,6 +87,10 @@ void gpio_writePin(uint8_t pinNum, gpioPinValue_t val);
 void gpio_attachIsr(uint8_t pinNum, bool enabled, gpioIrqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback);
 void gpio_detachIsr(uint8_t pinNum);
 
+/* The functions below are optional
+ * They are intended to be used during development to help create your attach\detach ISR functions. */
+uint32_t gpio_getIntFlags();
+uint32_t gpio_getPinInterrupt(uint32_t pin);
 
 #ifdef __cplusplus
 }

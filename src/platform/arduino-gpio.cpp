@@ -35,9 +35,25 @@ void gpio_writePin(uint8_t pNum, gpioPinValue_t val)
 }
 
 
+/* The attachIsr function requires that no interrupt be pending for the IOP modules (from the LTEmX SPI\UART chip).
+ * failure to assure that constraint will likely result in the LTEmC driver locking up in the IOP interrupt service
+ * routine. */
 void gpio_attachIsr(uint8_t pinNum, bool enabled, gpioIrqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback)
 {
+    EIC->INTFLAG.reg = 0x01 << g_APinDescription[pinNum].ulExtInt;
     attachInterrupt(digitalPinToInterrupt(pinNum), isrCallback, triggerOn);
+}
+
+
+uint32_t gpio_getIntFlags()
+{
+    return EIC->INTFLAG.reg;
+}
+
+
+uint32_t gpio_getPinInterrupt(uint32_t pin)
+{
+    return g_APinDescription[pin].ulExtInt;
 }
 
 

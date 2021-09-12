@@ -141,12 +141,33 @@ void IOP_registerStream(streamPeer_t streamIndx, iopStreamCtrl_t *streamCtrl)
  */
 void IOP_start()
 {
-    // attach ISR and enable NXP interrupt mode
-    gpio_attachIsr(g_ltem.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
-    spi_protectFromInterrupt(((spi_t*)g_ltem.spi), g_ltem.pinConfig.irqPin);
     SC16IS741A_enableIrqMode();
+
+    // // process any legacy interrupt triggers, once idle wire up ISR 
+    // SC16IS741A_IIR iirVal;
+    // iirVal.reg = SC16IS741A_readReg(SC16IS741A_IIR_ADDR);
+    // PRINTF(dbgColor__warn, "IOP_start: iirVal(1)=%x\r", iirVal.reg);
+
+    // uint8_t txAvailable = SC16IS741A_readReg(SC16IS741A_TXLVL_ADDR);
+    // PRINTF(dbgColor__watn, "TX-sz=%d\r", txAvailable);
+
+    // iirVal.reg = SC16IS741A_readReg(SC16IS741A_IIR_ADDR);
+    // PRINTF(dbgColor__warn, "IOP_start: iirVal(3)=%x\r", iirVal.reg);
+
+    // PRINTF(dbgColor__warn, "IRQpin=%d\r", gpio_readPin(g_ltem.pinConfig.irqPin));
+
+    // PRINTF(dbgColor__warn, "IntFLAGs=%d\r", gpio_getIntFlags());
+    // PRINTF(dbgColor__warn, "PinInt=%d\r", gpio_getPinInterrupt(g_ltem.pinConfig.irqPin));
+
+    gpio_attachIsr(g_ltem.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
+    spi_usingInterrupt(((spi_t*)g_ltem.spi), g_ltem.pinConfig.irqPin);
 }
 
+
+void IOP_stopIrq()
+{
+    gpio_detachIsr(g_ltem.pinConfig.irqPin);
+}
 
 
 /**
@@ -154,13 +175,16 @@ void IOP_start()
  */
 void IOP_awaitAppReady()
 {
-    unsigned long apprdyWaitStart = pMillis();
+    uint32_t waitStart = pMillis();
+    uint32_t now;
     while (g_ltem.qbgReadyState < qbg_readyState_appReady)
     {
         pYield();
-        if (apprdyWaitStart + QBG_APPREADY_MILLISMAX < pMillis())
-        ltem_notifyApp(lqNotifType_lqDevice_hwFault,  "qbg-BGx module failed to start in the allowed time");
+        now = pMillis();
+        if (now - waitStart > QBG_APPREADY_MILLISMAX)                                                               // typical wait: 700-1450 mS
+            ltem_notifyApp(lqNotifType_lqDevice_hwFault,  "qbg-BGx module failed to start in the allowed time");    // we don't return from here!
     }
+    PRINTF(dbgColor__none, "AppReady took %d ms\r",now - waitStart);
 }
 
 
@@ -503,12 +527,15 @@ void IOP_rxParseForUrcEvents()
             ((iop_t*)g_ltem.iop)->rxCBuffer->head = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead;                  // drop recv'd from cmd\core buffer, processed here
         }
 
-        else if (((iop_t*)g_ltem.iop)->mqttMap && memcmp("+QMTSTAT:", urcStartPtr, strlen("+QMTSTAT:")) == 0)
+        else if (((iop_t*)g_ltem.iop)->mqttMap &&
+                 (memcmp("+QMTSTAT:", urcStartPtr, 8) == 0 || 
+                 memcmp("+QMTDISC", urcStartPtr, 8) == 0))
         {
             PRINTF(dbgColor__cyan, "-p=mqttS");
-            char *cntxIdPtr = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead + strlen("+QIURC: \"recv");
+            char *cntxIdPtr = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead + 10;               // look past "+QMTSTAT: " or "+QMTDISC: "
             char *endPtr = NULL;
             uint8_t cntxId = (uint8_t)strtol(cntxIdPtr, &endPtr, 10);
+            ((iop_t*)g_ltem.iop)->mqttMap &= ~(0x01 << cntxId);
             ((mqttCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[cntxId])->state = mqttStatus_closed;
         }
 
@@ -566,7 +593,7 @@ static void S_interruptCallbackISR()
 
     iirVal.reg = SC16IS741A_readReg(SC16IS741A_IIR_ADDR);
     retryIsr:
-    PRINTF(dbgColor__white, "\rISR[");
+    PRINTF(dbgColor__white, "\rISR(%d:%d)[", iirVal.IRQ_nPENDING, iirVal.IRQ_SOURCE);
 
     do
     {

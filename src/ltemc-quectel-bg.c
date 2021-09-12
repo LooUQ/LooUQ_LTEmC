@@ -25,7 +25,7 @@
  * Manages module genaral and non-protocol cellular radio functions
  *****************************************************************************/
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -86,31 +86,31 @@ bool qbg_isPowerOn()
  */
 void qbg_powerOn()
 {
-    if (gpio_readPin(g_ltem.pinConfig.statusPin))
+    if (qbg_isPowerOn())
     {
-        PRINTF(dbgColor__dGreen, "LTEm already powered on.");
+        PRINTF(dbgColor__none, "LTEm found powered on.\r");
         g_ltem.qbgReadyState = qbg_readyState_powerOn;
-        return true;
     }
-
-    PRINTF(dbgColor__dGreen, "Powering LTEm On...");
-    gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
-    pDelay(BGX__powerOnDelay);
-    gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
-
-    uint8_t attempts = 0;
-    while (attempts++ < 20)             // wait for status=ready
+    else
     {
-        if (gpio_readPin(g_ltem.pinConfig.statusPin))
+        PRINTF(dbgColor__none, "Powering LTEm On...");
+        gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
+        pDelay(BGX__powerOnDelay);
+        gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+
+        uint8_t waitAttempts = 0;
+        while (waitAttempts++ < 50)         // wait for status=ready, HW Guide says 4.8s
         {
-            g_ltem.qbgReadyState = qbg_readyState_powerOn;
-            PRINTF(dbgColor__dGreen, "DONE\r");
-            return false;
+            if (qbg_isPowerOn())
+            {
+                g_ltem.qbgReadyState = qbg_readyState_powerOn;
+                PRINTF(dbgColor__none, "DONE\r");
+                break;
+            }
+            else
+                pDelay(100);                // allow background tasks to operate
         }
-        pDelay(500);                    // allow background tasks to operate
     }
-    PRINTF(dbgColor__warn, "FAILED\r");
-    return false;
 }
 
 
@@ -126,23 +126,7 @@ void qbg_powerOff()
 
     while (gpio_readPin(g_ltem.pinConfig.statusPin))
     {
-        pDelay(500);          // allow background tasks to operate
-    }
-}
-
-
-/**
- *	\brief Powers off the BGx module.
- */
-void qbg_reset()
-{
-    PRINTF(dbgColor__none, "Reseting LTEm\r");
-    g_ltem.qbgReadyState = qbg_readyState_powerOn;
-    IOP_sendTx("AT\r", 3, true);
-    IOP_sendTx("AT+CFUN=1,1\r", 11, true);
-    while (!gpio_readPin(g_ltem.pinConfig.statusPin))
-    {
-        pDelay(500);          // allow background tasks to operate
+        pDelay(100);          // allow background tasks to operate
     }
 }
 
@@ -150,7 +134,7 @@ void qbg_reset()
 /**
  *	\brief Initializes the BGx module.
  */
-void qbg_start()
+void qbg_setOptions()
 {
     atcmd_tryInvoke("AT");
     atcmd_awaitResult();

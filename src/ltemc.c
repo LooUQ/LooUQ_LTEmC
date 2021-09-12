@@ -26,7 +26,7 @@
  *****************************************************************************/
 
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -62,7 +62,6 @@ ltemDevice_t g_ltem;
 
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------ */
-static void S_initIo();
 
 
 #pragma region Public Functions
@@ -104,43 +103,58 @@ void ltem_create(const ltemPinConfig_t ltem_config, appNotifyFunc_t appNotifyCB)
 
 
 /**
- *	\brief Power on and start the modem (perform component init).
- * 
- *  \param protocolBitMap [in] - Binary-OR'd list of expected protocol services to validate inclusion and start.
+ *	\brief Power on and start the modem.
  */
 void ltem_start()
 {
-    S_initIo();                                                 // set host GPIO pins and SPI interface to operating state
-    spi_start(g_ltem.spi);
+  	// on Arduino compatible, ensure pin is in default "logical" state prior to opening
+	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
+	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
+	gpio_writePin(g_ltem.pinConfig.irqPin, gpioValue_high);
 
-    if (qbg_isPowerOn())                                        // power on BGx, returning prior power-state
-    {
-		PRINTF(dbgColor__info, "LTEm1 found powered on.\r\n");
-        g_ltem.qbgReadyState = qbg_readyState_appReady;         // if already "ON", assume running and check for IRQ latched
-    }
-    else
-        qbg_powerOn();
+	gpio_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	gpio_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	gpio_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	gpio_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
+	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
+
+    bool poweredPrevious = qbg_isPowerOn();
+    qbg_powerOn();
 
     if (qbg_isPowerOn())
     {
+        spi_start(g_ltem.spi);
         SC16IS741A_start();                                     // start (resets previously powered on) NXP SPI-UART bridge
         IOP_start();
-        IOP_awaitAppReady();                                    // wait for BGx to signal out firmware ready
-        qbg_start();                                            // initialize BGx operating settings
+        if (!poweredPrevious)
+            IOP_awaitAppReady();                                // wait for BGx to signal out firmware ready
+        qbg_setOptions();                                       // initialize BGx operating settings
     }
+    g_ltem.qbgReadyState = qbg_readyState_appReady;             // if already "ON", assume running
 }
-
 
 
 /**
- *	\brief Performs a HW reset of LTEm1 and optionally executes start sequence.
+ *	\brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW.
+ */
+void ltem_stop()
+{
+    spi_stop(g_ltem.spi);
+    IOP_stopIrq();
+    g_ltem.qbgReadyState = qbg_readyState_powerOff;
+    qbg_powerOff();
+}
+
+
+/**
+ *	\brief Performs a HW reset of LTEm1.
  */
 void ltem_reset()
 {
-    qbg_reset();
+    ltem_stop();
     ltem_start();
 }
-
 
 
 /**
@@ -161,17 +175,6 @@ bool ltem_chkHwReady()
 qbgReadyState_t ltem_getReadyState()
 {
     return g_ltem.qbgReadyState;
-}
-
-
-
-/**
- *	\brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW.
- */
-void ltem_stop()
-{
-    g_ltem.qbgReadyState = qbg_readyState_powerOff;
-    qbg_powerOff();
 }
 
 
@@ -278,17 +281,6 @@ void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker)
  */
 static void S_initIo()
 {
-	// on Arduino, ensure pin is in default "logical" state prior to opening
-	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
-	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
-	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
-
-	gpio_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	gpio_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	gpio_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
-
-	gpio_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
-	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
 }
 
 #pragma endregion

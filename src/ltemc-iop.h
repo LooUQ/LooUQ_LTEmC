@@ -98,6 +98,7 @@ extern "C"
 
 void IOP_create();
 void IOP_start();
+void IOP_stopIrq();
 void IOP_awaitAppReady();
 
 void IOP_resetCoreRxBuffer();

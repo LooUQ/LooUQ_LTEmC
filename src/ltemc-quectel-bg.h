@@ -81,18 +81,15 @@ extern "C"
 {
 #endif // __cplusplus
 
-
-void qbg_start();
-
 bool qbg_isPowerOn();
 void qbg_powerOn();
 void qbg_powerOff();
-void qbg_reset();
+
+void qbg_setOptions();
 
 void qbg_setNwScanSeq(const char *sequence);
 void qbg_setNwScanMode(qbg_nw_scan_mode_t mode);
 void qbg_setIotOpMode(qbg_nw_iot_mode_t mode);
-
 
 #ifdef __cplusplus
 }

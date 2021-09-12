@@ -58,7 +58,6 @@ void spi_start(void *spi)
     spi_t *spiPtr = (spi_t*)spi;
     digitalWrite(spiPtr->csPin, HIGH);
     pinMode(spiPtr->csPin, OUTPUT);
-
     SPI.begin();
 }
 
@@ -73,16 +72,21 @@ void spi_stop(void *spi)
 }
 
 
+/**
+ *	\brief Gaurd SPI resource from recursive interrupts.
+ */
+void spi_usingInterrupt(void *spi, int8_t irqNumber)
+{
+        SPI.usingInterrupt(irqNumber);
+}
+
 
 /**
- *	\brief Uninitialize and deallocate memory from the SPI resource.
+ *	\brief Gaurd SPI resource from recursive interrupts.
  */
-void spi_protectFromInterrupt(void *spi, int8_t irqNumber)
+void spi_notUsingInterrupt(void *spi, int8_t irqNumber)
 {
-    if (irqNumber == SPI_NO_IRQ_PROTECTION)
-        SPI.notUsingInterrupt(irqNumber);
-    else
-        SPI.usingInterrupt(irqNumber);
+    SPI.notUsingInterrupt(irqNumber);
 }
 
 

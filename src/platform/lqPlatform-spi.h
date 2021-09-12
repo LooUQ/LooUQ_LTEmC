@@ -25,13 +25,8 @@
 #ifndef __LQPLATFORM_spi_H__
 #define __LQPLATFORM_spi_H__
 
-#ifdef __cplusplus
-#include <cstdint>
-#include <stddef.h>
-#else
 #include <stdint.h>
 #include <stddef.h>
-#endif
 
 #define SPI_NO_IRQ_PROTECTION -1
 
@@ -86,7 +81,8 @@ void *spi_create(uint8_t chipSelLine);
 void spi_start(void *spi);
 void spi_stop(void *spi);
 
-void spi_protectFromInterrupt(void *spi, int8_t irqNumber);
+void spi_usingInterrupt(void *spi, int8_t irqNumber);
+void spi_notUsingInterrupt(void *spi, int8_t irqNumber);
 
 uint8_t spi_transferByte(void *spi, uint8_t writeVal);
 uint16_t spi_transferWord(void *spi, uint16_t writeVal);

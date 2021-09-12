@@ -452,7 +452,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
         }
     }
     if (atResult != 200)  
-        PRINTF(dbgColor__dYellow, "PUB ERROR, state=%d", pubstate);
+        PRINTF(dbgColor__dYellow, "PUB ERROR, state=%d\r", pubstate);
     atcmd_close();
     return atResult;
 }
