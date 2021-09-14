@@ -89,17 +89,19 @@ void qbg_powerOn()
     if (qbg_isPowerOn())
     {
         PRINTF(dbgColor__none, "LTEm found powered on.\r");
-        g_ltem.qbgReadyState = qbg_readyState_powerOn;
+        g_ltem.qbgReadyState = qbg_readyState_appReady;             // APP READY msg comes only once, shortly after chip start, would have missed it 
     }
     else
     {
+        g_ltem.qbgReadyState = qbg_readyState_powerOff;
+
         PRINTF(dbgColor__none, "Powering LTEm On...");
         gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
         pDelay(BGX__powerOnDelay);
         gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
 
         uint8_t waitAttempts = 0;
-        while (waitAttempts++ < 50)         // wait for status=ready, HW Guide says 4.8s
+        while (waitAttempts++ < 50)                                 // wait for status=ready, HW Guide says 4.8s
         {
             if (qbg_isPowerOn())
             {

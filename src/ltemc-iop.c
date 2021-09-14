@@ -53,7 +53,7 @@
 
 #pragma region Header
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -597,10 +597,12 @@ static void S_interruptCallbackISR()
 
     do
     {
-        while(iirVal.IRQ_nPENDING == 1)                             // wait for register, IRQ was signaled
+        uint8_t regReads = 0;
+        while(iirVal.IRQ_nPENDING == 1 && regReads < 120)           // wait for register, IRQ was signaled; safety limit at 120 in case of error gpio
         {
             iirVal.reg = SC16IS741A_readReg(SC16IS741A_IIR_ADDR);
             PRINTF(dbgColor__dRed, "*");
+            regReads++;
         }
 
 

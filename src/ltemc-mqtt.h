@@ -35,7 +35,7 @@ enum mqtt__constants
 {
     mqtt__useTls = 1,
     mqtt__notUsingTls = 0,
-    mqtt__publishTimeout = 2500,
+    mqtt__publishTimeout = 7500,
 
     mqtt__messageSz = 1548,                                             ///< Maximum message size for BGx family (BG96, BG95, BG77)
 

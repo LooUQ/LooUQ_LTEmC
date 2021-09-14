@@ -130,8 +130,8 @@ void ltem_start()
         if (!poweredPrevious)
             IOP_awaitAppReady();                                // wait for BGx to signal out firmware ready
         qbg_setOptions();                                       // initialize BGx operating settings
+        g_ltem.qbgReadyState = qbg_readyState_appReady;
     }
-    g_ltem.qbgReadyState = qbg_readyState_appReady;             // if already "ON", assume running
 }
 
 
