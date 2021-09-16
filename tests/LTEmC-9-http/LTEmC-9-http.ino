@@ -236,7 +236,7 @@ void httpRecvCB(dataContext_t cntxt, uint16_t httpStatus, char *recvData, uint16
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
+void appNotifCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
 {
     if (notifType >= lqNotifType__CATASTROPHIC)
     {
