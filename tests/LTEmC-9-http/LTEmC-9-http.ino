@@ -142,6 +142,8 @@ void loop()
         lastCycle = pMillis();
         pageChars = 0;
 
+        PRINTF(dbgColor__none, "\r\r");
+
         if (loopCnt % 2 == 1)
         {
             // resultCode_t http_get(httpCtrl_t *httpCtrl, const char* url, uint8_t timeoutSeconds);
@@ -191,15 +193,15 @@ void loop()
                 switch (rslt)
                 {
                 case resultCode__success:
-                    PRINTF(dbgColor__white, "Read page complete, %d chars received.", pageChars);
+                    PRINTF(dbgColor__white, "Read page complete, %d chars received.\r", pageChars);
                     break;
 
                 case resultCode__cancelled:
-                    PRINTF(dbgColor__warn, "Read page cancelled after %d chars.", pageChars);
+                    PRINTF(dbgColor__warn, "Read page cancelled after %d chars.\r", pageChars);
                     break;
                 
                 default:
-                    PRINTF(dbgColor__warn, "Problem reading page contents, result=%d.", rslt);
+                    PRINTF(dbgColor__warn, "Problem reading page contents, result=%d.\r", rslt);
                     break;
                 }
             }
