@@ -31,7 +31,9 @@
 
 typedef enum ltemcFilecodes_tag
 {
-    srcfile_ltemc_c = 0xFF00,
+    assm_ltemc = 0xC0,
+
+    srcfile_ltemc_c = 0xC000,
     srcfile_atcmd_c,
     srcfile_cbuf_c,
     srcfile_filesys_c,

@@ -12,7 +12,8 @@
             "request": "launch",
             "servertype": "jlink",
             "device": "ATSAMD21G18",
-            "runToMain": true
+            "runToMain": true,
+            "serverArgs": ["-gui"]
         },
         {
             "name": "Cortex Debug (attach)",
@@ -21,7 +22,8 @@
             "executable": ".//.build/ltemc-9-http.ino.elf",
             "request": "attach",
             "servertype": "jlink",
-            "device": "ATSAMD21G18"
+            "device": "ATSAMD21G18",
+            "serverArgs": ["-gui"]
         }
     ]
 }

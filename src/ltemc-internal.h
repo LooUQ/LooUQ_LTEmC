@@ -70,7 +70,8 @@ typedef struct ltemDevice_tag
 	ltemPinConfig_t pinConfig;              ///< GPIO pin configuration for required GPIO and SPI interfacing.
     bool cancellationRequest;               ///< For RTOS implementations, token to request cancellation of long running task/action.
     qbgReadyState_t qbgReadyState;          ///< Ready state of the BGx module
-    appNotifyFunc_t appNotifyCB;            ///< Notification callback to application
+    eventNotifFunc_t appNotifCB;            ///< Event notification callback to parent application
+    uint8_t instNm;                         ///< LTEm instance number 0=undefined, 1..254
 
     void *spi;                              ///< SPI device (methods signatures compatible with Arduino).
     void *pdpContext;                       ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.

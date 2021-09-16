@@ -17,3 +17,4 @@ _deps
 
 ## VSCode build
 .build/
+tests/LTEmC-9-http/.vscode/c_cpp_properties.json

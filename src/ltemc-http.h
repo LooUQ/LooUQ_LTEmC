@@ -88,8 +88,8 @@ typedef struct httpCtrl_tag
     rxDataBufferCtrl_t recvBufCtrl;         ///< RX smart buffer 
 
     httpRecvFunc_t dataRecvCB;              ///< callback to application, signals data ready
-    uint32_t bufPageSwapTck;                ///< last check for URC/dataPending
-    uint32_t bufPageTimeout;                ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
+    // uint32_t bufPageSwapTck;                ///< last check for URC/dataPending
+    // uint32_t bufPageTimeout;                ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow
     char urlHost[http__urlHostSz];          ///< host portion of URL for GET/POST requests
     bool returnResponseHdrs;                ///< if set true, response headers are included in the returned response
     char *cstmHdrs;                         ///< custom header content, optional buffer provided by application

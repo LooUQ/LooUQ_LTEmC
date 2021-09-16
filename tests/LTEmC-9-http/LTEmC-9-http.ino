@@ -49,6 +49,7 @@
 #include <ltemc.h>
 #include <ltemc-tls.h>
 #include <ltemc-http.h>
+#include <string.h>
 
 #define DEFAULT_NETWORK_CONTEXT 1
 // #define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
@@ -80,15 +81,14 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEm1c test9-HTTP\r\n");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
 
-    ltem_create(ltem_pinConfig, appNotifyCB);
+    ltem_create(ltem_pinConfig, appNotifCB);
     ltem_start();
 
     PRINTF(dbgColor__none, "Waiting on network...\r");
     networkOperator_t networkOp = ntwk_awaitOperator(30000);
     if (strlen(networkOp.operName) == 0)
-        appNotifyCB(255, "Timout (30s) waiting for cellular network.");
+        appNotifCB(255, 0, 0, "Timout (30s) waiting for cellular network.");
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     uint8_t cntxtCnt = ntwk_getActivePdpCntxtCnt();
@@ -191,7 +191,7 @@ void loop()
                 switch (rslt)
                 {
                 case resultCode__success:
-                    PRINTF(dbgColor__warn, "Read page complete, %d chars received.", pageChars);
+                    PRINTF(dbgColor__white, "Read page complete, %d chars received.", pageChars);
                     break;
 
                 case resultCode__cancelled:
@@ -220,10 +220,10 @@ void httpRecvCB(dataContext_t cntxt, uint16_t httpStatus, char *recvData, uint16
     // recvData[dataSz-1] = '\0';
     // PRINTF(dbgColor__info, "(%d) %s", httpStatus, recvData);
     
-    memcpy(pageBuffer + pageChars, recvData, dataSz);
+    strncpy(pageBuffer + pageChars, recvData, dataSz);
     pageChars += dataSz;
 
-    PRINTF(dbgColor__green, "\rAppRecv'd %d new chars, total page sz=%d\r", dataSz, strlen(pageBuffer));
+    PRINTF(dbgColor__green, "\rAppRecv'd %d new chars, total page sz=%d\r", dataSz, pageChars);
 
     // if (loopCnt % 2 == 1 && pageChars >= 1000)
     // {
@@ -236,15 +236,21 @@ void httpRecvCB(dataContext_t cntxt, uint16_t httpStatus, char *recvData, uint16
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
 {
-	PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
-    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
+    if (notifType >= lqNotifType__CATASTROPHIC)
+    {
+        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
+        volatile int halt = 1;
+        while (halt) {}
+    }
 
-    int halt = 1;
-    while (halt) {}
+    else if (notifType >= lqNotifType__WARNING)
+        PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
+
+    else
+        PRINTF(dbgColor__info, "\r\n%s \r\n", notifMsg);
 }
-
 
 
 /* Check free memory (stack-heap) 

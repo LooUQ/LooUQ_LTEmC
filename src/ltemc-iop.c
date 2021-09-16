@@ -53,7 +53,7 @@
 
 #pragma region Header
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -80,10 +80,8 @@
 #define IOP_RXCTRLBLK_ADVINDEX(INDX) INDX = (++INDX == IOP_RXCTRLBLK_COUNT) ? 0 : INDX
 //#define IOP_TX_ACTIVE()  do { g_ltem1->iop->txCtrl->remainSz > 0; } while(0);
 
-extern ltemDevice_t g_ltem;
 
-// debuggin temporary
-uint8_t dbg_urcInCmdLock = 0;
+extern ltemDevice_t g_ltem;
 
 
 /* Static Local Functions Declarations
@@ -93,7 +91,7 @@ static rxCoreBufferCtrl_t *S_createRxCoreBuffer();
 static uint16_t S_putTx(const char *data, uint16_t dataSz);
 static uint16_t S_takeTx(char *data, uint16_t dataSz);
 // static void S_resetRxDataBuffer(rxDataBufferCtrl_t *rxBuf, uint8_t page, bool streamEot);
-static inline rxDataBufferCtrl_t *S_isrCheckRxBufferSync();
+static inline rxDataBufferCtrl_t *S_isrRxBufferSync();
 static void S_interruptCallbackISR();
 static inline uint8_t S_convertToContextId(const char cntxtChar);
 
@@ -141,26 +139,9 @@ void IOP_registerStream(streamPeer_t streamIndx, iopStreamCtrl_t *streamCtrl)
  */
 void IOP_start()
 {
-    SC16IS741A_enableIrqMode();
-
-    // // process any legacy interrupt triggers, once idle wire up ISR 
-    // SC16IS741A_IIR iirVal;
-    // iirVal.reg = SC16IS741A_readReg(SC16IS741A_IIR_ADDR);
-    // PRINTF(dbgColor__warn, "IOP_start: iirVal(1)=%x\r", iirVal.reg);
-
-    // uint8_t txAvailable = SC16IS741A_readReg(SC16IS741A_TXLVL_ADDR);
-    // PRINTF(dbgColor__watn, "TX-sz=%d\r", txAvailable);
-
-    // iirVal.reg = SC16IS741A_readReg(SC16IS741A_IIR_ADDR);
-    // PRINTF(dbgColor__warn, "IOP_start: iirVal(3)=%x\r", iirVal.reg);
-
-    // PRINTF(dbgColor__warn, "IRQpin=%d\r", gpio_readPin(g_ltem.pinConfig.irqPin));
-
-    // PRINTF(dbgColor__warn, "IntFLAGs=%d\r", gpio_getIntFlags());
-    // PRINTF(dbgColor__warn, "PinInt=%d\r", gpio_getPinInterrupt(g_ltem.pinConfig.irqPin));
-
-    gpio_attachIsr(g_ltem.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
     spi_usingInterrupt(((spi_t*)g_ltem.spi), g_ltem.pinConfig.irqPin);
+    gpio_attachIsr(g_ltem.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
+    SC16IS741A_enableIrqMode();
 }
 
 
@@ -182,11 +163,12 @@ void IOP_awaitAppReady()
         pYield();
         now = pMillis();
         if (now - waitStart > QBG_APPREADY_MILLISMAX)                                                               // typical wait: 700-1450 mS
-            ltem_notifyApp(lqNotifType_lqDevice_hwFault,  "qbg-BGx module failed to start in the allowed time");    // we don't return from here!
+        {
+            ltem_notifyApp(lqNotifType_warning,  "Failed to detect BGx module APP RDY notification");
+            break;
+        }
     }
-    PRINTF(dbgColor__none, "AppReady took %d ms\r",now - waitStart);
 }
-
 
 
 /**
@@ -227,7 +209,7 @@ uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate)
 
 
 /**
- *	\brief Check for RX idle (no incoming receives from NXP in 2.5 buffer times).
+ *	\brief Check for RX idle (no incoming receives from NXP in ~3 buffer times).
  *
  *  \return True 
  */
@@ -240,11 +222,17 @@ bool IOP_detectRxIdle()
 
     if (((iop_t*)g_ltem.iop)->rxLastRecvChkLvl < fillNow)           // recv'd bytes since last check
     {
-        ((iop_t*)g_ltem.iop)->rxLastRecvChkLvl = fillNow;
+        ((iop_t*)g_ltem.iop)->rxLastRecvChkLvl = fillNow;           // update it
         return false;
     }
 
-    if (pElapsed(((iop_t*)g_ltem.iop)->rxLastRecvTck, IOP__uartFIFO_fillMS * 2 + 1))
+    if (((iop_t*)g_ltem.iop)->rxLastRecvTck == 0)                   // buffer timeout check idle, start it
+    {
+        ((iop_t*)g_ltem.iop)->rxLastRecvTck = pMillis();            // last RX was ancient, start count now that we are watching
+        return false;
+    }
+
+    if (pElapsed(((iop_t*)g_ltem.iop)->rxLastRecvTck, IOP__uartFIFORxTimeout))
     {
         return true;
     }
@@ -315,7 +303,7 @@ void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufCtrl)
  *
  *  \param bufCtrl [in] RX data buffer to sync.
  */
-static inline rxDataBufferCtrl_t *S_isrCheckRxBufferSync()
+static inline rxDataBufferCtrl_t *S_isrRxBufferSync()
 {
     rxDataBufferCtrl_t* bufCtrl = &(((baseCtrl_t*)((iop_t*)g_ltem.iop)->rxStreamCtrl)->recvBufCtrl);
 
@@ -345,6 +333,9 @@ static inline uint8_t S_convertToContextId(const char cntxtChar)
  */
 void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page)
 {
+    ((iop_t*)g_ltem.iop)->rxLastRecvChkLvl = 0;
+    ((iop_t*)g_ltem.iop)->rxLastRecvTck = 0;
+
     //memset(bufPtr->pages[page]._buffer, 0, (bufPtr->pages[page].head - bufPtr->pages[page]._buffer));
     bufPtr->pages[page].head = bufPtr->pages[page].prevHead = bufPtr->pages[page].tail = bufPtr->pages[page]._buffer;
 }
@@ -513,8 +504,6 @@ void IOP_rxParseForUrcEvents()
             uint8_t cntxtId = S_convertToContextId(*continuePtr);
             ASSERT(((iop_t*)g_ltem.iop)->rxStreamCtrl == NULL, srcfile_iop_c);                                  // should not be inside another stream recv
 
-            dbg_urcInCmdLock += ((atcmd_t*)g_ltem.atcmd)->isOpenLocked;
-
             // this chunk, contains both meta data for receive and the data, need to copy this chunk to start of rxDataBuffer for context
             ((iop_t*)g_ltem.iop)->rxStreamCtrl = ((mqttCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[cntxtId]);    // put IOP in datamode for context new recv as data
             rxDataBufferCtrl_t *dBufPtr = &(((baseCtrl_t*)((iop_t*)g_ltem.iop)->rxStreamCtrl)->recvBufCtrl);    // get reference to context specific data RX buffer
@@ -624,18 +613,21 @@ static void S_interruptCallbackISR()
                 iop_t *iopPtr = ((iop_t*)g_ltem.iop);
                 if (iopPtr->rxStreamCtrl != NULL)                                               // in DATA mode
                 {
-                    rxDataBufferCtrl_t *dBufPtr = S_isrCheckRxBufferSync();                         // check and get rxStream's data buffer control
+                    rxDataBufferCtrl_t *dBufPtr = S_isrRxBufferSync();                          // get rxStream's data buffer control, sync pending page swap
                     uint8_t iopPg = dBufPtr->iopPg;
+                    if (dBufPtr->pages[iopPg].head - dBufPtr->pages[iopPg]._buffer == 0)        // set page RX basis for page timeout detection
+                        iopPtr->rxLastRecvTck =  pMillis();
+
                     SC16IS741A_read(dBufPtr->pages[iopPg].head, rxLevel);
                     dBufPtr->pages[iopPg].head += rxLevel;
-
                     uint16_t fillLevel = dBufPtr->pages[iopPg].head - dBufPtr->pages[iopPg]._buffer;
-                    iopPtr->rxLastRecvTck = pMillis();
 
+                    PRINTF(dbgColor__white, "rxElap=%d ", pMillis() - iopPtr->rxLastRecvTck);
+                    iopPtr->rxLastRecvTck = pMillis();
                     PRINTF(dbgColor__cyan, "-data(%d:%d) ", iopPg, fillLevel);
                     if (fillLevel > dBufPtr->_pageSz - IOP__uartFIFOBufferSz)
                     {
-                        PRINTF(dbgColor__cyan, "-BSw-%d> ", iopPg);
+                        PRINTF(dbgColor__cyan, "-BSw>%d ", iopPg);
                         IOP_swapRxBufferPage(dBufPtr);
                         // check buffer page swapped in for head past page start: OVERFLOW
                         dBufPtr->_overflow =  dBufPtr->pages[dBufPtr->_nextIopPg].head != dBufPtr->pages[dBufPtr->_nextIopPg]._buffer;

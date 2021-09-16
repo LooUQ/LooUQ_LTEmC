@@ -73,7 +73,7 @@ ltemDevice_t g_ltem;
  *	\param ltem_config [in] - The LTE modem gpio pin configuration.
  *  \param appNotifyCB [in] - If supplied (not NULL), this function will be invoked for significant LTEm1 events.
  */
-void ltem_create(const ltemPinConfig_t ltem_config, appNotifyFunc_t appNotifyCB)
+void ltem_create(const ltemPinConfig_t ltem_config, eventNotifFunc_t eventNotifCallback)
 {
 	// g_ltem = calloc(1, sizeof(ltemDevice_t));
 	// if (g_ltem == NULL)
@@ -97,7 +97,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, appNotifyFunc_t appNotifyCB)
     g_ltem.cancellationRequest = false;
 
     ntwk_create();
-    g_ltem.appNotifyCB = appNotifyCB;
+    g_ltem.appNotifCB = eventNotifCallback;
 }
 
 
@@ -120,11 +120,12 @@ void ltem_start()
 	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
 
     bool poweredPrevious = qbg_isPowerOn();
+
+    spi_start(g_ltem.spi);
     qbg_powerOn();
 
     if (qbg_isPowerOn())
     {
-        spi_start(g_ltem.spi);
         SC16IS741A_start();                                     // start (resets previously powered on) NXP SPI-UART bridge
         IOP_start();
         if (!poweredPrevious)
@@ -152,6 +153,7 @@ void ltem_stop()
  */
 void ltem_reset()
 {
+    ltem_notifyApp(lqNotifType_disconnect, "LTEm reset");
     ltem_stop();
     ltem_start();
 }
@@ -205,7 +207,7 @@ void ltem_destroy()
 void ltem_doWork()
 {
     if (!ltem_chkHwReady())
-        ltem_notifyApp(lqNotifType_lqDevice_hwFault, "LTEm1 I/O Error");
+        ltem_notifyApp(lqNotifType_hardFault, "LTEm I/O Error");
 
     for (size_t i = 0; i < sizeof(g_ltem.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)  // each stream with a doWork() register it at OPEN (removed if last CLOSE)
     {
@@ -223,8 +225,8 @@ void ltem_doWork()
  */
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
-    if (g_ltem.appNotifyCB != NULL)                                       
-        (g_ltem.appNotifyCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
+    if (g_ltem.appNotifCB != NULL)                                       
+        (g_ltem.appNotifCB)(notifyType, lqNotifAssm_ltemc, 0, notifyMsg);                                // if app handler registered, it may/may not return
 }
 
 
@@ -234,12 +236,24 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
  * 
  *  \param yieldCb_func [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
-void ltem_setYieldCb(platform_yieldCB_func_t yieldCb_func)
+void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 {
-    platform_yieldCB_func = yieldCb_func;
+    platform_yieldCB_func = yieldCallback;
+}
+
+
+/**
+ *	\brief Registers the address (void*) of your application event nofication callback handler.
+ * 
+ *  \param yieldCb_func [in] Callback function in application code to be invoked when LTEmC is in await section.
+ */
+void ltem_setEventNotifCallback(eventNotifFunc_t eventNotifCallback)
+{
+    g_ltem.appNotifCB = eventNotifCallback;
 }
 
 #pragma endregion
+
 
 #pragma region LTEmC Internal Functions
 /*-----------------------------------------------------------------------------------------------*/

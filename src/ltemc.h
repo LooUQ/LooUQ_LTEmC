@@ -111,7 +111,7 @@ extern "C"
 {
 #endif // __cplusplus
 
-void ltem_create(const ltemPinConfig_t ltem_config, appNotifyFunc_t appNotifyCB);
+void ltem_create(const ltemPinConfig_t ltem_config, eventNotifFunc_t eventNotifCallback);
 void ltem_destroy();
 
 void ltem_start();
@@ -123,7 +123,9 @@ qbgReadyState_t ltem_getReadyState();
 void ltem_doWork();
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
 void ltem_notifyAssert(uint16_t faultCode)   __attribute__ ((noreturn));
-void ltem_setYieldCb(platform_yieldCB_func_t yieldCb_func);
+
+void ltem_setEventNotifCallback(eventNotifFunc_t eventNotifCallback);
+void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback);
 
 #ifdef __cplusplus
 }

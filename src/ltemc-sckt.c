@@ -102,7 +102,7 @@ void sckt_initControl(scktCtrl_t *scktCtrl, dataContext_t dataCntxt, protocol_t 
     ASSERT_W(recvBufSz == bufferSz, srcfile_sckt_c, "RxBufSz != multiple of 128bytes");
     ASSERT(bufferSz >= 128, srcfile_sckt_c);
     
-    scktCtrl->doWorkTimeout = (uint32_t)(scktCtrl->recvBufCtrl._bufferSz / IOP__uartFIFOBufferSz * IOP__uartFIFO_fillMS * 0.8);
+    //scktCtrl->doWorkTimeout = (uint32_t)(scktCtrl->recvBufCtrl._bufferSz / IOP__uartFIFOBufferSz * IOP__uartFIFO_fillMS * 0.8);
     scktCtrl->dataRecvCB = recvCallback;
     scktCtrl->dataPending = false;
     scktCtrl->flushing = false;
@@ -391,7 +391,7 @@ void S_scktDoWork()
         {
             iopPtr->txSendStartTck = 0;                                             // no longer waiting for IRD response
             atcmd_close();                                                          // release action lock
-            ltem_notifyApp(lqNotifType_lqDevice_streamFault, "IRD timeout");
+            ltem_notifyApp(lqNotifType_dataFault, "IRD timeout");
         }
     }
 
@@ -411,7 +411,7 @@ void S_scktDoWork()
 
             if (iopPtr->scktMap & 0x01 << nextIrd)                              // socket is OPEN
             {
-                ASSERT_W(!pElapsed(scktPtr->doWorkLastTck, scktPtr->doWorkTimeout), srcfile_sckt_c, "doWork freq slow:bffr ovrflw risk");
+                ASSERT_W(!pElapsed(scktPtr->doWorkLastTck, IOP_rxPageFillTimeout(&(scktPtr->recvBufCtrl))), srcfile_sckt_c, "doWork freq slow:bffr ovrflw risk");
                 scktPtr->doWorkLastTck = pMillis();                             // last check for URC\data pending check cycle
 
                 if (scktPtr->dataPending)                                       // socket has data reported (BGx URC)

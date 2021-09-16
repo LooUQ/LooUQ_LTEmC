@@ -54,6 +54,9 @@
 #include <ltemc-mqtt.h>
 
 #define DEFAULT_NETWORK_CONTEXT 1
+#define PERIOD_FROM_SECONDS(period)  (period * 1000)
+#define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
+
 
 
 /* Test is designed for use with Azure IoTHub. If you do not have a Azure subscription you can get a free test account with a preloaded credit.
@@ -133,7 +136,7 @@ void setup() {
     PRINTF(dbgColor__none, "Waiting on network...\r");
     networkOperator_t networkOp = ntwk_awaitOperator(30000);
     if (strlen(networkOp.operName) == 0)
-        appNotifyCB(255, "Timout (30s) waiting for cellular network.");
+        appNotifyCB(255, 0, 0, "Timout (30s) waiting for cellular network.");
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
     uint8_t cntxtCnt = ntwk_getActivePdpCntxtCnt();
@@ -154,19 +157,19 @@ void setup() {
     if (rslt != resultCode__success)
     {
         PRINTF(dbgColor__warn, "Open fail status=%d\r", rslt);
-        appNotifyCB(255, "MQTT open failed");
+        appNotifyCB(255, 0, 0, "MQTT open failed");
     }
     rslt = mqtt_connect(&mqttCtrl, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN, mqttSession_cleanStart);
     if (rslt != resultCode__success)
     {
         PRINTF(dbgColor__warn, "Connect fail status=%d\r", rslt);
-        appNotifyCB(255, "MQTT connect failed.");
+        appNotifyCB(255, 0, 0, "MQTT connect failed.");
     }
     rslt = mqtt_subscribe(&mqttCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1);
     if (rslt != resultCode__success)
     {
         PRINTF(dbgColor__warn, "Subscribe fail status=%d\r", rslt);
-        appNotifyCB(255, "MQTT subscribe to IoTHub C2D messages failed.");
+        appNotifyCB(255, 0, 0, "MQTT subscribe to IoTHub C2D messages failed.");
     }
     lastCycle = pMillis() - cycle_interval;
 }
@@ -242,15 +245,19 @@ void mqttRecvCB(dataContext_t cntxt, uint16_t msgId, const char *topic, char *to
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
 {
-	PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
-    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
-
-    int halt = 1;
-    while (halt) {}
+    if (notifType >= lqNotifType__CATASTROPHIC)
+    {
+        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
+        volatile int halt = 1;
+        while (halt) {}
+    }
+    else if (notifType >= lqNotifType__WARNING)
+        PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
+    else
+        PRINTF(dbgColor__info, "\r\n%s \r\n", notifMsg);
 }
-
 
 
 /* Check free memory (stack-heap) 

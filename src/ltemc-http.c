@@ -25,14 +25,15 @@
  * HTTP(S) Request Support (GET\POST)
  *****************************************************************************/
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if _DEBUG > 0
+#if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
     #if _DEBUG == 1
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
@@ -93,9 +94,9 @@ void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataCntxt, const char*
     httpCtrl->useTls = ((httpCtrl->urlHost)[4] == 'S' || (httpCtrl->urlHost)[4] == 's');
 
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(httpCtrl->recvBufCtrl), recvBuf, recvBufSz);
+
     ASSERT_W(recvBufSz == bufferSz, srcfile_http_c, "RxBufSz != multiple of 128B");
     ASSERT(bufferSz > 64, srcfile_http_c);
-    httpCtrl->bufPageTimeout = (uint32_t)(httpCtrl->recvBufCtrl._pageSz / IOP__uartFIFOBufferSz * IOP__uartFIFO_fillMS * 1.25);
 
     httpCtrl->dataRecvCB = recvCallback;
     httpCtrl->cstmHdrs = NULL;
@@ -451,7 +452,8 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
         char atCmdStr[30];
         snprintf(atCmdStr, sizeof(atCmdStr), "AT+QHTTPREAD=%d", timeoutMS);
         atcmd_sendCmdData(atCmdStr, strlen(atCmdStr), "\r");
-        httpCtrl->bufPageSwapTck = pMillis();                                                           // set the page timeout start time
+        
+        ((iop_t*)g_ltem.iop)->rxLastRecvTck = pMillis();
 
         /* process page data 
         *-----------------------------------------------------------------------------------*/
@@ -465,7 +467,10 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
             {
                 char *continuePtr = lq_strnstr(bufPtr->pages[!bufPtr->iopPg]._buffer, "CONNECT\r\n", 16);
                 if (continuePtr == NULL)
-                    return resultCode__internalError;
+                {
+                    httpCtrl->httpStatus = resultCode__internalError;
+                    break;
+                }
                 httpCtrl->requestState = httpState_readingData;
                 bufPtr->pages[!bufPtr->iopPg].tail = continuePtr + 9;
             }
@@ -483,7 +488,6 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
                 PRINTF(dbgColor__dGreen, "Closing reqst %d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
                 httpCtrl->requestState = httpState_closing;
                 httpCtrl->httpStatus = resultCode__success;
-                iopPtr->rxStreamCtrl = NULL;
             }
 
             /* Forward data to app
@@ -498,23 +502,19 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
                     httpCtrl->dataRecvCB(httpCtrl->dataCntxt, httpCtrl->httpStatus, bufPtr->pages[!bufPtr->iopPg].tail, appAvailable);
                 }
                 IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);                          // delivered, reset buffer and reset ready
-                httpCtrl->bufPageSwapTck = pMillis();
             }
             
             /* Check for buffer PAGE TIMEOUT to pull last partial buffer in from IOP
              *-------------------------------------------------------------------------------*/
-            if (pElapsed(httpCtrl->bufPageSwapTck, httpCtrl->bufPageTimeout))
+            if  (rxPageDataAvailable(bufPtr, bufPtr->iopPg) && IOP_detectRxIdle())
             {
-                if (rxPageDataAvailable(bufPtr, bufPtr->iopPg) > 0)
-                {
-                    PRINTF(dbgColor__cyan, "PageTO-BSwapOut:%d> ", bufPtr->iopPg);
-                    IOP_swapRxBufferPage(bufPtr);
-                }
+                PRINTF(dbgColor__cyan, "PgTO-Take>%d ", bufPtr->iopPg);
+                IOP_swapRxBufferPage(bufPtr);                                               // pull page forward
             }
 
             /* catch REQUEST TIMEOUT here, so we don't wait forever.
             *-----------------------------------------------------------------------------------------------------------*/
-            if (pElapsed(((atcmd_t*)g_ltem.atcmd)->invokedAt, timeoutMS))                  // if check for request timeout
+            if (pElapsed(((atcmd_t*)g_ltem.atcmd)->invokedAt, timeoutMS))                   // if check for request timeout
             {
                 httpCtrl->requestState = httpState_closing;
                 httpCtrl->httpStatus = resultCode__timeout;
@@ -523,7 +523,6 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
             if (httpCtrl->requestState == httpState_closing)                                // if page trailer detected
             {
                 httpCtrl->requestState = httpState_idle;
-                iopPtr->rxStreamCtrl = NULL;
                 break;
             }
 
@@ -533,6 +532,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
             httpCtrl->httpStatus = resultCode__cancelled;
 
         atcmd_close();                                                                      // close the GET\POST request and release atcmd lock
+        iopPtr->rxStreamCtrl = NULL;                                                        // done, take IOP out of data mode
         return httpCtrl->httpStatus;
     }
 }

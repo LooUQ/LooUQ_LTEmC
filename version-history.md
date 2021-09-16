@@ -1,6 +1,19 @@
 # LTEmC Version History
 #### Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
 
+## v2.1.0 
+### Fixes and minor enhancements
+*   Fixed intermittent timing issue in HTTP read response
+*   Fixed deadlock condition if HTTP request failed 
+*   Fixed modem info, where after loss of connection modem reported previous carrier and network type
+*   Changed modem reset logic to be more resilient
+*   Changed BGx startup logic to be more resilient
+*   Changed tests to reflect other changes in this release
+#### Breaking Changes
+*   Changed signature for application event notification callback to include uint8_t assembly and instance indications.
+    *   LTEmC will set assembly to 0xC0, LQCloud will set assembly to 0xC1 
+*   Changed name of set yield callback to ltem_setYieldCallback()
+
 ## v2.0.0 - Major long-term release
 ### Added HTTP(S) functionality and redesigned buffering model. Enhancements to AT-Command module to allow for continued extensions to supported features.
 *   Added support for HTTP(S) GET/POST 

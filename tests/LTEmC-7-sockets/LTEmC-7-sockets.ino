@@ -95,11 +95,12 @@ void setup() {
 
     ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
     ltem_start();                                                   // ... and start it
+    PRINTF(dbgColor__none, "BGx %s\r", mdminfo_ltem().fwver);
 
     PRINTF(dbgColor__dflt, "Waiting on network...\r");
     networkOperator_t networkOp = ntwk_awaitOperator(120);
     if (strlen(networkOp.operName) == 0)
-        appNotifyCB(255, "Timeout (120s) waiting for cellular network.");
+        appNotifyCB(255, 0, 0, "Timeout (120s) waiting for cellular network.");
 
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
@@ -120,7 +121,7 @@ void setup() {
     else if (scktResult != resultCode__success)
     {
         PRINTF(dbgColor__error, "Socket 0 open failed, resultCode=%d\r", scktResult);
-        appNotifyCB(255, "Failed to open socket.");
+        appNotifyCB(255, 0, 0, "Failed to open socket.");
     }
 }
 
@@ -230,35 +231,20 @@ void showStats()
 }
 
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
 {
-    if (notifType <= lqNotifType__LQDEVICE)
+    if (notifType >= lqNotifType__CATASTROPHIC)
     {
-        PRINTF(dbgColor__info, "\r\n** %s \r\n", notifMsg);
-        return;
+        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
+        volatile int halt = 1;
+        while (halt) {}
     }
 
-    switch (notifType)
-    {
-    case lqNotifType_assertWarning:
-        PRINTF(dbgColor__warn, "%s\r\n", notifMsg);
-        return;
-    case lqNotifType_lqDevice_recvOverflow:
-        PRINTF(dbgColor__warn, "ProtocolError: %s\r", notifMsg);
-        return;
-    case lqNotifType_lqDevice_hwFault:
-        PRINTF(dbgColor__warn, "HardwareError: %s\r", notifMsg);
-        break;
-    case lqNotifType_lqDevice_ntwkFault:
-        PRINTF(dbgColor__warn, "NetworkError: %s\r", notifMsg);
-        break;
-    case lqNotifType_lqDevice_streamFault:
-        PRINTF(dbgColor__warn, "ProtocolError: %s\r", notifMsg);
-    default:
-        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
-        break;
-    }
-    do {} while (1);
+    else if (notifType >= lqNotifType__WARNING)
+        PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
+
+    else
+        PRINTF(dbgColor__info, "\r\n%s \r\n", notifMsg);
 }
 
 

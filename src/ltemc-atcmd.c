@@ -335,10 +335,10 @@ void ATCMD_getResult()
             atcmdPtr->isOpenLocked = false;                             // close action to release action lock
             atcmdPtr->execDuration = pMillis() - atcmdPtr->invokedAt;
 
-            if (!ltem_chkHwReady())                                                                 // if action timed-out, verify not a device wide failure
-                ltem_notifyApp(lqNotifType_lqDevice_hwFault, "Modem HW Status Offline");     // BGx status pin
+            if (!ltem_chkHwReady())                                                     // if action timed-out, verify not a device wide failure
+                ltem_notifyApp(lqNotifType_hardFault, "Modem HW Status Offline");       // BGx status pin
             else if (!SC16IS741A_chkCommReady())
-                ltem_notifyApp(lqNotifType_lqDevice_hwFault, "Modem comm unresponsive");     // UART bridge SPI wr/rd
+                ltem_notifyApp(lqNotifType_hardFault, "Modem comm unresponsive");       // UART bridge SPI wr/rd
         }
         return;
     }

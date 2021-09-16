@@ -25,7 +25,7 @@
  * Manages module genaral and non-protocol cellular radio functions
  *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -142,11 +142,11 @@ void qbg_setOptions()
     atcmd_awaitResult();
 
     // init BGx state
-    for (size_t i = 0; i < BGX__initCommandCnt; i++)                                                    // sequence through list of start cmds
+    for (size_t i = 0; i < BGX__initCommandCnt; i++)                                            // sequence through list of start cmds
     {
         if (!S_issueStartCommand(qbg_initCmds[i]))
         {
-            ltem_notifyApp(lqNotifType_lqDevice_hwFault, "qbg-start() init sequence failed");    // send notification, maybe app can recover
+            ltem_notifyApp(lqNotifType_hardFault, "qbg-start() init sequence failed");          // send notification, maybe app can recover
             break;
         }
     }

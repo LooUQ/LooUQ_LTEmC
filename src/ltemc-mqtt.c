@@ -103,10 +103,10 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataContext_t dataCntxt, bool useTls
     mqttCtrl->useTls = useTls;
 
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(mqttCtrl->recvBufCtrl), recvBuf, recvBufSz);
+
     ASSERT_W(recvBufSz == bufferSz, srcfile_mqtt_c, "RxBufSz != multiple of 128B");
     ASSERT(bufferSz > 64, srcfile_mqtt_c);
 
-    mqttCtrl->doWorkTimeout = (uint32_t)(mqttCtrl->recvBufCtrl._pageSz / IOP__uartFIFOBufferSz * IOP__uartFIFO_fillMS * 1.2);
     mqttCtrl->dataRecvCB = recvCallback;
     mqttCtrl->useMqttVersion = useMqttVersion;
     mqttCtrl->msgId = 1;
@@ -531,13 +531,12 @@ static void S_mqttDoWork()
         char *trailerPtr = lq_strnstr(dBufPtr->pages[dBufPtr->iopPg].head - 8, "\"\r\n\r\n", 8);
         if (trailerPtr == NULL)
         {
-            if (pElapsed(mqttPtr->doWorkLastTck, mqttPtr->doWorkTimeout))                       // timeout is failure
+            if (IOP_detectRxIdle())
             {
-                ltem_notifyApp(lqNotifType_lqDevice_streamFault, "MQTT message truncated\\timeout");
+                ltem_notifyApp(lqNotifType_dataFault, "MQTT message truncated\\timeout");
                 IOP_resetRxDataBufferPage(dBufPtr, dBufPtr->iopPg);                             // clear partial page recv content
                 goto finally;
             }
-            mqttPtr->doWorkLastTck = pMillis();
             return;
         }
 
@@ -590,7 +589,6 @@ static void S_mqttDoWork()
         finally:
             IOP_resetRxDataBufferPage(dBufPtr, thisPage);                                       // done with this page, clear it
             iopPtr->rxStreamCtrl = NULL;                                                        // exit data mode
-            mqttPtr->doWorkLastTck = 0;                                                         // clear tick count timer for recv
     }
 }
 
