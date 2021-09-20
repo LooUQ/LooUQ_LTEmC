@@ -34,7 +34,6 @@
 #include "ltemc-streams.h"
 #include "ltemc-nxp-sc16is.h"
 
-
 enum
 {
                                     /* can be reduced based on you protocol selections and your data segment sizes */
@@ -43,8 +42,9 @@ enum
 
     IOP__uartBaudRate = 115200,     // baud rate between BGx and NXP UART
     IOP__uartFIFOBufferSz = 64,
-    IOP__uartFIFOFillPeriod = (1 / IOP__uartBaudRate * 10) * IOP__uartFIFOBufferSz,
-    IOP__uartFIFORxTimeout = IOP__uartFIFOFillPeriod * 2 + 128
+    IOP__uartFIFOFillPeriod = (int)(1 / (double)IOP__uartBaudRate * 10 * IOP__uartFIFOBufferSz * 1000) + 1,
+
+    IOP__rxDefaultTimeout = IOP__uartFIFOFillPeriod * 2 + 192
 };
 
 
@@ -55,19 +55,6 @@ static inline uint16_t IOP_rxPageDataAvailable(rxDataBufferCtrl_t *buf, uint8_t 
 {
     return buf->pages[page].head - buf->pages[page].tail;
 }
-
-
-// /**
-//  *   \brief Brief inline static function to calculate buffer fill time (MS)
-//  *   
-//  *   NXP buffer takes ~6ms raw serial xfer at 115200 baud, supplying up to 64 chars
-// */
-// static inline uint16_t IOP_rxPageFillTimeout(rxDataBufferCtrl_t *buf)
-// {
-//     return buf->pageTimeout;
-//     //         // (FIFO buffers to fill page + 2) * 6
-//     // return (buf->_pageSz / sc16is741a__LTEM_FIFO_bufferSz + 2) * 6;
-// }
 
 
 /** 
@@ -85,8 +72,9 @@ typedef volatile struct iop_tag
     iopStreamCtrl_t streamPeers[streamPeer_cnt];        ///< array of iopStream ctrl pointers, cast to a specific stream type: protocol or file stream
     iopStreamCtrl_t rxStreamCtrl;                       ///< stream data source, if not null
     uint32_t txSendStartTck;                            ///< tick count when TX send started, used for response timeout detection
-    uint32_t rxLastRecvTck;                             ///< receive timeout detection: performed at tick count
-    uint16_t rxLastRecvChkLvl;                          ///< receive timeout detection: fill level at check
+    uint32_t rxLastFillChgTck;                          ///< tick count when RX buffer fill level was known to have change
+    uint16_t rxLastFillLevel;                           ///< last known fill level (updated only during check)
+
     // protocol specific properties
     uint8_t scktMap;                                    ///< bitmap indicating open sockets (TCP/UDP/SSL), bit position is the dataContext (IOP event detect shortcut)
     uint8_t scktLstWrk;                                 ///< bit mask of last sckt do work IRD inquiry (fairness)
@@ -109,11 +97,13 @@ void IOP_resetCoreRxBuffer();
 uint16_t IOP_initRxBufferCtrl(rxDataBufferCtrl_t *bufCtrl, uint8_t *rxBuf, uint16_t rxBufSz);
 void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufPtr);
 void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page);
+uint32_t IOP_getRxIdleDuration();
+char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *pNeedle, const char *pTerm);
+uint16_t IOP_fetchRxAhead(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeCnt, char *pChars);
 
 void IOP_registerStream(streamPeer_t stream, iopStreamCtrl_t *streamCtrl);
 
 uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate);
-bool IOP_detectRxIdle();
 
 #ifdef __cplusplus
 }

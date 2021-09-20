@@ -41,6 +41,7 @@
 
 #include "ltemc-http.h"
 #include "ltemc-internal.h"
+#include <lq-str.h>
 
 
 enum
@@ -247,15 +248,17 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         * 
         * NOTE: there is only 1 URL in the BGx at a time
         *---------------------------------------------------------------------------------------------------------------*/
-        if (strlen(relativeUrl) > 0 && relativeUrl[0] != '/')
-            return resultCode__badRequest;
+        // if (strlen(relativeUrl) > 0 && relativeUrl[0] != '/')
+        //     return resultCode__badRequest;
 
         char url[240];                                                              // need to get length of URL prior to cmd
         strcpy(url, &httpCtrl->urlHost);
+        if (strlen(relativeUrl) > 0 && relativeUrl[0] != '/')
+            strcat(url, "/");
         strcat(url, relativeUrl);
         PRINTF(dbgColor__dGreen, "URL(%d)=%s \r", strlen(url), url);
 
-        if (S_setUrl(url, timeoutSec) != resultCode__success)
+        if ((atResult = S_setUrl(url, timeoutSec)) != resultCode__success)
         {
             PRINTF(dbgColor__warn, "Failed set URL (%d)\r", atResult);
             atcmd_close();
@@ -354,15 +357,14 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
         * 
         * NOTE: there is only 1 URL in the BGx at a time
         *---------------------------------------------------------------------------------------------------------------*/
-        if (strlen(relativeUrl) > 0 && relativeUrl[0] != '/')
-            return resultCode__badRequest;
-
         char url[240];                                                              // need to get length of URL prior to cmd
         strcpy(url, &httpCtrl->urlHost);
+        if (strlen(relativeUrl) > 0 && relativeUrl[0] != '/')
+            strcat(url, "/");
         strcat(url, relativeUrl);
         PRINTF(dbgColor__dGreen, "URL(%d)=%s \r", strlen(url), url);
 
-        if (S_setUrl(url, timeoutSec) != resultCode__success)
+        if ((atResult = S_setUrl(url, timeoutSec)) != resultCode__success)
         {
             PRINTF(dbgColor__warn, "Failed set URL (%d)\r", atResult);
             atcmd_close();
@@ -405,6 +407,8 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
                 PRINTF(dbgColor__warn, "Closed failed HTTP request, status=%d\r", httpCtrl->httpStatus);
             }
         }
+        else
+            httpCtrl->httpStatus = resultCode__internalError;
         atcmd_close();
         return httpCtrl->httpStatus;
     }                                                                           // master awaitLock() over transaction
@@ -412,27 +416,45 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
 }   // http_post()
 
 
+
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
+/**
+ *	\brief Performs a HTTP POST page web request.
+ *
+ *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ *	\param relativeUrl [in] - URL, relative to the host. If none, can be provided as "" or "/" ()
+ *  \param returnResponseHdrs [in] - if requested (true) the page response stream will prefix the page data
+ *  \param postData [in] - Pointer to char buffer with POST content
+ *  \param postDataSz [in] - Size of the POST content reference by *postData
+ *	\param timeoutSec [in] - the number of seconds to wait (blocking) for a page response
+ *
+ *  \return true if POST request completed
+ */
 resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
 {
-    iop_t *iopPtr = (iop_t*)g_ltem.iop;                 // shortcut to the IOP subsystem
+    iop_t *iopPtr = (iop_t*)g_ltem.iop;                             // shortcut to the IOP subsystem
     resultCode_t rslt;
     timeoutSec = (timeoutSec == 0) ? http__LTEM_defaultTimeoutBGxSec : timeoutSec;
     uint32_t timeoutMS = timeoutSec * 1000;
 
+    int pages = 0;
+    int bytes = 0;
+
     /* PROCESS ACTIVE DATA STREAM FLOW 
      *-------------------------------------------------------------------------------------------*/
     if (httpCtrl->requestState != httpState_requestComplete)        // readPage() only valid after 
-        return resultCode__badRequest;                              // a completed GET\PUT
+        return resultCode__notFound;                                // a completed GET\PUT
 
     // readability var
-    rxDataBufferCtrl_t *bufPtr = &(httpCtrl->recvBufCtrl);          // smart-buffer for this operation
+    rxDataBufferCtrl_t *pBuf = &(httpCtrl->recvBufCtrl);          // smart-buffer for this operation
 
-    IOP_resetRxDataBufferPage(bufPtr, 0);                           // reset data buffers for flow
-    IOP_resetRxDataBufferPage(bufPtr, 1);
-    bufPtr->iopPg = 0;
+    IOP_resetRxDataBufferPage(pBuf, 0);                           // reset data buffers for flow
+    IOP_resetRxDataBufferPage(pBuf, 1);
+    pBuf->iopPg = 0;
 
 
-    // PRINTF(dbgColor__dGreen, "httpDoWork-iopPg=%d, [0]=%d, [1]=%d\r", bufPtr->iopPg, rxPageDataAvailable(bufPtr, 0), rxPageDataAvailable(bufPtr, 1));
+    // PRINTF(dbgColor__dGreen, "httpDoWork-iopPg=%d, [0]=%d, [1]=%d\r", pBuf->iopPg, rxPageDataAvailable(pBuf, 0), rxPageDataAvailable(pBuf, 1));
 
     /* once read is invoked page data buffered in BGx will stream VERY quickly. If the page is
     * large, there may be a pause for BGx to retrieve more data. At this point the device
@@ -444,7 +466,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
     atcmd_setOptions(atcmd__setLockModeManual, timeoutMS, atcmd_connectPromptParser);
     if (atcmd_awaitLock(timeoutMS))
     {
-        iopPtr->rxStreamCtrl = httpCtrl;                                        // put IOP in data mode
+        iopPtr->rxStreamCtrl = httpCtrl;                            // put IOP in data mode
 
         /* issue AT+QHTTPREAD to start data stream, change state to httpState_responseRecvd
         *-----------------------------------------------------------------------------------*/
@@ -453,63 +475,78 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
         snprintf(atCmdStr, sizeof(atCmdStr), "AT+QHTTPREAD=%d", timeoutMS);
         atcmd_sendCmdData(atCmdStr, strlen(atCmdStr), "\r");
         
-        ((iop_t*)g_ltem.iop)->rxLastRecvTck = pMillis();
-
         /* process page data 
         *-----------------------------------------------------------------------------------*/
         uint16_t dataAvailable;
-        do
+        char *pTrailer;
+        uint8_t trailerLen = 0;
+        uint16_t appAvailable;
+
+        while (true)
         {
-            dataAvailable = rxPageDataAvailable(bufPtr, !bufPtr->iopPg);
+            dataAvailable = rxPageDataAvailable(pBuf, !pBuf->iopPg);
 
             /* skip "CONNECT"   (9 chars with \r\n) */
             if (httpCtrl->requestState < httpState_readingData && dataAvailable > 16)
             {
-                char *continuePtr = lq_strnstr(bufPtr->pages[!bufPtr->iopPg]._buffer, "CONNECT\r\n", 16);
+                char *continuePtr = lq_strnstr(pBuf->pages[!pBuf->iopPg]._buffer, "CONNECT\r\n", 16);
                 if (continuePtr == NULL)
                 {
                     httpCtrl->httpStatus = resultCode__internalError;
                     break;
                 }
                 httpCtrl->requestState = httpState_readingData;
-                bufPtr->pages[!bufPtr->iopPg].tail = continuePtr + 9;
+                pBuf->pages[!pBuf->iopPg].tail = continuePtr + 9;
             }
 
             /* Check for end-of-page (EOP), stop sending app data at "+QHTTPREAD: <err>" 
              *-------------------------------------------------------------------------------*/
-            char *trailerSearchPtr = bufPtr->pages[!bufPtr->iopPg].head - 30;
-            char *trailerPtr = lq_strnstr(trailerSearchPtr, "\r\nOK\r\n\r\n+QHTTPREAD: ", 30);         // stop at QHTTPREAD suffix, if found
-            if (trailerPtr != NULL)
-            {
-                uint16_t bgxError = strtol(trailerPtr + 20, NULL, 10);
-                if (bgxError != 0)
-                    httpCtrl->httpStatus = resultCode__internalError + bgxError;
+            // char *pTrailer = IOP_findLast(pBuf, "\r\nOK\r\n\r\n+QHTTPREAD: ", 25, "\r\n");
 
-                PRINTF(dbgColor__dGreen, "Closing reqst %d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+            pTrailer = IOP_findRxAhead(pBuf, 20, "+QHTTPREAD: ", "\r\n");               // room for 3 error response + term, points to char after "+QHTTPREAD: "
+            if (pTrailer != NULL && httpCtrl->requestState != httpState_closing)
+            {
+                char resultBuf[20];
+                if ((trailerLen = IOP_fetchRxAhead(pBuf, pTrailer, 19, resultBuf)) > 0)
+                {
+                    uint16_t bgxError = strtol(resultBuf + 12, NULL, 10);
+                    if (bgxError != 0)
+                        httpCtrl->httpStatus = resultCode__internalError + bgxError;
+                }
                 httpCtrl->requestState = httpState_closing;
                 httpCtrl->httpStatus = resultCode__success;
             }
 
             /* Forward data to app
              *-------------------------------------------------------------------------------*/
-            uint16_t appAvailable = (trailerPtr == NULL) ? rxPageDataAvailable(bufPtr, !bufPtr->iopPg) :
-                                                           trailerPtr - bufPtr->pages[!bufPtr->iopPg].tail;
-                                      
+            appAvailable = rxPageDataAvailable(pBuf, !pBuf->iopPg);
             if (httpCtrl->requestState >= httpState_readingData && appAvailable > 0)
             {
                 if (!httpCtrl->pageCancellation)
                 {
-                    httpCtrl->dataRecvCB(httpCtrl->dataCntxt, httpCtrl->httpStatus, bufPtr->pages[!bufPtr->iopPg].tail, appAvailable);
+                    httpCtrl->dataRecvCB(httpCtrl->dataCntxt, httpCtrl->httpStatus, pBuf->pages[!pBuf->iopPg].tail, (appAvailable - trailerLen));
                 }
-                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);                          // delivered, reset buffer and reset ready
+                IOP_resetRxDataBufferPage(pBuf, !pBuf->iopPg);                              // delivered, reset buffer and reset ready
+
+                if (httpCtrl->requestState == httpState_closing)                            // if page trailer detected
+                {
+                    PRINTF(dbgColor__dGreen, "Closing reqst %d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+                    httpCtrl->requestState = httpState_idle;
+                    break;
+                }
             }
             
             /* Check for buffer PAGE TIMEOUT to pull last partial buffer in from IOP
              *-------------------------------------------------------------------------------*/
-            if  (rxPageDataAvailable(bufPtr, bufPtr->iopPg) && IOP_detectRxIdle())
+            if (rxPageDataAvailable(pBuf, pBuf->iopPg) && IOP_getRxIdleDuration() > 200)
             {
-                PRINTF(dbgColor__cyan, "PgTO-Take>%d ", bufPtr->iopPg);
-                IOP_swapRxBufferPage(bufPtr);                                               // pull page forward
+                // char *pT = IOP_findRxAhead(pBuf, 20, "+QHTTPREAD: ", "\r\n"); // room for 3 digit response + term
+                // char tBuf[16];
+                // uint16_t charCnt = IOP_fetchRxAhead(pBuf, pT, 15, tBuf);
+                // PRINTF(0, "%s\r", tBuf);
+
+                PRINTF(dbgColor__cyan, "PgTO-Take>%d ", pBuf->iopPg);
+                IOP_swapRxBufferPage(pBuf);                                                 // pull page forward
             }
 
             /* catch REQUEST TIMEOUT here, so we don't wait forever.
@@ -519,14 +556,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
                 httpCtrl->requestState = httpState_closing;
                 httpCtrl->httpStatus = resultCode__timeout;
             }
-
-            if (httpCtrl->requestState == httpState_closing)                                // if page trailer detected
-            {
-                httpCtrl->requestState = httpState_idle;
-                break;
-            }
-
-        } while (true);
+        }   //while(true) 
 
         if (httpCtrl->pageCancellation)
             httpCtrl->httpStatus = resultCode__cancelled;

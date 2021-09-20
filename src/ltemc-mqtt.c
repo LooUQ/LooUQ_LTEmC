@@ -531,7 +531,7 @@ static void S_mqttDoWork()
         char *trailerPtr = lq_strnstr(dBufPtr->pages[dBufPtr->iopPg].head - 8, "\"\r\n\r\n", 8);
         if (trailerPtr == NULL)
         {
-            if (IOP_detectRxIdle())
+            if (IOP_getRxIdleDuration() > IOP__rxDefaultTimeout)
             {
                 ltem_notifyApp(lqNotifType_dataFault, "MQTT message truncated\\timeout");
                 IOP_resetRxDataBufferPage(dBufPtr, dBufPtr->iopPg);                             // clear partial page recv content

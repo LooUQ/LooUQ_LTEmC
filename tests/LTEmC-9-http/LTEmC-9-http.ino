@@ -134,7 +134,7 @@ char pageBuffer[4096] = {0};
 uint16_t pageChars = 0;
 
 
-void loop() 
+void loop()
 {
     // if (pMillis() - lastCycle >= CYCLE_INTERVAL)
     if (pMillis() - lastCycle >= 5000)
@@ -143,6 +143,10 @@ void loop()
         pageChars = 0;
 
         PRINTF(dbgColor__none, "\r\r");
+
+
+        loopCnt = 4;
+
 
         if (loopCnt % 2 == 1)
         {
@@ -205,6 +209,10 @@ void loop()
                     break;
                 }
             }
+
+            char printBuf[121];
+            strncpy(printBuf, pageBuffer, 120);
+            PRINTF(dbgColor__white, "Got (1st 120 chars):\r%s\r", printBuf);
         }
         loopCnt++;
     }
@@ -219,18 +227,10 @@ void loop()
 
 void httpRecvCB(dataContext_t cntxt, uint16_t httpStatus, char *recvData, uint16_t dataSz)
 {
-    // recvData[dataSz-1] = '\0';
-    // PRINTF(dbgColor__info, "(%d) %s", httpStatus, recvData);
-    
     strncpy(pageBuffer + pageChars, recvData, dataSz);
     pageChars += dataSz;
 
     PRINTF(dbgColor__green, "\rAppRecv'd %d new chars, total page sz=%d\r", dataSz, pageChars);
-
-    // if (loopCnt % 2 == 1 && pageChars >= 1000)
-    // {
-    //     http_cancelPage(httpPtr);
-    // }
 }
 
 

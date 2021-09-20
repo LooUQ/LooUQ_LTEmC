@@ -53,7 +53,7 @@
 
 #pragma region Header
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -74,9 +74,12 @@
 #include "ltemc-sckt.h"
 #include "ltemc-mqtt.h"
 
+#include <lq-str.h>
+
 #define QBG_APPREADY_MILLISMAX 5000
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define IOP_RXCTRLBLK_ADVINDEX(INDX) INDX = (++INDX == IOP_RXCTRLBLK_COUNT) ? 0 : INDX
 //#define IOP_TX_ACTIVE()  do { g_ltem1->iop->txCtrl->remainSz > 0; } while(0);
 
@@ -209,34 +212,178 @@ uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate)
 
 
 /**
- *	\brief Check for RX idle (no incoming receives from NXP in ~3 buffer times).
+ *	\brief Check for RX progress\idle.
  *
- *  \return True 
+ *  \return Duration since last fill level change detected; returns 0 if a change is detected since last call
  */
-bool IOP_detectRxIdle()
+uint32_t IOP_getRxIdleDuration()
 {
     ASSERT(((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL, srcfile_iop_c);
-
     rxDataBufferCtrl_t rxBuf = ((rxDataBufferCtrl_t)((baseCtrl_t*)((iop_t*)g_ltem.iop)->rxStreamCtrl)->recvBufCtrl);
     uint16_t fillNow = rxBuf.pages[rxBuf.iopPg].head - rxBuf.pages[rxBuf.iopPg]._buffer;
 
-    if (((iop_t*)g_ltem.iop)->rxLastRecvChkLvl < fillNow)           // recv'd bytes since last check
+    uint32_t retVal = 0;
+
+    if (((iop_t*)g_ltem.iop)->rxLastFillLevel == fillNow)           // idle now
     {
-        ((iop_t*)g_ltem.iop)->rxLastRecvChkLvl = fillNow;           // update it
-        return false;
+        retVal = pMillis() - ((iop_t*)g_ltem.iop)->rxLastFillChgTck;
+    }
+    else
+    {
+        ((iop_t*)g_ltem.iop)->rxLastFillChgTck = pMillis();
+        ((iop_t*)g_ltem.iop)->rxLastFillLevel = fillNow;
+    }
+    return retVal;
+}
+
+
+/**
+ *	\brief Finds a string in the last X characters of the IOP RX stream.
+ *
+ *  \param pBuf [in] - Pointer data receive buffer.
+ *  \param rewindCnt [in] - The number of chars to search backward.
+ *	\param pNeedle [in] - The string to find.
+ *  \param pTerm [in] - Optional phrase that must be found after needle phrase.
+ *
+ *  \return Pointer to the character after the needle match (if found), otherwise return NULL.
+ */
+char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *pNeedle, const char *pTerm)
+{
+    uint8_t needleLen = strlen(pNeedle);
+    uint8_t termLen = strlen(pTerm);
+
+    ASSERT(needleLen + termLen < rewindCnt, srcfile_iop_c);
+    uint16_t iopAvail = pBuf->pages[pBuf->iopPg].head - pBuf->pages[pBuf->iopPg].tail;
+
+    if (needleLen + termLen > iopAvail + (pBuf->pages[!pBuf->iopPg].head - pBuf->pages[!pBuf->iopPg].tail))
+        return NULL;
+
+    // find start of needle
+        //    uint16_t rewindRemaining = rewindCnt;
+        //    uint8_t searchPg;
+    // bool foundNeedle = false;
+    char *pNeedleAt = NULL;
+    uint8_t termSrchState = (termLen == 0) ? 2 : 0;                     // termSrchState: 0=nothing yet, 1=start found, 2=full match found
+
+    uint8_t searchPg = pBuf->iopPg;
+    char *pSearch = pBuf->pages[pBuf->iopPg].head - rewindCnt;
+    if (rewindCnt > iopAvail)
+    {
+        searchPg = !pBuf->iopPg;
+        pSearch = pBuf->pages[!pBuf->iopPg].head - iopAvail;
+    }
+    
+    // find start of needle, looking for match
+    while (pSearch < pBuf->pages[searchPg].head)
+    {
+        if (pNeedle[0] == *pSearch)
+        {
+            pNeedleAt = pSearch;
+            break;
+        }
+
+        pSearch++;
+        if (pSearch == pBuf->pages[!pBuf->iopPg].head)              // end of RCV page, continue search in IOP page
+        {
+            searchPg = pBuf->iopPg;
+            pSearch = pBuf->pages[pBuf->iopPg]._buffer;
+        }
     }
 
-    if (((iop_t*)g_ltem.iop)->rxLastRecvTck == 0)                   // buffer timeout check idle, start it
+    // find rest of needle, exit on miss
+    for (size_t i = 0; i < needleLen; i++)
     {
-        ((iop_t*)g_ltem.iop)->rxLastRecvTck = pMillis();            // last RX was ancient, start count now that we are watching
-        return false;
-    }
+        if (pNeedle[i] != *pSearch)
+            return NULL;
 
-    if (pElapsed(((iop_t*)g_ltem.iop)->rxLastRecvTck, IOP__uartFIFORxTimeout))
-    {
-        return true;
+        pSearch++;
+        if (pSearch == pBuf->pages[!pBuf->iopPg].head)              // end of RCV page, continue search in IOP page
+        {
+            searchPg = pBuf->iopPg;
+            pSearch = pBuf->pages[pBuf->iopPg]._buffer;
+        }
     }
-    return false;                               // insufficient time to determine idle
+    
+    // find start of term, looking for match
+    while (pSearch < pBuf->pages[searchPg].head)
+    {
+        if (pTerm[0] == *pSearch)
+        {
+            termSrchState = 1;
+            break;
+        }
+
+        pSearch++;
+        if (pSearch == pBuf->pages[!pBuf->iopPg].head)              // end of RCV page, continue search in IOP page
+        {
+            searchPg = pBuf->iopPg;
+            pSearch = pBuf->pages[pBuf->iopPg]._buffer;
+        }
+    }
+    if (!termSrchState)
+        return NULL;
+
+    // find rest of term, exit on miss
+    if (termSrchState < 2)
+    {
+        for (size_t i = 0; i < termLen; i++)
+        {
+            if (pTerm[i] != *pSearch)
+                return NULL;
+
+            pSearch++;
+            if (pSearch == pBuf->pages[!pBuf->iopPg].head)          // end of RCV page, continue search in IOP page
+            {
+                searchPg = pBuf->iopPg;
+                pSearch = pBuf->pages[pBuf->iopPg]._buffer;
+            }
+        }
+    }
+    return pNeedleAt;
+}
+
+
+/**
+ *	\brief Get a contiguous block of characters from the RX buffer pages.
+ *
+ *  \param pBuf [in] - Pointer data receive buffer.
+ *	\param pStart [in] - Address within the RX buffer to start retrieving chars.
+ *  \param takeCnt [in] - The number of chars to return.
+ *  \param pChars [out] - Buffer to hold retrieved characters, must be takeCnt + 1. Buffer will be null terminated.
+ *
+ *  \return Pointer to the character after the needle match (if found), otherwise return NULL.
+ */
+uint16_t IOP_fetchRxAhead(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeCnt, char *pChars)
+{
+    ASSERT(pBuf->_buffer <= pStart && pStart <= pBuf->_bufferEnd, srcfile_iop_c);
+    memset(pChars, 0, takeCnt + 1);
+
+//    uint16_t iopAvail =  pBuf->pages[pBuf->iopPg].head -  pBuf->pages[pBuf->iopPg]._buffer;
+    uint8_t startPg = pStart > pBuf->pages[1]._buffer;
+    uint16_t takenCnt = 0;
+
+    if (startPg != pBuf->iopPg) {
+        uint16_t pgTake = pBuf->pages[!pBuf->iopPg].head - pStart;
+        memcpy(pChars, pStart, pgTake);
+        takeCnt -= pgTake;
+        takenCnt += pgTake;
+
+        if (takeCnt > 0)
+        {
+            uint16_t iopAvail = pBuf->pages[pBuf->iopPg].head - pBuf->pages[pBuf->iopPg]._buffer;
+            takeCnt = MIN(takeCnt, iopAvail);
+            memcpy(pChars + takenCnt, pBuf->pages[pBuf->iopPg]._buffer, takeCnt);
+            takenCnt += takeCnt;
+        }
+    }
+    else
+    {
+        uint16_t iopAvail =  pBuf->pages[pBuf->iopPg].head -  pStart;
+        takeCnt = MIN(takeCnt, iopAvail);
+        memcpy(pChars, pStart, takeCnt);
+        takenCnt = takeCnt;
+    }
+    return takenCnt;
 }
 
 
@@ -285,8 +432,8 @@ uint16_t IOP_initRxBufferCtrl(rxDataBufferCtrl_t *bufCtrl, uint8_t *rxBuf, uint1
  */
 void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufCtrl)
 {
-    ((iop_t*)g_ltem.iop)->rxLastRecvChkLvl = 0;
-    ((iop_t*)g_ltem.iop)->rxLastRecvTck = 0;
+    ((iop_t*)g_ltem.iop)->rxLastFillLevel = 0;
+    // ((iop_t*)g_ltem.iop)->rxLastFillChgTck = 0;
 
     bufCtrl->_nextIopPg = !bufCtrl->iopPg;     // set intent, used to check state if swap interrupted
     bufCtrl->bufferSync = true;                // set bufferSync, IOP ISR will finish swap if interrupted
@@ -333,8 +480,8 @@ static inline uint8_t S_convertToContextId(const char cntxtChar)
  */
 void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page)
 {
-    ((iop_t*)g_ltem.iop)->rxLastRecvChkLvl = 0;
-    ((iop_t*)g_ltem.iop)->rxLastRecvTck = 0;
+    ((iop_t*)g_ltem.iop)->rxLastFillLevel = 0;
+    ((iop_t*)g_ltem.iop)->rxLastFillChgTck = 0;
 
     //memset(bufPtr->pages[page]._buffer, 0, (bufPtr->pages[page].head - bufPtr->pages[page]._buffer));
     bufPtr->pages[page].head = bufPtr->pages[page].prevHead = bufPtr->pages[page].tail = bufPtr->pages[page]._buffer;
@@ -615,19 +762,14 @@ static void S_interruptCallbackISR()
                 {
                     rxDataBufferCtrl_t *dBufPtr = S_isrRxBufferSync();                          // get rxStream's data buffer control, sync pending page swap
                     uint8_t iopPg = dBufPtr->iopPg;
-                    if (dBufPtr->pages[iopPg].head - dBufPtr->pages[iopPg]._buffer == 0)        // set page RX basis for page timeout detection
-                        iopPtr->rxLastRecvTck =  pMillis();
-
                     SC16IS741A_read(dBufPtr->pages[iopPg].head, rxLevel);
                     dBufPtr->pages[iopPg].head += rxLevel;
                     uint16_t fillLevel = dBufPtr->pages[iopPg].head - dBufPtr->pages[iopPg]._buffer;
 
-                    PRINTF(dbgColor__white, "rxElap=%d ", pMillis() - iopPtr->rxLastRecvTck);
-                    iopPtr->rxLastRecvTck = pMillis();
                     PRINTF(dbgColor__cyan, "-data(%d:%d) ", iopPg, fillLevel);
                     if (fillLevel > dBufPtr->_pageSz - IOP__uartFIFOBufferSz)
                     {
-                        PRINTF(dbgColor__cyan, "-BSw>%d ", iopPg);
+                        PRINTF(dbgColor__cyan, "-BSw>%d ", !iopPg);
                         IOP_swapRxBufferPage(dBufPtr);
                         // check buffer page swapped in for head past page start: OVERFLOW
                         dBufPtr->_overflow =  dBufPtr->pages[dBufPtr->_nextIopPg].head != dBufPtr->pages[dBufPtr->_nextIopPg]._buffer;

@@ -1,6 +1,11 @@
 # LTEmC Version History
 #### Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
 
+## v2.1.1
+### Fixes to HTTP and network modules
+*   Updated network to ensure network is IPV4. Future version will allow for complete configurability of the APN\PDP parameters
+*   Fixed a timing issue in the http_read()
+
 ## v2.1.0 
 ### Fixes and minor enhancements
 *   Fixed intermittent timing issue in HTTP read response
