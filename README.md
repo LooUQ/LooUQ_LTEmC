@@ -21,10 +21,9 @@ The LooUQ LTEm1c driver supports the LooUQ Circuit River LTEm1 LTE modem. The LT
 
 All of the core (blue) subsystems are functional. Extension subsystems (copper, with wide-borders) are optional and can be built into the application, or omitted to reduced code size. Grey boxes indicate future feature areas. 
 
-## Latest Release: v2.1
-* Fixes to HTTP, BGx start\reset logic
+## Latest Release: v2.2
 
-## Next Planned Release: v2.2 (Oct 2021)
+## Planned features for Q4 2021
 * File system support on BGx
 * Support for LTEm2 (BG95) and LTEm3F (BG77)
 * Initial support for BGx advanced power management

@@ -111,9 +111,9 @@ gnssLocation_t gnss_getLocation()
     
     // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08  + lineEnds and OK
 
-    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, gnssLocCompleteParser);
-    if (atcmd_awaitLock(atcmd__useDefaultTimeout))
+    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
     {
+        atcmd_setOptions(atcmd__defaultTimeoutMS, gnssLocCompleteParser);
         atcmd_invokeReuseLock("AT+QGPSLOC=2");
         resultCode_t atResult = atcmd_awaitResult();
 

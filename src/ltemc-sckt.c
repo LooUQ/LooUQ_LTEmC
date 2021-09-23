@@ -133,17 +133,17 @@ resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uin
     switch (sckt->protocol)
     {
     case protocol_udp:
-        atcmd_setOptions(atcmd__setLockModeAuto, sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
-        atcmd_tryInvokeAutoLockWithOptions("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
+        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
+        atcmd_tryInvokeWithOptions("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
         break;
   case protocol_tcp:
-        atcmd_setOptions(atcmd__setLockModeAuto, sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
-        atcmd_tryInvokeAutoLockWithOptions("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
+        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
+        atcmd_tryInvokeWithOptions("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
         break;
 
     case protocol_ssl:
-        atcmd_setOptions(atcmd__setLockModeAuto, sckt__defaultOpenTimeoutMS, S_sslOpenCompleteParser);
-        atcmd_tryInvokeAutoLockWithOptions("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
+        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_sslOpenCompleteParser);
+        atcmd_tryInvokeWithOptions("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
         break;
     }
     // await result of open from inside switch() above
@@ -249,8 +249,8 @@ bool sckt_getState(scktCtrl_t *sckt)
 {
     ASSERT(sckt->ctrlMagic != streams__ctrlMagic, srcfile_sckt_c);
 
-    atcmd_setOptions(atcmd__setLockModeAuto, atcmd__useDefaultTimeout, S_socketStatusParser);
-    if (!atcmd_tryInvokeOptions("AT+QISTATE=1,%d", sckt->dataCntxt))
+    atcmd_setOptions(atcmd__defaultTimeoutMS, S_socketStatusParser);
+    if (!atcmd_tryInvokeWithOptions("AT+QISTATE=1,%d", sckt->dataCntxt))
         return resultCode__conflict;
 
     return atcmd_awaitResult() == resultCode__success;
@@ -273,8 +273,8 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
     // AT+QISEND command initiates send by signaling we plan to send dataSz bytes on a socket,
     // send has subcommand to actual transfer the bytes, so don't automatically close action cmd
 
-    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd_txDataPromptParser);
-    if (atcmd_awaitLock(atcmd__useDefaultTimeout))
+    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd_txDataPromptParser);
+    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
     {
         atcmd_invokeReuseLock("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz);      // reusing manual lock
         atResult = atcmd_awaitResult();                                             // waiting for data prompt, leaving action open on return if sucessful
@@ -282,7 +282,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
         // await data prompt atResult successful, now send data sub-command to actually transfer data, now automatically close action after data sent
         if (atResult == resultCode__success)
         {
-            atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, S_socketSendCompleteParser);
+            atcmd_setOptions(atcmd__defaultTimeoutMS, S_socketSendCompleteParser);
             atcmd_sendCmdData(data, dataSz, "");    // parse for BGx send complete
             atResult = atcmd_awaitResult();
             scktCtrl->statsTxCnt++;
@@ -373,7 +373,7 @@ void S_scktDoWork()
             }
 
             /* Check for IOP buffer page with data and RX idle, pull data forward to finish the IRD segment */
-            if  (rxPageDataAvailable(bufPtr, bufPtr->iopPg) && IOP_detectRxIdle())
+            if  (rxPageDataAvailable(bufPtr, bufPtr->iopPg) && IOP_getRxIdleDuration() > 200)
             {
                 PRINTF(dbgColor__cyan, "Idle sckt=%d, swapToPg=%d\r", dataCntxt, bufPtr->iopPg);
                 IOP_swapRxBufferPage(bufPtr);                                       // pull page forward
@@ -401,7 +401,6 @@ void S_scktDoWork()
      *----------------------------------------------------------------------------------------------------*/
     if (!atcmd_isLockActive() && iopPtr->scktMap)                               // if no ATCMD underway AND there are sockets open 
     {
-
         iopPtr->scktLstWrk = ++iopPtr->scktLstWrk % dataContext_cnt;            // IRD fairness: if mult sckts. Skip last, get next possible context
         uint8_t nextIrd;
         for (uint8_t i = 0; i < dataContext_cnt; i++)
@@ -411,7 +410,7 @@ void S_scktDoWork()
 
             if (iopPtr->scktMap & 0x01 << nextIrd)                              // socket is OPEN
             {
-                ASSERT_W(!pElapsed(scktPtr->doWorkLastTck, IOP_rxPageFillTimeout(&(scktPtr->recvBufCtrl))), srcfile_sckt_c, "doWork freq slow:bffr ovrflw risk");
+                ASSERT_W(!pElapsed(scktPtr->doWorkLastTck, IOP__rxDefaultTimeout), srcfile_sckt_c, "doWork freq slow:bffr ovrflw risk");
                 scktPtr->doWorkLastTck = pMillis();                             // last check for URC\data pending check cycle
 
                 if (scktPtr->dataPending)                                       // socket has data reported (BGx URC)
@@ -457,7 +456,7 @@ static bool S_requestIrdData(dataContext_t dataCntx, uint16_t reqstSz, bool appl
         snprintf(irdCmd, 24, "AT+QIRD=%d,%d", dataCntx, requestedSz);
     // PRINTF(dbgColor__white, "rqstIrd lck=%d, cmd=%s\r", applyLock, irdCmd);
 
-    if (applyLock && !atcmd_awaitLock(atcmd__useDefaultTimeout))
+    if (applyLock && !atcmd_awaitLock(atcmd__defaultTimeoutMS))
         return false;
 
     ((iop_t*)g_ltem.iop)->rxStreamCtrl = ((iop_t*)g_ltem.iop)->streamPeers[dataCntx];       // set IOP in data mode

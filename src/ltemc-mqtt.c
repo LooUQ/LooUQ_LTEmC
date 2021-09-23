@@ -130,8 +130,8 @@ mqttStatus_t mqtt_getStatus(mqttCtrl_t *mqttCtrl, const char *host)
     mqttCtrl->state = mqttStatus_closed;
 
     // connect check first to short-circuit open test
-    atcmd_setOptions(atcmd__setLockModeAuto, PERIOD_FROM_SECONDS(5), S_mqttConnectStatusParser);
-    if (atcmd_tryInvokeAutoLockWithOptions("AT+QMTCONN?"))
+    atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttConnectStatusParser);
+    if (atcmd_tryInvokeWithOptions("AT+QMTCONN?"))
     {
         resultCode_t atResult = atcmd_awaitResult();
         if (atResult == 203)
@@ -142,8 +142,8 @@ mqttStatus_t mqtt_getStatus(mqttCtrl_t *mqttCtrl, const char *host)
 
     if (mqttCtrl->state != mqttStatus_connected || *host != '\0')       // if not connected or need host verification: check open
     {
-        atcmd_setOptions(atcmd__setLockModeAuto, PERIOD_FROM_SECONDS(5), S_mqttOpenStatusParser);
-        if (atcmd_tryInvokeAutoLockWithOptions("AT+QMTOPEN?"))
+        atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttOpenStatusParser);
+        if (atcmd_tryInvokeWithOptions("AT+QMTOPEN?"))
         {
             resultCode_t atResult = atcmd_awaitResult();
             if (atResult == resultCode__success)
@@ -207,8 +207,8 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port)
     }
 
     // TYPICAL: AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
-    atcmd_setOptions(atcmd__setLockModeAuto, PERIOD_FROM_SECONDS(45), S_mqttOpenCompleteParser);
-    if (atcmd_tryInvokeAutoLockWithOptions("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, host, port))
+    atcmd_setOptions(PERIOD_FROM_SECONDS(45), S_mqttOpenCompleteParser);
+    if (atcmd_tryInvokeWithOptions("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, host, port))
     {
         resultCode_t atResult = atcmd_awaitResult();
         if (atResult >= resultCode__success && atResult <= resultCode__successMax)      // opened mqtt server
@@ -298,13 +298,13 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, const char *clientId, const char
             return resultCode__internalError;
     }
 
-    atcmd_setOptions(atcmd__setLockModeAuto, PERIOD_FROM_SECONDS(60), S_mqttConnectCompleteParser);
+    atcmd_setOptions(PERIOD_FROM_SECONDS(60), S_mqttConnectCompleteParser);
 
     /* MQTT connect command can be quite large, using local buffer here rather than bloat global cmd\core buffer */
     char connectCmd[384] = {0};
     snprintf(connectCmd, sizeof(connectCmd), "AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->dataCntxt, clientId, username, password);
 
-    if (atcmd_awaitLock(atcmd__useDefaultTimeout))                  // to use oversized buffer need sendCmdData(), which doesn't acquire lock
+    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))                  // to use oversized buffer need sendCmdData(), which doesn't acquire lock
     {
         atcmd_sendCmdData(connectCmd, strlen(connectCmd), "\r");
         atResult = atcmd_awaitResult();                             // in autolock mode, so this will release lock
@@ -362,8 +362,8 @@ uint8_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos)
     // if sucessful, the topic's subscription will overwrite the IOP peer map without issue as well (same bitmap value)
 
     // snprintf(actionCmd, MQTT_ACTION_CMD_SZ, "AT+QMTSUB=%d,%d,\"%s\",%d", mqtt->dataCntxt, ++mqtt->msgId, topic, qos);
-    atcmd_setOptions(atcmd__setLockModeAuto, PERIOD_FROM_SECONDS(15), S_mqttSubscribeCompleteParser);
-    if (atcmd_tryInvokeAutoLockWithOptions("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->dataCntxt, ++mqttCtrl->msgId, topic, qos))
+    atcmd_setOptions(PERIOD_FROM_SECONDS(15), S_mqttSubscribeCompleteParser);
+    if (atcmd_tryInvokeWithOptions("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->dataCntxt, ++mqttCtrl->msgId, topic, qos))
     {
         resultCode_t atResult = atcmd_awaitResult();
         if (atResult == resultCode__success)
@@ -430,8 +430,8 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
     char msgText[mqtt__messageSz];
     resultCode_t atResult = resultCode__conflict;               // assume lock not obtainable, conflict
 
-    atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(5), atcmd_txDataPromptParser);
-    if (atcmd_awaitLock(atcmd__useDefaultTimeout))
+    atcmd_setOptions(PERIOD_FROM_SECONDS(5), atcmd_txDataPromptParser);
+    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
     {
         uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->msgId++;
         atcmd_invokeReuseLock("AT+QMTPUB=%d,%d,%d,0,\"%s\"", mqttCtrl->dataCntxt, msgId, qos, topic);
@@ -441,7 +441,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
         if (atResult == resultCode__success)                    // wait for data prompt for data, now complete sub-command to actually transfer data
         {
             pubstate++;
-            atcmd_setOptions(atcmd__setLockModeManual, mqtt__publishTimeout, S_mqttPublishCompleteParser);
+            atcmd_setOptions(mqtt__publishTimeout, S_mqttPublishCompleteParser);
             atcmd_sendCmdData(message, strlen(message), ASCII_CtrlZ_STR);
             atResult = atcmd_awaitResult();
         }

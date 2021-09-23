@@ -104,10 +104,10 @@ void setup() {
 
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
-    uint8_t cntxtCnt = ntwk_getActivePdpCntxtCnt();
+    uint8_t cntxtCnt = ntwk_fetchActivePdpCntxts();
     if (cntxtCnt == 0)
     {
-        ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT);
+        ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT, pdpCntxtProtocolType_IPV4, "");
     }
 
     // create a socket control and open it

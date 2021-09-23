@@ -72,7 +72,8 @@ void ntwk_create()
 
     for (size_t i = 0; i < sizeof(networkPtr->pdpCntxts)/sizeof(pdpCntxt_t); i++)
     {   
-        networkPtr->pdpCntxts[i].ipType = pdpCntxtIpType_IPV4;
+        networkPtr->pdpCntxts[i].protoType = pdpCntxtProtocolType_IPV4;
+        memset(networkPtr->pdpCntxts[i].ipAddress, 0, sizeof(networkPtr->pdpCntxts[i].ipAddress));
     }
     g_ltem.network = networkPtr;
 }
@@ -107,21 +108,20 @@ networkOperator_t ntwk_awaitOperator(uint16_t waitDurSeconds)
 }
 
 
-
 /**
  *	\brief Get count of APN active data contexts from BGx.
  * 
  *  \return Count of active data contexts (BGx max is 3).
  */
-uint8_t ntwk_getActivePdpCntxtCnt()
+uint8_t ntwk_fetchActivePdpCntxts()
 {
     #define IP_QIACT_SZ 8
 
     uint8_t apnIndx = 0;
 
-    atcmd_setOptions(atcmd__setLockModeManual,  atcmd__useDefaultTimeout, s_contextStatusCompleteParser);
-    if (atcmd_awaitLock(atcmd__useDefaultTimeout))
+    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
     {
+        atcmd_setOptions(atcmd__defaultTimeoutMS, s_contextStatusCompleteParser);
         atcmd_invokeReuseLock("AT+QIACT?");
         resultCode_t atResult = atcmd_awaitResult();
 
@@ -150,13 +150,13 @@ uint8_t ntwk_getActivePdpCntxtCnt()
             nextContext = strstr(atcmd_getLastResponse(), "+QIACT: ");
 
             // no contexts returned = none active (only active contexts are returned)
-            while (nextContext != NULL)                             // now parse each pdp context entry
+            while (nextContext != NULL && apnIndx < NTWK__pdpContextCnt)                            // now parse each pdp context entry
             {
                 landmarkAt = nextContext;
                 ((network_t*)g_ltem.network)->pdpCntxts[apnIndx].contextId = strtol(landmarkAt + landmarkSz, &continuePtr, 10);
-                continuePtr = strchr(++continuePtr, ',');             // skip context_state: always 1
-                ((network_t*)g_ltem.network)->pdpCntxts[apnIndx].ipType = (int)strtol(continuePtr + 1, &continuePtr, 10);
+                continuePtr = strchr(++continuePtr, ',');                                           // skip context_state: always 1
 
+                ((network_t*)g_ltem.network)->pdpCntxts[apnIndx].protoType = (int)strtol(continuePtr + 1, &continuePtr, 10);
                 continuePtr = S_grabToken(continuePtr + 2, '"', tokenBuf, TOKEN_BUF_SZ);
                 if (continuePtr != NULL)
                 {
@@ -180,7 +180,7 @@ uint8_t ntwk_getActivePdpCntxtCnt()
  * 
  *  \return Pointer to PDP context info in active context table, NULL if not active
  */
-pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
+pdpCntxt_t *ntwk_getPdpCntxtInfo(uint8_t cntxtId)
 {
     for (size_t i = 0; i < NTWK__pdpContextCnt; i++)
     {
@@ -195,36 +195,55 @@ pdpCntxt_t *ntwk_getPdpCntxt(uint8_t cntxtId)
  *	\brief Activate PDP Context/APN.
  * 
  *  \param cntxtId [in] - The APN to operate on. Typically 0 or 1
+ *  \param protoType [in] - The PDP protocol IPV4, IPV6, IPV4V6 (both).
+ *  \param pApn [in] - The APN name if required by network carrier.
  */
-bool ntwk_activatePdpContext(uint8_t cntxtId)
+bool ntwk_activatePdpContext(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, const char *pApn)
 {
-    if (ntwk_getPdpCntxt(cntxtId) != NULL)
+    if (ntwk_getPdpCntxtInfo(cntxtId) != NULL)
         return true;
 
-    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, s_contextStatusCompleteParser);
-
-    if (atcmd_tryInvokeAutoLockWithOptions("AT+CGDCONT=%d,\"IP\"\r", cntxtId))
+    bool pdpActivated = false;
+    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
     {
+        atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
+        atcmd_invokeReuseLock("AT+QICSGP=%d,%d,\"%s\"\r", cntxtId, protoType, pApn);
+
         resultCode_t atResult = atcmd_awaitResult();
-        if ( atResult == resultCode__success)
+        if (atResult == resultCode__success)
         {
-            if (atcmd_tryInvokeAutoLockWithOptions("AT+QIACT=%d\r", cntxtId))
-            {
-                resultCode_t atResult = atcmd_awaitResult();
-                if ( atResult == resultCode__success)
-                    ntwk_getActivePdpCntxtCnt();
-            }
+            atcmd_setOptions(atcmd__defaultTimeoutMS, s_contextStatusCompleteParser); 
+            atcmd_invokeReuseLock("AT+QIACT=%d\r", cntxtId);
+            atResult = atcmd_awaitResult();
+            if (atResult == resultCode__success)
+                pdpActivated = true;
         }
     }
     atcmd_close();
 
-    if (ntwk_getPdpCntxt(cntxtId) != NULL)
+    if (pdpActivated)
+        ntwk_fetchActivePdpCntxts();
+
+    if (ntwk_getPdpCntxtInfo(cntxtId) != NULL)
         return true;
 
+    // if fell through, PDP not available. Clear network operator too, next attempt may change network
     memset(((network_t*)g_ltem.network)->networkOperator, 0, sizeof(networkOperator_t));
     return false;
 }
 
+
+/**
+ *	\brief Activate PDP Context/APN requiring authentication.
+ * 
+ *  \param cntxtId [in] - The APN to operate on. Typically 0 or 1
+ *  \param pUserName [in] - String with user name
+ *  \param pPW [in] - String with password
+ *  \param authMethod [in] - Enum specifying the type of authentication expected by network
+ */
+bool ntwk_activatePdpContextWithAuth(uint8_t cntxtId, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod)
+{
+}
 
 
 /**
@@ -234,39 +253,14 @@ bool ntwk_activatePdpContext(uint8_t cntxtId)
  */
 void ntwk_deactivatePdpContext(uint8_t cntxtId)
 {
-    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, s_contextStatusCompleteParser);
-    if (atcmd_awaitLock(atcmd__useDefaultTimeout))
+    atcmd_setOptions(atcmd__defaultTimeoutMS, s_contextStatusCompleteParser);
+    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
     {
         if (atcmd_tryInvokeOptions("AT+QIDEACT=%d\r", cntxtId))
         {
             resultCode_t atResult = atcmd_awaitResult();
             if ( atResult == resultCode__success)
                 ntwk_getActivePdpContexts();
-        }
-    }
-}
-
-
-/**
- *	\brief Reset (deactivate/activate) all network APNs.
- *
- *  NOTE: activate and deactivate have side effects, they internally call getActiveContexts prior to return
- */
-void ntwk_resetPdpContexts()
-{
-    uint8_t activeIds[NTWK__pdpContextCnt] = {0};
-
-    for (size_t i = 0; i < NTWK__pdpContextCnt; i++)                         // preserve initial active APN list
-    {
-        if(((network_t*)g_ltem.network)->pdpCntxts[i].contextId != 0)
-            activeIds[i] = ((network_t*)g_ltem.network)->pdpCntxts[i].contextId;
-    }
-    for (size_t i = 0; i < NTWK__pdpContextCnt; i++)                         // now, cycle the active contexts
-    {
-        if(activeIds[i] != 0)
-        {
-            ntwk_deactivatePdpContext(activeIds[i]);
-            ntwk_activatePdpContext(activeIds[i]);
         }
     }
 }
@@ -301,10 +295,10 @@ static networkOperator_t s_getNetworkOperator()
     if (*((network_t*)g_ltem.network)->networkOperator->operName != 0)
         return *((network_t*)g_ltem.network)->networkOperator;
 
-    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd__useDefaultOKCompletionParser);
-    if (!atcmd_awaitLock(atcmd__useDefaultTimeout))
+    if (!atcmd_awaitLock(atcmd__defaultTimeoutMS))
         goto finally;
 
+    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
     atcmd_invokeReuseLock("AT+COPS?");
     if (atcmd_awaitResult() == resultCode__success)
     {
@@ -353,8 +347,8 @@ static char *S_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t to
     if (tokenSz == 0)
         return NULL;
 
-    memset(tokenBuf, 0, tokenSz);
-    strncpy(tokenBuf, source, MIN(tokenSz, tokenBufSz-1));
+    memset(tokenBuf, 0, tokenBufSz);
+    memcpy(tokenBuf, source, MIN(tokenSz, tokenBufSz-1));
     return delimAt + 1;
 }
 

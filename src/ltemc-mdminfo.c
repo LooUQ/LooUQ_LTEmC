@@ -67,63 +67,66 @@ static resultCode_t S_iccidCompleteParser(const char *response, char **endptr);
 */
 modemInfo_t mdminfo_ltem()
 {
-    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd__useDefaultOKCompletionParser);
-    if (!atcmd_awaitLock(atcmd__useDefaultTimeout))
+    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    {
+        atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
+
+        if (((modemInfo_t*)g_ltem.modemInfo)->imei[0] == 0)
+        {
+            atcmd_invokeReuseLock("AT+GSN");
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                strncpy(((modemInfo_t*)g_ltem.modemInfo)->imei, atcmd_getLastResponse() + 2, IMEI_SIZE);        // skip leading /r/n
+            }
+        }
+
+        if (((modemInfo_t*)g_ltem.modemInfo)->fwver[0] == 0)
+        {
+            atcmd_invokeReuseLock("AT+QGMR");
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                char *term;
+                term = strstr(atcmd_getLastResponse() + 2, "\r\n");
+                *term = '\0';
+                strcpy(((modemInfo_t*)g_ltem.modemInfo)->fwver, atcmd_getLastResponse() + 2);
+                term = strchr(((modemInfo_t*)g_ltem.modemInfo)->fwver, '_');
+                *term = ' ';
+            }
+        }
+
+        if (((modemInfo_t*)g_ltem.modemInfo)->mfgmodel[0] == 0)
+        {
+            atcmd_invokeReuseLock("ATI");
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                char *term;
+                term = strstr(atcmd_getLastResponse() + 2, "\r\nRev");
+                *term = '\0';
+                strcpy(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, atcmd_getLastResponse() + 2);
+                term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\r');
+                *term = ':';
+                term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\n');
+                *term = ' ';
+            }
+        }
+
+        if (((modemInfo_t*)g_ltem.modemInfo)->iccid[0] == 0)
+        {
+            atcmd_setOptions(atcmd__defaultTimeoutMS, S_iccidCompleteParser);
+            atcmd_invokeReuseLock("AT+ICCID");
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                strncpy(((modemInfo_t*)g_ltem.modemInfo)->iccid, atcmd_getLastResponse() + ICCID_OFFSET, ICCID_SIZE);
+            }
+        }
+
+        atcmd_close();
+        return *((modemInfo_t*)g_ltem.modemInfo);
+    }
+    else
     {
         return *((modemInfo_t*)g_ltem.modemInfo);
     }
-
-    if (((modemInfo_t*)g_ltem.modemInfo)->imei[0] == 0)
-    {
-        atcmd_invokeReuseLock("AT+GSN");
-        if (atcmd_awaitResult() == resultCode__success)
-        {
-            strncpy(((modemInfo_t*)g_ltem.modemInfo)->imei, atcmd_getLastResponse() + 2, IMEI_SIZE);        // skip leading /r/n
-        }
-    }
-
-    if (((modemInfo_t*)g_ltem.modemInfo)->fwver[0] == 0)
-    {
-        atcmd_invokeReuseLock("AT+QGMR");
-        if (atcmd_awaitResult() == resultCode__success)
-        {
-            char *term;
-            term = strstr(atcmd_getLastResponse() + 2, "\r\n");
-            *term = '\0';
-            strcpy(((modemInfo_t*)g_ltem.modemInfo)->fwver, atcmd_getLastResponse() + 2);
-            term = strchr(((modemInfo_t*)g_ltem.modemInfo)->fwver, '_');
-            *term = ' ';
-        }
-    }
-
-    if (((modemInfo_t*)g_ltem.modemInfo)->mfgmodel[0] == 0)
-    {
-        atcmd_invokeReuseLock("ATI");
-        if (atcmd_awaitResult() == resultCode__success)
-        {
-            char *term;
-            term = strstr(atcmd_getLastResponse() + 2, "\r\nRev");
-            *term = '\0';
-            strcpy(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, atcmd_getLastResponse() + 2);
-            term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\r');
-            *term = ':';
-            term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\n');
-            *term = ' ';
-        }
-    }
-
-    if (((modemInfo_t*)g_ltem.modemInfo)->iccid[0] == 0)
-    {
-        atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, S_iccidCompleteParser);
-        atcmd_invokeReuseLock("AT+ICCID");
-        if (atcmd_awaitResult() == resultCode__success)
-        {
-            strncpy(((modemInfo_t*)g_ltem.modemInfo)->iccid, atcmd_getLastResponse() + ICCID_OFFSET, ICCID_SIZE);
-        }
-    }
-
-    atcmd_close();
-    return *((modemInfo_t*)g_ltem.modemInfo);
 }
 
 

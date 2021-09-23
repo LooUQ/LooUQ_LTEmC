@@ -91,10 +91,10 @@ void setup() {
         appNotifCB(255, 0, 0, "Timout (30s) waiting for cellular network.");
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
 
-    uint8_t cntxtCnt = ntwk_getActivePdpCntxtCnt();
+    uint8_t cntxtCnt = ntwk_fetchActivePdpCntxts();
     if (cntxtCnt == 0)
     {
-        ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT);
+        ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT, pdpCntxtProtocolType_IPV4, "");
     }
 
     /* Basic connectivity established, moving on to HTTPS setup */

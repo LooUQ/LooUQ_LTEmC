@@ -140,7 +140,7 @@ void loop()
 ========================================================================================================================= */
 
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
 {
     if (notifType > 200)
     {

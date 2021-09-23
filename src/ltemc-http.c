@@ -216,7 +216,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
     // uint32_t timeoutMS = timeoutSec * 1000;
     resultCode_t atResult;
 
-    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd__useDefaultOKCompletionParser);
+    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
     if (atcmd_awaitLock(PERIOD_FROM_SECONDS(timeoutSec)))
     {
         if (returnResponseHdrs)
@@ -274,7 +274,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
         atcmd_reset(false);                                                         // reset atCmd control struct WITHOUT clearing lock
-        atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(timeoutSec), S_httpGetStatusParser);
+        atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSec), S_httpGetStatusParser);
 
         char httpRequestCmd[20];
         snprintf(httpRequestCmd, sizeof(httpRequestCmd), "AT+QHTTPGET=%d", timeoutSec);
@@ -325,7 +325,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
     // uint32_t timeoutMS = timeoutSec * 1000;
     resultCode_t atResult;
 
-    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd__useDefaultOKCompletionParser);
+    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
     if (atcmd_awaitLock(PERIOD_FROM_SECONDS(timeoutSec)))
     {
         if (returnResponseHdrs)
@@ -380,7 +380,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
         atcmd_reset(false);                                                                     // reset atCmd control struct WITHOUT clearing lock
-        atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(timeoutSec), atcmd_connectPromptParser);
+        atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSec), atcmd_connectPromptParser);
 
         char httpRequestCmd[40];
         uint16_t httpRequestLength = postDataSz;
@@ -391,7 +391,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
 
         if (atcmd_awaitResult() == resultCode__success)                                 // wait for "CONNECT", the status result can be 5,10 seconds or longer
         {
-            atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(timeoutSec), S_httpPostStatusParser);
+            atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSec), S_httpPostStatusParser);
             atcmd_sendCmdData(postData, postDataSz, "");
             atResult = atcmd_awaitResult();
             if (atResult == resultCode__success)                                        // wait for "+QHTTPPOST trailer
@@ -423,10 +423,6 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
  *	\brief Performs a HTTP POST page web request.
  *
  *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	\param relativeUrl [in] - URL, relative to the host. If none, can be provided as "" or "/" ()
- *  \param returnResponseHdrs [in] - if requested (true) the page response stream will prefix the page data
- *  \param postData [in] - Pointer to char buffer with POST content
- *  \param postDataSz [in] - Size of the POST content reference by *postData
  *	\param timeoutSec [in] - the number of seconds to wait (blocking) for a page response
  *
  *  \return true if POST request completed
@@ -463,7 +459,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
     * ISR will be firing and filling buffers, this block needs to efficiently send them to appl
     *-----------------------------------------------------------------------------------------------*/
 
-    atcmd_setOptions(atcmd__setLockModeManual, timeoutMS, atcmd_connectPromptParser);
+    atcmd_setOptions(timeoutMS, atcmd_connectPromptParser);
     if (atcmd_awaitLock(timeoutMS))
     {
         iopPtr->rxStreamCtrl = httpCtrl;                            // put IOP in data mode
@@ -595,14 +591,14 @@ static uint16_t S_setUrl(const char *url, uint16_t timeoutSec)
 {
     uint16_t atResult;
 
-    atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(10), atcmd_connectPromptParser);
+    atcmd_setOptions(PERIOD_FROM_SECONDS(10), atcmd_connectPromptParser);
     uint8_t urlState = 0;
     atcmd_invokeReuseLock("AT+QHTTPURL=%d,%d", strlen(url), timeoutSec);
     atResult = atcmd_awaitResult();
     if (atResult == resultCode__success)                                            // waiting for URL prompt "CONNECT"
     {
         urlState++;
-        atcmd_setOptions(atcmd__setLockModeManual, PERIOD_FROM_SECONDS(10), atcmd__useDefaultOKCompletionParser); 
+        atcmd_setOptions(PERIOD_FROM_SECONDS(10), atcmd__useDefaultOKCompletionParser); 
         atcmd_sendCmdData(url, strlen(url), "");                                    // wait for BGx OK (send complete) 
         atResult = atcmd_awaitResult();
         if (atResult == resultCode__success)

@@ -71,7 +71,7 @@ ltemDevice_t g_ltem;
  *	\brief Initialize the LTEm1 modem.
  *
  *	\param ltem_config [in] - The LTE modem gpio pin configuration.
- *  \param appNotifyCB [in] - If supplied (not NULL), this function will be invoked for significant LTEm1 events.
+ *  \param eventNotifCallback [in] - If supplied (not NULL), this function will be invoked for significant LTEm1 events.
  */
 void ltem_create(const ltemPinConfig_t ltem_config, eventNotifFunc_t eventNotifCallback)
 {
@@ -92,7 +92,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, eventNotifFunc_t eventNotifC
 
     IOP_create();
     g_ltem.atcmd = calloc(1, sizeof(atcmd_t));
-    atcmd_setOptions(atcmd__setLockModeAuto, ATCMD__defaultTimeoutMS, atcmd_okResultParser);
+    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd_okResultParser);
     atcmd_reset(true);
     g_ltem.cancellationRequest = false;
 
@@ -234,7 +234,7 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 /**
  *	\brief Registers the address (void*) of your application yield callback handler.
  * 
- *  \param yieldCb_func [in] Callback function in application code to be invoked when LTEmC is in await section.
+ *  \param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
 void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 {
@@ -245,7 +245,7 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 /**
  *	\brief Registers the address (void*) of your application event nofication callback handler.
  * 
- *  \param yieldCb_func [in] Callback function in application code to be invoked when LTEmC is in await section.
+ *  \param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
 void ltem_setEventNotifCallback(eventNotifFunc_t eventNotifCallback)
 {

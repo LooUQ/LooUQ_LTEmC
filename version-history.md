@@ -1,6 +1,20 @@
 # LTEmC Version History
 #### Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
 
+## v2.2.0
+### Enhancements to network module for specification of APN name, PDP IP type (v4\v6\both) username\password, authentication method
+*   Changed signatures for ntwk functions for activate PDP and get active contexts
+*   Enhanced ntwk PDP options
+*   Updates to atcmd functions
+    *   Made atcmd_getResult() public to allow for deferred AT response retrieval
+#### Breaking Changes
+*   atcmd functions
+    *   Removed locking option from atcmd_setOptions()
+    *   Changed atcmd_tryInvokeAutoLockWithOptions() to atcmd_tryInvokeWithOptions()
+*   ntwk
+    * Changed ntwk_getActivePdpCntxtCnt() to ntwk_fetchActivePdpCntxts()
+    * Added two new parameters to ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT, pdpCntxtProtocolType_IPV4, "yourAPNname")
+
 ## v2.1.1
 ### Fixes to HTTP and network modules
 *   Updated network to ensure network is IPV4. Future version will allow for complete configurability of the APN\PDP parameters

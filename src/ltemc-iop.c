@@ -53,7 +53,7 @@
 
 #pragma region Header
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -212,7 +212,7 @@ uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate)
 
 
 /**
- *	\brief Check for RX progress\idle.
+ *	\brief Check for RX progress/idle.
  *
  *  \return Duration since last fill level change detected; returns 0 if a change is detected since last call
  */

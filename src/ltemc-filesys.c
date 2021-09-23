@@ -47,14 +47,14 @@ fileInfoResult_t filsys_info()
     resultCode_t atResult;
     char *continuePtr;
 
-    atcmd_setOptions(atcmd__setLockModeManual, atcmd__useDefaultTimeout, atcmd__useDefaultOKCompletionParser);
-    if (ATCMD_awaitLock(atcmd__useDefaultTimeout))
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         fileResult.resultCode = resultCode__conflict;                       // failed to get lock
         return fileResult;
     }
 
     // first get file system info
+    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
     atcmd_invokeNoLock("AT+QFLDS=\"UFS\"");                                 // reusing existing lock
     atResult = atcmd_awaitResult();
     if (atResult != RESULT_CODE_SUCCESS)
@@ -125,7 +125,7 @@ fileOpenResult_t filsys_open(const char* fileName, fileOpenMode_t openMode, file
     resultCode_t atResult;
     char *continuePtr;
 
-    if (!ATCMD_awaitLock(atcmd__useDefaultTimeout))
+    if (!ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         return fileResult;
     }
@@ -184,7 +184,7 @@ filePositionResult_t filsys_getPosition(uint16_t fileHandle)
     resultCode_t atResult;
     char *continuePtr;
 
-    if (ATCMD_awaitLock(atcmd__useDefaultTimeout))
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         fileResult.resultCode = resultCode__conflict;
         return fileResult;

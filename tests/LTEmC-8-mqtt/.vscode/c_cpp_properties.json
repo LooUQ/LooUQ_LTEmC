@@ -18,10 +18,10 @@
                 "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\LooUQ-LTEmC\\src",
                 "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\LooUQ-DeviceCommon\\src",
                 "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\**",
-                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.2\\**"
+                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.4\\**"
             ],
             "forcedInclude": [
-                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.2\\cores\\arduino\\Arduino.h"
+                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.4\\cores\\arduino\\Arduino.h"
             ],
             "cStandard": "c99",
             "cppStandard": "c++11",

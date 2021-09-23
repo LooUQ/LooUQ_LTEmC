@@ -33,7 +33,7 @@
 
 enum 
 {
-    NTWK__pdpContextCnt = 3,
+    NTWK__pdpContextCnt = 2,
     NTWK__operatorNameSz = 20
 };
 
@@ -43,9 +43,11 @@ enum
 */
 typedef enum pdpCntxtIpType_tag
 {
-    pdpCntxtIpType_IPV4 = 1,              ///< IP v4, 32-bit address (ex: 192.168.37.52)
-    pdpCntxtIpType_IPV6 = 2               ///< IP v6, 128-bit address (ex: 2001:0db8:0000:0000:0000:8a2e:0370:7334)
-} pdpCntxtIpType_t;
+    pdpCntxtProtocolType_IPV4 = 1,              ///< IP v4, 32-bit address (ex: 192.168.37.52)
+    pdpCntxtProtocolType_IPV6 = 2,              ///< IP v6, 128-bit address (ex: 2001:0db8:0000:0000:0000:8a2e:0370:7334)
+    pdpCntxtProtocolType_IPV4V6 = 3,
+    pdpCntxtProtocolType_PPP = 9
+} pdpCntxtProtocolType_t;
 
 
 typedef enum pdpCntxtAuthMethods_tag
@@ -78,9 +80,9 @@ typedef struct networkOperator_tag
 */
 typedef struct pdpCntxt_tag
 {
-    uint8_t contextId;              ///< context ID recognized by the carrier (valid are 1 to 16)
-    pdpCntxtIpType_t ipType;        ///< IPv4 or IPv6
-	char ipAddress[16];             ///< The IP address obtained from the carrier for this context. The IP address of the modem.
+    uint8_t contextId;                  ///< context ID recognized by the carrier (valid are 1 to 16)
+    pdpCntxtProtocolType_t protoType;   ///< IPv4 or IPv6
+	char ipAddress[40];                 ///< The IP address obtained from the carrier for this context. The IP address of the modem.
 } pdpCntxt_t;
 
 
@@ -99,18 +101,16 @@ extern "C"
 {
 #endif // __cplusplus
 
-
 void ntwk_create();
 
 networkOperator_t ntwk_awaitOperator(uint16_t waitDurSeconds);
-uint8_t ntwk_getActivePdpCntxtCnt();
-void ntwk_configPdpCntxt(uint8_t contxtId, pdpCntxtIpType_t ipType, const char *userId, const char *pw, pdpCntxtAuthMethods_t authMethod);
-pdpCntxt_t *ntwk_getPdpCntxt(uint8_t contxtId);
 
-bool ntwk_activatePdpContext(uint8_t contxtId);
+bool ntwk_activatePdpContext(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, const char *pApn);
+bool ntwk_activatePdpContextWithAuth(uint8_t cntxtId, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
 void ntwk_deactivatePdpContext(uint8_t contxtId);
-void ntwk_resetPdpContexts();
 
+uint8_t ntwk_fetchActivePdpCntxts();
+pdpCntxt_t *ntwk_getPdpCntxtInfo(uint8_t contxtId);
 
 #ifdef __cplusplus
 }

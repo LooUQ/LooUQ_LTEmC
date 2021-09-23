@@ -139,7 +139,10 @@ void qbg_powerOff()
 void qbg_setOptions()
 {
     atcmd_tryInvoke("AT");
-    atcmd_awaitResult();
+    if (atcmd_awaitResult() != resultCode__success)
+    {
+        ltem_notifyApp(lqNotifType_hardFault, "qbg-start() BGx is non-responsive");             // send notification, maybe app can recover
+    }
 
     // init BGx state
     for (size_t i = 0; i < BGX__initCommandCnt; i++)                                            // sequence through list of start cmds
@@ -147,7 +150,7 @@ void qbg_setOptions()
         if (!S_issueStartCommand(qbg_initCmds[i]))
         {
             ltem_notifyApp(lqNotifType_hardFault, "qbg-start() init sequence failed");          // send notification, maybe app can recover
-            break;
+            while (true) {}                                                                     // should not get here!
         }
     }
 }
@@ -219,21 +222,9 @@ void qbg_setIotOpMode(qbg_nw_iot_mode_t mode)
 
 bool S_issueStartCommand(const char *cmdStr)
 {
-    uint8_t attempts = 0;
-    do
-    {
-        if (atcmd_tryInvoke(cmdStr) && atcmd_awaitResult() == resultCode__success)
-            return true;
-
-        attempts++;
-        PRINTF(dbgColor__warn, "Reseting BGx and retrying start cmd: %s\r", cmdStr);
-        qbg_powerOff();                                                                 // power OFF\ON here to also reset SPI UART
-        qbg_powerOn();
-        IOP_awaitAppReady();
-        
-        atcmd_tryInvoke("AT");                                                  // toss out an empty AT command to flush any debris in the command channel
-        atcmd_awaitResult();
-    } while (attempts <= BGX__initCommandAttempts);
+    atcmd_reset(true);
+    if (atcmd_tryInvoke(cmdStr) && atcmd_awaitResult() == resultCode__success)
+        return true;
 
     return false;
 }
