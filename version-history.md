@@ -1,6 +1,12 @@
 # LTEmC Version History
 #### Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
 
+## v2.3.0
+### Moved radio access technology (RAT) functions to network 
+* Moved functions to ntwk_ module to set RAT allowed (LTE,GSM), RAT scan sequence (GSM,CAT-M1,NB-IOT), and IOP mode (CAT-M1,NB-IOT)
+* RAT functions are beta right now, invoking them will cause BGx to suspend. Future signature and guidance likely in a 2.3.1 release.
+* Added timeout parameter for mqtt_publish() due to variability of network and server responsiveness
+
 ## v2.2.0
 ### Enhancements to network module for specification of APN name, PDP IP type (v4\v6\both) username\password, authentication method
 *   Changed signatures for ntwk functions for activate PDP and get active contexts

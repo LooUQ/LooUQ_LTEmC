@@ -85,6 +85,9 @@ void setup() {
     ltem_create(ltem_pinConfig, appNotifCB);
     ltem_start();
 
+    ntwk_setNwScanMode(ntwk_scanMode_lteonly);
+    ntwk_setIotOpMode(ntwk_iotMode_m1);
+
     PRINTF(dbgColor__none, "Waiting on network...\r");
     networkOperator_t networkOp = ntwk_awaitOperator(30000);
     if (strlen(networkOp.operName) == 0)

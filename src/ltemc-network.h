@@ -37,6 +37,27 @@ enum
     NTWK__operatorNameSz = 20
 };
 
+/** 
+ *  \brief Enum describing the mode the BGx module is using to look for available networks (carriers).
+*/
+typedef enum
+{
+    ntwk_scanMode_auto = 0U,         ///< BGx is considering either GSM or LTE carrier connections.
+    ntwk_scanMode_gsmonly = 1U,      ///< GSM only mode: BGx is filtering visible networks and only considering connections to GSM endpoints.
+    ntwk_scanMode_lteonly = 3U       ///< LTE only mode: BGx is filtering visible networks and only considering connections to LTE endpoints.
+} ntwk_scanMode_t;
+
+
+/** 
+ *  \brief Enum describing the available options for an IoT protocol when connecting to the network.
+*/
+typedef enum
+{
+    ntwk_iotMode_m1 = 0U,            ///< CAT-M1 only mode: BGx is filtering visible networks and only considering CAT-M1 connections.
+    ntwk_iotMode_nb1 = 1U,           ///< NB-IOT only mode: BGx is filtering visible networks and only considering NB-IOT connections.
+    ntwk_iotMode_m1nb1 = 2U          ///< The BGx will connect to either a CAT-M1 or NB-IOT network.
+} ntwk_iotMode_t;
+
 
 /** 
  *  \brief Enum of the two available PDP contexts for BGx provided by network carriers.
@@ -101,12 +122,20 @@ extern "C"
 {
 #endif // __cplusplus
 
+const char *ltem_ltemcVersion();
+
 void ntwk_create();
+
+void ntwk_setNwScanSeq(const char *sequence);
+void ntwk_setNwScanMode(ntwk_scanMode_t mode);
+void ntwk_setIotOpMode(ntwk_iotMode_t mode);
+
+void ntwk_getOperators(char *operatorList, uint16_t listSz);
 
 networkOperator_t ntwk_awaitOperator(uint16_t waitDurSeconds);
 
 bool ntwk_activatePdpContext(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, const char *pApn);
-bool ntwk_activatePdpContextWithAuth(uint8_t cntxtId, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
+bool ntwk_activatePdpContextWithAuth(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, const char *pApn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
 void ntwk_deactivatePdpContext(uint8_t contxtId);
 
 uint8_t ntwk_fetchActivePdpCntxts();

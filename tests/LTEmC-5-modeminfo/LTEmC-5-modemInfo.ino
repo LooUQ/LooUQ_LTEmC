@@ -65,6 +65,12 @@ void setup() {
 
     ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
     ltem_start();                                                   // ... and start it
+
+    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_ltemcVersion());
+
+    char opList[300];
+    ntwk_getOperators(opList, sizeof(opList));
+    PRINTF(dbgColor__green, "Ops: %s\r", opList);
 }
 
 

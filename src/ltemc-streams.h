@@ -81,7 +81,8 @@ typedef enum dataContext_tag
     dataContext_3 = 3,
     dataContext_4 = 4,
     dataContext_5 = 5,
-    dataContext_cnt = 6
+    dataContext_cnt = 6,
+    dataContext_none = 0xFF
 } dataContext_t;
 
 

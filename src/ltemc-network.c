@@ -182,10 +182,13 @@ uint8_t ntwk_fetchActivePdpCntxts()
  */
 pdpCntxt_t *ntwk_getPdpCntxtInfo(uint8_t cntxtId)
 {
-    for (size_t i = 0; i < NTWK__pdpContextCnt; i++)
+    if (ltem_chkHwReady())
     {
-        if(((network_t*)g_ltem.network)->pdpCntxts[i].contextId != 0)
-            return &((network_t*)g_ltem.network)->pdpCntxts[i];
+        for (size_t i = 0; i < NTWK__pdpContextCnt; i++)
+        {
+            if(((network_t*)g_ltem.network)->pdpCntxts[i].contextId != 0)
+                return &((network_t*)g_ltem.network)->pdpCntxts[i];
+        }
     }
     return NULL;
 }
@@ -237,12 +240,44 @@ bool ntwk_activatePdpContext(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, 
  *	\brief Activate PDP Context/APN requiring authentication.
  * 
  *  \param cntxtId [in] - The APN to operate on. Typically 0 or 1
+ *  \param protoType [in] - The PDP protocol IPV4, IPV6, IPV4V6 (both).
+ *  \param pApn [in] - The APN name if required by network carrier.
  *  \param pUserName [in] - String with user name
  *  \param pPW [in] - String with password
  *  \param authMethod [in] - Enum specifying the type of authentication expected by network
  */
-bool ntwk_activatePdpContextWithAuth(uint8_t cntxtId, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod)
+bool ntwk_activatePdpContextWithAuth(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, const char *pApn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod)
 {
+    if (ntwk_getPdpCntxtInfo(cntxtId) != NULL)
+        return true;
+
+    bool pdpActivated = false;
+    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    {
+        atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
+        atcmd_invokeReuseLock("AT+QICSGP=%d,%d,\"%s\"\r", cntxtId, protoType, pApn, pUserName, pPW, authMethod);
+
+        resultCode_t atResult = atcmd_awaitResult();
+        if (atResult == resultCode__success)
+        {
+            atcmd_setOptions(atcmd__defaultTimeoutMS, s_contextStatusCompleteParser); 
+            atcmd_invokeReuseLock("AT+QIACT=%d\r", cntxtId);
+            atResult = atcmd_awaitResult();
+            if (atResult == resultCode__success)
+                pdpActivated = true;
+        }
+    }
+    atcmd_close();
+
+    if (pdpActivated)
+        ntwk_fetchActivePdpCntxts();
+
+    if (ntwk_getPdpCntxtInfo(cntxtId) != NULL)
+        return true;
+
+    // if fell through, PDP not available. Clear network operator too, next attempt may change network
+    memset(((network_t*)g_ltem.network)->networkOperator, 0, sizeof(networkOperator_t));
+    return false;
 }
 
 
@@ -264,6 +299,91 @@ void ntwk_deactivatePdpContext(uint8_t cntxtId)
         }
     }
 }
+
+
+/**
+ *  \brief Configure RAT searching sequence
+ * 
+ *     [scanseq] Number format. RAT search sequence.
+ *     (e.g.: 020301 stands for LTE Cat M1 | LTE Cat NB1 | GSM))
+ *      00 Automatic (LTE Cat M1 | LTE Cat NB1 | GSM)
+ *      01 GSM
+ *      02 LTE Cat M1
+ *      03 LTE Cat NB1
+ * 
+ *  \param scanSequence [in] - Character string specifying the RAT scanning order.
+*/
+void ntwk_setNwScanSeq(const char* scanSequence)
+{
+    //AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
+    /*
+    */
+    atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence);
+    atcmd_awaitResult();
+}
+
+
+/** 
+ *  \brief Configure RAT(s) allowed to be searched
+ *     [scanmode] Number format. RAT(s) to be searched.
+ *      0 Automatic
+ *      1 GSM only
+ *      3 LTE only
+ *
+ *  \param scanMode [in] - Enum specifying what cell network to scan.
+*/
+void ntwk_setNwScanMode(ntwk_scanMode_t scanMode)
+{
+    // AT+QCFG="nwscanmode"[,<scanmode>[,<effect>]]
+    atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode);
+    atcmd_awaitResult();
+}
+
+
+/** 
+ *  \brief Configure the network category to be searched under LTE RAT.
+ *    [mode] Number format. Network category to be searched under LTE RAT.
+ *     0 LTE Cat M1
+ *     1 LTE Cat NB1
+ *     2 LTE Cat M1 and Cat NB1
+ *
+ *  \param iotMode [in] - Enum specifying the LTE LPWAN protocol(s) to scan for.
+ */
+void ntwk_setIotOpMode(ntwk_iotMode_t iotMode)
+{
+    atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode);
+    atcmd_awaitResult();
+}
+
+
+/** 
+ *  \brief Development/diagnostic function to retrieve visible operators from radio.
+ * 
+ *  Note: This command can be minutes in response. It is generally considered a command used solely for diagnostics.
+ * 
+ *  \param operatorList [in/out] - Pointer to char buffer to return operator list information retrieved from BGx.
+ *  \param listSz [in] - Length of provided buffer.
+ */
+void ntwk_getOperators(char *operatorList, uint16_t listSz)
+{
+    // AT+COPS=?
+
+    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    {
+        atcmd_setOptions(PERIOD_FROM_SECONDS(180), atcmd__useDefaultOKCompletionParser);
+
+        if (((modemInfo_t*)g_ltem.modemInfo)->imei[0] == 0)
+        {
+            atcmd_invokeReuseLock("AT+COPS=?");
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                strncpy(operatorList, atcmd_getLastResponse() + 9, listSz - 1);
+            }
+        }
+    }
+    atcmd_close();
+}
+
 
 #pragma endregion
 

@@ -54,27 +54,6 @@ typedef enum qbgReadyState_tag
 } qbgReadyState_t;
 
 
-/** 
- *  \brief Enum describing the mode the BGx module is using to look for available networks (carriers).
-*/
-typedef enum
-{
-    qbg_nw_scan_mode_auto = 0U,         ///< BGx is considering either GSM or LTE carrier connections.
-    qbg_nw_scan_mode_gsmonly = 1U,      ///< GSM only mode: BGx is filtering visible networks and only considering connections to GSM endpoints.
-    qbg_nw_scan_mode_lteonly = 3U       ///< LTE only mode: BGx is filtering visible networks and only considering connections to LTE endpoints.
-} qbg_nw_scan_mode_t;
-
-
-/** 
- *  \brief Enum describing the available options for an IoT protocol when connecting to the network.
-*/
-typedef enum
-{
-    qbg_nw_iot_mode_m1 = 0U,            ///< CAT-M1 only mode: BGx is filtering visible networks and only considering CAT-M1 connections.
-    qbg_nw_iot_mode_nb1 = 1U,           ///< NB-IOT only mode: BGx is filtering visible networks and only considering NB-IOT connections.
-    qbg_nw_iot_mode_m1nb1 = 2U          ///< The BGx will connect to either a CAT-M1 or NB-IOT network.
-} qbg_nw_iot_mode_t;
-
 
 #ifdef __cplusplus
 extern "C"
@@ -86,10 +65,6 @@ void qbg_powerOn();
 void qbg_powerOff();
 
 void qbg_setOptions();
-
-void qbg_setNwScanSeq(const char *sequence);
-void qbg_setNwScanMode(qbg_nw_scan_mode_t mode);
-void qbg_setIotOpMode(qbg_nw_iot_mode_t mode);
 
 #ifdef __cplusplus
 }

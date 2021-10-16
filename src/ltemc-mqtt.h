@@ -131,10 +131,10 @@ typedef enum mqttSession_tag
 typedef enum mqttStatus_tag
 {
     mqttStatus_closed = 0,          ///< MQTT is idle, not active.
-    mqttStatus_open = 1,            ///< MQTT is open, open but not connected.
-    mqttStatus_connected = 2,       ///< MQTT is connected, in session with server.
-    mqttStatus_pending = 200,       ///< MQTT is attempting connect (BGx MQTT problem area that needs to be detected, reset BGx if stays here).
-    mqttStatus_invalidHost = 201
+    mqttStatus_invalidHost = 1,
+    mqttStatus_open = 2,            ///< MQTT is open, open but not connected.
+    mqttStatus_pending = 3,         ///< MQTT is attempting connect (BGx MQTT problem area that needs to be detected, reset BGx if stays here).
+    mqttStatus_connected = 4        ///< MQTT is connected, in session with server.
 } mqttStatus_t;
 
 
@@ -217,11 +217,11 @@ void mqtt_close(mqttCtrl_t *mqttCtrl);
 uint8_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos);
 resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic);
 
+resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSeconds);
+
 mqttStatus_t mqtt_getStatus(mqttCtrl_t *mqttCtrl, const char *host);
+uint8_t mqtt_getContextState(dataContext_t cntxt, const char *host);
 uint16_t mqtt_getMsgId(mqttCtrl_t *mqttCtrl);
-
-resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message);
-
 uint16_t mqtt_getLastBufferReqd(mqttCtrl_t *mqttCtrl);
 
 #ifdef __cplusplus

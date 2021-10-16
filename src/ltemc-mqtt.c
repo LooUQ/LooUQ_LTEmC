@@ -114,59 +114,6 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataContext_t dataCntxt, bool useTls
 
 
 /**
- *  \brief Query the status of the MQTT server state.
- * 
- *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  \param host [in] A char string to match with the currently connected server. Host is not checked if empty string passed.
- * 
- *  \returns A mqttStatus_t value indicating the state of the MQTT connection.
-*/
-mqttStatus_t mqtt_getStatus(mqttCtrl_t *mqttCtrl, const char *host)
-{
-    // See BG96_MQTT_Application_Note: AT+QMTOPEN? and AT+QMTCONN?
-
-    ASSERT(mqttCtrl->ctrlMagic == streams__ctrlMagic, srcfile_mqtt_c);      // check for bad pointer into MQTT control
-
-    mqttCtrl->state = mqttStatus_closed;
-
-    // connect check first to short-circuit open test
-    atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttConnectStatusParser);
-    if (atcmd_tryInvokeWithOptions("AT+QMTCONN?"))
-    {
-        resultCode_t atResult = atcmd_awaitResult();
-        if (atResult == 203)
-            mqttCtrl->state = mqttStatus_connected;
-        else if (atResult == 201 || atResult == 202)
-            mqttCtrl->state = mqttStatus_pending;
-    }
-
-    if (mqttCtrl->state != mqttStatus_connected || *host != '\0')       // if not connected or need host verification: check open
-    {
-        atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttOpenStatusParser);
-        if (atcmd_tryInvokeWithOptions("AT+QMTOPEN?"))
-        {
-            resultCode_t atResult = atcmd_awaitResult();
-            if (atResult == resultCode__success)
-            {
-                mqttCtrl->state = mqttCtrl->state == mqttStatus_closed ? mqttStatus_open : mqttCtrl->state;
-                if (*host != '\0')                                  // host matching requested, check modem response host == requested host
-                {
-                    char *hostNamePtr = strchr(atcmd_getLastResponse(), '"');
-                    mqttCtrl->state = hostNamePtr != NULL && strncmp(hostNamePtr + 1, host, strlen(host)) == 0 ? mqttCtrl->state : mqttStatus_invalidHost;
-                }
-            }
-        }
-    }
-    return mqttCtrl->state;
-}
-
-uint16_t mqtt_getMsgId(mqttCtrl_t *mqttCtrl)
-{
-    return mqttCtrl->msgId;
-}
-
-
-/**
  *  \brief Open a remote MQTT server for use.
  * 
  *  \param mqttCtrl [in] MQTT type stream control to operate on.
@@ -419,19 +366,21 @@ resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic)
  *  \param topic [in] - Pointer to the message topic (see your server for topic formatting details).
  *  \param qos [in] - The MQTT QOS to be assigned to sent message.
  *  \param message [in] - Pointer to message to be sent.
+ *  \param timeoutSeconds [in] - Seconds to wait for publish to complete, highly dependent on network and remote server.
  * 
  *  \returns A resultCode_t value indicating the success or type of failure (http status type code).
 */
-resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message)
+resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSeconds)
 {
     uint8_t pubstate = 0;
+    uint32_t timeoutMS = (timeoutSeconds == 0) ? mqtt__publishTimeout : timeoutSeconds * 1000;
 
     // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
     char msgText[mqtt__messageSz];
     resultCode_t atResult = resultCode__conflict;               // assume lock not obtainable, conflict
 
-    atcmd_setOptions(PERIOD_FROM_SECONDS(5), atcmd_txDataPromptParser);
-    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSeconds), atcmd_txDataPromptParser);
+    if (atcmd_awaitLock(timeoutMS))
     {
         uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->msgId++;
         atcmd_invokeReuseLock("AT+QMTPUB=%d,%d,%d,0,\"%s\"", mqttCtrl->dataCntxt, msgId, qos, topic);
@@ -441,7 +390,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
         if (atResult == resultCode__success)                    // wait for data prompt for data, now complete sub-command to actually transfer data
         {
             pubstate++;
-            atcmd_setOptions(mqtt__publishTimeout, S_mqttPublishCompleteParser);
+            atcmd_setOptions(timeoutMS, S_mqttPublishCompleteParser);
             atcmd_sendCmdData(message, strlen(message), ASCII_CtrlZ_STR);
             atResult = atcmd_awaitResult();
         }
@@ -455,6 +404,103 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
         PRINTF(dbgColor__dYellow, "PUB ERROR, state=%d\r", pubstate);
     atcmd_close();
     return atResult;
+}
+
+
+/**
+ *  \brief Query the status of the MQTT server state.
+ * 
+ *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  \param host [in] A char string to match with the currently connected server. Host is not checked if empty string passed.
+ * 
+ *  \returns A mqttStatus_t value indicating the state of the MQTT connection.
+*/
+mqttStatus_t mqtt_getStatus(mqttCtrl_t *mqttCtrl, const char *host)
+{
+    // See BG96_MQTT_Application_Note: AT+QMTOPEN? and AT+QMTCONN?
+
+    ASSERT(mqttCtrl->ctrlMagic == streams__ctrlMagic, srcfile_mqtt_c);      // check for bad pointer into MQTT control
+
+    mqttCtrl->state = mqtt_getContextState(mqttCtrl->dataCntxt, host);
+
+    // // connect check first to short-circuit open test
+    // atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttConnectStatusParser);
+    // if (atcmd_tryInvokeWithOptions("AT+QMTCONN?"))
+    // {
+    //     resultCode_t atResult = atcmd_awaitResult();
+    //     if (atResult == 203)
+    //         mqttCtrl->state = mqttStatus_connected;
+    //     else if (atResult == 201 || atResult == 202)
+    //         mqttCtrl->state = mqttStatus_pending;
+    // }
+
+    // if (mqttCtrl->state != mqttStatus_connected || *host != '\0')       // if not connected or need host verification: check open
+    // {
+    //     atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttOpenStatusParser);
+    //     if (atcmd_tryInvokeWithOptions("AT+QMTOPEN?"))
+    //     {
+    //         resultCode_t atResult = atcmd_awaitResult();
+    //         if (atResult == resultCode__success)
+    //         {
+    //             mqttCtrl->state = mqttCtrl->state == mqttStatus_closed ? mqttStatus_open : mqttCtrl->state;
+    //             if (*host != '\0')                                  // host matching requested, check modem response host == requested host
+    //             {
+    //                 char *hostNamePtr = strchr(atcmd_getLastResponse(), '"');
+    //                 mqttCtrl->state = hostNamePtr != NULL && strncmp(hostNamePtr + 1, host, strlen(host)) == 0 ? mqttCtrl->state : mqttStatus_invalidHost;
+    //             }
+    //         }
+    //     }
+    // }
+    return mqttCtrl->state;
+}
+
+
+uint8_t mqtt_getContextState(dataContext_t cntxt, const char *host)
+{
+    if (!ltem_chkHwReady() || ((iop_t*)g_ltem.iop)->mqttMap == 0)
+        return 0;
+
+    if (cntxt != dataContext_none)
+    {
+        if (!((iop_t*)g_ltem.iop)->mqttMap & 0x01 << cntxt)
+            return 0;
+    }
+
+    // connect check first to short-circuit open test
+    atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttConnectStatusParser);
+    if (atcmd_tryInvokeWithOptions("AT+QMTCONN?"))
+    {
+        resultCode_t atResult = atcmd_awaitResult();
+        if (atResult == 203)
+            return mqttStatus_connected;
+        if (atResult == 201 || atResult == 202)
+            return mqttStatus_pending;
+    }
+
+    atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttOpenStatusParser);
+    if (atcmd_tryInvokeWithOptions("AT+QMTOPEN?"))
+    {
+        resultCode_t atResult = atcmd_awaitResult();
+        if (atResult == resultCode__success)
+        {
+            if (*host != '\0')                                  // host matching requested, check modem response host == requested host
+            {
+                char *hostNamePtr = strchr(atcmd_getLastResponse(), '"');
+                if (hostNamePtr == NULL && strncmp(hostNamePtr + 1, host, strlen(host)) != 0)
+                    return mqttStatus_invalidHost;
+            }
+            return mqttStatus_open;
+        }
+        if (atResult == 204)
+            return mqttStatus_invalidHost;
+    }
+    return resultCode__internalError;
+}
+
+
+uint16_t mqtt_getMsgId(mqttCtrl_t *mqttCtrl)
+{
+    return mqttCtrl->msgId;
 }
 
 

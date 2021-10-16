@@ -21,10 +21,9 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- ******************************************************************************
- *
- *****************************************************************************/
-
+ *************************************************************************** */
+const char *ltemcVersion = "2.2.1";
+/* ************************************************************************* */
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
@@ -66,6 +65,16 @@ ltemDevice_t g_ltem;
 
 #pragma region Public Functions
 /*-----------------------------------------------------------------------------------------------*/
+
+/**
+ *	\brief Get the LTEmC software version.
+ *  \return Version as a const char pointer.
+ */
+const char *ltem_ltemcVersion()
+{
+    return ltemcVersion;
+}
+
 
 /**
  *	\brief Initialize the LTEm1 modem.

@@ -156,66 +156,6 @@ void qbg_setOptions()
 }
 
 
-/**
- *  \brief Configure RAT searching sequence
-*/
-void qbg_setNwScanSeq(const char* sequence)
-{
-    //AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
-    /*
-    <scanseq> Number format. RAT search sequence.
-    (e.g.: 020301 stands for LTE Cat M1 | LTE Cat NB1 | GSM))
-        00 Automatic (LTE Cat M1 | LTE Cat NB1 | GSM)
-        01 GSM
-        02 LTE Cat M1
-        03 LTE Cat NB1
-    <effect> Number format. When to take effect.
-        0 Take effect after UE reboots
-        1 Take effect immediately
-    */
-    atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", sequence);
-    atcmd_awaitResult();
-}
-
-
-/** 
- *  \brief Configure RAT(s) allowed to be searched
-*/
-void qbg_setNwScanMode(qbg_nw_scan_mode_t mode)
-{
-    // AT+QCFG="nwscanmode"[,<scanmode>[,<effect>]]
-    /*
-    <scanmode> Number format. RAT(s) to be searched.
-        0 Automatic
-        1 GSM only
-        3 LTE only
-    <effect> Number format. When to take effect.
-        0 Take effect after UE reboots
-        1 Take effect immediately    
-    */
-    atcmd_tryInvokeDefault("AT+QCFG=\"nwscanmode\",%d", mode);
-    atcmd_awaitResult();
-}
-
-
-/** 
- *  \brief Configure the network category to be searched under LTE RAT.
- */
-void qbg_setIotOpMode(qbg_nw_iot_mode_t mode)
-{
-    //AT+QCFG="iotopmode"[,<mode>[,<effect>]]
-    /*
-    <mode> Number format. Network category to be searched under LTE RAT.
-        0 LTE Cat M1
-        1 LTE Cat NB1
-        2 LTE Cat M1 and Cat NB1
-    <effect> Number format. When to take effect.
-        0 Take effect after UE reboots
-        1 Take effect immediately
-    */
-    atcmd_tryInvokeDefault("AT+QCFG=\"iotopmode\",%d", mode);
-    atcmd_awaitResult();
-}
 
 #pragma endregion
 

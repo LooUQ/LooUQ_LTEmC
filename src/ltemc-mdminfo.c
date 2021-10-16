@@ -138,19 +138,22 @@ modemInfo_t mdminfo_ltem()
 int16_t mdminfo_rssi()
 {
     uint8_t csq = 0;
-    int8_t rssi;
+    int8_t rssi = -128;
 
-    if (atcmd_tryInvoke("AT+CSQ"))
+if (ltem_chkHwReady())
     {
-        if (atcmd_awaitResult() == resultCode__success)
+        if (atcmd_tryInvoke("AT+CSQ"))
         {
-            char *term;
-            char *lastResponse = atcmd_getLastResponse();
-            term = strstr(atcmd_getLastResponse() + 2, "+CSQ");
-            csq = strtol(term + 5, NULL, 10);
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                char *term;
+                char *lastResponse = atcmd_getLastResponse();
+                term = strstr(atcmd_getLastResponse() + 2, "+CSQ");
+                csq = strtol(term + 5, NULL, 10);
+            }
+            rssi = (csq == 99) ? -128 : csq * 2 -113;        // raw=99: no signal, range -51 to -113
+            atcmd_close();
         }
-        rssi = (csq == 99) ? -128 : csq * 2 -113;        // raw=99: no signal, range -51 to -113
-        atcmd_close();
     }
     return rssi;
 }

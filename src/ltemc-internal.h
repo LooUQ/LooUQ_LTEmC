@@ -53,8 +53,6 @@
 // #include "ltemc-gnss.h"
 // #include "ltemc-geo.h"
 
-
-
 /* LTEmC global fields/properties as Singleton 
  * Kept internal here, future support for multiple LTEmC instances would replace this with function calls to serve instances
  * ------------------------------------------------------------------------------------------------------------------------------*/

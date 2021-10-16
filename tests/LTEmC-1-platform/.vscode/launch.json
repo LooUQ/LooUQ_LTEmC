@@ -12,7 +12,8 @@
             "request": "launch",
             "servertype": "jlink",
             "device": "ATSAMD21G18",
-            "runToMain": true
+            "runToMain": true,
+            "serverArgs": ["-gui"]
         }
     ]
 }
