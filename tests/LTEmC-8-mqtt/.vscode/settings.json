@@ -23,7 +23,8 @@
         "ltemc-mqtt.h": "c",
         "ltemc-filecodes.h": "c",
         "ltemc-atcmd.h": "c",
-        "lq-str.h": "c"
+        "lq-str.h": "c",
+        "ltemc-quectel-bg.h": "c"
     },
     "C_Cpp.loggingLevel": "Debug"
 }

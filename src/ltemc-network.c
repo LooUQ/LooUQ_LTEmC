@@ -59,16 +59,16 @@ static char *S_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t to
 #pragma region public functions
 
 /**
- *	\brief Initialize the IP network contexts structure.
+ *	@brief Initialize the IP network contexts structure.
  */
 void ntwk_create()
 {
     network_t *networkPtr = (network_t*)calloc(1, sizeof(network_t));
-    ASSERT(networkPtr != NULL, srcfile_network_c);
+    ASSERT(networkPtr != NULL, srcfile_ltemc_network_c);
 
     networkPtr->networkOperator = calloc(1, sizeof(networkOperator_t));
-    pdpCntxt_t *context = calloc(NTWK__pdpContextCnt, sizeof(pdpCntxt_t));
-    ASSERT(context != NULL, srcfile_network_c);
+    pdpCntxt_t *context = calloc(ntwk__pdpContextCnt, sizeof(pdpCntxt_t));
+    ASSERT(context != NULL, srcfile_ltemc_network_c);
 
     for (size_t i = 0; i < sizeof(networkPtr->pdpCntxts)/sizeof(pdpCntxt_t); i++)
     {   
@@ -80,11 +80,41 @@ void ntwk_create()
 
 
 /**
- *   \brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
- * 
- *   \param waitDurSeconds [in] Number of seconds to wait for a network. Supply 0 for no wait.
- * 
- *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
+ *  @brief Configure RAT searching sequence
+*/
+void ntwk_setNwScanSeq(const char* scanSequence)
+{
+    //AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
+    /*
+    */
+    atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence);
+    atcmd_awaitResult();
+}
+
+
+/** 
+ *  @brief Configure RAT(s) allowed to be searched.
+*/
+void ntwk_setNwScanMode(ntwkScanMode_t scanMode)
+{
+    // AT+QCFG="nwscanmode"[,<scanmode>[,<effect>]]
+    atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode);
+    atcmd_awaitResult();
+}
+
+
+/** 
+ *  @brief Configure the network category to be searched under LTE RAT.
+ */
+void ntwk_setIotOpMode(ntwk_iotMode_t iotMode)
+{
+    atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode);
+    atcmd_awaitResult();
+}
+
+
+/**
+ *   @brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
 */
 networkOperator_t ntwk_awaitOperator(uint16_t waitDurSeconds)
 {
@@ -109,97 +139,7 @@ networkOperator_t ntwk_awaitOperator(uint16_t waitDurSeconds)
 
 
 /**
- *	\brief Get count of APN active data contexts from BGx.
- * 
- *  \return Count of active data contexts (BGx max is 3).
- */
-uint8_t ntwk_fetchActivePdpCntxts()
-{
-    #define IP_QIACT_SZ 8
-
-    uint8_t apnIndx = 0;
-
-    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
-    {
-        atcmd_setOptions(atcmd__defaultTimeoutMS, s_contextStatusCompleteParser);
-        atcmd_invokeReuseLock("AT+QIACT?");
-        resultCode_t atResult = atcmd_awaitResult();
-
-        memset(&((network_t*)g_ltem.network)->pdpCntxts, 0, sizeof(pdpCntxt_t) * NTWK__pdpContextCnt);    // empty context table for return, if success refill from parsing
-        // for (size_t i = 0; i < NTWK__pdpContextCnt; i++)         // empty context table return and if success refill from parsing
-        // {
-        //     ((network_t*)g_ltem.network)->pdpCntxts[i].contextId = 0;
-        //     ((network_t*)g_ltem.network)->pdpCntxts[i].ipAddress[0] = 0;
-        // }
-
-        if (atResult != resultCode__success)
-        {
-            apnIndx = 0xFF;
-            goto finally;
-        }
-
-        if (strlen(atcmd_getLastResponse()) > IP_QIACT_SZ)
-        {
-            #define TOKEN_BUF_SZ 16
-            char *nextContext;
-            char *landmarkAt;
-            char *continuePtr;
-            uint8_t landmarkSz = IP_QIACT_SZ;
-            char tokenBuf[TOKEN_BUF_SZ];
-
-            nextContext = strstr(atcmd_getLastResponse(), "+QIACT: ");
-
-            // no contexts returned = none active (only active contexts are returned)
-            while (nextContext != NULL && apnIndx < NTWK__pdpContextCnt)                            // now parse each pdp context entry
-            {
-                landmarkAt = nextContext;
-                ((network_t*)g_ltem.network)->pdpCntxts[apnIndx].contextId = strtol(landmarkAt + landmarkSz, &continuePtr, 10);
-                continuePtr = strchr(++continuePtr, ',');                                           // skip context_state: always 1
-
-                ((network_t*)g_ltem.network)->pdpCntxts[apnIndx].protoType = (int)strtol(continuePtr + 1, &continuePtr, 10);
-                continuePtr = S_grabToken(continuePtr + 2, '"', tokenBuf, TOKEN_BUF_SZ);
-                if (continuePtr != NULL)
-                {
-                    strncpy(((network_t*)g_ltem.network)->pdpCntxts[apnIndx].ipAddress, tokenBuf, TOKEN_BUF_SZ);
-                }
-                nextContext = strstr(nextContext + landmarkSz, "+QIACT: ");
-                apnIndx++;
-            }
-        }
-    }
-    finally:
-        atcmd_close();
-        return apnIndx;
-}
-
-
-/**
- *	\brief Get PDP Context/APN information
- * 
- *  \param cntxtId [in] - The PDP context (APN) to retreive.
- * 
- *  \return Pointer to PDP context info in active context table, NULL if not active
- */
-pdpCntxt_t *ntwk_getPdpCntxtInfo(uint8_t cntxtId)
-{
-    if (ltem_chkHwReady())
-    {
-        for (size_t i = 0; i < NTWK__pdpContextCnt; i++)
-        {
-            if(((network_t*)g_ltem.network)->pdpCntxts[i].contextId != 0)
-                return &((network_t*)g_ltem.network)->pdpCntxts[i];
-        }
-    }
-    return NULL;
-}
-
-
-/**
- *	\brief Activate PDP Context/APN.
- * 
- *  \param cntxtId [in] - The APN to operate on. Typically 0 or 1
- *  \param protoType [in] - The PDP protocol IPV4, IPV6, IPV4V6 (both).
- *  \param pApn [in] - The APN name if required by network carrier.
+ *	@brief Activate PDP Context/APN.
  */
 bool ntwk_activatePdpContext(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, const char *pApn)
 {
@@ -207,7 +147,7 @@ bool ntwk_activatePdpContext(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, 
         return true;
 
     bool pdpActivated = false;
-    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
         atcmd_invokeReuseLock("AT+QICSGP=%d,%d,\"%s\"\r", cntxtId, protoType, pApn);
@@ -237,14 +177,7 @@ bool ntwk_activatePdpContext(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, 
 
 
 /**
- *	\brief Activate PDP Context/APN requiring authentication.
- * 
- *  \param cntxtId [in] - The APN to operate on. Typically 0 or 1
- *  \param protoType [in] - The PDP protocol IPV4, IPV6, IPV4V6 (both).
- *  \param pApn [in] - The APN name if required by network carrier.
- *  \param pUserName [in] - String with user name
- *  \param pPW [in] - String with password
- *  \param authMethod [in] - Enum specifying the type of authentication expected by network
+ *	@brief Activate PDP Context/APN requiring authentication.
  */
 bool ntwk_activatePdpContextWithAuth(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, const char *pApn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod)
 {
@@ -252,7 +185,7 @@ bool ntwk_activatePdpContextWithAuth(uint8_t cntxtId, pdpCntxtProtocolType_t pro
         return true;
 
     bool pdpActivated = false;
-    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
         atcmd_invokeReuseLock("AT+QICSGP=%d,%d,\"%s\"\r", cntxtId, protoType, pApn, pUserName, pPW, authMethod);
@@ -282,14 +215,12 @@ bool ntwk_activatePdpContextWithAuth(uint8_t cntxtId, pdpCntxtProtocolType_t pro
 
 
 /**
- *	\brief Deactivate APN.
- * 
- *  \param cntxtId [in] - The APN number to operate on.
+ *	@brief Deactivate PDP Context/APN.
  */
 void ntwk_deactivatePdpContext(uint8_t cntxtId)
 {
     atcmd_setOptions(atcmd__defaultTimeoutMS, s_contextStatusCompleteParser);
-    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         if (atcmd_tryInvokeOptions("AT+QIDEACT=%d\r", cntxtId))
         {
@@ -302,73 +233,93 @@ void ntwk_deactivatePdpContext(uint8_t cntxtId)
 
 
 /**
- *  \brief Configure RAT searching sequence
- * 
- *     [scanseq] Number format. RAT search sequence.
- *     (e.g.: 020301 stands for LTE Cat M1 | LTE Cat NB1 | GSM))
- *      00 Automatic (LTE Cat M1 | LTE Cat NB1 | GSM)
- *      01 GSM
- *      02 LTE Cat M1
- *      03 LTE Cat NB1
- * 
- *  \param scanSequence [in] - Character string specifying the RAT scanning order.
-*/
-void ntwk_setNwScanSeq(const char* scanSequence)
-{
-    //AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
-    /*
-    */
-    atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence);
-    atcmd_awaitResult();
-}
-
-
-/** 
- *  \brief Configure RAT(s) allowed to be searched
- *     [scanmode] Number format. RAT(s) to be searched.
- *      0 Automatic
- *      1 GSM only
- *      3 LTE only
- *
- *  \param scanMode [in] - Enum specifying what cell network to scan.
-*/
-void ntwk_setNwScanMode(ntwk_scanMode_t scanMode)
-{
-    // AT+QCFG="nwscanmode"[,<scanmode>[,<effect>]]
-    atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode);
-    atcmd_awaitResult();
-}
-
-
-/** 
- *  \brief Configure the network category to be searched under LTE RAT.
- *    [mode] Number format. Network category to be searched under LTE RAT.
- *     0 LTE Cat M1
- *     1 LTE Cat NB1
- *     2 LTE Cat M1 and Cat NB1
- *
- *  \param iotMode [in] - Enum specifying the LTE LPWAN protocol(s) to scan for.
+ *	@brief Get count of APN active data contexts from BGx.
  */
-void ntwk_setIotOpMode(ntwk_iotMode_t iotMode)
+uint8_t ntwk_fetchActivePdpCntxts()
 {
-    atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode);
-    atcmd_awaitResult();
+    #define IP_QIACT_SZ 8
+
+    uint8_t apnIndx = 0;
+
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
+    {
+        atcmd_setOptions(atcmd__defaultTimeoutMS, s_contextStatusCompleteParser);
+        atcmd_invokeReuseLock("AT+QIACT?");
+        resultCode_t atResult = atcmd_awaitResult();
+
+        memset(&((network_t*)g_ltem.network)->pdpCntxts, 0, sizeof(pdpCntxt_t) * ntwk__pdpContextCnt);    // empty context table for return, if success refill from parsing
+        // for (size_t i = 0; i < NTWK__pdpContextCnt; i++)         // empty context table return and if success refill from parsing
+        // {
+        //     ((network_t*)g_ltem.network)->pdpCntxts[i].contextId = 0;
+        //     ((network_t*)g_ltem.network)->pdpCntxts[i].ipAddress[0] = 0;
+        // }
+
+        if (atResult != resultCode__success)
+        {
+            apnIndx = 0xFF;
+            goto finally;
+        }
+
+        if (strlen(ATCMD_getLastResponse()) > IP_QIACT_SZ)
+        {
+            #define TOKEN_BUF_SZ 16
+            char *nextContext;
+            char *landmarkAt;
+            char *continuePtr;
+            uint8_t landmarkSz = IP_QIACT_SZ;
+            char tokenBuf[TOKEN_BUF_SZ];
+
+            nextContext = strstr(ATCMD_getLastResponse(), "+QIACT: ");
+
+            // no contexts returned = none active (only active contexts are returned)
+            while (nextContext != NULL && apnIndx < ntwk__pdpContextCnt)                            // now parse each pdp context entry
+            {
+                landmarkAt = nextContext;
+                ((network_t*)g_ltem.network)->pdpCntxts[apnIndx].contextId = strtol(landmarkAt + landmarkSz, &continuePtr, 10);
+                continuePtr = strchr(++continuePtr, ',');                                           // skip context_state: always 1
+
+                ((network_t*)g_ltem.network)->pdpCntxts[apnIndx].protoType = (int)strtol(continuePtr + 1, &continuePtr, 10);
+                continuePtr = S_grabToken(continuePtr + 2, '"', tokenBuf, TOKEN_BUF_SZ);
+                if (continuePtr != NULL)
+                {
+                    strncpy(((network_t*)g_ltem.network)->pdpCntxts[apnIndx].ipAddress, tokenBuf, TOKEN_BUF_SZ);
+                }
+                nextContext = strstr(nextContext + landmarkSz, "+QIACT: ");
+                apnIndx++;
+            }
+        }
+    }
+    finally:
+        atcmd_close();
+        return apnIndx;
+}
+
+
+/**
+ *	@brief Get PDP Context/APN information
+ */
+pdpCntxt_t *ntwk_getPdpCntxtInfo(uint8_t cntxtId)
+{
+    if (ltem_chkHwReady())
+    {
+        for (size_t i = 0; i < ntwk__pdpContextCnt; i++)
+        {
+            if(((network_t*)g_ltem.network)->pdpCntxts[i].contextId != 0)
+                return &((network_t*)g_ltem.network)->pdpCntxts[i];
+        }
+    }
+    return NULL;
 }
 
 
 /** 
- *  \brief Development/diagnostic function to retrieve visible operators from radio.
- * 
- *  Note: This command can be minutes in response. It is generally considered a command used solely for diagnostics.
- * 
- *  \param operatorList [in/out] - Pointer to char buffer to return operator list information retrieved from BGx.
- *  \param listSz [in] - Length of provided buffer.
+ *  @brief Development/diagnostic function to retrieve visible operators from radio.
  */
 void ntwk_getOperators(char *operatorList, uint16_t listSz)
 {
     // AT+COPS=?
 
-    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         atcmd_setOptions(PERIOD_FROM_SECONDS(180), atcmd__useDefaultOKCompletionParser);
 
@@ -377,7 +328,7 @@ void ntwk_getOperators(char *operatorList, uint16_t listSz)
             atcmd_invokeReuseLock("AT+COPS=?");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                strncpy(operatorList, atcmd_getLastResponse() + 9, listSz - 1);
+                strncpy(operatorList, ATCMD_getLastResponse() + 9, listSz - 1);
             }
         }
     }
@@ -394,9 +345,9 @@ void ntwk_getOperators(char *operatorList, uint16_t listSz)
 
 
 /**
- *   \brief Tests for the completion of a network APN context activate action.
+ *   @brief Tests for the completion of a network APN context activate action.
  * 
- *   \return standard action result integer (http result).
+ *   @return standard action result integer (http result).
 */
 static resultCode_t s_contextStatusCompleteParser(const char *response, char **endptr)
 {
@@ -406,16 +357,16 @@ static resultCode_t s_contextStatusCompleteParser(const char *response, char **e
 
 
 /**
- *   \brief Get the network operator name and network mode.
+ *   @brief Get the network operator name and network mode.
  * 
- *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
+ *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
 static networkOperator_t s_getNetworkOperator()
 {
     if (*((network_t*)g_ltem.network)->networkOperator->operName != 0)
         return *((network_t*)g_ltem.network)->networkOperator;
 
-    if (!atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    if (!ATCMD_awaitLock(atcmd__defaultTimeoutMS))
         goto finally;
 
     atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
@@ -423,16 +374,16 @@ static networkOperator_t s_getNetworkOperator()
     if (atcmd_awaitResult() == resultCode__success)
     {
         char *continuePtr;
-        continuePtr = strchr(atcmd_getLastResponse(), '"');
+        continuePtr = strchr(ATCMD_getLastResponse(), '"');
         if (continuePtr != NULL)
         {
-            continuePtr = S_grabToken(continuePtr + 1, '"', ((network_t*)g_ltem.network)->networkOperator->operName, NTWK__operatorNameSz);
+            continuePtr = S_grabToken(continuePtr + 1, '"', ((network_t*)g_ltem.network)->networkOperator->operName, ntwk__operatorNameSz);
 
             uint8_t ntwkMode = (uint8_t)strtol(continuePtr + 1, &continuePtr, 10);
             if (ntwkMode == 8)
-                strcpy(((network_t*)g_ltem.network)->networkOperator->ntwkMode, "CAT-M1");
+                strcpy(((network_t*)g_ltem.network)->networkOperator->ntwkMode, "M1");
             else
-                strcpy(((network_t*)g_ltem.network)->networkOperator->ntwkMode, "CAT-NB1");
+                strcpy(((network_t*)g_ltem.network)->networkOperator->ntwkMode, "NB1");
         }
     }
     else
@@ -447,14 +398,14 @@ static networkOperator_t s_getNetworkOperator()
 }
 
 /**
- *  \brief Scans a C-String (char array) for the next delimeted token and null terminates it.
+ *  @brief Scans a C-String (char array) for the next delimeted token and null terminates it.
  * 
- *  \param source [in] - Original char array to scan.
- *  \param delimeter [in] - Character separating tokens (passed as integer value).
- *  \param tokenBuf [out] - Pointer to where token should be copied to.
- *  \param tokenBufSz [in] - Size of buffer to receive token.
+ *  @param source [in] - Original char array to scan.
+ *  @param delimeter [in] - Character separating tokens (passed as integer value).
+ *  @param tokenBuf [out] - Pointer to where token should be copied to.
+ *  @param tokenBufSz [in] - Size of buffer to receive token.
  * 
- *  \return Pointer to the location in the source string immediately following the token.
+ *  @return Pointer to the location in the source string immediately following the token.
 */
 static char *S_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz) 
 {

@@ -31,31 +31,34 @@
 #include "ltemc.h"
 
 
-enum 
+/** 
+ *  \brief Typed numeric constants for network subsystem.
+*/
+enum ntwk__constants
 {
-    NTWK__pdpContextCnt = 2,
-    NTWK__operatorNameSz = 20
+    ntwk__pdpContextCnt = 2,
+    ntwk__operatorNameSz = 20
 };
 
 /** 
  *  \brief Enum describing the mode the BGx module is using to look for available networks (carriers).
 */
-typedef enum
+typedef enum ntwkScanMode_tag
 {
-    ntwk_scanMode_auto = 0U,         ///< BGx is considering either GSM or LTE carrier connections.
-    ntwk_scanMode_gsmonly = 1U,      ///< GSM only mode: BGx is filtering visible networks and only considering connections to GSM endpoints.
-    ntwk_scanMode_lteonly = 3U       ///< LTE only mode: BGx is filtering visible networks and only considering connections to LTE endpoints.
-} ntwk_scanMode_t;
+    ntwkScanMode_auto = 0U,         ///< BGx is considering either GSM or LTE carrier connections.
+    ntwkScanMode_gsmonly = 1U,      ///< GSM only mode: BGx is filtering visible networks and only considering connections to GSM endpoints.
+    ntwkScanMode_lteonly = 3U       ///< LTE only mode: BGx is filtering visible networks and only considering connections to LTE endpoints.
+} ntwkScanMode_t;
 
 
 /** 
  *  \brief Enum describing the available options for an IoT protocol when connecting to the network.
 */
-typedef enum
+typedef enum ntwkIotMode_tag
 {
-    ntwk_iotMode_m1 = 0U,            ///< CAT-M1 only mode: BGx is filtering visible networks and only considering CAT-M1 connections.
-    ntwk_iotMode_nb1 = 1U,           ///< NB-IOT only mode: BGx is filtering visible networks and only considering NB-IOT connections.
-    ntwk_iotMode_m1nb1 = 2U          ///< The BGx will connect to either a CAT-M1 or NB-IOT network.
+    ntwkIotMode_m1 = 0U,            ///< CAT-M1 only mode: BGx is filtering visible networks and only considering CAT-M1 connections.
+    ntwkIotMode_nb1 = 1U,           ///< NB-IOT only mode: BGx is filtering visible networks and only considering NB-IOT connections.
+    ntwkIotMode_m1nb1 = 2U          ///< The BGx will connect to either a CAT-M1 or NB-IOT network.
 } ntwk_iotMode_t;
 
 
@@ -113,7 +116,7 @@ typedef struct pdpCntxt_tag
 typedef struct network_tag
 {
     networkOperator_t *networkOperator;             ///< Network operator name and protocol
-    pdpCntxt_t pdpCntxts[NTWK__pdpContextCnt];      ///< Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
+    pdpCntxt_t pdpCntxts[ntwk__pdpContextCnt];      ///< Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
 } network_t;
 
 
@@ -122,24 +125,95 @@ extern "C"
 {
 #endif // __cplusplus
 
-const char *ltem_ltemcVersion();
+//const char *ltem_ltemcVersion();
 
+/**
+ *	@brief Initialize the IP network contexts structure.
+ */
 void ntwk_create();
 
+
+/**
+ *  @brief Configure RAT searching sequence
+ *  @details Example: scanSequence = "020301" represents: search LTE-M1, then LTE-NB1, then GSM
+ *  @param scanSequence [in] - Character string specifying the RAT scanning order; 00=Automatic[LTE-M1|LTE-NB1|GSM],01=GSM,02=LTE-M1,03=LTE-NB1
+*/
 void ntwk_setNwScanSeq(const char *sequence);
-void ntwk_setNwScanMode(ntwk_scanMode_t mode);
+
+
+/** 
+ *  @brief Configure RAT(s) allowed to be searched
+ *  @param scanMode [in] - Enum specifying what cell network to scan; 0=Automatic,1=GSM only,3=LTE only
+*/
+void ntwk_setNwScanMode(ntwkScanMode_t mode);
+
+
+/** 
+ *  @brief Configure the network category to be searched under LTE RAT.
+ *  @param iotMode [in] - Enum specifying the LTE LPWAN protocol(s) to scan; 0=LTE M1,1=LTE NB1,2=LTE M1 and NB1
+ */
 void ntwk_setIotOpMode(ntwk_iotMode_t mode);
 
-void ntwk_getOperators(char *operatorList, uint16_t listSz);
 
+/**
+ *   @brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
+ *   @param waitDurSeconds [in] Number of seconds to wait for a network. Supply 0 for no wait.
+ *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
+*/
 networkOperator_t ntwk_awaitOperator(uint16_t waitDurSeconds);
 
+
+/**
+ *	@brief Activate PDP Context/APN.
+ *  @param cntxtId [in] - The APN to operate on. Typically 0 or 1
+ *  @param protoType [in] - The PDP protocol IPV4, IPV6, IPV4V6 (both).
+ *  @param pApn [in] - The APN name if required by network carrier.
+ */
 bool ntwk_activatePdpContext(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, const char *pApn);
+
+
+/**
+ *	@brief Activate PDP Context/APN requiring authentication.
+ *  @param cntxtId [in] - The APN to operate on. Typically 0 or 1
+ *  @param protoType [in] - The PDP protocol IPV4, IPV6, IPV4V6 (both).
+ *  @param pApn [in] - The APN name if required by network carrier.
+ *  @param pUserName [in] - String with user name
+ *  @param pPW [in] - String with password
+ *  @param authMethod [in] - Enum specifying the type of authentication expected by network
+ */
 bool ntwk_activatePdpContextWithAuth(uint8_t cntxtId, pdpCntxtProtocolType_t protoType, const char *pApn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
+
+/**
+ *	@brief Deactivate PDP Context/APN.
+ *  @param cntxtId [in] - The APN number to operate on.
+ */
 void ntwk_deactivatePdpContext(uint8_t contxtId);
 
+
+/**
+ *	@brief Get count of APN active data contexts from BGx.
+ * 
+ *  @return Count of active data contexts (BGx max is 3).
+ */
 uint8_t ntwk_fetchActivePdpCntxts();
+
+
+/**
+ *	@brief Get PDP Context/APN information
+ *  @param cntxtId [in] - The PDP context (APN) to retreive.
+ *  @return Pointer to PDP context info in active context table, NULL if not active
+ */
 pdpCntxt_t *ntwk_getPdpCntxtInfo(uint8_t contxtId);
+
+
+/** 
+ *  @brief Development/diagnostic function to retrieve visible operators from radio.
+ *  @details This command can take MINUTES to respond! It is generally considered a command used solely for diagnostics.
+ *  @param operatorList [in/out] - Pointer to char buffer to return operator list information retrieved from BGx.
+ *  @param listSz [in] - Length of provided buffer.
+ */
+void ntwk_getOperators(char *operatorList, uint16_t listSz);
+
 
 #ifdef __cplusplus
 }

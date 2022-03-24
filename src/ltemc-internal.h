@@ -35,7 +35,7 @@
 
 #include <lq-types.h>
 #include <lq-diagnostics.h>
-#include "ltemc-filecodes.h"
+#include "ltemc-srcfiles.h"
 
 #include "lq-platform.h"
 #include "ltemc-nxp-sc16is.h"
@@ -67,9 +67,10 @@ typedef struct ltemDevice_tag
     // ltem1Functionality_t funcLevel;      ///< Enum value indicating services enabled during ltemC startup.
 	ltemPinConfig_t pinConfig;              ///< GPIO pin configuration for required GPIO and SPI interfacing.
     bool cancellationRequest;               ///< For RTOS implementations, token to request cancellation of long running task/action.
-    qbgReadyState_t qbgReadyState;          ///< Ready state of the BGx module
-    eventNotifFunc_t appNotifCB;            ///< Event notification callback to parent application
+    qbgDeviceState_t qbgDeviceState;        ///< Device state of the BGx module
+    appEventCallback_func appEventCB;       ///< Event notification callback to parent application
     uint8_t instNm;                         ///< LTEm instance number 0=undefined, 1..254
+    char moduleType[8];                     ///< c-str indicating module type. BG96, BG95-M3 (so far)
 
     void *spi;                              ///< SPI device (methods signatures compatible with Arduino).
     void *pdpContext;                       ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.

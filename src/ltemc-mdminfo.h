@@ -25,12 +25,12 @@
  * Obtain basic modem identification and operational information 
  *****************************************************************************/
 
-
-#include "ltemc.h"
-
-
 #ifndef _MODEMINFO_H_
 #define _MODEMINFO_H_
+
+#include "ltemc.h"
+#include "lq-network.h"
+
 
 // #include <stddef.h>
 // #include <stdint.h>
@@ -40,16 +40,16 @@
 #define MDMINFO_FWVER_SZ = 41
 #define MDMINFO_MFGINFO_SZ 41
 
-/** 
- *  \brief Struct holding information about the physical BGx module.
-*/
-typedef struct modemInfo_tag
-{
-	char imei[16];          ///< IMEI (15 digits) International Mobile Equipment Identity, set in the BGx itself at manufacture.
-	char iccid [21];        ///< ICCID (20 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
-	char mfgmodel [21];     ///< The Quectel model number of the BGx device.
-	char fwver [41];        ///< Firmware version of the BGx device.
-} modemInfo_t;
+// /** 
+//  *  \brief Struct holding information about the physical BGx module.
+// */
+// typedef struct modemInfo_tag
+// {
+// 	char imei[16];          ///< IMEI (15 digits) International Mobile Equipment Identity, set in the BGx itself at manufacture.
+// 	char iccid [21];        ///< ICCID (20 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
+// 	char mfgmodel [21];     ///< The Quectel model number of the BGx device.
+// 	char fwver [41];        ///< Firmware version of the BGx device.
+// } modemInfo_t;
 
 
 #ifdef __cplusplus
@@ -57,10 +57,25 @@ extern "C" {
 #endif
 
 
-modemInfo_t mdminfo_ltem();
-int16_t mdminfo_rssi();
-uint8_t mdminfo_rssiBars(uint8_t numberOfBars);
+/**
+ *  @brief Get the LTEm1 static device identification/provisioning information.
+ *  @return Modem information struct, see mdminfo.h for details.
+*/
+modemInfo_t *mdminfo_ltem();
 
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device as RSSI reported
+ *  @return The radio signal strength in the range of -51dBm to -113dBm (-999 is no signal)
+*/
+int16_t mdminfo_signalRSSI();
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device at a percent
+ *  @return The radio signal strength in the range of 0 to 100 (0 is no signal)
+*/
+uint8_t mdmInfo_signalPercent();
 
 #ifdef __cplusplus
 }

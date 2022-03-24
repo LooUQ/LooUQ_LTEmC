@@ -40,49 +40,143 @@
 
 #include "platform/lqPlatform-spi.h"
 
+
+#define DEF_SC16IS7xx_REG(REG_NAME, REG_BITS) \
+typedef union    \
+{                \
+    struct {     \
+    REG_BITS     \
+    };           \
+    uint8_t reg; \
+} SC16IS7xx_##REG_NAME;
+
+
 #pragma region structures
 
-enum sc16is741a__LTEM_constants
+typedef const uint8_t ro8;
+typedef uint8_t rw8;
+
+enum SC16IS74__constants
 {
-    sc16is741a__LTEM_FIFO_bufferSz = 0x40,
-    sc16is741a__LTEM_FIFO_RnW_read = 0x01,
-    sc16is741a__LTEM_FIFO_RnW_write = 0x00,
+    // BGx default baudrate is 115200, LTEm-OSC raw clock is 7.378MHz (SC16IS740 section 7.8)
+    SC16IS7xx__DLL_baudClockDivisorLOW = 0x04U,
+    SC16IS7xx__DLH_baudClockDivisorHIGH = 0x00U,
 
-    sc16is741a__LTEM_RegSet_general = 0x00,
-    sc16is741a__LTEM_RegSet_special = 0x80,
-    sc16is741a__LTEM_RegSet_enhanced = 0xBF,
+    // Bridge<>BG96 UART framing - 8 data, no parity, 1 stop (bits)
+    SC16IS7xx__LCR_UARTframing = 0x03U,
+    //SC16IS7xx__SC16IS7xx_EFR_ENHANCED_FUNCTIONS = 0x10U
 
-    sc16is741a__LTEM_HW_resetDelay = 1U,
-    sc16is741a__LTEM_SW_resetMask = 0x08
+    // [7:4] RX, [3:0] TX - level / 4 (buffer granularity is 4)
+    // SC16IS7xx__TLR_TriggerLevels = 0x22U,						// **!** testing value **!**
+    //SC16IS7xx__SC16IS7xx_TLR_TRIGGER_LEVELS = 0xFFU					    // 15 (*4) = 60 char buffer
+
+    // fcr is a RdOnly register, flush and FIFO enable are both in this register 
+    SC16IS7xx__FCR_BASIC_MODE = 0xB7U,
+    SC16IS7xx__FCR_IOP_FIFO_ENABLE = 0xB1U,
+    SC16IS7xx__FCR_IOP_RX_FLUSH = 0x02U,
+    SC16IS7xx__FCR_IOP_TX_FLUSH = 0x04U,
+
+    SC16IS7xx__FIFO_bufferSz = 0x40,
+    SC16IS7xx__FIFO_readRnW = 0x01,
+    SC16IS7xx__FIFO_writeRnW = 0x00,
+
+    SC16IS7xx__REGSET_general = 0x00,
+    SC16IS7xx__REGSET_special = 0x80,
+    SC16IS7xx__REGSET_enhanced = 0xBF,
+
+    SC16IS7xx__HW_resetDelay = 1U,
+    SC16IS7xx__SW_resetMask = 0x08,
+
+    SC16IS7xx__LSR_RHR_dataReady = 0x01U,
+    SC16IS7xx__LSR_THR_empty = 0x02U,
+    SC16IS7xx__LSR_FIFO_dataError = 0x80U,
 };
 
-// #define SC16IS741A_FIFO_BUFFER_SZ   0x40
-// #define SC16IS741A_FIFO_RnW_READ    0x01
-// #define SC16IS741A_FIFO_RnW_WRITE   0x00
+
+/** 
+ *  @brief NXP SC16IS740/750/760/741 register addresses, for details about registers see the NXP SC16IS740/750/760 data sheet.NXP SC16IS740/750/760/741 register addresses, for details about registers see the NXP SC16IS740/750/760 data sheet.
+ */ 
+typedef enum SC16IS7xx_regAddr_tag
+{
+    SC16IS7xx_FIFO_regAddr = 0x00U,               ///< FIFO data register, accesses the TX/RX buffers
+    SC16IS7xx_IER_regAddr = 0x01U,                ///< Interrupt enable register
+    SC16IS7xx_FCR_regAddr = 0x02U,                ///< Frame control register
+    SC16IS7xx_IIR_regAddr = 0x02U,                ///< Interrupt identification register
+    SC16IS7xx_LCR_regAddr = 0x03U,                ///< Line control register
+    SC16IS7xx_MCR_regAddr = 0x04U,                ///< Modem control register
+    SC16IS7xx_LSR_regAddr = 0x05U,                ///< Line state register
+    SC16IS7xx_MSR_regAddr = 0x06U,                ///< Modem status register
+    SC16IS7xx_SPR_regAddr = 0x07U,                ///< Scratchpad register (test loopback)
+    SC16IS7xx_TCR_regAddr = 0x06U,                ///< Transmission control register
+    SC16IS7xx_TLR_regAddr = 0x07U,                ///< Trigger level register
+    SC16IS7xx_TXLVL_regAddr = 0x08U,              ///< TX level register
+    SC16IS7xx_RXLVL_regAddr = 0x09U,              ///< RX level register
+    SC16IS7xx_UARTRST_regAddr = 0x0EU,            ///< UART reset
+    SC16IS7xx_EFCR_regAddr = 0x0FU,               ///< Extra features register
+    SC16IS7xx_DLL_regAddr = 0x00U,                ///< Divisor latch register (LSB)
+    SC16IS7xx_DLH_regAddr = 0x01U,                ///< Divisor latch register (MSB)
+    SC16IS7xx_EFR_regAddr = 0x02U,                ///< Enhanced features register
+    SC16IS7xx_XON1_regAddr = 0x04U,               ///< XON-1 word 
+    SC16IS7xx_XON2_regAddr = 0x05U,               ///< XON-2 word
+    SC16IS7xx_XOFF1_regAddr = 0x06U,              ///< XOFF-1 word
+    SC16IS7xx_XOFF2_regAddr = 0x07U               ///< XOFF-2 word
+}SC16IS7xx_regAddr_t;
+
+
+// // BG96 default baudrate is 115200, LTEm1 raw clock is 7.378MHz (SC16IS741a pg13)
+// #define BAUDCLOCK_DIVISOR_DLL 0x04U
+// #define BAUDCLOCK_DIVISOR_DLH 0x00U
+
+// // Bridge<>BG96 UART framing - 8 data, no parity, 1 stop (bits)
+// #define SC16IS7xx_LCR_UART_FRAMING 0x03U
+// //#define SC16IS7xx_EFR_ENHANCED_FUNCTIONS 0x10U
+
+// // [7:4] RX, [3:0] TX - level / 4 (buffer granularity is 4)
+// #define SC16IS7xx_TLR_TRIGGER_LEVELS 0x22U							// **!** testing value **!**
+// //#define SC16IS7xx_TLR_TRIGGER_LEVELS 0xFFU					    // 15 (*4) = 60 char buffer
+
+// // fcr is a RdOnly register, flush and FIFO enable are both in this register 
+// #define FCR_REGISTER_VALUE_BASIC_MODE 0xB7U
+// #define FCR_REGISTER_VALUE_IOP_FIFO_ENABLE 0xB1U
+// #define FCR_REGISTER_VALUE_IOP_RX_FLUSH 0x02U
+// #define FCR_REGISTER_VALUE_IOP_TX_FLUSH 0x04U
+
+
+
+// #define SC16IS7xx_FIFO_BUFFER_SZ   0x40
+// #define SC16IS7xx_FIFO_RnW_READ    0x01
+// #define SC16IS7xx_FIFO_RnW_WRITE   0x00
 
 // #define NXP_TX_FIFOSZ 0x40
 // #define NXP_RX_FIFOSZ 0x40
 
 // // NXP Bridge register set selector values (applied to LCR register)
-// #define SC16IS741A_REG_SET_GENERAL  0x00
-// #define SC16IS741A_REG_SET_SPECIAL  0x80
-// #define SC16IS741A_REG_SET_ENHANCED 0xBF
+// #define SC16IS7xx_REG_SET_GENERAL  0x00
+// #define SC16IS7xx_REG_SET_SPECIAL  0x80
+// #define SC16IS7xx_REG_SET_ENHANCED 0xBF
 
-// #define SC16IS741A_HW_RESET_DELAY      1U
-// #define SC16IS741A_SW_RESET_MASK       0x08
-
-
-typedef const uint8_t ro8;
-typedef uint8_t rw8;
+// #define SC16IS7xx_HW_RESET_DELAY      1U
+// #define SC16IS7xx_SW_RESET_MASK       0x08
 
 
 /**
- *	\brief SC16IS741A First SPI byte for register addressing.
+ *	@brief SC16IS7xx FIFO buffer reset actions
+ */
+typedef enum sc16IS7xx_FifoResetAction_tag
+{ 
+    SC16IS7xx_FIFO_resetActionRx = 0x02U,
+    SC16IS7xx_FIFO_resetActionTx = 0x04U,
+    SC16IS7xx_FIFO_resetActionRxTx = 0x06U,
+} sc16IS7xx_FifoResetAction_t;
+
+
+/**
+ *	@brief SC16IS741A First SPI byte for register addressing.
  *
  *	This byte tells the SPI slave what register to access and
  *	whether this operation is a read or write.
  */
-union __sc16is741a_reg_addr_byte__
+union __SC16IS7xx_reg_addr_byte__
 {
 	struct
 	{
@@ -96,15 +190,14 @@ union __sc16is741a_reg_addr_byte__
 };
 
 
-
 /**
- *	\brief SC16IS741A SPI bytes containing address and register value.
+ *	@brief SC16IS741A SPI bytes containing address and register value.
  */
-union __sc16is741a_reg_payload__
+union __SC16IS7xx_reg_payload__
 {
 	struct
 	{
-		union __sc16is741a_reg_addr_byte__ reg_addr;
+		union __SC16IS7xx_reg_addr_byte__ reg_addr;
 		uint8_t reg_data;
 	};
 	uint16_t reg_payload;
@@ -112,71 +205,19 @@ union __sc16is741a_reg_payload__
 
 
 
-// /**
-//  *	\brief A NXP SC16IS741A Serial bridge device (SPI<=>UART on LTEm1)
-//  */
-// typedef struct sc16is741a_device_tag
-// {
-// 	spi_device_t *spi;
-// } sc16is741a_device_t;
-
-//typedef sc16is741a_device_t* sc16is741a_device;
-
-
-#define DEF_SC16IS741A_REG(REG_NAME, REG_BITS) \
-typedef union \
-{ \
-    struct { \
-    REG_BITS \
-    }; \
-    uint8_t reg; \
-} SC16IS741A_##REG_NAME;
-
-
-/** 
- *  \brief Enum representing the register addresses of the NXP SPI bridge chip on the LTEm1.
- * 
- *  For details about registers see the NXP SC16IS741A data sheet.
-*/
-typedef enum
-{
-    SC16IS741A_FIFO_ADDR = 0x00U,               ///< FIFO data register, accesses the TX/RX buffers
-    SC16IS741A_IER_ADDR = 0x01U,                ///< Interrupt enable register
-    SC16IS741A_FCR_ADDR = 0x02U,                ///< Frame control register
-    SC16IS741A_IIR_ADDR = 0x02U,                ///< Interrupt identification register
-    SC16IS741A_LCR_ADDR = 0x03U,                ///< Line control register
-    SC16IS741A_MCR_ADDR = 0x04U,                ///< Modem control register
-    SC16IS741A_LSR_ADDR = 0x05U,                ///< Line state register
-    SC16IS741A_MSR_ADDR = 0x06U,                ///< Modem status register
-    SC16IS741A_SPR_ADDR = 0x07U,                ///< Scratchpad register (test loopback)
-    SC16IS741A_TCR_ADDR = 0x06U,                ///< Transmission control register
-    SC16IS741A_TLR_ADDR = 0x07U,                ///< Trigger level register
-    SC16IS741A_TXLVL_ADDR = 0x08U,              ///< TX level register
-    SC16IS741A_RXLVL_ADDR = 0x09U,              ///< RX level register
-    SC16IS741A_UARTRST_ADDR = 0x0EU,            ///< UART reset
-    SC16IS741A_EFCR_ADDR = 0x0FU,               ///< Extra features register
-    SC16IS741A_DLL_ADDR = 0x00U,                ///< Divisor latch register (LSB)
-    SC16IS741A_DLH_ADDR = 0x01U,                ///< Divisor latch register (MSB)
-    SC16IS741A_EFR_ADDR = 0x02U,                ///< Enhanced features register
-    SC16IS741A_XON1_ADDR = 0x04U,               ///< XON-1 word 
-    SC16IS741A_XON2_ADDR = 0x05U,               ///< XON-2 word
-    SC16IS741A_XOFF1_ADDR = 0x06U,              ///< XOFF-1 word
-    SC16IS741A_XOFF2_ADDR = 0x07U               ///< XOFF-2 word
-} sc16is741a_reg_addr;
 
 
 /* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 *
-*  bit-order may be affected by compiler and platform for DEF_SC16IS741A_REG 
+*  bit-order may be affected by compiler and platform for DEF_SC16IS7xx_REG 
 *  register structs below. These are composed as bit [0] first.
 *
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
 
-
 /**
- *  \brief Interrupt enable register.
+ *  @brief Interrupt enable register.
  */
-DEF_SC16IS741A_REG(IER,
+DEF_SC16IS7xx_REG(IER,
     rw8 RHR_DATA_AVAIL_INT_EN : 1;
     rw8 THR_EMPTY_INT_EN : 1;
     rw8 RECEIVE_LINE_STAT_INT_EN : 1;
@@ -189,9 +230,9 @@ DEF_SC16IS741A_REG(IER,
 
 
 /**
- *  \brief FIFO control register.
+ *  @brief FIFO control register.
  */
-DEF_SC16IS741A_REG(FCR,
+DEF_SC16IS7xx_REG(FCR,
     rw8 FIFO_EN : 1;
     rw8 RX_FIFO_RST : 1;
     rw8 TX_FIFO_RST : 1;
@@ -207,7 +248,7 @@ typedef enum
     TX_LVL_16SPACES = 0b01U,
     TX_LVL_32SPACES = 0b10U,
     TX_LVL_56SPACES = 0b11U
-} sc16is741a_fcr_tx_trigger_val;
+} SC16IS7xx_fcr_tx_trigger_val;
 
 
 typedef enum
@@ -216,11 +257,11 @@ typedef enum
     RX_LVL_16CHARS = 0b01U,
     RX_LVL_56CHARS = 0b10U,
     RX_LVL_60CHARS = 0b11U
-} sc16is741a_fcr_rx_trigger_val;
+} SC16IS7xx_fcr_rx_trigger_val;
 
 
 /**
- *  \brief Decode for Interrupt indicator register priority bits.
+ *  @brief Decode for Interrupt indicator register priority bits.
  */
 typedef enum
 {
@@ -231,13 +272,13 @@ typedef enum
     IRQ_4_MODEM = 0x00U,
     IRQ_6_XOFF = 0x08U,
     IRQ_7_CTSRTS = 0x10U
-} sc16is741a_irq_priority_val;
+} SC16IS7xx_irq_priority_val;
 
 
 /**
- *  \brief Interrupt indicator register.
+ *  @brief Interrupt indicator register.
  */
-DEF_SC16IS741A_REG(IIR,
+DEF_SC16IS7xx_REG(IIR,
     ro8 IRQ_nPENDING : 1;
     ro8 IRQ_SOURCE : 5;
     ro8 FIFO_EN : 2;
@@ -245,9 +286,9 @@ DEF_SC16IS741A_REG(IIR,
 
 
 /**
- *  \brief Line control register.
+ *  @brief Line control register.
  */
-DEF_SC16IS741A_REG(LCR, 
+DEF_SC16IS7xx_REG(LCR, 
     rw8 WORD_LEN : 2;
     rw8 STOP : 1;
     rw8 PARITY_EN : 1;
@@ -259,9 +300,9 @@ DEF_SC16IS741A_REG(LCR,
 
 
 /**
- *  \brief Modem control register.
+ *  @brief Modem control register.
  */
-DEF_SC16IS741A_REG(MCR,
+DEF_SC16IS7xx_REG(MCR,
     ro8 : 1;
     rw8 nRTS : 1;
     rw8 TCR_TLR_EN : 1;
@@ -274,9 +315,9 @@ DEF_SC16IS741A_REG(MCR,
 
 
 /**
- *  \brief Line status register.
+ *  @brief Line status register.
  */
-DEF_SC16IS741A_REG(LSR,
+DEF_SC16IS7xx_REG(LSR,
     ro8 DATA_IN_RECVR : 1;
     ro8 OVERRUN_ERROR : 1;
     ro8 PARITY_ERROR : 1;
@@ -287,21 +328,11 @@ DEF_SC16IS741A_REG(LSR,
     ro8 FIFO_DATA_ERROR : 1;
 )
 
-enum 
-{
-    nxp__lsr_DataInReceiver = 0x01U,
-    nxp__lsr_THR_empty = 0x02U,
-    nxp__lsr_FIFO_dataError = 0x80U
-};
-
-// #define NXP_LSR_DATA_IN_RECVR 0x01U
-// #define NXP_LSR_THR_EMPTY 0x02U
-// #define NXP_LSR_FIFO_DATA_ERROR 0x80U
 
 /**
- *  \brief Modem status register.
+ *  @brief Modem status register.
  */
-DEF_SC16IS741A_REG(MSR,
+DEF_SC16IS7xx_REG(MSR,
     ro8 DELTA_CTS : 1;
     ro8 : 3;
     ro8 CTS : 1;
@@ -310,26 +341,26 @@ DEF_SC16IS741A_REG(MSR,
 
 
 /**
- *  \brief Scratch pad register.
+ *  @brief Scratch pad register.
  */
-DEF_SC16IS741A_REG(SPR,
+DEF_SC16IS7xx_REG(SPR,
     rw8 DATA;
 )
 
 
 /**
- *  \brief UART software reset.
+ *  @brief UART software reset.
  */
-DEF_SC16IS741A_REG(UARTRST,
+DEF_SC16IS7xx_REG(UARTRST,
     ro8 : 3;
     rw8 UART_SWRST : 1;
 )
 
 
 /**
- *  \brief
+ *  @brief
  */
-DEF_SC16IS741A_REG(EFCR,
+DEF_SC16IS7xx_REG(EFCR,
     rw8 MODE_9BIT_EN : 1;
     rw8 RECVR_DISABLE : 1;
     rw8 TRANSMITTER_DISABLE : 1;
@@ -342,18 +373,18 @@ DEF_SC16IS741A_REG(EFCR,
 
 
 /**
- *  \brief Modem status register.
+ *  @brief Modem status register.
  */
-DEF_SC16IS741A_REG(TLR,
+DEF_SC16IS7xx_REG(TLR,
     rw8 TX_TRIGGER_LVL : 4;
     rw8 RX_TRIGGER_LVL : 4;
 )
 
 
 /**
- *  \brief
+ *  @brief
  */
-DEF_SC16IS741A_REG(EFR, 
+DEF_SC16IS7xx_REG(EFR, 
     rw8 SWFLOW_CTRL : 4;
     rw8 ENHANCED_FNS_EN : 1;
     rw8 SPECIAL_CHAR_DETECT : 1;
@@ -361,15 +392,8 @@ DEF_SC16IS741A_REG(EFR,
     rw8 AUTO_nCTS : 1;
 )
 
-
-typedef enum
-{
-  resetFifo_action_Rx = 0x02U,
-  resetFifo_action_Tx = 0x04U,
-  resetFifo_action_RxTx = 0x06U
-} resetFifo_action_t;
-
 #pragma endregion
+/* ----------------------------------------------------------------------------------------------------------------- */
 
 
 #ifdef __cplusplus
@@ -377,21 +401,75 @@ extern "C"
 {
 #endif // __cplusplus
 
-// private
-void SC16IS741A_start();
-void SC16IS741A_enableIrqMode();
-bool SC16IS741A_chkCommReady();
 
-void SC16IS741A_write(const void * src, uint8_t src_len);
-void SC16IS741A_read(void* dest, uint8_t dest_len);
-void SC16IS741A_writeReg(uint8_t reg_addr, uint8_t reg_data);
-uint8_t SC16IS741A_readReg(uint8_t reg_addr);
+/**
+*	@brief Configure base NXP bridge settings: reset (opt), FIFO, trigger levels (no trig IRQ yet), baud and framing
+*/
+void SC16IS7xx_start();
 
-void SC16IS741A_resetFifo(resetFifo_action_t resetAction);
-void SC16IS741A_flushRxFifo();
 
-// diagnostics
-void SC16IS741A__displayFifoStatus(const char *dispMsg);
+/**
+ *	@brief Enable IRQ servicing for communications between SC16IS741 and BG96
+ */
+void SC16IS7xx_enableIrqMode();
+
+
+/**
+ *	@brief Perform simple write/read using SC16IS741A scratchpad register. Used to test SPI communications.
+ */
+bool SC16IS7xx_chkCommReady();
+
+
+/**
+ *	@brief Read from a SC16IS741A bridge register
+ *	@param reg_addr [in] - The register address
+ *  @return reg_data - Byte of data read from register
+ */
+uint8_t SC16IS7xx_readReg(uint8_t reg_addr);
+
+
+/**
+ *	@brief Write to a SC16IS741A bridge register
+ *	@param reg_addr [in] - The register address
+ *	@param reg_data [in] - Pointer to the data to write to the register
+ */
+void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data);
+
+
+/**
+ *	@brief Reads through the SC16IS741A bridge (its RX FIFO)
+ *	@param dest [out] - The destination buffer
+ *	@param dest_len [in] - The length of the destination buffer
+ */
+void SC16IS7xx_read(void* dest, uint8_t dest_len);
+
+
+/**
+ *	@brief Write through the SC16IS741A bridge
+ *	@param src [in] - The source data to write
+ *	@param src_len [in] - The length of the source
+ */
+void SC16IS7xx_write(const void * src, uint8_t src_len);
+
+
+/**
+ *	@brief Perform reset on bridge FIFO
+ *  @param resetAction [in] - What to reset TX, RX or both
+ */
+void SC16IS7xx_resetFifo(sc16IS7xx_FifoResetAction_t resetAction);
+
+
+/**
+ *	@brief Flush contents of RX FIFO
+ */
+void SC16IS7xx_flushRxFifo();
+
+
+/**
+ *	@brief DEBUG: Show FIFO buffers fill level
+ */
+void SC16IS7xx__displayFifoStatus(const char *dispMsg);
+
 
 #ifdef __cplusplus
 }

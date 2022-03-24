@@ -88,11 +88,11 @@
  * 
  * If you are a LQCloud user get your SAS token from the Devices..Device Details panel.
  */
-#define MQTT_IOTHUB_DEVICEID "867198053224766"
+#define MQTT_IOTHUB_DEVICEID "864508030074113"
 #define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/" MQTT_IOTHUB_DEVICEID "/?api-version=2018-06-30"
 
-//#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F" MQTT_IOTHUB_DEVICEID "&sig=J0S6wK5yFEFcUcFpP84GRGeB%2FrIZRgjssfRs09kTeq0%3D&se=1624376687"
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053224766&sig=zlkmqXDdb9ebeRBOMssHj0XHOSllIpXc5zKdBFgSTec%3D&se=1628439070"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F864508030074113&sig=qxMZCJbzrH2IEvX8nWDSrRQU7jrIl55UxD%2BcSBA%2BxAE%3D&se=1675872394"
+//#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F863940053438001&sig=jOd0DSmbtHenUtuenv5x3ScKlTAMLaYR2R%2B%2Fz46oWqo%3D&se=1637909480"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
@@ -148,8 +148,9 @@ void setup() {
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
      * Azure requires TLS 1.2 and MQTT version 3.11 */
 
-    tls_configure(dataContext_5, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
-    mqtt_initControl(&mqttCtrl, dataContext_5, mqtt__useTls, mqttVersion_311, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
+    tls_configure(dataContext_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    mqtt_initControl(&mqttCtrl, dataContext_0, mqtt__useTls, mqttVersion_311, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
+    mqttCtrl.canReuseConn = true;
 
     resultCode_t rslt;
 
@@ -189,7 +190,7 @@ void loop()
         resultCode_t rslt;
 
         // /* no retry */
-        // rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage);
+        // rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage, 15);
 
         // if (rslt != resultCode__success)
         //     PRINTF(dbgColor__warn, "Publish failed!\r");
@@ -199,8 +200,8 @@ void loop()
         uint32_t publishTck = pMillis();
         do
         {
-            rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage);
-            if (pElapsed(publishTck, PERIOD_FROM_SECONDS(1)))
+            rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage, 30);
+            if (rslt != resultCode__success)
             {
                 PRINTF(dbgColor__warn, "Publish attempts timed out, Publish Failed!\r");
                 break;

@@ -32,22 +32,31 @@
 #include "ltemc-streams.h"
 #include "ltemc-internal.h"
 
+/** 
+ *  @brief Typed numeric constants for the sockets subsystem
+ */
+enum sckt__constants
+{
+    sckt__resultCode_previouslyOpen = 563,
+    sckt__defaultOpenTimeoutMS = 60000,
+
+    SCKT__IRD_requestMaxSz = 1500
+};
+
 
 /** 
- *  \brief Callback function for data received event. Notifies application that new data is available and needs serviced.
- * 
- *  The *data and dataSz values are for convenience, since the application supplied the buffer to LTEmC.
- * 
- *  \param peerId [in] Data peer (data context or filesys) 
- *  \param handle [in] Subordinate data ID to give application information about received data
- *  \param data [in] Pointer to received data buffer
- *  \param dataSz [in] The number of bytes available
+ *  @brief Callback function for data received event. Notifies application that new data is available and needs serviced.
+ *  @details The *data and dataSz values are for convenience, since the application supplied the buffer to LTEmC.
+ *  @param peerId [in] Data peer (data context or filesys) 
+ *  @param handle [in] Subordinate data ID to give application information about received data
+ *  @param data [in] Pointer to received data buffer
+ *  @param dataSz [in] The number of bytes available
 */
 typedef void (*scktRecvFunc_t)(streamPeer_t peerId, void *data, uint16_t dataSz);
 
 
 /** 
- *  \brief Struct representing the state of a TCP/UDP/SSL socket stream.
+ *  @brief Struct representing the state of a TCP/UDP/SSL socket stream.
 */
 typedef struct scktCtrl_tag
 {
@@ -69,37 +78,75 @@ typedef struct scktCtrl_tag
 } scktCtrl_t;
 
 
-// /** 
-//  *  \brief Struct representing the sockets service.
-// */
-// typedef volatile struct sockets_tag
-// {
-//     socketCtrl_t socketCtrls[SOCKET_COUNT];   ///< Array of socket connections.
-// } sockets_t;
-
-
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif // __cplusplus
 
-// void sckt_create();
+
+/**
+ *	@brief Create a socket data control(TCP/UDP/SSL).
+ *  @param scktCtrl [in/out] Pointer to socket control structure
+ *	@param dataCntxt [in] - Data context (0-5) to host socket
+ *	@param protocol [in] - The IP protocol to use for the connection (TCP/UDP/SSL clients)
+ *  @param recvBuf [in] - Pointer to application created receive buffer
+ *  @param recvBufSz [in] - Size of allocated receive buffer
+ *  @param recvCallback [in] - The callback function in your application to be notified of received data ready
+ *  @return socket result code similar to http status code, OK = 200
+ */
 void sckt_initControl(scktCtrl_t *scktCtrl, dataContext_t dataCntxt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback);
 
+
+/**
+ *	@brief Open a data connection (socket) to d data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING)
+ *  @param sckt [in] - Pointer to the control block for the socket
+ *	@param host [in] - The IP address (string) or domain name of the remote host to communicate with
+ *  @param rmtPort [in] - The port number at the remote host
+ *  @param lclPort [in] - The port number on this side of the conversation, set to 0 to auto-assign
+ *  @param cleanSession [in] - If the port is found already open, TRUE: flushes any previous data from the socket session
+ *  @return Result code similar to http status code, OK = 200
+ */
 resultCode_t sckt_open(scktCtrl_t *scktCtrl, const char *host, uint16_t rmtPort, uint16_t lclPort, bool cleanSession);
 
+
+/**
+ *	@brief Close an established (open) connection socket
+ *	@param scktCtrl [in] - Pointer to socket control struct governing the sending socket's operation
+ */
 void sckt_close(scktCtrl_t *scktCtrl);
+
+
+/**
+ *	@brief Reset open socket connection. This function drains the connection's data pipeline 
+ *	@param scktCtrl [in] - Pointer to socket control struct governing the sending socket's operation
+ *  @return True if flush socket data initiated
+ */
 bool sckt_flush(scktCtrl_t *scktCtrl);
+
+
+/**
+ *  @brief Close out all TCP/IP sockets on a context
+ *	@param contxtId [in] - The carrier PDP context hosting the sockets to close
+*/
 void sckt_closeAll();
 
+
+/**
+ *	@brief Retrieve the state of a socket connection
+ *	@param scktCtrl [in] - Pointer to socket control struct governing the sending socket's operation
+ *  @return True if socket is open
+ */
 bool sckt_getState(scktCtrl_t *scktCtrl);
 
+
+/**
+ *	@brief Send data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING)
+ *	@param scktCtrl [in] - Pointer to socket control struct governing the sending socket's operation
+ *	@param data [in] - A character pointer containing the data to send
+ *  @param dataSz [in] - The size of the buffer (< 1501 bytes)
+ */
 resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz);
-
-
-// private to LTEmc
-void sckt__doWork();
 
 
 #ifdef __cplusplus

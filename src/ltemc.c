@@ -44,20 +44,23 @@ const char *ltemcVersion = "2.2.1";
 /* ------------------------------------------------------------------------------------------------
  * GLOBAL LTEm1 Device Objects, One LTEmX supported
  * --------------------------------------------------------------------------------------------- */
-// ltemDevice_t *g_ltem;
+/* ltemDevice_t *g_ltem;
 
-// ltemPinConfig_t g_ltemPinConfig;         ///< GPIO pin configuration for required GPIO and SPI interfacing.
-// spiDevice_t *g_ltemSpiPtr;               ///< SPI device (methods signatures compatible with Arduino).
-// qbgReadyState_t g_ltemQbgReadyState;     ///< Ready state of the BGx module
-// appNotifyFunc_t g_ltemAppNotifyCB;       ///< Notification callback to application
-// uint8_t g_ltemPdpContext;                ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.
-// volatile iop_t *g_ltemIopPtr;            ///< IOP subsystem controls.
-// atcmd_t *g_ltemAtcmdPtr;                 ///< Action subsystem controls.
-// modemInfo_t *g_ltemModemInfoPtr;         ///< Data structure holding persistent information about application modem state.
-// network_t *g_ltemNetworkPtr;             ///< Data structure representing the cellular network.
-// bool g_ltemCancellationRequest;          ///< For RTOS implementations, token to request cancellation of long running task/action.
+   ltemPinConfig_t g_ltemPinConfig;         ///< GPIO pin configuration for required GPIO and SPI interfacing.
+   spiDevice_t *g_ltemSpiPtr;               ///< SPI device (methods signatures compatible with Arduino).
+   qbgReadyState_t g_ltemQbgReadyState;     ///< Ready state of the BGx module
+   appNotifyFunc_t g_ltemAppNotifyCB;       ///< Notification callback to application
+   uint8_t g_ltemPdpContext;                ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.
+   volatile iop_t *g_ltemIopPtr;            ///< IOP subsystem controls.
+   atcmd_t *g_ltemAtcmdPtr;                 ///< Action subsystem controls.
+   modemInfo_t *g_ltemModemInfoPtr;         ///< Data structure holding persistent information about application modem state.
+   network_t *g_ltemNetworkPtr;             ///< Data structure representing the cellular network.
+   bool g_ltemCancellationRequest;          ///< For RTOS implementations, token to request cancellation of long running task/action.
+*/
 
+// global device object
 ltemDevice_t g_ltem;
+
 
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------ */
@@ -67,8 +70,7 @@ ltemDevice_t g_ltem;
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *	\brief Get the LTEmC software version.
- *  \return Version as a const char pointer.
+ *	@brief Get the LTEmC software version.
  */
 const char *ltem_ltemcVersion()
 {
@@ -77,121 +79,31 @@ const char *ltem_ltemcVersion()
 
 
 /**
- *	\brief Initialize the LTEm1 modem.
- *
- *	\param ltem_config [in] - The LTE modem gpio pin configuration.
- *  \param eventNotifCallback [in] - If supplied (not NULL), this function will be invoked for significant LTEm1 events.
+ *	@brief Initialize the LTEm1 modem.
  */
-void ltem_create(const ltemPinConfig_t ltem_config, eventNotifFunc_t eventNotifCallback)
+void ltem_create(const ltemPinConfig_t ltem_config, appEventCallback_func eventNotifCallback)
 {
-	// g_ltem = calloc(1, sizeof(ltemDevice_t));
-	// if (g_ltem == NULL)
-	// {
-    //     if (appNotifyCB != NULL)                                       
-    //         appNotifyCB(ltemNotifType_memoryAllocFault, "ltem1-could not alloc ltem1 object");
-	// }
-
 	g_ltem.pinConfig = ltem_config;
     g_ltem.spi = spi_create(g_ltem.pinConfig.spiCsPin);
-    //g_ltem->spi = createSpiConfig(g_ltem->gpio->spiCsPin, LTEM1_SPI_DATARATE, BG96_BAUDRATE_DEFAULT);
 
     g_ltem.modemInfo = calloc(1, sizeof(modemInfo_t));
-    ASSERT(g_ltem.modemInfo != NULL, srcfile_ltemc_c);
+    ASSERT(g_ltem.modemInfo != NULL, srcfile_ltemc_ltemc_c);
     g_ltem.pdpContext = 1;
 
     IOP_create();
     g_ltem.atcmd = calloc(1, sizeof(atcmd_t));
     atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd_okResultParser);
-    atcmd_reset(true);
+    ATCMD_reset(true);
     g_ltem.cancellationRequest = false;
 
     ntwk_create();
-    g_ltem.appNotifCB = eventNotifCallback;
+    g_ltem.appEventCB = eventNotifCallback;
 }
 
 
 
 /**
- *	\brief Power on and start the modem.
- */
-void ltem_start()
-{
-  	// on Arduino compatible, ensure pin is in default "logical" state prior to opening
-	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
-	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
-	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
-	gpio_writePin(g_ltem.pinConfig.irqPin, gpioValue_high);
-
-	gpio_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	gpio_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	gpio_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
-	gpio_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
-	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
-
-    bool poweredPrevious = qbg_isPowerOn();
-
-    spi_start(g_ltem.spi);
-    qbg_powerOn();
-
-    if (qbg_isPowerOn())
-    {
-        SC16IS741A_start();                                     // start (resets previously powered on) NXP SPI-UART bridge
-        IOP_start();
-        if (!poweredPrevious)
-            IOP_awaitAppReady();                                // wait for BGx to signal out firmware ready
-        qbg_setOptions();                                       // initialize BGx operating settings
-        g_ltem.qbgReadyState = qbg_readyState_appReady;
-    }
-}
-
-
-/**
- *	\brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW.
- */
-void ltem_stop()
-{
-    spi_stop(g_ltem.spi);
-    IOP_stopIrq();
-    g_ltem.qbgReadyState = qbg_readyState_powerOff;
-    qbg_powerOff();
-}
-
-
-/**
- *	\brief Performs a HW reset of LTEm1.
- */
-void ltem_reset()
-{
-    ltem_notifyApp(lqNotifType_disconnect, "LTEm reset");
-    ltem_stop();
-    ltem_start();
-}
-
-
-/**
- *	\brief Check the BGx for hardware ready (status pin).
- *
- *  \return True is status HIGH, hardware ready.
- */
-bool ltem_chkHwReady()
-{
-	return gpio_readPin(g_ltem.pinConfig.statusPin);
-}
-
-
-
-/**
- *	\brief Performs a HW reset of LTEm1 and optionally executes start sequence.
- */
-qbgReadyState_t ltem_getReadyState()
-{
-    return g_ltem.qbgReadyState;
-}
-
-
-
-/**
- *	\brief Uninitialize the LTE modem.
+ *	@brief Uninitialize the LTEm device structures.
  */
 void ltem_destroy()
 {
@@ -211,12 +123,127 @@ void ltem_destroy()
 
 
 /**
- *	\brief Background work task runner. To be called in application Loop() periodically.
+ *	@brief Start the modem.
+ */
+bool ltem_start(bool forceReset)
+{
+  	// on Arduino compatible, ensure pin is in default "logical" state prior to opening
+	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
+	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
+	gpio_writePin(g_ltem.pinConfig.irqPin, gpioValue_high);
+
+	gpio_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	gpio_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	gpio_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	gpio_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
+	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
+
+    spi_start(g_ltem.spi);                                              // start host SPI
+
+    bool foundOn = qbg_isPowerOn();
+    if (foundOn)
+    {
+        if (forceReset)
+        {
+            SC16IS7xx_start(false);                             // SPI-UART bridge functionality may/may not be running, init base functions: FIFO, levels, baud, framing
+            qbg_reset(true);                                    // do hardware reset (aka power cycle)
+        }
+    }
+    else 
+    {
+        qbg_powerOn();                                          // turn on BGx
+        // ltem_initDevice(true);                                  // start services from cold start (waits for APP RDY)
+        if (qbg_isPowerOn())                                    // ensure BGx powered on
+        {
+            SC16IS7xx_start();                                  // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
+            if (!foundOn)                                   
+                IOP_awaitAppReady();                            // wait for BGx to signal out firmware ready (URC message)
+
+            IOP_start();                                        // start I/O processor and switch SPI-UART bridge to IRQ mode
+            SC16IS7xx_enableIrqMode();
+
+            qbg_setOptions();                                   // initialize BGx operating settings
+            g_ltem.qbgDeviceState = qbgDeviceState_appReady;    // set device state
+        }
+
+    }
+    return !foundOn;
+}
+
+
+
+/**
+ *	@brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW.
+ */
+void ltem_stop()
+{
+    spi_stop(g_ltem.spi);
+    IOP_stopIrq();
+    g_ltem.qbgDeviceState = qbgDeviceState_powerOff;
+    qbg_powerOff();
+}
+
+
+
+/**
+ *	@brief Performs a software restart of LTEm device.
+ */
+// void ltem_initDevice(bool coldStart)
+// {
+    // if (qbg_isPowerOn())                                // check for HW powered on, status=true. If powered off nothing to do.
+    // {
+    //     SC16IS7xx_start();                              // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
+    //     if (coldStart)                                          // caller notifies if cold BGx (powered ON/reset prior to call)
+    //         IOP_awaitAppReady();                                // wait for BGx to signal out firmware ready (URC message)
+
+    //     IOP_start();                                            // start I/O processor and SPI-UART IRQ mode
+    //     SC16IS7xx_enableIrqMode();
+
+    //     qbg_setOptions();                                       // initialize BGx operating settings
+    //     g_ltem.qbgDeviceState = qbgDeviceState_appReady;        // set device state
+    // }
+// }
+
+
+/**
+ *	@brief Performs a reset of LTEm.
+ */
+void ltem_reset(bool hardReset)
+{
+    qbg_reset(hardReset);                                       // reset module, indirectly SPI/UART (CFUNC or reset pin)
+    ltem_initDevice(true);
+}
+
+
+/**
+ *	@brief Check the BGx for hardware ready (status pin).
+ *
+ *  @return True is status HIGH, hardware ready.
+ */
+bool ltem_chkHwReady()
+{
+	return gpio_readPin(g_ltem.pinConfig.statusPin);
+}
+
+
+
+/**
+ *	@brief Performs a HW reset of LTEm1 and optionally executes start sequence.
+ */
+qbgDeviceState_t ltem_getDeviceState()
+{
+    return g_ltem.qbgDeviceState;
+}
+
+
+/**
+ *	@brief Background work task runner. To be called in application Loop() periodically.
  */
 void ltem_doWork()
 {
     if (!ltem_chkHwReady())
-        ltem_notifyApp(lqNotifType_hardFault, "LTEm I/O Error");
+        ltem_notifyApp(appEvent_fault_hardFault, "LTEm I/O Error");
 
     for (size_t i = 0; i < sizeof(g_ltem.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)  // each stream with a doWork() register it at OPEN (removed if last CLOSE)
     {
@@ -227,23 +254,29 @@ void ltem_doWork()
 
 
 /**
- *	\brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
- * 
- *  \param notifyType [in] - Enum of broad notification categories.
- *  \param notifyMsg [in] - Message from origination about the issue being reported.
+ *	@brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
  */
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
-    if (g_ltem.appNotifCB != NULL)                                       
-        (g_ltem.appNotifCB)(notifyType, lqNotifAssm_ltemc, 0, notifyMsg);                                // if app handler registered, it may/may not return
+    if (g_ltem.appEventCB != NULL)                                       
+        (g_ltem.appEventCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
 }
 
 
+/**
+ *	@brief Registers the address (void*) of your application event nofication callback handler.
+ * 
+ *  @param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ */
+void ltem_setEventNotifCallback(appEventCallback_func eventNotifCallback)
+{
+    g_ltem.appEventCB = eventNotifCallback;
+}
 
 /**
- *	\brief Registers the address (void*) of your application yield callback handler.
+ *	@brief Registers the address (void*) of your application yield callback handler.
  * 
- *  \param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ *  @param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
 void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 {
@@ -251,20 +284,10 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 }
 
 
-/**
- *	\brief Registers the address (void*) of your application event nofication callback handler.
- * 
- *  \param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
- */
-void ltem_setEventNotifCallback(eventNotifFunc_t eventNotifCallback)
-{
-    g_ltem.appNotifCB = eventNotifCallback;
-}
-
 #pragma endregion
 
 
-#pragma region LTEmC Internal Functions
+#pragma region LTEmC Internal Functions (ltemc-internal.h)
 /*-----------------------------------------------------------------------------------------------*/
 
 void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker)
@@ -295,15 +318,6 @@ void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker)
 #pragma endregion
 
 
+
 #pragma region Static Function Definitions
-
-/**
- *	\brief Initialize the modems IO.
- *
- *	\param[in] modem The LTE modem.
- */
-static void S_initIo()
-{
-}
-
 #pragma endregion

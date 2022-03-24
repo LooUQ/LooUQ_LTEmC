@@ -1,6 +1,6 @@
 \mainpage
 # Circuit River - LTEmC
-## Latest Release: v2.2.0 
+## Latest Release: v2.3.0 
 
 LTEm1 modem driver implemented in C for portability and a small footprint.
 

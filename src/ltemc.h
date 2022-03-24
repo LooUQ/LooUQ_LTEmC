@@ -34,7 +34,7 @@
 #include <lq-types.h>
 #include <lq-diagnostics.h>
 
-#include "ltemc-filecodes.h"
+#include "ltemc-srcfiles.h"
 #include "lq-platform.h"
 #include "ltemc-quectel-bg.h"
 #include "ltemc-iop.h"
@@ -49,83 +49,113 @@
  *      IOP__txBufferSize = 1800
  *      ATCMD__commandBufferSz = 256
  */
-
-// // optional services
-// #include "ltemc-sckt.h"
-// #include "ltemc-mqtt.h"
-// #include "ltemc-http.h"
-// #include "ltemc-gnss.h"
-// #include "ltemc-geo.h"
-
 /* ----------------------------------------------------------------------------------- */
-
-// typedef enum ltemcOptions_tag              // binary-OR'd list of buildable options
-// {
-//     ltemcOptions_none = 0x0000,         
-//     ltemcOptions_sockets = 0x0001,         
-//     ltemcOptions_mqtt = 0x0002,
-//     ltemcOptions_gnss = 0x0004,
-//     ltemcOptions_geofence = 0x0008,
-//     ltemcOptions_http = 0x0010,
-//     ltemcOptions_file = 0x0020
-// } ltemcOptions_t;
-
-
-
-// /** 
-//  *  \brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
-//  * 
-//  *  Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
-// */
-// typedef struct ltemDevice_tag
-// {
-//     // ltem1Functionality_t funcLevel;  ///< Enum value indicating services enabled during ltemC startup.
-// 	ltemPinConfig_t pinConfig;          ///< GPIO pin configuration for required GPIO and SPI interfacing.
-//     spiDevice_t *spi;                   ///< SPI device (methods signatures compatible with Arduino).
-//     // uint16_t faultCode;                 ///< debugging fault code set by driver ASSERT flows
-//     qbgReadyState_t qbgReadyState;      ///< Ready state of the BGx module
-//     appNotifyFunc_t appNotifyCB;         ///< Notification callback to application
-//     uint8_t pdpContext;                 ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.
-//     volatile iop_t *iop;                ///< IOP subsystem controls.
-//     atcmd_t *atcmd;                     ///< Action subsystem controls.
-// 	modemInfo_t *modemInfo;             ///< Data structure holding persistent information about application modem state.
-//     network_t *network;                 ///< Data structure representing the cellular network.
-//     bool cancellationRequest;           ///< For RTOS implementations, token to request cancellation of long running task/action.
-
-//     // /* optional services                only taking room for some pointers if not implemented */
-// 	// void *sockets;                      ///< IP sockets subsystem (TCP/UDP/SSL).
-//     // void (*scktWork_func)();            ///< Sockets background do work function
-//     // void *mqtt;                         ///< MQTT protocol subsystem.
-//     // void (*mqttWork_func)();            ///< MQTT background do work function
-
-//     // array of function pointers to each protocol doWork(), create protoCtrl factory will init()
-//     // needed for sockets, ...
-// } ltemDevice_t;
-
-
-// extern ltemDevice_t *g_ltem;            ///< The LTEm "object". Since this is C99, like the instance object.
-
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif // __cplusplus
 
-void ltem_create(const ltemPinConfig_t ltem_config, eventNotifFunc_t eventNotifCallback);
+
+/**
+ *	@brief Get the LTEmC software version.
+ *  @return Version as a const char pointer.
+ */
+const char *ltem_ltemcVersion();
+
+
+// typedef void (*eventNotifCallback_func)(uint8_t notifCode, const char *message);
+
+/**
+ *	@brief Initialize the LTEm1 modem.
+ *	@param ltem_config [in] - The LTE modem gpio pin configuration.
+ *  @param applicationCallback [in] - If supplied (not NULL), this function will be invoked for significant LTEm events.
+ */
+void ltem_create(const ltemPinConfig_t ltem_config, appEventCallback_func eventNotifCallback);
+
+
+/**
+ *	@brief Uninitialize the LTEm device structures.
+ */
 void ltem_destroy();
 
-void ltem_start();
+
+/**
+ *	@brief Power on and start the modem
+ *  @param resetIfPoweredOn [in] Perform a software reset on the modem, if found in a powered on state
+ *  @return True if the LTEM powers up with this function invocation (it was not previously powered on)
+ */
+bool ltem_start(bool resetIfRunning);
+
+
+/**
+ *	@brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW
+ */
 void ltem_stop();
-void ltem_reset();
-bool ltem_chkHwReady();
-qbgReadyState_t ltem_getReadyState();
 
+
+// /**
+//  *	@brief Performs a software restart of LTEm1.
+//  *  @param coldStart [in] Set to true if the LTEm is being hard started, from a reset/power ON
+//  */
+// void ltem_initDevice(bool coldStart);
+
+
+/**
+ *	@brief Performs a reset of LTEm.
+ */
+void ltem_reset(bool hardReset);
+
+
+/**
+ *	@brief Check the BGx for hardware ready (status pin).
+ *  @return True is status HIGH, hardware ready.
+ */
+bool ltem_chkDeviceRdy();
+
+
+/**
+ *	@brief Performs a HW reset of LTEm1 and optionally executes start sequence.
+ *  @return DeviceState enum type indicating device state (power, app ready, etc.).
+ */
+qbgDeviceState_t ltem_getDeviceState();
+
+
+
+/**
+ *	@brief Background work task runner. To be called in application Loop() periodically.
+ */
 void ltem_doWork();
-void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
-void ltem_notifyAssert(uint16_t faultCode)   __attribute__ ((noreturn));
 
-void ltem_setEventNotifCallback(eventNotifFunc_t eventNotifCallback);
-void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback);
+
+/**
+ *	@brief Registers the address (void*) of your application yield callback handler.
+ *  @param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ */
+void ltem_setYieldCallback(yield_func yieldCallback);
+
+
+/**
+ *	@brief Registers the address (void*) of your application event notification callback handler.
+ *  @param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ */
+void ltem_setEventNotifCallback(appEventCallback_func eventNotifCallback);
+
+
+/**
+ *	@brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
+ *  @param notifyType [in] - Enum of broad notification categories.
+ *  @param notifyMsg [in] - Message from origination about the issue being reported.
+ */
+void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
+
+
+// /**
+//  *	@brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
+//  *  @param faultCode [in] - HTTP style error code.
+//  */
+// void ltem_notifyAssert(uint16_t faultCode)   __attribute__ ((noreturn));
+
 
 #ifdef __cplusplus
 }

@@ -43,12 +43,7 @@
 #include "ltemc-internal.h"
 #include <lq-str.h>
 
-
-enum
-{
-    http__LTEM_defaultTimeoutBGxSec = 60
-};
-
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 
 extern ltemDevice_t g_ltem;
@@ -66,22 +61,13 @@ static resultCode_t S_httpPostStatusParser(const char *response, char **endptr);
 ------------------------------------------------------------------------------------------------------------------------- */
 
 /**
- *	\brief Create a HTTP(s) control structure to manage web communications. 
- *
- *  \param httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
- *	\param dataCntxt [in] The data context (0-5) to use for this communications.
- *  \param urlHost [in] The host portion of the web server URL.
- *  \param recvBuf [in] Pointer to application provided char buffer.
- *  \param recvBufSz [in] Size of the receive buffer.
- *  \param recvCallback [in] Callback function to receive incoming page data.
- * 
- *  \return True if action was invoked, false if not
+ *	@brief Create a HTTP(s) control structure to manage web communications. 
  */
 void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataCntxt, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback)
 {
-    ASSERT(httpCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_http_c);
-    ASSERT(dataCntxt < dataContext_cnt, srcfile_sckt_c);
-    ASSERT(strncmp(urlHost, "HTTP", 4) == 0 || strncmp(urlHost, "http", 4) == 0, srcfile_http_c);
+    ASSERT(httpCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_ltemc_http_c);
+    ASSERT(dataCntxt < dataContext__cnt, srcfile_ltemc_sckt_c);
+    ASSERT(strncmp(urlHost, "HTTP", 4) == 0 || strncmp(urlHost, "http", 4) == 0, srcfile_ltemc_http_c);
 
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
 
@@ -96,8 +82,8 @@ void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataCntxt, const char*
 
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(httpCtrl->recvBufCtrl), recvBuf, recvBufSz);
 
-    ASSERT_W(recvBufSz == bufferSz, srcfile_http_c, "RxBufSz != multiple of 128B");
-    ASSERT(bufferSz > 64, srcfile_http_c);
+    ASSERT_W(recvBufSz == bufferSz, srcfile_ltemc_http_c, "Http RxBufSz not *of 128b");
+    ASSERT(bufferSz > 64, srcfile_ltemc_http_c);
 
     httpCtrl->dataRecvCB = recvCallback;
     httpCtrl->cstmHdrs = NULL;
@@ -109,17 +95,13 @@ void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataCntxt, const char*
 
 
 /**
- *	\brief Registers custom headers (char) buffer with HTTP control.
- *
- *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	\param headerBuf [in] - pointer to header buffer  created by application
- *  \param headerBufSz [in] - size of the header buffer
+ *	@brief Registers custom headers (char) buffer with HTTP control.
  */
 void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t headerBufSz)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_http_c);
-    ASSERT(headerBuf != NULL, srcfile_http_c);
-    ASSERT(headerBufSz > 0, srcfile_http_c);
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
+    ASSERT(headerBuf != NULL, srcfile_ltemc_http_c);
+    ASSERT(headerBufSz > 0, srcfile_ltemc_http_c);
 
     httpCtrl->cstmHdrs = headerBuf;
     httpCtrl->cstmHdrsSz = headerBufSz;
@@ -127,15 +109,12 @@ void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t heade
 
 
 /**
- *	\brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
- *
- *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	\param headerMap [in] - Bitmap for which standard headers to use.
+ *	@brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
  */
 void http_addDefaultHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_http_c);
-    ASSERT(httpCtrl->cstmHdrs != NULL, srcfile_http_c);
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
+    ASSERT(httpCtrl->cstmHdrs != NULL, srcfile_ltemc_http_c);
 
     if (headerMap & httpHeaderMap_accept > 0 || headerMap == httpHeaderMap_all)
     {
@@ -161,16 +140,12 @@ void http_addDefaultHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
 
 
 /**
- *	\brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
- *
- *  \param http [in] - Pointer to the control block for HTTP communications.
- *	\param user [in] - User name.
- *  \param pw [in] - Password/secret for header.
+ *	@brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
  */
 void http_addBasicAuthHdr(httpCtrl_t *http, const char *user, const char *pw)
 {
-    ASSERT(http->ctrlMagic == streams__ctrlMagic, srcfile_http_c);
-    ASSERT(http->cstmHdrs != NULL, srcfile_http_c);
+    ASSERT(http->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
+    ASSERT(http->cstmHdrs != NULL, srcfile_ltemc_http_c);
 
     char toEncode[80];
     char b64str[120];
@@ -192,32 +167,25 @@ void http_addBasicAuthHdr(httpCtrl_t *http, const char *user, const char *pw)
 
 /* ------------------------------------------------------------------------------------------------
  *  Request and Response Section 
------------------------------------------------------------------------------------------------- */
+ * --------------------------------------------------------------------------------------------- */
 
 /**
- *	\brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
- *
- *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	\param relativeUrl [in] - The URL to GET (starts with \ and doesn't include the host part)
- *  \param returnResponseHdrs [in] - Set to true for page result to include response headers at the start of the page
- *  \param timeoutSec [in] - Timeout for entire GET request cycle
- * 
- *  \return true if GET request sent successfully
+ *	@brief Perform HTTP GET operation. Results are internally buffered on the LTEm, see http_read().
  */
 resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, uint8_t timeoutSec)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_http_c);
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
 
     httpCtrl->requestState = httpState_idle;
     httpCtrl->requestType = 'G';
     httpCtrl->httpStatus = resultCode__unknown;
 
-    timeoutSec = (timeoutSec == 0) ? http__LTEM_defaultTimeoutBGxSec : timeoutSec;
+    timeoutSec = (timeoutSec == 0) ? http__defaultTimeoutBGxSec : timeoutSec;
     // uint32_t timeoutMS = timeoutSec * 1000;
     resultCode_t atResult;
 
     atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
-    if (atcmd_awaitLock(PERIOD_FROM_SECONDS(timeoutSec)))
+    if (ATCMD_awaitLock(PERIOD_FROM_SECONDS(timeoutSec)))
     {
         if (returnResponseHdrs)
         {
@@ -273,7 +241,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         * This allows other application tasks to be performed while waiting for page. No LTEm commands can be invoked
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
-        atcmd_reset(false);                                                         // reset atCmd control struct WITHOUT clearing lock
+        ATCMD_reset(false);                                                         // reset atCmd control struct WITHOUT clearing lock
         atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSec), S_httpGetStatusParser);
 
         char httpRequestCmd[20];
@@ -283,7 +251,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         atResult = atcmd_awaitResult();                                         // wait for "+QHTTPGET trailer
         if (atResult == resultCode__success)
         {
-            httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastResponseTail());
+            httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, ATCMD_getLastResponseTail());
             if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                 httpCtrl->requestState = httpState_requestComplete;                 // update httpState, got GET/POST response
         }
@@ -300,33 +268,23 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
 }   // http_get()
 
 
-
 /**
- *	\brief Performs a HTTP POST page web request.
- *
- *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	\param relativeUrl [in] - URL, relative to the host. If none, can be provided as "" or "/" ()
- *  \param returnResponseHdrs [in] - if requested (true) the page response stream will prefix the page data
- *  \param postData [in] - Pointer to char buffer with POST content
- *  \param postDataSz [in] - Size of the POST content reference by *postData
- *	\param timeoutSec [in] - the number of seconds to wait (blocking) for a page response
- *
- *  \return true if POST request completed
+ *	@brief Performs a HTTP POST page web request.
  */
 resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, const char* postData, uint16_t postDataSz, uint8_t timeoutSec)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_http_c);
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
 
     httpCtrl->requestState = httpState_idle;
     httpCtrl->requestType = 'P';
     httpCtrl->httpStatus = resultCode__unknown;
 
-    timeoutSec = (timeoutSec == 0) ? http__LTEM_defaultTimeoutBGxSec : timeoutSec;
+    timeoutSec = (timeoutSec == 0) ? http__defaultTimeoutBGxSec : timeoutSec;
     // uint32_t timeoutMS = timeoutSec * 1000;
     resultCode_t atResult;
 
     atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
-    if (atcmd_awaitLock(PERIOD_FROM_SECONDS(timeoutSec)))
+    if (ATCMD_awaitLock(PERIOD_FROM_SECONDS(timeoutSec)))
     {
         if (returnResponseHdrs)
         {
@@ -379,7 +337,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
         * This allows other application tasks to be performed while waiting for page. No LTEm commands can be invoked
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
-        atcmd_reset(false);                                                                     // reset atCmd control struct WITHOUT clearing lock
+        ATCMD_reset(false);                                                                     // reset atCmd control struct WITHOUT clearing lock
         atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSec), atcmd_connectPromptParser);
 
         char httpRequestCmd[40];
@@ -396,7 +354,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
             atResult = atcmd_awaitResult();
             if (atResult == resultCode__success)                                        // wait for "+QHTTPPOST trailer
             {
-                httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastResponseTail());
+                httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, ATCMD_getLastResponseTail());
                 if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                     httpCtrl->requestState = httpState_requestComplete;                 // update httpState, got GET/POST response
             }
@@ -417,21 +375,14 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
 
 
 
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-
 /**
- *	\brief Performs a HTTP POST page web request.
- *
- *  \param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	\param timeoutSec [in] - the number of seconds to wait (blocking) for a page response
- *
- *  \return true if POST request completed
+ *	@brief Retrieves page results from a previous GET or POST.
  */
 resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
 {
     iop_t *iopPtr = (iop_t*)g_ltem.iop;                             // shortcut to the IOP subsystem
     resultCode_t rslt;
-    timeoutSec = (timeoutSec == 0) ? http__LTEM_defaultTimeoutBGxSec : timeoutSec;
+    timeoutSec = (timeoutSec == 0) ? http__defaultTimeoutBGxSec : timeoutSec;
     uint32_t timeoutMS = timeoutSec * 1000;
 
     int pages = 0;
@@ -460,7 +411,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
     *-----------------------------------------------------------------------------------------------*/
 
     atcmd_setOptions(timeoutMS, atcmd_connectPromptParser);
-    if (atcmd_awaitLock(timeoutMS))
+    if (ATCMD_awaitLock(timeoutMS))
     {
         iopPtr->rxStreamCtrl = httpCtrl;                            // put IOP in data mode
 
@@ -551,6 +502,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
             {
                 httpCtrl->requestState = httpState_closing;
                 httpCtrl->httpStatus = resultCode__timeout;
+                break;
             }
         }   //while(true) 
 
@@ -564,12 +516,8 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
 }
 
 
-void http_cancelPage(httpCtrl_t *httpCtrl)
-{
-    httpCtrl->pageCancellation = true;
-}
-
 #pragma endregion
+
 
 
 #pragma region Static Functions

@@ -25,30 +25,32 @@
  * LTEmC ASSERT file codes
  *****************************************************************************/
 
-#ifndef __LTEMC_FILECODES_H__
-#define __LTEMC_FILECODES_H__
+#ifndef __LTEMC_SOURCEFILES_H__
+#define __LTEMC_SOURCEFILES_H__
 
-
-typedef enum ltemcFilecodes_tag
+/**
+ * @brief Enum listing code source files used for diagnostics.
+ */
+typedef enum srcfile_ltemc_tag
 {
-    assm_ltemc = 0xC0,
+    srcfile__ltemc = 60100,
 
-    srcfile_ltemc_c = 0xC000,
-    srcfile_atcmd_c,
-    srcfile_cbuf_c,
-    srcfile_filesys_c,
-    srcfile_geo_c,
-    srcfile_gnss_c,
-    srcfile_http_c,
-    srcfile_iop_c,
-    srcfile_mdminfo_c,
-    srcfile_mqtt_c,
-    srcfile_network_c,
-    srcfile_nxp_sc16is_c,
-    srcfile_quectel_bg_c,
-    srcfile_sckt_c,
-    srcfile_tls
-} ltemcFilecodes_t;
+    srcfile_ltemc_ltemc_c,
+    srcfile_ltemc_atcmd_c,
+    srcfile_ltemc_cbuf_c,
+    srcfile_ltemc_filesys_c,
+    srcfile_ltemc_geo_c,
+    srcfile_ltemc_gnss_c,
+    srcfile_ltemc_http_c,
+    srcfile_ltemc_iop_c,
+    srcfile_ltemc_mdminfo_c,
+    srcfile_ltemc_mqtt_c,
+    srcfile_ltemc_network_c,
+    srcfile_ltemc_nxpSc16is_c,
+    srcfile_ltemc_quectelBg_c,
+    srcfile_ltemc_sckt_c,
+    srcfile_ltemc_tls_c
+} srcfile_ltemc_t;
 
 
-#endif  /* !__LTEMC_FILECODES_H__ */
+#endif  /* !__LTEMC_SOURCEFILES_H__ */

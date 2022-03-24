@@ -27,8 +27,10 @@
  *****************************************************************************/
 
 /*** Known BGx Header Patterns Supported by LTEmC IOP ***
+/**
+ * @details
 
-//  Area/Msg Prefix
+ Area/Msg Prefix
     // -- BG96 init
     // \r\nAPP RDY\r\n      -- BG96 completed firmware initialization
     // 
@@ -49,7 +51,9 @@
     // +QIURC: "pdpdeact"   -- network pdp context timed out and deactivated
 
     // default content type is command response
-*/
+ * 
+ */
+
 
 #pragma region Header
 
@@ -87,16 +91,16 @@
 extern ltemDevice_t g_ltem;
 
 
-/* Static Local Functions Declarations
------------------------------------------------------------------------------------------------- */
+#pragma region Private Static Function Declarations
+/* ------------------------------------------------------------------------------------------------ */
+
 static cbuf_t *S_createTxBuffer();
 static rxCoreBufferCtrl_t *S_createRxCoreBuffer();
 static uint16_t S_putTx(const char *data, uint16_t dataSz);
 static uint16_t S_takeTx(char *data, uint16_t dataSz);
-// static void S_resetRxDataBuffer(rxDataBufferCtrl_t *rxBuf, uint8_t page, bool streamEot);
 static inline rxDataBufferCtrl_t *S_isrRxBufferSync();
 static void S_interruptCallbackISR();
-static inline uint8_t S_convertToContextId(const char cntxtChar);
+static inline uint8_t S_convertCharToContextId(const char cntxtChar);
 
 #pragma endregion // Header
 
@@ -110,12 +114,12 @@ static inline uint8_t S_convertToContextId(const char cntxtChar);
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *	\brief Initialize the Input/Output Process subsystem.
+ *	@brief Initialize the Input/Output Process subsystem.
  */
 void IOP_create()
 {
     g_ltem.iop = calloc(1, sizeof(iop_t));
-    ASSERT(g_ltem.iop != NULL, srcfile_iop_c);
+    ASSERT(g_ltem.iop != NULL, srcfile_ltemc_iop_c);
 
     ((iop_t*)g_ltem.iop)->txBuf = S_createTxBuffer();
     ((iop_t*)g_ltem.iop)->rxCBuffer = S_createRxCoreBuffer(IOP__rxCoreBufferSize);        // create cmd/default RX buffer
@@ -129,7 +133,26 @@ void IOP_create()
 
 
 /**
- *	\brief register a stream peer with IOP to control communications. Typically performed by protocol open.
+ *	@brief Complete initialization and start running IOP processes.
+ */
+void IOP_start()
+{
+    spi_usingInterrupt(((spi_t*)g_ltem.spi), g_ltem.pinConfig.irqPin);
+    gpio_attachIsr(g_ltem.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
+}
+
+
+/**
+ *	@brief Stop IOP services.
+ */
+void IOP_stopIrq()
+{
+    gpio_detachIsr(g_ltem.pinConfig.irqPin);
+}
+
+
+/**
+ *	@brief register a stream peer with IOP to control communications. Typically performed by protocol open.
  */
 void IOP_registerStream(streamPeer_t streamIndx, iopStreamCtrl_t *streamCtrl)
 {
@@ -138,50 +161,40 @@ void IOP_registerStream(streamPeer_t streamIndx, iopStreamCtrl_t *streamCtrl)
 
 
 /**
- *	\brief Complete initialization and start running iop processes.
- */
-void IOP_start()
-{
-    spi_usingInterrupt(((spi_t*)g_ltem.spi), g_ltem.pinConfig.irqPin);
-    gpio_attachIsr(g_ltem.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
-    SC16IS741A_enableIrqMode();
-}
-
-
-void IOP_stopIrq()
-{
-    gpio_detachIsr(g_ltem.pinConfig.irqPin);
-}
-
-
-/**
- *	\brief Verify LTEm1 is ready for driver operations.
+ *	@brief Verify LTEm firmware has started and is ready for driver operations.
  */
 void IOP_awaitAppReady()
 {
+    char buf[120] = {0};
+    char *head = &buf;
+    uint8_t rxLevel = 0;
     uint32_t waitStart = pMillis();
-    uint32_t now;
-    while (g_ltem.qbgReadyState < qbg_readyState_appReady)
+
+    while (pMillis() - waitStart < QBG_APPREADY_MILLISMAX)      // typical wait: 700-1450 mS
     {
-        pYield();
-        now = pMillis();
-        if (now - waitStart > QBG_APPREADY_MILLISMAX)                                                               // typical wait: 700-1450 mS
+        pYield();                                               // give application time for non-comm startup activities or watchdog
+        rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
+        if (rxLevel > 0)
         {
-            ltem_notifyApp(lqNotifType_warning,  "Failed to detect BGx module APP RDY notification");
-            break;
+            if ((head - buf) + rxLevel < 120)
+            {
+                SC16IS7xx_read(head, rxLevel);
+                head += rxLevel;
+                char *foundAt = strstr(buf, "APP RDY");
+                if (foundAt)
+                {
+                    g_ltem.qbgDeviceState = qbgDeviceState_appReady;
+                    return;
+                }
+            }
         }
     }
 }
 
 
+
 /**
- *	\brief Start a (raw) send operation.
- *
- *  \param sendData [in] - Pointer to char data to send out, input buffer can be discarded following call.
- *  \param sendSz [in] - The number of characters to send.
- *  \param sendImmediate [in] - If true: queue sendData then initiate the actual send process. If false: continue queueing and wait to send.
- * 
- *  \return Number of characters queued for sending.
+ *	@brief Start a (raw) send operation.
  */
 uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate)
 {
@@ -191,10 +204,10 @@ uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate)
 
     if (sendImmediate)                                  // if sender done adding, send initial block of data
     {                                                       // IOP ISR will continue sending chunks until global buffer empty
-        char txData[sc16is741a__LTEM_FIFO_bufferSz] = {0};       // max size of the NXP TX FIFO
+        char txData[SC16IS7xx__FIFO_bufferSz] = {0};       // max size of the NXP TX FIFO
         do
         {
-            uint8_t bufAvailable = SC16IS741A_readReg(SC16IS741A_TXLVL_ADDR);
+            uint8_t bufAvailable = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
             uint16_t dataToSendSz = S_takeTx(txData, bufAvailable);
             if (dataToSendSz == 0) 
                 break;
@@ -202,7 +215,7 @@ uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate)
             {
                 ((iop_t*)g_ltem.iop)->txSendStartTck = pMillis();
                 PRINTF(dbgColor__dCyan, "txChunk=%s\r", txData);
-                SC16IS741A_write(txData, dataToSendSz);
+                SC16IS7xx_write(txData, dataToSendSz);
                 break;
             }
         } while (true);                                     // loop until send at least 1 char
@@ -212,13 +225,12 @@ uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate)
 
 
 /**
- *	\brief Check for RX progress/idle.
- *
- *  \return Duration since last fill level change detected; returns 0 if a change is detected since last call
+ *	@brief Check for RX progress/idle.
  */
 uint32_t IOP_getRxIdleDuration()
 {
-    ASSERT(((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL, srcfile_iop_c);
+    ASSERT(((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL, srcfile_ltemc_iop_c);
+
     rxDataBufferCtrl_t rxBuf = ((rxDataBufferCtrl_t)((baseCtrl_t*)((iop_t*)g_ltem.iop)->rxStreamCtrl)->recvBufCtrl);
     uint16_t fillNow = rxBuf.pages[rxBuf.iopPg].head - rxBuf.pages[rxBuf.iopPg]._buffer;
 
@@ -238,21 +250,14 @@ uint32_t IOP_getRxIdleDuration()
 
 
 /**
- *	\brief Finds a string in the last X characters of the IOP RX stream.
- *
- *  \param pBuf [in] - Pointer data receive buffer.
- *  \param rewindCnt [in] - The number of chars to search backward.
- *	\param pNeedle [in] - The string to find.
- *  \param pTerm [in] - Optional phrase that must be found after needle phrase.
- *
- *  \return Pointer to the character after the needle match (if found), otherwise return NULL.
+ *	@brief Finds a string in the last X characters of the IOP RX stream.
  */
 char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *pNeedle, const char *pTerm)
 {
     uint8_t needleLen = strlen(pNeedle);
     uint8_t termLen = strlen(pTerm);
 
-    ASSERT(needleLen + termLen < rewindCnt, srcfile_iop_c);
+    ASSERT(needleLen + termLen < rewindCnt, srcfile_ltemc_iop_c);
     uint16_t iopAvail = pBuf->pages[pBuf->iopPg].head - pBuf->pages[pBuf->iopPg].tail;
 
     if (needleLen + termLen > iopAvail + (pBuf->pages[!pBuf->iopPg].head - pBuf->pages[!pBuf->iopPg].tail))
@@ -344,18 +349,11 @@ char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *p
 
 
 /**
- *	\brief Get a contiguous block of characters from the RX buffer pages.
- *
- *  \param pBuf [in] - Pointer data receive buffer.
- *	\param pStart [in] - Address within the RX buffer to start retrieving chars.
- *  \param takeCnt [in] - The number of chars to return.
- *  \param pChars [out] - Buffer to hold retrieved characters, must be takeCnt + 1. Buffer will be null terminated.
- *
- *  \return Pointer to the character after the needle match (if found), otherwise return NULL.
+ *	@brief Get a contiguous block of characters from the RX data buffer pages.
  */
 uint16_t IOP_fetchRxAhead(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeCnt, char *pChars)
 {
-    ASSERT(pBuf->_buffer <= pStart && pStart <= pBuf->_bufferEnd, srcfile_iop_c);
+    ASSERT(pBuf->_buffer <= pStart && pStart <= pBuf->_bufferEnd, srcfile_ltemc_iop_c);
     memset(pChars, 0, takeCnt + 1);
 
 //    uint16_t iopAvail =  pBuf->pages[pBuf->iopPg].head -  pBuf->pages[pBuf->iopPg]._buffer;
@@ -388,7 +386,7 @@ uint16_t IOP_fetchRxAhead(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeC
 
 
 /**
- *	\brief Clear receive COMMAND/CORE response buffer.
+ *	@brief Clear receive COMMAND/CORE response buffer.
  */
 void IOP_resetCoreRxBuffer()
 {
@@ -400,11 +398,7 @@ void IOP_resetCoreRxBuffer()
 
 
 /**
- *	\brief Initializes a RX buffer control.
- *
- *  \param bufCtrl [in] Pointer to RX data buffer control structure to initialize.
- *  \param rxBuf [in] Pointer to raw byte buffer to integrate into RxBufferCtrl.
- *  \param rxBufSz [in] The size of the rxBuf passed in.
+ *	@brief Initializes a RX data buffer control.
  */
 uint16_t IOP_initRxBufferCtrl(rxDataBufferCtrl_t *bufCtrl, uint8_t *rxBuf, uint16_t rxBufSz)
 {
@@ -424,11 +418,7 @@ uint16_t IOP_initRxBufferCtrl(rxDataBufferCtrl_t *bufCtrl, uint8_t *rxBuf, uint1
 
 
 /**
- *	\brief Syncs RX consumers with ISR for buffer swap.
- *
- *  \param bufCtrl [in] RX data buffer to sync.
- * 
- *  \return True if overflow detected: buffer being assigned to IOP for filling is not empty
+ *	@brief Syncs RX consumers with ISR for buffer swap.
  */
 void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufCtrl)
 {
@@ -446,9 +436,7 @@ void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufCtrl)
 
 
 /**
- *	\brief Syncs RX consumers with ISR for buffer swap.
- *
- *  \param bufCtrl [in] RX data buffer to sync.
+ *	@brief Syncs RX consumers with ISR for buffer swap.
  */
 static inline rxDataBufferCtrl_t *S_isrRxBufferSync()
 {
@@ -462,21 +450,7 @@ static inline rxDataBufferCtrl_t *S_isrRxBufferSync()
 
 
 /**
- *	\brief Rapid fixed case conversion of context value returned from BGx to number.
- *
- *  \param cntxChar [in] RX data buffer to sync.
- */
-static inline uint8_t S_convertToContextId(const char cntxtChar)
-{
-    return (uint8_t)cntxtChar - 0x30;
-}
-
-
-/**
- *	\brief Reset a receive buffer for reuse.
- *
- *  \param bufPtr [in] Pointer to the buffer struct.
- *  \param page [in] Index to buffer page to be reset.
+ *	@brief Reset a receive buffer for reuse.
  */
 void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page)
 {
@@ -495,7 +469,17 @@ void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page)
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *	\brief Create the IOP transmit buffer.
+ *	@brief Rapid fixed case conversion of context value returned from BGx to number.
+ *  @param cntxChar [in] RX data buffer to sync.
+ */
+static inline uint8_t S_convertCharToContextId(const char cntxtChar)
+{
+    return (uint8_t)cntxtChar - 0x30;
+}
+
+
+/**
+ *	@brief Create the IOP transmit buffer.
  */
 static cbuf_t *S_createTxBuffer()
 {
@@ -515,9 +499,8 @@ static cbuf_t *S_createTxBuffer()
 
 
 /**
- *	\brief Create the core/command receive buffer.
- *
- *  \param bufSz [in] Size of the buffer to create.
+ *	@brief Create the core/command receive buffer.
+ *  @param bufSz [in] Size of the buffer to create.
  */
 static rxCoreBufferCtrl_t *S_createRxCoreBuffer(size_t bufSz)
 {
@@ -538,29 +521,11 @@ static rxCoreBufferCtrl_t *S_createRxCoreBuffer(size_t bufSz)
 }
 
 
-// /**
-//  *	\brief Reset a receive buffer for reuse.
-//  *
-//  *  \param rxBuf [in] Pointer to the buffer struct.
-//  *  \param bufPg [in] Index to buffer page to be reset
-//  *  \param streamEot [in] True if the stream has complete and the "completion" check fields should also be cleared
-//  */
-// static void S_resetRxDataBuffer(rxDataBufferCtrl_t *rxBuf, uint8_t bufPg, bool streamEot)
-// {
-//     memset(rxBuf->pages[bufPg]._buffer, 0, (rxBuf->pages[bufPg].head - rxBuf->pages[bufPg]._buffer));
-//     rxBuf->pages[bufPg].head = rxBuf->pages[bufPg].prevHead = rxBuf->pages[bufPg].tail = rxBuf->pages[bufPg]._buffer;
-//     if (streamEot)
-//         rxBuf->iopPg = 0;
-// }
-
-
 /**
- *  \brief Puts data into the TX buffer control structure. NOTE: this operation performs a copy.
- * 
- *  \param data [in] - Pointer to where source data is now. 
- *  \param dataSz [in] - How much data to put in the TX struct.
- * 
- *  \return The number of bytes of actual queued in the TX struct, compare to dataSz to determine if all data queued. 
+ *  @brief Puts data into the TX buffer control structure. NOTE: this operation performs a copy.
+ *  @param data [in] - Pointer to where source data is now. 
+ *  @param dataSz [in] - How much data to put in the TX struct.
+ *  @return The number of bytes of actual queued in the TX struct, compare to dataSz to determine if all data queued. 
 */
 static uint16_t S_putTx(const char *data, uint16_t dataSz)
 {
@@ -582,12 +547,10 @@ static uint16_t S_putTx(const char *data, uint16_t dataSz)
 
 
 /**
- *  \brief Gets (dequeues) data from the TX buffer control structure.
- * 
- *  \param data [in] - Pointer to where taken data will be placed.
- *  \param dataSz [in] - How much data to take, if possible.
- * 
- *  \return The number of bytes of data being returned. 
+ *  @brief Gets (dequeues) data from the TX buffer control structure.
+ *  @param data [in] - Pointer to where taken data will be placed.
+ *  @param dataSz [in] - How much data to take, if possible.
+ *  @return The number of bytes of data being returned. 
  */
 static uint16_t S_takeTx(char *data, uint16_t dataSz)
 {
@@ -612,9 +575,9 @@ static uint16_t S_takeTx(char *data, uint16_t dataSz)
 #pragma region ISR
 
 /**
- *  \brief Parse recv'd data (in command RX buffer) for async event preambles that need to be handled immediately.
- *  
- *  Internal only function. Dependency in atcmd
+ *  @brief Parse recv'd data (in command RX buffer) for async event preambles that need to be handled immediately.
+ *  @details AT cmd uses this to examine new buffer contents for +URC events that may arrive in command response
+ *           Declared in ltemc-internal.h
  */
 void IOP_rxParseForUrcEvents()
 {
@@ -647,18 +610,17 @@ void IOP_rxParseForUrcEvents()
         {
             PRINTF(dbgColor__cyan, "-p=mqttR");
             //char *endPtr = NULL;
-            char *continuePtr = urcStartPtr + strlen("+QMTRECV: ");
-            uint8_t cntxtId = S_convertToContextId(*continuePtr);
-            ASSERT(((iop_t*)g_ltem.iop)->rxStreamCtrl == NULL, srcfile_iop_c);                                  // should not be inside another stream recv
+            uint8_t cntxtId = S_convertCharToContextId(*(urcStartPtr + strlen("+QMTRECV: ")));                  // parse for context #
 
-            // this chunk, contains both meta data for receive and the data, need to copy this chunk to start of rxDataBuffer for context
-            ((iop_t*)g_ltem.iop)->rxStreamCtrl = ((mqttCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[cntxtId]);    // put IOP in datamode for context new recv as data
+            ASSERT(((iop_t*)g_ltem.iop)->rxStreamCtrl == NULL, srcfile_ltemc_iop_c);                            // ASSERT: not inside another stream recv
+
+            // this chunk, contains both meta data for receive followed by actual data, need to copy the data chunk to start of rxDataBuffer for this context
+            ((iop_t*)g_ltem.iop)->rxStreamCtrl = ((mqttCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[cntxtId]);    // put IOP in datamode for context 
             rxDataBufferCtrl_t *dBufPtr = &(((baseCtrl_t*)((iop_t*)g_ltem.iop)->rxStreamCtrl)->recvBufCtrl);    // get reference to context specific data RX buffer
 
             // move received from core\cmd buffer to context data buffer, preserving prefix text for overflow detection (prefix & trailer text must be in same buffer)
             memcpy(dBufPtr->pages[dBufPtr->iopPg]._buffer, urcStartPtr, ((iop_t*)g_ltem.iop)->rxCBuffer->head - urcStartPtr);
             dBufPtr->pages[dBufPtr->iopPg].head += ((iop_t*)g_ltem.iop)->rxCBuffer->head - urcStartPtr;
-            // memcpy(dBufPtr->_buffer, continuePtr, ((iop_t*)g_ltem.iop)->rxCBuffer->head - continuePtr);     // move to data buffer (from cmd\core)
 
             ((iop_t*)g_ltem.iop)->rxCBuffer->head = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead;                  // drop recv'd from cmd\core buffer, processed here
         }
@@ -672,7 +634,7 @@ void IOP_rxParseForUrcEvents()
             char *endPtr = NULL;
             uint8_t cntxId = (uint8_t)strtol(cntxIdPtr, &endPtr, 10);
             ((iop_t*)g_ltem.iop)->mqttMap &= ~(0x01 << cntxId);
-            ((mqttCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[cntxId])->state = mqttStatus_closed;
+            ((mqttCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[cntxId])->state = mqttState_closed;
         }
 
         else if (memcmp("+QIURC: \"pdpdeact", urcStartPtr, strlen("+QIURC: \"pdpdeact")) == 0)
@@ -696,19 +658,19 @@ void IOP_rxParseForUrcEvents()
         }
     }
 
-    else if (g_ltem.qbgReadyState != qbg_readyState_appReady && memcmp("\r\nAPP RDY", ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead, strlen("\r\nAPP RDY")) == 0)
-    {
-        PRINTF(dbgColor__cyan, "-p=aRdy");
-        g_ltem.qbgReadyState = qbg_readyState_appReady;
-        // discard this chunk, processed here
-        ((iop_t*)g_ltem.iop)->rxCBuffer->head = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead;
-    }
+    // else if (g_ltem.qbgDeviceState != qbgDeviceState_appReady && memcmp("\r\nAPP RDY", ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead, strlen("\r\nAPP RDY")) == 0)
+    // {
+    //     PRINTF(dbgColor__cyan, "-p=aRdy");
+    //     g_ltem.qbgDeviceState = qbgDeviceState_appReady;
+    //     // discard this chunk, processed here
+    //     ((iop_t*)g_ltem.iop)->rxCBuffer->head = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead;
+    // }
 }
 
 
 
 /**
- *	\brief ISR for NXP UART interrupt events, the NXP UART performs all serial I/O with BGx.
+ *	@brief ISR for NXP UART interrupt events, the NXP UART performs all serial I/O with BGx.
  */
 static void S_interruptCallbackISR()
 {
@@ -723,11 +685,11 @@ static void S_interruptCallbackISR()
     *   write (THR): buffer emptied sufficiently to send more chars
     */
 
-    SC16IS741A_IIR iirVal;
+    SC16IS7xx_IIR iirVal;
     uint8_t rxLevel;
     uint8_t txAvailable;
 
-    iirVal.reg = SC16IS741A_readReg(SC16IS741A_IIR_ADDR);
+    iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
     retryIsr:
     PRINTF(dbgColor__white, "\rISR(%d:%d)[", iirVal.IRQ_nPENDING, iirVal.IRQ_SOURCE);
 
@@ -736,7 +698,7 @@ static void S_interruptCallbackISR()
         uint8_t regReads = 0;
         while(iirVal.IRQ_nPENDING == 1 && regReads < 120)           // wait for register, IRQ was signaled; safety limit at 120 in case of error gpio
         {
-            iirVal.reg = SC16IS741A_readReg(SC16IS741A_IIR_ADDR);
+            iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
             PRINTF(dbgColor__dRed, "*");
             regReads++;
         }
@@ -745,14 +707,14 @@ static void S_interruptCallbackISR()
         if (iirVal.IRQ_SOURCE == 3)                                 // priority 1 -- receiver line status error : clear fifo of bad char
         {
             PRINTF(dbgColor__error, "RXErr ");
-            SC16IS741A_flushRxFifo();
+            SC16IS7xx_flushRxFifo();
         }
 
         
         if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)       // priority 2 -- receiver RHR full (src=2), receiver time-out (src=6)
         {                                                           // Service Action: read RXLVL, read FIFO to empty
             PRINTF(dbgColor__gray, "RX(%d)", iirVal.IRQ_SOURCE);
-            rxLevel = SC16IS741A_readReg(SC16IS741A_RXLVL_ADDR);
+            rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
             PRINTF(dbgColor__gray, "-sz=%d ", rxLevel);
 
             if (rxLevel > 0)
@@ -762,7 +724,7 @@ static void S_interruptCallbackISR()
                 {
                     rxDataBufferCtrl_t *dBufPtr = S_isrRxBufferSync();                          // get rxStream's data buffer control, sync pending page swap
                     uint8_t iopPg = dBufPtr->iopPg;
-                    SC16IS741A_read(dBufPtr->pages[iopPg].head, rxLevel);
+                    SC16IS7xx_read(dBufPtr->pages[iopPg].head, rxLevel);
                     dBufPtr->pages[iopPg].head += rxLevel;
                     uint16_t fillLevel = dBufPtr->pages[iopPg].head - dBufPtr->pages[iopPg]._buffer;
 
@@ -778,7 +740,7 @@ static void S_interruptCallbackISR()
                 else                                                                            // in COMMAND\EVENT mode (aka not data mode), use core buffer
                 {
                     PRINTF(dbgColor__white, "-cmd ");
-                    SC16IS741A_read(((iop_t*)g_ltem.iop)->rxCBuffer->head, rxLevel);
+                    SC16IS7xx_read(((iop_t*)g_ltem.iop)->rxCBuffer->head, rxLevel);
                     ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead = ((iop_t*)g_ltem.iop)->rxCBuffer->head;  // save last head if RX moved/discarded
                     ((iop_t*)g_ltem.iop)->rxCBuffer->head += rxLevel;
                     IOP_rxParseForUrcEvents();                                                          // parse recv'd for events or immediate processing and discard
@@ -789,16 +751,16 @@ static void S_interruptCallbackISR()
         
         if (iirVal.IRQ_SOURCE == 1)                                 // priority 3 -- transmit THR (threshold) : TX ready for more data
         {
-            uint8_t buf[sc16is741a__LTEM_FIFO_bufferSz] = {0};
+            uint8_t buf[SC16IS7xx__FIFO_bufferSz] = {0};
             uint8_t thisTxSz;
 
-            txAvailable = SC16IS741A_readReg(SC16IS741A_TXLVL_ADDR);
+            txAvailable = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
             PRINTF(dbgColor__gray, "TX-sz=%d ", txAvailable);
 
             if ((thisTxSz = S_takeTx(buf, txAvailable)) > 0)
             {
                 PRINTF(dbgColor__dCyan, "txChunk=%s", buf);
-                SC16IS741A_write(buf, thisTxSz);
+                SC16IS7xx_write(buf, thisTxSz);
             }
         }
 
@@ -808,7 +770,7 @@ static void S_interruptCallbackISR()
         // priority 7 -- nCTS, nRTS state change:
         */
 
-        iirVal.reg = SC16IS741A_readReg(SC16IS741A_IIR_ADDR);
+        iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
 
     } while (iirVal.IRQ_nPENDING == 0);
 
@@ -817,9 +779,9 @@ static void S_interruptCallbackISR()
     gpioPinValue_t irqPin = gpio_readPin(g_ltem.pinConfig.irqPin);
     if (irqPin == gpioValue_low)
     {
-        iirVal.reg = SC16IS741A_readReg(SC16IS741A_IIR_ADDR);
-        txAvailable = SC16IS741A_readReg(SC16IS741A_TXLVL_ADDR);
-        rxLevel = SC16IS741A_readReg(SC16IS741A_RXLVL_ADDR);
+        iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
+        txAvailable = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
+        rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
 
         PRINTF(dbgColor__warn, "IRQ failed to reset!!! nIRQ=%d, iir=%d, txLvl=%d, rxLvl=%d \r", iirVal.IRQ_nPENDING, iirVal.reg, txAvailable, rxLevel);
         //ltem1_notifyApp(ltem1NotifType_resetFailed, "IRQ failed to reset.");

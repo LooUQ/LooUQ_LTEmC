@@ -32,7 +32,7 @@
 #include <lq-diagnostics.h>
 
 /** 
- *  \brief Enum of available SSL version options for an SSL connection. 
+ *  @brief Enum of available SSL version options for an SSL connection
 */
 typedef enum tlsVersion_tag
 {
@@ -48,7 +48,7 @@ typedef enum tlsVersion_tag
 
 
 /** 
- *  \brief Enum of the available cipher suites for TLS processing.
+ *  @brief Enum of the available cipher suites for TLS processing
 */
 typedef enum tlsCipher_tag
 {
@@ -74,7 +74,7 @@ typedef enum tlsCipher_tag
 
 
 /** 
- *  \brief Enum of the options for certificate expiration date/time checking.
+ *  @brief Enum of the options for certificate expiration date/time checking
 */
 typedef enum tlsCertExpiration_tag
 {
@@ -86,7 +86,7 @@ typedef enum tlsCertExpiration_tag
 
 
 /** 
- *  \brief Enum of the certification validation options.
+ *  @brief Enum of the certification validation options
 */
 typedef enum tlsSecurityLevel_tag
 {
@@ -99,7 +99,7 @@ typedef enum tlsSecurityLevel_tag
 
 
 /** 
- *  \brief Return struct for get TLC information.
+ *  @brief Return struct for get TLC information
 */
 typedef struct tlsOptions_tag
 {
@@ -116,21 +116,39 @@ extern "C"
 {
 #endif // __cplusplus
 
+
+
+/** 
+ *  @brief Configure the TLS/SSL settings for a context
+ *  @details The TLS/SSL context is loosely associated with the protocol context. This package maintains a 1-to-1 map for consistency.
+ *  @param contxt [in] TLS/SSL context to configure
+ *  @param version [in] TLS/SSL version: 0=SSL-3.0, 1=TLS-1.0, 2=TLS-1.1, 3=TLS-1.2, 4=ALL
+ *  @param cipherSuite [in] Cipher suite to use for processing of crypto
+ *  @param certExpirationCheck [in] Options for how the certificate's expiration information is processed
+ *  @param securityLevel [in] Authentication mode: 0=no auth, 1=server auth, 2=server/client auth
+ */
 bool tls_configure(dataContext_t contxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel);
 
+
+/** 
+ *  @brief Configure the TLS/SSL settings for a context
+ *  @details The TLS/SSL context is loosely associated with the protocol context. This package maintains a 1-to-1 map for consistency.
+ *  @param contxt [in] TLS/SSL context to configure
+ *  @return TLS options structure with the settings currently applied to the specified context
+ */
 tlsOptions_t tlsGetOptions(dataContext_t cntxt);
 
 
 /* Maintenance of customer trustd root (TR) certificates requires the file_ module functionality (under developement Q3-2021)
- * Process is: 1) upload certficate to BGx file system, 2) configure TR for context 
+ *  1) upload certficate to BGx file system 
+ *  2) configure TR for context 
  */
-
 // future certificate management support
-//void tls_configureTRCertificate(context_t cntxt, const char *certificatePath);
+// void tls_configureTRCertificate(context_t cntxt, const char *certificatePath);
+
 
 #ifdef __cplusplus
 }
 #endif // !__cplusplus
-
 
 #endif  /* !__LTEMC_TLS_H__ */

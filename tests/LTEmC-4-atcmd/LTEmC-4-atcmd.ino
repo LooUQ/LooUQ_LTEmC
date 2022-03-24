@@ -83,7 +83,9 @@ void loop()
     */
 
     uint8_t regValue = 0;
-    char cmdStr[] = "ATI\r\0";
+    // char cmdStr[] = "ATI\r\0";
+    //char cmdStr[] = "AT+CPIN?\r\0";
+    char cmdStr[] = "AT+QCCID\r\0";
     PRINTF(dbgColor__none, "Invoking cmd: %s \r\n", cmdStr);
 
     if (atcmd_tryInvoke(cmdStr))

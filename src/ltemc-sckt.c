@@ -49,13 +49,6 @@
 
 #define ASCII_sSENDOK "SEND OK\r\n"
 
-enum
-{
-    sckt__resultCode_previouslyOpen = 563,
-    sckt__defaultOpenTimeoutMS = 60000,
-
-    SCKT__IRD_requestMaxSz = 1500
-};
 
 extern ltemDevice_t g_ltem;
 
@@ -69,27 +62,18 @@ static resultCode_t S_socketStatusParser(const char *response, char **endptr);
 void S_scktDoWork();
 
 
-/* public sockets (IP:TCP/UDP/SSL) functions
- * --------------------------------------------------------------------------------------------- */
-#pragma region public functions
+#pragma region public sockets (IP:TCP/UDP/SSL) functions
+/* --------------------------------------------------------------------------------------------- */
+
 
 /**
- *	\brief Create a socket data control(TCP/UDP/SSL).
- *
- *  \param scktCtrl [in/out] Pointer to socket control structure
- *	\param dataCntxt [in] - Data context (0-5) to host socket.
- *	\param protocol [in] - The IP protocol to use for the connection (TCP/UDP/SSL clients).
- *  \param recvBuf [in] - Pointer to application created receive buffer
- *  \param recvBufSz [in] - Size of allocated receive buffer
- *  \param recvCallback [in] - The callback function in your application to be notified of received data ready.
- * 
- *  \return socket result code similar to http status code, OK = 200
+ *	@brief Create a socket data control(TCP/UDP/SSL).
  */
 void sckt_initControl(scktCtrl_t *scktCtrl, dataContext_t dataCntxt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback)
 {
-    ASSERT(scktCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_sckt_c);
-    ASSERT(dataCntxt < dataContext_cnt, srcfile_sckt_c);
-    ASSERT(protocol < protocol_socket, srcfile_sckt_c);
+    ASSERT(scktCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_ltemc_sckt_c);
+    ASSERT(dataCntxt < dataContext__cnt, srcfile_ltemc_sckt_c);
+    ASSERT(protocol < protocol_socket, srcfile_ltemc_sckt_c);
 
     memset(scktCtrl, 0, sizeof(scktCtrl_t));
 
@@ -99,8 +83,8 @@ void sckt_initControl(scktCtrl_t *scktCtrl, dataContext_t dataCntxt, protocol_t 
     scktCtrl->useTls = protocol == protocol_ssl;
 
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(scktCtrl->recvBufCtrl), recvBuf, recvBufSz);
-    ASSERT_W(recvBufSz == bufferSz, srcfile_sckt_c, "RxBufSz != multiple of 128bytes");
-    ASSERT(bufferSz >= 128, srcfile_sckt_c);
+    ASSERT_W(recvBufSz == bufferSz, srcfile_ltemc_sckt_c, "RxBufSz != multiple of 128bytes");
+    ASSERT(bufferSz >= 128, srcfile_ltemc_sckt_c);
     
     //scktCtrl->doWorkTimeout = (uint32_t)(scktCtrl->recvBufCtrl._bufferSz / IOP__uartFIFOBufferSz * IOP__uartFIFO_fillMS * 0.8);
     scktCtrl->dataRecvCB = recvCallback;
@@ -112,21 +96,21 @@ void sckt_initControl(scktCtrl_t *scktCtrl, dataContext_t dataCntxt, protocol_t 
 
 
 /**
- *	\brief Open a data connection (socket) to d data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
+ *	@brief Open a data connection (socket) to d data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
  *
- *  \param sckt [in] - Pointer to the control block for the socket.
- *	\param host [in] - The IP address (string) or domain name of the remote host to communicate with.
- *  \param rmtPort [in] - The port number at the remote host.
- *  \param lclPort [in] - The port number on this side of the conversation, set to 0 to auto-assign.
- *  \param cleanSession [in] - If the port is found already open, TRUE: flushes any previous data from the socket session.
+ *  @param sckt [in] - Pointer to the control block for the socket.
+ *	@param host [in] - The IP address (string) or domain name of the remote host to communicate with.
+ *  @param rmtPort [in] - The port number at the remote host.
+ *  @param lclPort [in] - The port number on this side of the conversation, set to 0 to auto-assign.
+ *  @param cleanSession [in] - If the port is found already open, TRUE: flushes any previous data from the socket session.
  * 
- *  \return Result code similar to http status code, OK = 200
+ *  @return Result code similar to http status code, OK = 200
  */
 resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uint16_t lclPort, bool cleanSession)
 {
-    ASSERT(sckt->ctrlMagic == streams__ctrlMagic, srcfile_sckt_c);
-    ASSERT(sckt->dataCntxt < dataContext_cnt || ((iop_t*)g_ltem.iop)->streamPeers[sckt->dataCntxt] != NULL, srcfile_sckt_c);
-    ASSERT(sckt->protocol < protocol_socket, srcfile_sckt_c);
+    ASSERT(sckt->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_sckt_c);
+    ASSERT(sckt->dataCntxt < dataContext__cnt || ((iop_t*)g_ltem.iop)->streamPeers[sckt->dataCntxt] != NULL, srcfile_ltemc_sckt_c);
+    ASSERT(sckt->protocol < protocol_socket, srcfile_ltemc_sckt_c);
 
     ((iop_t*)g_ltem.iop)->scktMap &= 0x01 << sckt->dataCntxt;
 
@@ -172,9 +156,7 @@ resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uin
 
 
 /**
- *	\brief Close an established (open) connection socket.
- *
- *	\param scktCtrl [in] - Pointer to socket control struct governing the sending socket's operation.
+ *	@brief Close an established (open) connection socket
  */
 void sckt_close(scktCtrl_t *scktCtrl)
 {
@@ -208,11 +190,7 @@ void sckt_close(scktCtrl_t *scktCtrl)
 
 
 /**
- *	\brief Reset open socket connection. This function drains the connection's data pipeline. 
- *
- *	\param scktCtrl [in] - Pointer to socket control struct governing the sending socket's operation.
- *
- *  \return True if flush socket data initiated.
+ *	@brief Reset open socket connection. This function drains the connection's data pipeline. 
  */
 bool sckt_flush(scktCtrl_t *scktCtrl)
 {
@@ -230,24 +208,24 @@ bool sckt_flush(scktCtrl_t *scktCtrl)
 }
 
 
-
 /**
- *  \brief Close out all TCP/IP sockets on a context.
- *
- *	\param contxtId [in] - The carrier PDP context hosting the sockets to close.
+ *  @brief Close out all TCP/IP sockets on a context
 */
 void sckt_closeAll()
 {
-    for (size_t i = 0; i < dataContext_cnt; i++)
+    for (size_t i = 0; i < dataContext__cnt; i++)
     {
         sckt_close(i);
     }
 }
 
 
+/**
+ *	@brief Retrieve the state of a socket connection
+ */
 bool sckt_getState(scktCtrl_t *sckt)
 {
-    ASSERT(sckt->ctrlMagic != streams__ctrlMagic, srcfile_sckt_c);
+    ASSERT(sckt->ctrlMagic != streams__ctrlMagic, srcfile_ltemc_sckt_c);
 
     atcmd_setOptions(atcmd__defaultTimeoutMS, S_socketStatusParser);
     if (!atcmd_tryInvokeWithOptions("AT+QISTATE=1,%d", sckt->dataCntxt))
@@ -258,23 +236,19 @@ bool sckt_getState(scktCtrl_t *sckt)
 
 
 /**
- *	\brief Send data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
- *
- *	\param scktCtrl [in] - Pointer to socket control struct governing the sending socket's operation.
- *	\param data [in] - A character pointer containing the data to send.
- *  \param dataSz [in] - The size of the buffer (< 1501 bytes).
+ *	@brief Send data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
  */
 resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
     resultCode_t atResult;
-    ASSERT(scktCtrl != 0 && (((iop_t*)g_ltem.iop)->scktMap & 0x01 << scktCtrl->dataCntxt) != 0, srcfile_sckt_c);
-    ASSERT(dataSz > 0, srcfile_sckt_c);
+    ASSERT(scktCtrl != 0 && (((iop_t*)g_ltem.iop)->scktMap & 0x01 << scktCtrl->dataCntxt) != 0, srcfile_ltemc_sckt_c);
+    ASSERT(dataSz > 0, srcfile_ltemc_sckt_c);
 
     // AT+QISEND command initiates send by signaling we plan to send dataSz bytes on a socket,
     // send has subcommand to actual transfer the bytes, so don't automatically close action cmd
 
     atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd_txDataPromptParser);
-    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         atcmd_invokeReuseLock("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz);      // reusing manual lock
         atResult = atcmd_awaitResult();                                             // waiting for data prompt, leaving action open on return if sucessful
@@ -293,23 +267,15 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 }
 
 
-// /**
-//  *   \brief Brief inline static function to support doWork() readability
-// */
-// static inline uint16_t pageDataAvailable(rxDataBufferCtrl_t *buf, uint8_t page)
-// {
-//     return buf->pages[page].head - buf->pages[page].tail;
-// }
-
-
-
 /**
- *   \brief Perform background tasks to move socket data through pipeline.
+ *   @brief Perform background tasks to move socket data through pipeline.
  * 
  *   1) check for existing IRD flow and proccess
  *   2) deliver received data to application
  *   3) if no IRD flow underway, check for other sockets that have dataPending
 */
+// private to LTEmc
+//void SCKT__doWork();
 void S_scktDoWork()
 {
     iop_t *iopPtr = (iop_t*)g_ltem.iop;                 // shortcut to the IOP subsystem
@@ -322,8 +288,8 @@ void S_scktDoWork()
         // readability vars
         scktCtrl_t *scktPtr = ((scktCtrl_t *)iopPtr->rxStreamCtrl);
         uint8_t dataCntxt = scktPtr->dataCntxt;
-        ASSERT(scktPtr == iopPtr->streamPeers[dataCntxt], srcfile_sckt_c);  // ASSERT dataCntxt cross-links are still valid
-        rxDataBufferCtrl_t *bufPtr = &(scktPtr->recvBufCtrl);               // smart-buffer for this operation
+        ASSERT(scktPtr == iopPtr->streamPeers[dataCntxt], srcfile_ltemc_sckt_c);    // ASSERT dataCntxt cross-links are still valid
+        rxDataBufferCtrl_t *bufPtr = &(scktPtr->recvBufCtrl);                       // smart-buffer for this operation
 
         uint16_t dataAvailable = 0;
         do
@@ -335,7 +301,7 @@ void S_scktDoWork()
                                                                                                     // -- 1st data chuck has data header with size of queued data in BGx
                 iopPtr->txSendStartTck = 0;                                                         // stop IRD request timeout timer
                 char *irdSzAt = bufPtr->pages[!bufPtr->iopPg]._buffer + 9;                          // data prefix from BGx:  len("\r\n+QIRD: ") == 9
-                ASSERT(bufPtr->pages[!bufPtr->iopPg]._buffer[7] == ':', srcfile_sckt_c);            // check BGx response if not valid IRD, we are lost
+                ASSERT(bufPtr->pages[!bufPtr->iopPg]._buffer[7] == ':', srcfile_ltemc_sckt_c);      // check BGx response if not valid IRD, we are lost
                 scktPtr->irdRemaining = strtol(irdSzAt, &bufPtr->pages[!bufPtr->iopPg].tail, 10);   // parse IRD segment sz:  \r\n+QIRD: <dataSz>, tail points to data
                 bufPtr->pages[!bufPtr->iopPg].tail += 2;                                            // ignore /r/n between data size and data
             }
@@ -391,7 +357,7 @@ void S_scktDoWork()
         {
             iopPtr->txSendStartTck = 0;                                             // no longer waiting for IRD response
             atcmd_close();                                                          // release action lock
-            ltem_notifyApp(lqNotifType_dataFault, "IRD timeout");
+            ltem_notifyApp(appEvent_prto_recvFault , "IRD timeout");
         }
     }
 
@@ -399,18 +365,18 @@ void S_scktDoWork()
      *------------------------------------------------------------------------------------------------------
      * Now see if any other sockets are open and have dataPending reported by BGx (+QIURC/+QSSLURC event)
      *----------------------------------------------------------------------------------------------------*/
-    if (!atcmd_isLockActive() && iopPtr->scktMap)                               // if no ATCMD underway AND there are sockets open 
+    if (!ATCMD_isLockActive() && iopPtr->scktMap)                               // if no ATCMD underway AND there are sockets open 
     {
-        iopPtr->scktLstWrk = ++iopPtr->scktLstWrk % dataContext_cnt;            // IRD fairness: if mult sckts. Skip last, get next possible context
+        iopPtr->scktLstWrk = ++iopPtr->scktLstWrk % dataContext__cnt;           // IRD fairness: if mult sckts. Skip last, get next possible context
         uint8_t nextIrd;
-        for (uint8_t i = 0; i < dataContext_cnt; i++)
+        for (uint8_t i = 0; i < dataContext__cnt; i++)
         {
-            nextIrd = (iopPtr->scktLstWrk + i) % dataContext_cnt;               // rotate to look for next open sckt for IRD request
+            nextIrd = (iopPtr->scktLstWrk + i) % dataContext__cnt;              // rotate to look for next open sckt for IRD request
             scktCtrl_t *scktPtr = ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[nextIrd]);
 
             if (iopPtr->scktMap & 0x01 << nextIrd)                              // socket is OPEN
             {
-                ASSERT_W(!pElapsed(scktPtr->doWorkLastTck, IOP__rxDefaultTimeout), srcfile_sckt_c, "doWork freq slow:bffr ovrflw risk");
+                ASSERT_W(!pElapsed(scktPtr->doWorkLastTck, IOP__rxDefaultTimeout), srcfile_ltemc_sckt_c, "doWork freq slow:bffr ovrflw risk");
                 scktPtr->doWorkLastTck = pMillis();                             // last check for URC\data pending check cycle
 
                 if (scktPtr->dataPending)                                       // socket has data reported (BGx URC)
@@ -440,12 +406,12 @@ void S_scktDoWork()
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *  \brief [private] Invoke IRD command to request BGx for socket (read) data
-*/
+ *  @brief [private] Invoke IRD command to request BGx for socket (read) data
+ */
 static bool S_requestIrdData(dataContext_t dataCntx, uint16_t reqstSz, bool applyLock)
 {
-    ASSERT(dataCntx < dataContext_cnt, srcfile_sckt_c);                                     // ASSERT data context is valid context
-    ASSERT(((iop_t*)g_ltem.iop)->scktMap & 0x01 << dataCntx, srcfile_sckt_c);               // ASSERT socket is open 
+    ASSERT(dataCntx < dataContext__cnt, srcfile_ltemc_sckt_c);                                    // ASSERT data context is valid context
+    ASSERT(((iop_t*)g_ltem.iop)->scktMap & 0x01 << dataCntx, srcfile_ltemc_sckt_c);               // ASSERT socket is open 
 
     char irdCmd[24] = {0};
     uint16_t requestedSz = (!reqstSz) ? SCKT__IRD_requestMaxSz : MAX(SCKT__IRD_requestMaxSz, reqstSz);
@@ -456,7 +422,7 @@ static bool S_requestIrdData(dataContext_t dataCntx, uint16_t reqstSz, bool appl
         snprintf(irdCmd, 24, "AT+QIRD=%d,%d", dataCntx, requestedSz);
     // PRINTF(dbgColor__white, "rqstIrd lck=%d, cmd=%s\r", applyLock, irdCmd);
 
-    if (applyLock && !atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    if (applyLock && !ATCMD_awaitLock(atcmd__defaultTimeoutMS))
         return false;
 
     ((iop_t*)g_ltem.iop)->rxStreamCtrl = ((iop_t*)g_ltem.iop)->streamPeers[dataCntx];       // set IOP in data mode
@@ -471,7 +437,7 @@ static bool S_requestIrdData(dataContext_t dataCntx, uint16_t reqstSz, bool appl
 
 
 /**
- *	\brief [private] TCP/UDP wrapper for open connection parser.
+ *	@brief [private] TCP/UDP wrapper for open connection parser.
  */
 static resultCode_t S_tcpudpOpenCompleteParser(const char *response, char **endptr) 
 {
@@ -480,7 +446,7 @@ static resultCode_t S_tcpudpOpenCompleteParser(const char *response, char **endp
 
 
 /**
- *	\brief [private] SSL wrapper for open connection parser.
+ *	@brief [private] SSL wrapper for open connection parser.
  */
 static resultCode_t S_sslOpenCompleteParser(const char *response, char **endptr) 
 {
@@ -489,7 +455,7 @@ static resultCode_t S_sslOpenCompleteParser(const char *response, char **endptr)
 
 
 /**
- *	\brief [private] SSL wrapper for open connection parser.
+ *	@brief [private] SSL wrapper for open connection parser.
  */
 static resultCode_t S_socketSendCompleteParser(const char *response, char **endptr)
 {
@@ -497,14 +463,11 @@ static resultCode_t S_socketSendCompleteParser(const char *response, char **endp
 }
 
 /**
- *	\brief [static] Socket status parser
- *
- *  Wraps generic atcm
- *
- *  \param response [in] Character data recv'd from BGx to parse for task complete
- *  \param endptr [out] Char pointer to the char following parsed text
- * 
- *  \return HTTP style result code, 0 = not complete
+ *	@brief [static] Socket status parser
+ *  @details Wraps generic atcm
+ *  @param response [in] Character data recv'd from BGx to parse for task complete
+ *  @param endptr [out] Char pointer to the char following parsed text
+ *  @return HTTP style result code, 0 = not complete
  */
 static resultCode_t S_socketStatusParser(const char *response, char **endptr) 
 {

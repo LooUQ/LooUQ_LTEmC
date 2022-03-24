@@ -31,16 +31,18 @@
 #include <lq-types.h>
 
 
+/** 
+ *  @brief Typed numeric constants for stream peers subsystem (sockets, mqtt, http)
+ */
 enum streams__constants
 {
     streams__ctrlMagic = 0x5c
 };
 
 
-
 /** 
- *  \brief Enum of data stream peer types
-*/
+ *  @brief Enum of data stream peer types
+ */
 typedef enum dataStreamType_tag
 {
     dataStream_none = 0,
@@ -52,10 +54,9 @@ typedef enum dataStreamType_tag
 
 
 /** 
- *  \brief Enum of protocols available on the modem (bit-mask). 
- * 
- *  Note: All of the protocols are CLIENTS, while the BGx line of modules support server mode the network carriers generally don't
-*/
+ *  @brief Enum of protocols available on the modem (bit-mask). 
+ *  @details All of the protocols are CLIENTS, while the BGx line of modules support server mode the network carriers generally don't
+ */
 typedef enum protocol_tag
 {
     protocol_tcp = 0x00,                ///< TCP client
@@ -71,8 +72,8 @@ typedef enum protocol_tag
 
 
 /** 
- *  \brief Enum of the available data contexts for BGx (only SSL/TLS capable contexts are supported).
-*/
+ *  @brief Enum of the available data contexts for BGx (only SSL/TLS capable contexts are supported).
+ */
 typedef enum dataContext_tag
 {
     dataContext_0 = 0,
@@ -81,16 +82,15 @@ typedef enum dataContext_tag
     dataContext_3 = 3,
     dataContext_4 = 4,
     dataContext_5 = 5,
-    dataContext_cnt = 6,
-    dataContext_none = 0xFF
+    dataContext__cnt = 6,
+    dataContext__none = 0xFF
 } dataContext_t;
 
 
 /** 
- *  \brief Enum of data stream peers: network data contexts or the BGx file system
- * 
- *  Only data contexts that coincide with SSL contexts are supported.
-*/
+ *  @brief Enum of data stream peers: network data contexts or the BGx file system
+ *  @details Only data contexts that coincide with SSL contexts are supported.
+ */
 typedef enum streamPeer_tag
 {
     streamPeer_dataCntxt0 = 0,
@@ -105,7 +105,7 @@ typedef enum streamPeer_tag
 
 
 /** 
- *  \brief Receive buffer page. Component struct for the rxDataBufferCtrl_t.
+ *  @brief Receive buffer page. Component struct for the rxDataBufferCtrl_t.
  */
 typedef volatile struct rxBufferPage_tag
 {
@@ -117,8 +117,9 @@ typedef volatile struct rxBufferPage_tag
 
 
 /** 
- *  \brief Struct for a IOP smart buffer. Contains the char buffer and controls to marshall data between IOP and consumer (cmd,sockets,mqtt,etc.).
+ *  @brief Struct for a IOP smart buffer. Contains the char buffer and controls to marshall data between IOP and consumer (cmd,sockets,mqtt,etc.).
  * 
+ *  @details 
  *  bufferSync is a semphore to signal buffer page role swap underway. ISR will sync with this upon entering the RX critical section 
  * 
  *  - Receive consumers (doWork functions) wanting to swap RX buffer pages will set bufferSync
@@ -149,8 +150,8 @@ typedef volatile struct rxDataBufferCtrl_tag
 
 
 /** 
- *  \brief Struct for a single page IOP smart buffer. Used by commands (AT cmd) and for capturing BGx async events.
-*/
+ *  @brief Struct for a single page IOP smart buffer. Used by commands (AT cmd) and for capturing BGx async events.
+ */
 typedef volatile struct rxCoreBufferCtrl_tag
 {
     // _variables are set at initialization and don't change
@@ -166,10 +167,9 @@ typedef volatile struct rxCoreBufferCtrl_tag
 
 
 /** 
- *  \brief Struct for a IOP transmit (TX) buffer control block. Tracks progress of chunk sends to LTEm1.
- * 
- *  LTEm1 SPI bridge works with chunks of ~64 bytes (actual transfers are usually 58 - 62 bytes). IOP abstracts SPI chunks from senders.
-*/
+ *  @brief Struct for a IOP transmit (TX) buffer control block. Tracks progress of chunk sends to LTEm1.
+ *  @details LTEm SPI bridge works with chunks of ~64 bytes (actual transfers are usually 58 - 62 bytes). IOP abstracts SPI chunks from senders.
+ */
 typedef struct txBufferCtrl_tag
 {
     char *txBuf;                        ///< Pointer to the base address of the TX buffer. Fixed, doesn't change with operations.
@@ -178,30 +178,16 @@ typedef struct txBufferCtrl_tag
 } txBufferCtrl_t;
 
 
-// /** 
-//  *  \brief Callback function for data received event. Notifies application that new data is available and needs serviced.
-//  * 
-//  *  The *data and dataSz values are for convenience, since the application supplied the buffer to LTEmC.
-//  * 
-//  *  \param peerId [in] Data peer (data context or filesys) 
-//  *  \param handle [in] Subordinate data ID to give application information about received data
-//  *  \param data [in] Pointer to received data buffer
-//  *  \param dataSz [in] The number of bytes available
-// */
-// typedef void (*streamRcvrFunc_t)(streamPeer_t peerId, uint16_t handle, void *data, uint16_t dataSz);
-
-
  /** 
- *  \brief Background work function signature.
- * 
- *  Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
+ *  @brief Background work function signature.
+ *  @details Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
  */
 typedef void (*moduleDoWorkFunc_t)();
 
 
 /** 
- *  \brief Abstract base struct containing common properties required of a stream control
-*/
+ *  @brief Abstract base struct containing common properties required of a stream control
+ */
 typedef struct baseCtrl_tag
 {
     uint8_t ctrlMagic;                  ///< magic flag to validate incoming requests 
@@ -212,13 +198,16 @@ typedef struct baseCtrl_tag
 } baseCtrl_t;
 
 
-typedef void * iopStreamCtrl_t;         ///< this is cast into the specific stream control.
-                                        ///< Example:  scktCtrl_t *sckt = (scktCtrl_t*)((iop_t*)g_ltem.iop)->streamPeers[((iop_t*)g_ltem.iop)->rxStreamPeer];
+/** 
+ *  @brief Abstract pointer type that is cast into the specific stream control.
+ *  @details Example:  scktCtrl_t *sckt = (scktCtrl_t*)((iop_t*)g_ltem.iop)->streamPeers[((iop_t*)g_ltem.iop)->rxStreamPeer];
+ */
+typedef void * iopStreamCtrl_t;
 
 
 /**
- *   \brief Brief inline static function to support doWork() readability
-*/
+ *   @brief Brief inline static function to support doWork() readability
+ */
 static inline uint16_t rxPageDataAvailable(rxDataBufferCtrl_t *buf, uint8_t page)
 {
     return buf->pages[page].head - buf->pages[page].tail;

@@ -58,12 +58,7 @@ extern ltemDevice_t g_ltem;
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *	\brief Sets options for BGx AT command control (atcmd). 
- *
- *  \param timeoutMS [in] Number of milliseconds the action can take. Use system default ACTION_TIMEOUTms or your value.
- *  \param customCmdCompleteParser_func [in] Custom command response parser to signal result is complete. NULL for std parser.
- * 
- *  \return True if action was invoked, false if not
+ *	@brief Sets options for BGx AT command control (atcmd). 
  */
 void atcmd_setOptions(uint32_t timeoutMS, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr))
 {
@@ -77,9 +72,7 @@ void atcmd_setOptions(uint32_t timeoutMS, uint16_t (*customCmdCompleteParser_fun
 
 
 /**
- *	\brief Reset AT command options to defaults.
- *  
- *  Use after setOptions() to return to default internal settings.
+ *	@brief Reset AT command options to defaults.
  */
 inline void atcmd_restoreOptionDefaults()
 {
@@ -88,29 +81,24 @@ inline void atcmd_restoreOptionDefaults()
 
 
 /**
- *	\brief Invokes a BGx AT command using default option values.
- *
- *	\param cmdStrTemplate [in] The command string to send to the BG96 module.
- *  \param ... [in] Variadic parameter list to integrate into the cmdStrTemplate.
- * 
- *  \return True if action was invoked, false if not
+ *	@brief Invokes a BGx AT command using default option values (automatic locking).
  */
-bool atcmd_tryInvoke(const char *cmdStrTemplate, ...)
+bool atcmd_tryInvoke(const char *cmdTemplate, ...)
 {
     if (((atcmd_t*)g_ltem.atcmd)->isOpenLocked || ((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)
         return false;
 
-    atcmd_reset(true);                                                  // clear atCmd control
+    ATCMD_reset(true);                                                  // clear atCmd control
     ((atcmd_t*)g_ltem.atcmd)->autoLock = atcmd__setLockModeAuto;        // set automatic lock control mode
     atcmd_restoreOptionDefaults();                                      // standard behavior reset default option values
 
     char *cmdStr = ((atcmd_t*)g_ltem.atcmd)->cmdStr;
     va_list ap;
 
-    va_start(ap, cmdStrTemplate);
-    vsnprintf(cmdStr, sizeof(((atcmd_t*)g_ltem.atcmd)->cmdStr), cmdStrTemplate, ap);
+    va_start(ap, cmdTemplate);
+    vsnprintf(cmdStr, sizeof(((atcmd_t*)g_ltem.atcmd)->cmdStr), cmdTemplate, ap);
 
-    if (!atcmd_awaitLock(((atcmd_t*)g_ltem.atcmd)->timeoutMS))          // attempt to acquire new atCmd lock for this instance
+    if (!ATCMD_awaitLock(((atcmd_t*)g_ltem.atcmd)->timeoutMS))          // attempt to acquire new atCmd lock for this instance
         return false;
 
     ((atcmd_t*)g_ltem.atcmd)->invokedAt = pMillis();
@@ -121,30 +109,23 @@ bool atcmd_tryInvoke(const char *cmdStrTemplate, ...)
 
 
 /**
- *	\brief Invokes a BGx AT command using previously set option values: setOptions().
- *
- *  NOTE: This function will automatically attempt lock and will FAIL is lock is not acquired!
- *
- *	\param cmdStrTemplate [in] The command string to send to the BG96 module.
- *  \param ... [in] Variadic parameter list to integrate into the cmdStrTemplate.
- * 
- *  \return True if action was invoked, false if not
+ *	@brief Invokes a BGx AT command using set option values, previously set with setOptions() (automatic locking).
  */
-bool atcmd_tryInvokeWithOptions(const char *cmdStrTemplate, ...)
+bool atcmd_tryInvokeWithOptions(const char *cmdTemplate, ...)
 {
     if (((atcmd_t*)g_ltem.atcmd)->isOpenLocked || ((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)
         return false;
 
-    atcmd_reset(true);                                                  // clear atCmd control
+    ATCMD_reset(true);                                                  // clear atCmd control
     ((atcmd_t*)g_ltem.atcmd)->autoLock = atcmd__setLockModeAuto;        // set automatic lock control mode
 
     char *cmdStr = ((atcmd_t*)g_ltem.atcmd)->cmdStr;
     va_list ap;
 
-    va_start(ap, cmdStrTemplate);
-    vsnprintf(cmdStr, sizeof(((atcmd_t*)g_ltem.atcmd)->cmdStr), cmdStrTemplate, ap);
+    va_start(ap, cmdTemplate);
+    vsnprintf(cmdStr, sizeof(((atcmd_t*)g_ltem.atcmd)->cmdStr), cmdTemplate, ap);
 
-    if (!atcmd_awaitLock(((atcmd_t*)g_ltem.atcmd)->timeoutMS))          // attempt to acquire new atCmd lock for this instance
+    if (!ATCMD_awaitLock(((atcmd_t*)g_ltem.atcmd)->timeoutMS))          // attempt to acquire new atCmd lock for this instance
         return false;
 
     ((atcmd_t*)g_ltem.atcmd)->invokedAt = pMillis();
@@ -155,23 +136,20 @@ bool atcmd_tryInvokeWithOptions(const char *cmdStrTemplate, ...)
 
 
 /**
- *	\brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
- *
- *	\param cmdStrTemplate [in] The command string to send to the BG96 module.
- *  \param ... [in] Variadic parameter list to integrate into the cmdStrTemplate.
+ *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
  */
-void atcmd_invokeReuseLock(const char *cmdStrTemplate, ...)
+void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
 {
-    ASSERT(((atcmd_t*)g_ltem.atcmd)->isOpenLocked, srcfile_atcmd_c);            // function assumes re-use of existing lock
+    ASSERT(((atcmd_t*)g_ltem.atcmd)->isOpenLocked, srcfile_ltemc_atcmd_c);            // function assumes re-use of existing lock
 
-    atcmd_reset(false);                                                         // clear out properties WITHOUT lock release
+    ATCMD_reset(false);                                                         // clear out properties WITHOUT lock release
     ((atcmd_t*)g_ltem.atcmd)->autoLock = atcmd__setLockModeManual;
 
     char *cmdStr = ((atcmd_t*)g_ltem.atcmd)->cmdStr;
     va_list ap;
 
-    va_start(ap, cmdStrTemplate);
-    vsnprintf(cmdStr, sizeof(((atcmd_t*)g_ltem.atcmd)->cmdStr), cmdStrTemplate, ap);
+    va_start(ap, cmdTemplate);
+    vsnprintf(cmdStr, sizeof(((atcmd_t*)g_ltem.atcmd)->cmdStr), cmdTemplate, ap);
 
     ((atcmd_t*)g_ltem.atcmd)->invokedAt = pMillis();
     IOP_sendTx(((atcmd_t*)g_ltem.atcmd)->cmdStr, strlen(((atcmd_t*)g_ltem.atcmd)->cmdStr), false);
@@ -180,7 +158,7 @@ void atcmd_invokeReuseLock(const char *cmdStrTemplate, ...)
 
 
 /**
- *	\brief Closes (completes) a BGx AT command structure and frees action resource (release action lock).
+ *	@brief Closes (completes) a BGx AT command structure and frees action resource (release action lock).
  */
 void atcmd_close()
 {
@@ -190,13 +168,7 @@ void atcmd_close()
 
 
 /**
- *	\brief Performs data transfer (send) sub-action.
- *
- *  Operates in without regard to atcmd lock. Doesn't set/reset lock, doesn't check for lock.
-
- *  \param data [in] - Pointer to the block of binary data to send.
- *  \param dataSz [in] - The size of the data block. 
- *  \param eotPhrase [in] - Char string that indicates that the action has completed.
+ *	@brief Performs blind send data transfer to device.
  */
 void atcmd_sendCmdData(const char *data, uint16_t dataSz, const char* eotPhrase)
 {
@@ -210,25 +182,9 @@ void atcmd_sendCmdData(const char *data, uint16_t dataSz, const char* eotPhrase)
 }
 
 
-resultCode_t atcmd_awaitResult()
-{
-    resultCode_t result;
-    do
-    {
-        atcmd_getResult();
-        if (g_ltem.cancellationRequest)                         // test for cancellation (RTOS or IRQ)
-        {
-            ((atcmd_t*)g_ltem.atcmd)->resultCode = resultCode__cancelled;
-            break;
-        }
-        pYield();                                               // give back control momentarily
-
-    } while (((atcmd_t*)g_ltem.atcmd)->resultCode == atcmd__parserPendingResult);
-    
-    return ((atcmd_t*)g_ltem.atcmd)->resultCode;
-}
-
-
+/**
+ *	@brief Checks recv buffer for command response and sets atcmd structure data with result.
+ */
 void atcmd_getResult()
 {
     atcmd_t *atcmdPtr = (atcmd_t*)g_ltem.atcmd;
@@ -254,9 +210,9 @@ void atcmd_getResult()
             atcmdPtr->execDuration = pMillis() - atcmdPtr->invokedAt;
 
             if (!ltem_chkHwReady())                                                     // if action timed-out, verify not a device wide failure
-                ltem_notifyApp(lqNotifType_hardFault, "Modem HW Status Offline");       // BGx status pin
-            else if (!SC16IS741A_chkCommReady())
-                ltem_notifyApp(lqNotifType_hardFault, "Modem comm unresponsive");       // UART bridge SPI wr/rd
+                ltem_notifyApp(appEvent_fault_hardFault, "LTEm Status Fault");              // BGx status pin
+            else if (!SC16IS7xx_chkCommReady())
+                ltem_notifyApp(appEvent_fault_hardFault, "LTEm SPI Fault");               // UART bridge SPI wr/rd
         }
         return;
     }
@@ -284,16 +240,73 @@ void atcmd_getResult()
 
 
 /**
- *	\brief Sends ESC character to ensure BGx is not in text mode (> prompt awaiting ^Z/ESC).
+ *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
  */
-void atcmd_exitTextMode()
+resultCode_t atcmd_awaitResult()
 {
-    IOP_sendTx("\x1A", 1, true);            // send ^Z - 0x1A
+    resultCode_t result;
+    do
+    {
+        atcmd_getResult();
+        if (g_ltem.cancellationRequest)                         // test for cancellation (RTOS or IRQ)
+        {
+            ((atcmd_t*)g_ltem.atcmd)->resultCode = resultCode__cancelled;
+            break;
+        }
+        pYield();                                               // give back control momentarily
+
+    } while (((atcmd_t*)g_ltem.atcmd)->resultCode == atcmd__parserPendingResult);
+    
+    return ((atcmd_t*)g_ltem.atcmd)->resultCode;
+}
+
+/**
+ *	@brief Returns the atCmd result code, 0xFFFF or atcmd__parserPendingResult if command is pending completion
+ */
+resultCode_t atcmd_getLastResult()
+{
+    return ((atcmd_t*)g_ltem.atcmd)->resultCode;
 }
 
 
 /**
- *	\brief Sends +++ sequence to transition BGx out of data mode to command mode.
+ *	@brief Returns the atCmd last execution duration in milliseconds
+ */
+uint32_t atcmd_getLastDuration()
+{
+    return ((atcmd_t*)g_ltem.atcmd)->execDuration;
+}
+
+
+/**
+ *	@brief Returns the atCmd response text if completed, will be empty C-string prior to completion
+ */
+char *ATCMD_getLastResponse()
+{
+    return ((atcmd_t*)g_ltem.atcmd)->response;
+}
+
+
+/**
+ *	@brief Returns the atCmd response text beyond internal completion parser's progress
+ */
+char *ATCMD_getLastResponseTail()
+{
+    return ((atcmd_t*)g_ltem.atcmd)->responseTail;
+}
+
+
+/**
+ *	@brief Sends ESC character to ensure BGx is not in text mode (">" prompt awaiting ^Z/ESC, MQTT publish etc.).
+ */
+void atcmd_exitTextMode()
+{
+    IOP_sendTx("\x1B", 1, true);            // send ESC - Ctrl-[
+}
+
+
+/**
+ *	@brief Sends +++ sequence to transition BGx out of data mode to command mode.
  */
 void atcmd_exitDataMode()
 {
@@ -303,36 +316,6 @@ void atcmd_exitDataMode()
 }
 
 
-/**
- *	\brief Returns the atCmd result code, 0xFFFF or atcmd__parserPendingResult if command is pending completion
- */
-resultCode_t atcmd_getLastResult()
-{
-    return ((atcmd_t*)g_ltem.atcmd)->resultCode;
-}
-
-
-/**
- *	\brief Returns the atCmd last execution duration in milliseconds
- */
-uint32_t atcmd_getLastDuration()
-{
-    return ((atcmd_t*)g_ltem.atcmd)->execDuration;
-}
-
-
-/**
- *	\brief Returns the atCmd response text if completed, will be empty C-string prior to completion
- */
-char *atcmd_getLastResponse()
-{
-    return ((atcmd_t*)g_ltem.atcmd)->response;
-}
-
-char *atcmd_getLastResponseTail()
-{
-    return ((atcmd_t*)g_ltem.atcmd)->responseTail;
-}
 
 #pragma endregion
 
@@ -342,46 +325,55 @@ char *atcmd_getLastResponseTail()
 
 
 /**
- *  \brief Awaits exclusive access to QBG module command interface.
- * 
- *  \param timeoutMS [in] - Number of milliseconds to wait for a lock.
- * 
- *  \return true if lock aquired prior to the timeout period.
+ *  @brief Awaits exclusive access to QBG module command interface.
 */
-bool atcmd_awaitLock(uint16_t timeoutMS)
+bool ATCMD_awaitLock(uint16_t timeoutMS)
 {
-    uint32_t waitNow, waitStart = pMillis();
+    uint32_t waitStart = pMillis();
+                                                                    // cannot set lock while... 
+    // while (((atcmd_t*)g_ltem.atcmd)->isOpenLocked ||                // - existing lock
+    //        ((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)              // - IOP is in data mode (handling a receive)
+    // {
+    //     pYield();                                                   // call back to platform yield() in case there is work there
+    //     if (((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)
+    //         ltem_doWork();                                          // if data receive is blocking, give doWork an opportunity to resolve
 
-    while (((atcmd_t*)g_ltem.atcmd)->isOpenLocked ||                // can set lock if... atCmd not open\locked
-           ((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)              // and... IOP is not in data mode (handling a receive)
-    {
-        pYield();                                                   // call back to platform yield() in case there is work there
+    //     if (pMillis() - waitStart > timeoutMS)
+    //         return false;                                           // timed out waiting for lock
+    // }
+    // ((atcmd_t*)g_ltem.atcmd)->isOpenLocked = true;                  // acquired lock
+    // return true;
+
+    while (pMillis() - waitStart < timeoutMS)
+    {                                                               // can set new lock if...
+        if (!((atcmd_t*)g_ltem.atcmd)->isOpenLocked &&              // !not existing lock
+            ((iop_t*)g_ltem.iop)->rxStreamCtrl == NULL)             // IOP is not in data mode (handling a receive)
+        {
+            ((atcmd_t*)g_ltem.atcmd)->isOpenLocked = true;          // acquired new lock
+            return true;
+        }
+
+        pYield();                                                   // call back to platform yield() in case there is work there that can be done
         if (((iop_t*)g_ltem.iop)->rxStreamCtrl != NULL)
             ltem_doWork();                                          // if data receive is blocking, give doWork an opportunity to resolve
-
-        if (waitNow - waitStart > timeoutMS)
-            return false;                                           // timed out waiting for lock
-
-        waitNow = pMillis();
     }
-    ((atcmd_t*)g_ltem.atcmd)->isOpenLocked = true;
-    return true;
+    return false;                                                   // timed out waiting for lock
 }
 
 
 /**
- *	\brief Returns the current atCmd lock state
+ *	@brief Returns the current atCmd lock state
  */
-bool atcmd_isLockActive()
+bool ATCMD_isLockActive()
 {
     return ((atcmd_t*)g_ltem.atcmd)->isOpenLocked;
 }
 
 
 /**
- *	\brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
+ *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
  */
-void atcmd_reset(bool releaseOpenLock)
+void ATCMD_reset(bool releaseOpenLock)
 {
     /* clearing req/resp buffers now for debug clarity, future likely just insert '\0' */
 
@@ -422,16 +414,16 @@ void atcmd_reset(bool releaseOpenLock)
 
 
 /**
- *	\brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
+ *	@brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
  *
- *  \param response [in] - The string returned from the getResult function.
- *  \param preamble [in] - The string to look for to signal start of response match.
- *  \param preambleReqd [in] - The preamble string is required, set to false to search for only gap and terminator
- *  \param gapReqd [in] - The minimum char count between preamble (or start) and terminator (0 is valid).
- *  \param terminator [in] - The string to signal the end of the command response.
- *  \param endptr [out] - Char pointer to the next char in response after parser match
+ *  @param response [in] - The string returned from the getResult function.
+ *  @param preamble [in] - The string to look for to signal start of response match.
+ *  @param preambleReqd [in] - The preamble string is required, set to false to search for only gap and terminator
+ *  @param gapReqd [in] - The minimum char count between preamble (or start) and terminator (0 is valid).
+ *  @param terminator [in] - The string to signal the end of the command response.
+ *  @param endptr [out] - Char pointer to the next char in response after parser match
  * 
- *  \return HTTP style result code, 0 if parser incomplete (need more response). OK = 200.
+ *  @return HTTP style result code, 0 if parser incomplete (need more response). OK = 200.
  */
 resultCode_t atcmd_defaultResultParser(const char *response, const char *preamble, bool preambleReqd, uint8_t gapReqd, const char *terminator, char** endptr)
 {
@@ -502,16 +494,16 @@ resultCode_t atcmd_defaultResultParser(const char *response, const char *preambl
 
 
 /**
- *	\brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
+ *	@brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
  *
- *  \param response [in] - The string returned from the getResult function.
- *  \param preamble [in] - The string to look for to signal response matches command (scans from end backwards).
- *  \param delim [in] - The token delimeter char.
- *  \param reqdTokens [in] - The minimum number of tokens expected.
- *  \param terminator [in] - Text to look for indicating the sucessful end of command response.
- *  \param endptr [out] - Char pointer to the next char in response after parser match
+ *  @param response [in] - The string returned from the getResult function.
+ *  @param preamble [in] - The string to look for to signal response matches command (scans from end backwards).
+ *  @param delim [in] - The token delimeter char.
+ *  @param reqdTokens [in] - The minimum number of tokens expected.
+ *  @param terminator [in] - Text to look for indicating the sucessful end of command response.
+ *  @param endptr [out] - Char pointer to the next char in response after parser match
  * 
- *  \return True if the response meets the conditions in the preamble and token count required.
+ *  @return True if the response meets the conditions in the preamble and token count required.
  */
 resultCode_t atcmd_tokenResultParser(const char *response, const char *preamble, char delim, uint8_t reqdTokens, const char *terminator, char** endptr)
 {
@@ -551,12 +543,12 @@ resultCode_t atcmd_tokenResultParser(const char *response, const char *preamble,
 
 
 /**
- *	\brief Validate the response ends in a BGxx OK value.
+ *	@brief Validate the response ends in a BGxx OK value.
  *
- *	\param response [in] - Pointer to the command response received from the BGx.
- *  \param endptr [out] - Char pointer to the next char in response after parser match
+ *	@param response [in] - Pointer to the command response received from the BGx.
+ *  @param endptr [out] - Char pointer to the next char in response after parser match
  *
- *  \return bool If the response string ends in a valid OK sequence
+ *  @return bool If the response string ends in a valid OK sequence
  */
 resultCode_t atcmd_okResultParser(const char *response, char** endptr)
 {
@@ -565,16 +557,16 @@ resultCode_t atcmd_okResultParser(const char *response, char** endptr)
 
 
 /**
- *	\brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
+ *	@brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
  *
  *  Expected form: +[landmark]: [otherInfo],[RESULT_CODE],[otherInfo][EOL]
  * 
- *  \param response [in] - Pointer to the command response received from the BGx.
- *  \param landmark [in] - Pointer to a landmark phrase to look for in the response
- *  \param resultIndx [in] - Zero based index after landmark of numeric fields to find result
- *  \param endptr [out] - Pointer to character in response following parser match
+ *  @param response [in] - Pointer to the command response received from the BGx.
+ *  @param landmark [in] - Pointer to a landmark phrase to look for in the response
+ *  @param resultIndx [in] - Zero based index after landmark of numeric fields to find result
+ *  @param endptr [out] - Pointer to character in response following parser match
  *
- *  \return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code
+ *  @return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code
  */
 resultCode_t atcmd_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx, char** endptr) 
 {
@@ -601,16 +593,16 @@ resultCode_t atcmd_serviceResponseParser(const char *response, const char *landm
 
 
 /**
- *	\brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
+ *	@brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
  *
  *  Expected form: +[landmark]: [otherInfo],[RESULT_CODE],[otherInfo][EOL]
- *  \param response [in] - Pointer to the command response received from the BGx.
- *  \param landmark [in] - Pointer to a landmark phrase to look for in the response.
- *  \param resultIndx [in] - Zero based index after landmark of numeric fields to find result.
- *  \param terminator [in] - Character string signaling then end of action response parsing.
- *  \param endptr [out] - Pointer to character in response following parser match.
+ *  @param response [in] - Pointer to the command response received from the BGx.
+ *  @param landmark [in] - Pointer to a landmark phrase to look for in the response.
+ *  @param resultIndx [in] - Zero based index after landmark of numeric fields to find result.
+ *  @param terminator [in] - Character string signaling then end of action response parsing.
+ *  @param endptr [out] - Pointer to character in response following parser match.
  *
- *  \return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code.
+ *  @return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code.
  */
 resultCode_t atcmd_serviceResponseParserTerm(const char *response, const char *landmark, uint8_t resultIndx, const char *terminator, char** endptr) 
 {
@@ -641,13 +633,13 @@ resultCode_t atcmd_serviceResponseParserTerm(const char *response, const char *l
 
 
 /**
- *	\brief Response parser looking for "ready-to-proceed" prompt in order to send to network
+ *	@brief Response parser looking for "ready-to-proceed" prompt in order to send to network
  *
- *  \param response [in] The character string received from BGx (so far, may not be complete).
- *  \param rdyPrompt [in] Prompt text to check for.
- *  \param endptr [out] Pointer to the char after match.
+ *  @param response [in] The character string received from BGx (so far, may not be complete).
+ *  @param rdyPrompt [in] Prompt text to check for.
+ *  @param endptr [out] Pointer to the char after match.
  * 
- *  \return Result code enum value (http status code)
+ *  @return Result code enum value (http status code)
  */
 resultCode_t atcmd_readyPromptParser(const char *response, const char *rdyPrompt, char **endptr)
 {
@@ -667,12 +659,12 @@ resultCode_t atcmd_readyPromptParser(const char *response, const char *rdyPrompt
 
 
 /**
- *	\brief [private] Transmit data ready to send "data prompt" parser.
+ *	@brief [private] Transmit data ready to send "data prompt" parser.
  *
- *  \param response [in] Character data recv'd from BGx to parse for task complete
- *  \param endptr [out] Char pointer to the char following parsed text
+ *  @param response [in] Character data recv'd from BGx to parse for task complete
+ *  @param endptr [out] Char pointer to the char following parsed text
  * 
- *  \return HTTP style result code, 0 = not complete
+ *  @return HTTP style result code, 0 = not complete
  */
 resultCode_t atcmd_txDataPromptParser(const char *response, char **endptr) 
 {
@@ -681,12 +673,12 @@ resultCode_t atcmd_txDataPromptParser(const char *response, char **endptr)
 
 
 /**
- *	\brief "CONNECT" prompt parser.
+ *	@brief "CONNECT" prompt parser.
  *
- *  \param response [in] Character data recv'd from BGx to parse for task complete
- *  \param endptr [out] Char pointer to the char following parsed text
+ *  @param response [in] Character data recv'd from BGx to parse for task complete
+ *  @param endptr [out] Char pointer to the char following parsed text
  * 
- *  \return HTTP style result code, 0 = not complete
+ *  @return HTTP style result code, 0 = not complete
  */
 resultCode_t atcmd_connectPromptParser(const char *response, char **endptr)
 {
@@ -695,7 +687,7 @@ resultCode_t atcmd_connectPromptParser(const char *response, char **endptr)
 
 
 /**
- *	\brief C-string token grabber.
+ *	@brief C-string token grabber.
  */
 char *atcmd_strToken(char *source, int delimiter, char *token, uint8_t tokenMax) 
 {
@@ -720,7 +712,7 @@ char *atcmd_strToken(char *source, int delimiter, char *token, uint8_t tokenMax)
 /*-----------------------------------------------------------------------------------------------*/
 
 // /**
-//  *	\brief Copies response\result information at action conclusion. Designed as a diagnostic aid for failed AT actions.
+//  *	@brief Copies response\result information at action conclusion. Designed as a diagnostic aid for failed AT actions.
 //  */
 // static void S_copyToDiagnostics()
 // {

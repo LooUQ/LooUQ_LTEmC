@@ -31,6 +31,16 @@
 #include "ltemc.h"
 
 
+enum filesys__constants
+{
+    filesys__cmdSz = 81,
+    filesys__dataOffsetInfo = 10,
+    filesys__dataOffsetPosition = 12,   ///< +QFPOSITION: 
+    filesys__dataOffsetOpen = 9,        ///< +QFOPEN: {filehandle}
+    filesys__timeoutMS = 800            ///< file system command default timeout (milliseconds)
+};
+
+
 typedef enum fileInfoType_tag
 {
     fileInfoType_fileSystem = 0,
@@ -114,7 +124,7 @@ typedef struct filePositionResult_tag
 } filePositionResult_t;
 
 /** 
- *  \brief typedef for the socket services data receiver function. Connects filesystem processing to the application (receive).
+ *  @brief typedef for the socket services data receiver function. Connects filesystem processing to the application (receive).
 */
 typedef void (*fileReceiver_func_t)(uint16_t fileHandle, void *fileData, uint16_t dataSz);
 
@@ -124,23 +134,68 @@ extern "C" {
 #endif
 
 
-// set file read data receiver function (here or with filsys_open). Not required if file is write only access.
-void filsys_setRecvrFunc(fileReceiver_func_t fileRecvr_func);
+/**
+ *	@brief set file read data receiver function (here or with filesys_open). Not required if file is write only access.
+ */
+void filesys_setRecvrFunc(fileReceiver_func_t fileRecvr_func);
+
 
 fileInfoResult_t filesys_info();
-fileListResult_t filsys_list(const char* fileName);
-resultCode_t filsys_delete(const char* fileName);
-fileOpenResult_t filsys_open(const char* fileName, fileOpenMode_t mode, fileReceiver_func_t fileRecvr_func);
-resultCode_t filsys_read(uint16_t fileHandle, uint16_t readSz);
-fileWriteResult_t filsys_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz);
-resultCode_t filsys_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t seekFrom);
-filePositionResult_t filsys_getPosition(uint16_t fileHandle);
-resultCode_t filsys_truncate(uint16_t fileHandle);
-resultCode_t filsys_close(uint16_t fileHandle);
+
+
+fileListResult_t filesys_list(const char* fileName);
+
+
+/**
+ *	@brief Delete a file from the file system.
+ *	@param fileName [in] - "*" or filename to delete. Wildcard with filename is not allowed.
+ *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ */
+resultCode_t filesys_delete(const char* fileName);
+
+
+fileOpenResult_t filesys_open(const char* fileName, fileOpenMode_t mode, fileReceiver_func_t fileRecvr_func);
+
+
+resultCode_t filesys_read(uint16_t fileHandle, uint16_t readSz);
+
+
+fileWriteResult_t filesys_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz);
+
+
+/**
+ *	@brief Set the position of the file pointer.
+ *
+ *	@param [in] fileHandle - Numeric handle for the file to operate with.
+ *	@param [in] offset - Number of bytes to move the file pointer by.
+ *	@param [in] seekFrom - The starting point for the pointer movement (positive only).
+ * 
+ *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ */
+resultCode_t filesys_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t seekFrom);
+
+
+filePositionResult_t filesys_getPosition(uint16_t fileHandle);
+
+
+/**
+ *	@brief Truncate all the data beyond the current position of the file pointer.
+ *	@param [in] fileHandle - Numeric handle for the file to truncate.
+ *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ */
+resultCode_t filesys_truncate(uint16_t fileHandle);
+
+
+/**
+ *	@brief Closes the file. 
+ *	@param [in] fileHandle - Numeric handle for the file to close.
+ *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ */
+resultCode_t filesys_close(uint16_t fileHandle);
 
 /* future */
-// fileUploadResult_t filsys_upload(const char* fileName);
-// fileDownloadResult_t filsys_download(const char* fileName);
+// fileUploadResult_t filesys_upload(const char* fileName);
+// fileDownloadResult_t filesys_download(const char* fileName);
 
 
 #ifdef __cplusplus

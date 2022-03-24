@@ -36,12 +36,12 @@
 #define FILE_TIMEOUTml         800
 
 
-void filsys_setRecvrFunc(fileReceiver_func_t fileRecvr_func)
+void filesys_setRecvrFunc(fileReceiver_func_t fileRecvr_func)
 {
 }
 
 
-fileInfoResult_t filsys_info()
+fileInfoResult_t filesys_info()
 {
     fileInfoResult_t fileResult;
     resultCode_t atResult;
@@ -87,19 +87,15 @@ fileInfoResult_t filsys_info()
 }
 
 
-fileListResult_t filsys_list(const char* fileName)
+fileListResult_t filesys_list(const char* fileName)
 {
 }
 
 
 /**
- *	\brief Delete a file from the file system.
- *
- *	\param fileName [in] - "*" or filename to delete. Wildcard with filename is not allowed.
- * 
- *  \return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ *	@brief Delete a file from the file system.
  */
-resultCode_t filsys_delete(const char* fileName)
+resultCode_t filesys_delete(const char* fileName)
 {
     if (atcmd_tryInvoke("AT+QFDEL=%s", fileName))
     {
@@ -109,17 +105,17 @@ resultCode_t filsys_delete(const char* fileName)
 }
 
 
-// fileUploadResult_t filsys_upload(const char* fileName)
+// fileUploadResult_t filesys_upload(const char* fileName)
 // {
 // }
-// fileDownloadResult_t filsys_download(const char* fileName)
+// fileDownloadResult_t filesys_download(const char* fileName)
 // {
 // }
 
 
-fileOpenResult_t filsys_open(const char* fileName, fileOpenMode_t openMode, fileReceiver_func_t fileRecvr_func)
+fileOpenResult_t filesys_open(const char* fileName, fileOpenMode_t openMode, fileReceiver_func_t fileRecvr_func)
 {
-    ASSERT(strlen(fileName) > 0, srcfile_filesys_c);
+    ASSERT(strlen(fileName) > 0, srcfile_ltemc_filesys_c);
 
     fileOpenResult_t fileResult = { 0, resultCode__conflict};
     resultCode_t atResult;
@@ -131,7 +127,7 @@ fileOpenResult_t filsys_open(const char* fileName, fileOpenMode_t openMode, file
     }
 
     // first get file system info
-    atcmd_tryInvokeAdv("AT+QFOPEN=%s,%d", fileName, openMode);
+    atcmd_tryInvoke("AT+QFOPEN=%s,%d", fileName, openMode);
     atResult = atcmd_awaitResult();
     if (atResult != resultCode__success)
     {
@@ -140,7 +136,7 @@ fileOpenResult_t filsys_open(const char* fileName, fileOpenMode_t openMode, file
     }
     // parse response
     // +QFOPEN: <filehandle>
-    continuePtr = atcmd_getLastResponse() + FILE_INFO_DATAOFFSET;      // skip past +QFLDS: 
+    continuePtr = ATCMD_getLastResponse() + FILE_INFO_DATAOFFSET;      // skip past +QFLDS: 
     fileResult.fileHandle = strtol(continuePtr, &continuePtr, 10);  
 
     finally:
@@ -149,26 +145,20 @@ fileOpenResult_t filsys_open(const char* fileName, fileOpenMode_t openMode, file
 }
 
 
-resultCode_t filsys_read(uint16_t fileHandle, uint16_t readSz)
+resultCode_t filesys_read(uint16_t fileHandle, uint16_t readSz)
 {
 }
 
 
-fileWriteResult_t filsys_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz)
+fileWriteResult_t filesys_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz)
 {
 }
 
 
 /**
- *	\brief Set the position of the file pointer.
- *
- *	\param [in] fileHandle - Numeric handle for the file to operate with.
- *	\param [in] offset - Number of bytes to move the file pointer by.
- *	\param [in] seekFrom - The starting point for the pointer movement (positive only).
- * 
- *  \return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ *	@brief Set the position of the file pointer.
  */
-resultCode_t filsys_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t seekFrom)
+resultCode_t filesys_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t seekFrom)
 {
     if (atcmd_tryInvoke("AT+QFSEEK=%d,%d,%d", fileHandle, offset, seekFrom))
     {
@@ -178,7 +168,7 @@ resultCode_t filsys_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t se
 }
 
 
-filePositionResult_t filsys_getPosition(uint16_t fileHandle)
+filePositionResult_t filesys_getPosition(uint16_t fileHandle)
 {
     filePositionResult_t fileResult;
     resultCode_t atResult;
@@ -207,13 +197,9 @@ filePositionResult_t filsys_getPosition(uint16_t fileHandle)
 
 
 /**
- *	\brief Truncate all the data beyond the current position of the file pointer.
- *
- *	\param [in] fileHandle - Numeric handle for the file to truncate.
- * 
- *  \return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ *	@brief Truncate all the data beyond the current position of the file pointer.
  */
-resultCode_t filsys_truncate(uint16_t fileHandle)
+resultCode_t filesys_truncate(uint16_t fileHandle)
 {
     if (atcmd_tryInvokeAdv("AT+QFTUCAT=%d", fileHandle))
     {
@@ -224,13 +210,9 @@ resultCode_t filsys_truncate(uint16_t fileHandle)
 
 
 /**
- *	\brief Closes the file. 
- *
- *	\param [in] fileHandle - Numeric handle for the file to close.
- * 
- *  \return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ *	@brief Closes the file. 
  */
-resultCode_t filsys_close(uint16_t fileHandle)
+resultCode_t filesys_close(uint16_t fileHandle)
 {
     if (atcmd_tryInvoke("AT+QFCLOSE=%d", fileHandle))
     {

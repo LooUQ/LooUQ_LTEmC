@@ -123,18 +123,18 @@ void startLTEm()
     if (qbg_isPowerOn())                                        // power on BGx, returning prior power-state
     {
 		PRINTF(dbgColor__info, "LTEm1 found powered on.\r\n");
-        g_ltem.qbgReadyState = qbg_readyState_appReady;         // if already "ON", assume running and check for IRQ latched
+        g_ltem.qbgDeviceState = qbgDeviceState_appReady;        // if already "ON", assume running and check for IRQ latched
     }
     else
         qbg_powerOn();
 
-    SC16IS741A_start();                                         // start (resets previously powered on) NXP SPI-UART bridge
+    SC16IS7xx_start();                                          // start (resets previously powered on) NXP SPI-UART bridge
     IOP_start();
     IOP_awaitAppReady();                                        // wait for BGx to signal out firmware ready
 }
 
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg)
 {
     if (notifType > 200)
     {

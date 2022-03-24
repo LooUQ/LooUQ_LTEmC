@@ -102,8 +102,8 @@ uint8_t testPattern;
 
 void loop() {
     testPattern = random(256);
-    txBuffer.msb = SC16IS741A_SPR_ADDR << 3;
-    rxBuffer.msb = (SC16IS741A_SPR_ADDR << 3) | 0x80;
+    txBuffer.msb = SC16IS7xx_SPR_regAddr << 3;
+    rxBuffer.msb = (SC16IS7xx_SPR_regAddr << 3) | 0x80;
     txBuffer.lsb = testPattern;
     // rxBuffer.lsb doesn't matter prior to read
 
@@ -118,8 +118,8 @@ void loop() {
     }
 
     // SPI operations are destructive to register addr; reset addr and incr pattern to differentiate
-    txBuffer.msb = SC16IS741A_SPR_ADDR << 3;
-    rxBuffer.msb = (SC16IS741A_SPR_ADDR << 3) | 0x80;  // write: reg addr + data
+    txBuffer.msb = SC16IS7xx_SPR_regAddr << 3;
+    rxBuffer.msb = (SC16IS7xx_SPR_regAddr << 3) | 0x80;  // write: reg addr + data
     txBuffer.lsb = ++testPattern;
 
     spi_transferBuffer(spi, txBuffer.msb, &txBuffer.lsb, 1);

@@ -67,9 +67,7 @@ static resultCode_t gnssLocCompleteParser(const char *response, char **endptr);
 
 
 /**
- *	\brief Turn GNSS/GPS subsystem on. 
- *
- *  \return Result code representing status of operation, OK = 200.
+ *	@brief Turn GNSS/GPS subsystem on. 
  */
 resultCode_t gnss_on()
 {
@@ -81,11 +79,8 @@ resultCode_t gnss_on()
 }
 
 
-
 /**
- *	\brief Turn GNSS/GPS subsystem off. 
- *
- *  \return Result code representing status of operation, OK = 200.
+ *	@brief Turn GNSS/GPS subsystem off. 
  */
 resultCode_t gnss_off()
 {
@@ -98,9 +93,7 @@ resultCode_t gnss_off()
 
 
 /**
- *	\brief Query BGx for current location/positioning information. 
- *
- *  \return GNSS location struct, see gnss.h for details.
+ *	@brief Query BGx for current location/positioning information. 
  */
 gnssLocation_t gnss_getLocation()
 {
@@ -111,7 +104,7 @@ gnssLocation_t gnss_getLocation()
     
     // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08  + lineEnds and OK
 
-    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         atcmd_setOptions(atcmd__defaultTimeoutMS, gnssLocCompleteParser);
         atcmd_invokeReuseLock("AT+QGPSLOC=2");
@@ -122,7 +115,7 @@ gnssLocation_t gnss_getLocation()
             return gnssResult;
 
         PRINTF(dbgColor__warn, "getLocation(): parse starting...\r");
-        char *continuePtr = atcmd_getLastResponse()  + GNSS_LOC_DATAOFFSET;             // skip past "+QGPSLOC: "
+        char *continuePtr = ATCMD_getLastResponse()  + GNSS_LOC_DATAOFFSET;             // skip past "+QGPSLOC: "
         continuePtr = atcmd_strToken(continuePtr, ',', tokenBuf, sizeof(tokenBuf));     // grab 1st element as a string
         if (continuePtr != NULL)
             strncpy(gnssResult.utc, tokenBuf, 11);
@@ -156,7 +149,7 @@ gnssLocation_t gnss_getLocation()
 
 
 /**
- *	\brief Action response parser for GNSS location request. 
+ *	@brief Action response parser for GNSS location request. 
  */
 static resultCode_t gnssLocCompleteParser(const char *response, char **endptr)
 {

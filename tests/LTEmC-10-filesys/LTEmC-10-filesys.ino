@@ -36,6 +36,7 @@
 #define JLINK_RTT                       // enable JLink debugger RTT terminal fuctionality
 // #define SERIAL_OPT 1                    // enable serial port comm with devl host (1=force ready test)
 #include <ltemc.h>
+#include <ltemc-filesys.h>
 
 #define ASSERT(expected_true, failMsg)  if(!(expected_true))  indicateFailure(failMsg)
 #define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') indicateFailure(failMsg)
@@ -63,20 +64,20 @@ void setup() {
     gpio_openPin(LED_BUILTIN, gpioMode_output);
 
     ltem_create(ltem_pinConfig, NULL);
-    ltem_start(pdpProtocol_none);
+    ltem_start();
 }
 
 
 void loop() 
 {
-    if (lMillis() - lastCycle >= CYCLE_INTERVAL)
+    if (pMillis() - lastCycle >= CYCLE_INTERVAL)
     {
-        lastCycle = lMillis();
+        lastCycle = pMillis();
         char testFile[12];
 
         // open (create) file
         snprintf(testFile, 12, "test%d.txt", loopCnt);
-        filsys_open(testFile, fileOpenMode_normalRdWr, fileReadReceiver);
+        filesys_open(testFile, fileOpenMode_normalRdWr, fileReadReceiver);
         // write to it
 
         if (loopCnt > 1)

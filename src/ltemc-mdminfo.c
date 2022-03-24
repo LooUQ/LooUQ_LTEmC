@@ -61,13 +61,11 @@ static resultCode_t S_iccidCompleteParser(const char *response, char **endptr);
 
 
 /**
- *  \brief Get the LTEm1 static device identification/provisioning information.
- * 
- *  \return Modem information struct, see mdminfo.h for details.
+ *  @brief Get the LTEm1 static device identification/provisioning information.
 */
-modemInfo_t mdminfo_ltem()
+modemInfo_t *mdminfo_ltem()
 {
-    if (atcmd_awaitLock(atcmd__defaultTimeoutMS))
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
 
@@ -76,7 +74,7 @@ modemInfo_t mdminfo_ltem()
             atcmd_invokeReuseLock("AT+GSN");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                strncpy(((modemInfo_t*)g_ltem.modemInfo)->imei, atcmd_getLastResponse() + 2, IMEI_SIZE);        // skip leading /r/n
+                strncpy(((modemInfo_t*)g_ltem.modemInfo)->imei, ATCMD_getLastResponse() + 2, IMEI_SIZE);        // skip leading /r/n
             }
         }
 
@@ -86,9 +84,9 @@ modemInfo_t mdminfo_ltem()
             if (atcmd_awaitResult() == resultCode__success)
             {
                 char *term;
-                term = strstr(atcmd_getLastResponse() + 2, "\r\n");
+                term = strstr(ATCMD_getLastResponse() + 2, "\r\n");
                 *term = '\0';
-                strcpy(((modemInfo_t*)g_ltem.modemInfo)->fwver, atcmd_getLastResponse() + 2);
+                strcpy(((modemInfo_t*)g_ltem.modemInfo)->fwver, ATCMD_getLastResponse() + 2);
                 term = strchr(((modemInfo_t*)g_ltem.modemInfo)->fwver, '_');
                 *term = ' ';
             }
@@ -100,9 +98,9 @@ modemInfo_t mdminfo_ltem()
             if (atcmd_awaitResult() == resultCode__success)
             {
                 char *term;
-                term = strstr(atcmd_getLastResponse() + 2, "\r\nRev");
+                term = strstr(ATCMD_getLastResponse() + 2, "\r\nRev");
                 *term = '\0';
-                strcpy(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, atcmd_getLastResponse() + 2);
+                strcpy(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, ATCMD_getLastResponse() + 2);
                 term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\r');
                 *term = ':';
                 term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\n');
@@ -116,42 +114,35 @@ modemInfo_t mdminfo_ltem()
             atcmd_invokeReuseLock("AT+ICCID");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                strncpy(((modemInfo_t*)g_ltem.modemInfo)->iccid, atcmd_getLastResponse() + ICCID_OFFSET, ICCID_SIZE);
+                strncpy(((modemInfo_t*)g_ltem.modemInfo)->iccid, ATCMD_getLastResponse() + ICCID_OFFSET, ICCID_SIZE);
             }
         }
-
         atcmd_close();
-        return *((modemInfo_t*)g_ltem.modemInfo);
     }
-    else
-    {
-        return *((modemInfo_t*)g_ltem.modemInfo);
-    }
+    return (modemInfo_t*)(g_ltem.modemInfo);
 }
 
 
 /**
- *  \brief Get the static device provisioning information about the LTEm1.
- * 
- *  \return The radio signal strength in the range of -51dBm to -113dBm (-999 is no signal)
+ *  @brief Get the static device provisioning information about the LTEm1.
 */
-int16_t mdminfo_rssi()
+int16_t mdminfo_signalRSSI()
 {
     uint8_t csq = 0;
-    int8_t rssi = -128;
+    int8_t rssi = -999;
 
-if (ltem_chkHwReady())
+    if (ltem_chkHwReady())
     {
         if (atcmd_tryInvoke("AT+CSQ"))
         {
             if (atcmd_awaitResult() == resultCode__success)
             {
                 char *term;
-                char *lastResponse = atcmd_getLastResponse();
-                term = strstr(atcmd_getLastResponse() + 2, "+CSQ");
+                char *lastResponse = ATCMD_getLastResponse();
+                term = strstr(ATCMD_getLastResponse() + 2, "+CSQ");
                 csq = strtol(term + 5, NULL, 10);
             }
-            rssi = (csq == 99) ? -128 : csq * 2 -113;        // raw=99: no signal, range -51 to -113
+            rssi = (csq == 99) ? -999 : csq * 2 - 113;        // raw=99: no signal, range -51 to -113
             atcmd_close();
         }
     }
@@ -160,28 +151,31 @@ if (ltem_chkHwReady())
 
 
 /**
- *  \brief Get the RSSI value as a calculate bar count for visualizations. Like on a smartphone.
- * 
- *  \param numberOfBars [in] The total number of bars on your display. 
- * 
- *  \return The number of bars to indicate based on the current RSSI and your scale.
+ *  @brief Get the signal strength reported by the LTEm device at a percent
 */
-uint8_t mdminfo_rssiBars(uint8_t numberOfBars)
+uint8_t mdmInfo_signalPercent()
 {
-    uint8_t barSpan = (113 - 51) / numberOfBars;
-    int rssi = mdminfo_rssi();
-    return (int)((rssi + 113 + barSpan) / barSpan);
-}
+    // The radio signal strength in the range of -51dBm to -113dBm (-999 is no signal)
+    int16_t rssi = mdminfo_rssi(); 
 
+    if (rssi == -999)
+        return 0;
+
+    rssi += 113;
+    rssi /= 62;
+    return (uint8_t)rssi;
+}
 
 #pragma endregion
 
-/* private (static) functions
- * --------------------------------------------------------------------------------------------- */
-#pragma region private functions
+
+
+#pragma region private static functions
+/* --------------------------------------------------------------------------------------------- */
+
 
 /**
- *	\brief Action response parser for iccid value request. 
+ *	@brief Action response parser for iccid value request. 
  */
 static resultCode_t S_iccidCompleteParser(const char *response, char **endptr)
 {

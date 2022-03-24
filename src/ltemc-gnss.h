@@ -74,18 +74,24 @@ typedef struct gnssLocation_tag
 extern "C" {
 #endif
 
+/**
+ *	@brief Turn GNSS/GPS subsystem on. 
+ *
+ *  @return Result code representing status of operation, OK = 200.
+ */
 resultCode_t gnss_on();          // AT+QGPS=1
+
+/**
+ *	@brief Turn GNSS/GPS subsystem off. 
+ *  @return Result code representing status of operation, OK = 200.
+ */
 resultCode_t gnss_off();
 
+/**
+ *	@brief Query BGx for current location/positioning information. 
+ *  @return GNSS location struct, see gnss.h for details.
+ */
 gnssLocation_t gnss_getLocation();
-
-// future geo-fence
-void gnss_geoAdd();
-void gnss_geoDelete();
-
-/* future geo-fence, likely separate .h/.c fileset */
-// void gnss_geoAdd();
-// void gnss_geoDelete();
 
 
 #ifdef __cplusplus

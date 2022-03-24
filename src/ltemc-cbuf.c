@@ -26,12 +26,7 @@
 #include "ltemc-cbuf.h"
 
 /**
- *  \brief Pushes a character on to stack buffer.
- * 
- *  \param bufStruct [in] - The destination buffer.
- *  \param data [in] - Character to add to buffer.
- * 
- *  \return true (1) if added, 0 if not added to buffer. 
+ *  @brief Pushes a character on to stack buffer.
 */
 uint8_t cbuf_push(cbuf_t *bufStruct, uint8_t data)
 {
@@ -48,12 +43,7 @@ uint8_t cbuf_push(cbuf_t *bufStruct, uint8_t data)
 
 
 /**
- *  \brief Pops a character from stack buffer.
- * 
- *  \param bufStruct [in] - The destination buffer.
- *  \param data [in] - Pointer where to place popped character.
- * 
- *  \return true (1) if popped, 0 if not returned. 
+ *  @brief Pops a character from stack buffer.
 */
 uint8_t cbuf_pop(cbuf_t *bufStruct, uint8_t *data)
 {
@@ -67,9 +57,4 @@ uint8_t cbuf_pop(cbuf_t *bufStruct, uint8_t *data)
     *data = bufStruct->buffer[bufStruct->tail];
     bufStruct->tail = next;
     return 1;
-}
-
-uint8_t cbub_available(cbuf_t *bufStruct)
-{
-
 }

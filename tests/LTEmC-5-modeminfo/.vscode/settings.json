@@ -7,6 +7,7 @@
         "type_traits": "c",
         "bitset": "cpp",
         "cfloat": "cpp",
-        "ltem1c.h": "c"
+        "ltem1c.h": "c",
+        "lq-diagnostics.h": "c"
     }
 }

@@ -13,7 +13,7 @@
             "servertype": "jlink",
             "interface": "swd",
             "device": "ATSAMD21G18",
-            "runToMain": true
+            "runToEntryPoint": "main"
         }
     ]
 }

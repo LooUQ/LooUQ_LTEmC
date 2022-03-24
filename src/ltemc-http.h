@@ -33,31 +33,34 @@
 #include "ltemc-internal.h"
 
 
+/** 
+ *  @brief Typed numeric constants used in HTTP module.
+*/
 enum http__constants
 {
     http__noResponseHeaders = 0, 
     http__returnResponseHeaders = 1, 
     http__useDefaultTimeout = 0,
-
+    http__defaultTimeoutBGxSec = 60,
     http__urlHostSz = 128
 };
 
 
 /** 
- *  \brief Callback function for data received event. Notifies application that new data is available and needs serviced.
+ *  @brief Callback function for data received event. Notifies application that new data is available and needs serviced.
  * 
- *  The *data and dataSz values are for convenience, since the application supplied the buffer to LTEmC.
+ *  @details The *data and dataSz values are for convenience, since the application supplied the buffer to LTEmC.
  * 
- *  \param dataCntxt [in] Data peer (data context or filesys) 
- *  \param httpRslt [in] HTTP status code found in the page result headers
- *  \param data [in] Pointer to received data buffer
- *  \param dataSz [in] The number of bytes available
+ *  @param dataCntxt [in] Data peer (data context or filesys) 
+ *  @param httpRslt [in] HTTP status code found in the page result headers
+ *  @param data [in] Pointer to received data buffer
+ *  @param dataSz [in] The number of bytes available
 */
 typedef void (*httpRecvFunc_t)(dataContext_t dataCntxt, uint16_t httpRslt, char *data, uint16_t dataSz);
 
 
 /** 
- *  \brief If using custom headers, bit-map indicating what headers to create for default custom header collection.
+ *  @brief If using custom headers, bit-map indicating what headers to create for default custom header collection.
 */
 typedef enum httpHeaderMap_tag              // bit-map to indicate headers to create for add custom headers, bitwise OR to http_addDefaultHdrs()
 {
@@ -109,23 +112,84 @@ extern "C"
 {
 #endif
 
-// Session settings factory methods to create options for a series of GET/POST operations
 
+/**
+ *	@brief Create a HTTP(s) control structure to manage web communications. 
+ *  @param httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
+ *	@param dataCntxt [in] The data context (0-5) to use for this communications.
+ *  @param urlHost [in] The host portion of the web server URL.
+ *  @param recvBuf [in] Pointer to application provided char buffer.
+ *  @param recvBufSz [in] Size of the receive buffer.
+ *  @param recvCallback [in] Callback function to receive incoming page data.
+ *  @return True if action was invoked, false if not
+ */
 void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataCntxt, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
 
+
+/**
+ *	@brief Registers custom headers (char) buffer with HTTP control.
+ *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ *	@param headerBuf [in] - pointer to header buffer  created by application
+ *  @param headerBufSz [in] - size of the header buffer
+ */
 void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *hdrBuffer, uint16_t hdrBufferSz);
+
+
+/**
+ *	@brief 
+ *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ *	@param headerMap [in] - Bitmap for which standard headers to use.
+ */
 void http_addDefaultHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap);
+
+
+/**
+ *	@brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
+ *
+ *  @param http [in] - Pointer to the control block for HTTP communications.
+ *	@param user [in] - User name.
+ *  @param pw [in] - Password/secret for header.
+ */
 void http_addBasicAuthHdr(httpCtrl_t *httpCtrl, const char *user, const char *pw);
 
+/* ------------------------------------------------------------------------------------------------
+ *  Request and Response Section 
+ * --------------------------------------------------------------------------------------------- */
+
+/**
+ *	@brief Perform HTTP GET operation. Results are internally buffered on the LTEm, see http_read().
+ *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ *	@param relativeUrl [in] - The URL to GET (starts with \ and doesn't include the host part)
+ *  @param returnResponseHdrs [in] - Set to true for page result to include response headers at the start of the page
+ *  @param timeoutSec [in] - Timeout for entire GET request cycle
+ *  @return true if GET request sent successfully
+ */
 resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, uint8_t timeoutSec);
+
+
+/**
+ *	@brief Performs a HTTP POST page web request.
+ *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ *	@param relativeUrl [in] - URL, relative to the host. If none, can be provided as "" or "/" ()
+ *  @param returnResponseHdrs [in] - if requested (true) the page response stream will prefix the page data
+ *  @param postData [in] - Pointer to char buffer with POST content
+ *  @param postDataSz [in] - Size of the POST content reference by *postData
+ *	@param timeoutSec [in] - the number of seconds to wait (blocking) for a page response
+ *  @return true if POST request completed
+ */
 resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, const char* postData, uint16_t dataSz, uint8_t timeoutSec);
 
+
+/**
+ *	@brief Retrieves page results from a previous GET or POST.
+ *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ *	@param timeoutSec [in] - the number of seconds to wait (blocking) for a page response
+ *  @return true if POST request completed
+ */
 resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec);
+
 void http_cancelPage(httpCtrl_t *httpCtrl);
 
-// resultCode_t http_checkResult(httpCtrl_t *httpCtrl);
-// resultCode_t http_getFinalResult(httpCtrl_t *httpCtrl);
-// resultCode_t http_awaitResult(httpCtrl_t *httpCtrl, uint8_t timeoutSec);
 
 // future support for fileSystem destinations, requires file_ module still under development planned for v2.1
 /*

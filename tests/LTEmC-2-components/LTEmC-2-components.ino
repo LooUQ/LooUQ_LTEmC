@@ -69,17 +69,20 @@ void setup() {
     initIO();
     spi_start(g_ltem.spi);
 
-    if (qbg_isPowerOn())
+    if (qbg_powerOn())
         PRINTF(dbgColor__dGreen, "LTEm found already powered on.\r\n");
     else
+    {
         PRINTF(dbgColor__dGreen, "Powered LTEm on.\r\n");
-
-    SC16IS741A_start();     // start NXP SPI-UART bridge
+        pDelay(5);
+    }
+    SC16IS7xx_start();     // start NXP SPI-UART bridge
 }
 
 
 int loopCnt = 0;
 uint8_t testPattern;
+int nullResponses = 0;
 
 void loop() {
     testPattern = random(256);
@@ -89,12 +92,11 @@ void loop() {
     txBuffer_reg = testPattern;
     // rxBuffer doesn't matter prior to read
     
-    SC16IS741A_writeReg(SC16IS741A_SPR_ADDR, txBuffer_reg);
-    rxBuffer_reg = SC16IS741A_readReg(SC16IS741A_SPR_ADDR);
+    SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, txBuffer_reg);
+    rxBuffer_reg = SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr);
 
     if (testPattern != rxBuffer_reg)
         indicateFailure("Scratchpad write/read failed (write/read register)."); 
-
 
     /* BG96 test pattern: get IMEI
     *
@@ -107,7 +109,7 @@ void loop() {
 
     uint8_t regValue = 0;
     char cmd[] = "ATI\r\0";
-    //char cmd[] = "AT+QPOWD=0\r\0";
+    // char cmd[] = "AT+QPOWD=0\r\0";
     PRINTF(0, "Invoking cmd: %s \r\n", cmd);
 
     sendCommand(cmd);
@@ -117,31 +119,41 @@ void loop() {
 
     recvResponse(response);
 
-//\r\nQuectel\r\nBG96\r\nRevision: BG96MAR02A07M1G\r\n\r\nOK\r\n", 
-
+    //\r\nQuectel\r\nBG96\r\nRevision: BG96MAR02A07M1G\r\n\r\nOK\r\n", 
     // test response v. expected 
-    const char* validResponse = "\r\nQuectel\r\nBG";                                              // initial characters in response
 
-    if (strstr(response, "\r\nAPP RDY"))
+    const char* validResponse = "\r\nQuectel\r\nBG";                                              // initial characters in response
+    char* tailAt = NULL;
+
+    if (strstr(response, "APP RDY"))
     {
         PRINTF(dbgColor__warn, "Received APP RDY from LTEm.\r\n");
     }
-    else
+    if (strstr(response, "RDY"))
     {
-        char* tailAt = NULL;
+        PRINTF(dbgColor__warn, "Received BG RDY from LTEm.\r\n");
+    }
+    if (strlen(response) == 0)
+    {
+        PRINTF(dbgColor__warn, "Got no response from BGx.\r\n");
+        nullResponses++;
+        if (nullResponses > 2)
+            indicateFailure("BGx is not responding to cmds... failed."); 
+    }
+
+    if (strlen(response) > 60 )
+    {
         if (strstr(response, validResponse))
         {
             tailAt = strstr(response, "OK\r\n");
-
             if (tailAt != NULL)
                 PRINTF(0, "Got correctly formed response: \r\n%s", response);  
             else
-                PRINTF(dbgColor__error, "Missing final OK in response.\r");
+                PRINTF(dbgColor__warn, "Missing final OK in response.\r");
         }
-        else if (tailAt == NULL)
+        else
             indicateFailure("Unexpected device information returned on cmd test... failed."); 
     }
-
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
 }
@@ -156,11 +168,11 @@ void sendCommand(const char* cmd)
 {
     size_t sendSz = strlen(cmd);
 
-    //sc16is741a_write(cmd, strlen(cmd));                      // normally you are going to use buffered writes like here
+    //SC16IS7xx_write(cmd, strlen(cmd));                      // normally you are going to use buffered writes like here
 
     for (size_t i = 0; i < sendSz; i++)
     {
-        SC16IS741A_writeReg(SC16IS741A_FIFO_ADDR, cmd[i]);      // without a small delay the register is not moved to FIFO before next byte\char
+        SC16IS7xx_writeReg(SC16IS7xx_FIFO_regAddr, cmd[i]);      // without a small delay the register is not moved to FIFO before next byte\char
         pDelay(1);                                              // this is NOT the typical write cycle
     }
     pDelay(300);                                                // max response time per-Quectel specs, for this test we will wait
@@ -169,20 +181,25 @@ void sendCommand(const char* cmd)
 
 void recvResponse(char *response)
 {
-    uint8_t lsrValue = 0;
+    bool dataAvailable = false;
     uint8_t recvSz = 0;
     uint8_t attempts = 0;
 
-    while (!(lsrValue & nxp__lsr_DataInReceiver))
+    while (!dataAvailable && attempts < 20)
     {
-        lsrValue = SC16IS741A_readReg(SC16IS741A_LSR_ADDR);
-        if (attempts == 5)
+        uint8_t lsrValue = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
+        if (lsrValue & SC16IS7xx__LSR_RHR_dataReady)
+        {
+            dataAvailable = true;
             break;
-        pDelay(10);
+        }
         attempts++;
     }
-    recvSz = SC16IS741A_readReg(SC16IS741A_RXLVL_ADDR);
-    SC16IS741A_read(response, recvSz);
+    if (dataAvailable)
+    {
+        recvSz = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
+        SC16IS7xx_read(response, recvSz);
+    }
 }
 
 
@@ -210,7 +227,9 @@ bool validOkResponse(const char *response)
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+//typedef void (*eventNotifFunc_t)(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg);
+
+void appNotifyCB(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg)
 {
     if (notifType > 200)
     {

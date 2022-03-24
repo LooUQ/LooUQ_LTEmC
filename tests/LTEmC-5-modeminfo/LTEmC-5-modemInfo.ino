@@ -61,31 +61,31 @@ void setup() {
     PRINTF(dbgColor__red, "LTEm1c test5-modemInfo\r\n");
     
     randomSeed(analogRead(0));
-    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_registerEventCallback(appEventCB);                       // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
-    ltem_start();                                                   // ... and start it
+    ltem_create(ltem_pinConfig, appEventCB);                        // create LTEmC modem
+    ltem_start(false);                                              // ... and start it
 
     PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_ltemcVersion());
 
-    char opList[300];
-    ntwk_getOperators(opList, sizeof(opList));
-    PRINTF(dbgColor__green, "Ops: %s\r", opList);
+    // char opList[300];
+    // ntwk_getOperators(opList, sizeof(opList));
+    // PRINTF(dbgColor__green, "Ops: %s\r", opList);
 }
 
 
 int loopCnt = 0;
-modemInfo_t modemInfo;
+modemInfo_t *modemInfo;
 
 
 void loop() {
     modemInfo = mdminfo_ltem();
 
     PRINTF(dbgColor__cyan, "\rModem Information\r");
-    PRINTF(dbgColor__cyan, "IMEI = %s \r", modemInfo.imei);
-    PRINTF(dbgColor__cyan, "ICCID = %s \r", modemInfo.iccid);
-    PRINTF(dbgColor__cyan, "Firmware = %s \r", modemInfo.fwver);
-    PRINTF(dbgColor__cyan, "Mfg/Model = %s \r", modemInfo.mfgmodel);
+    PRINTF(dbgColor__cyan, "IMEI = %s \r", modemInfo->imei);
+    PRINTF(dbgColor__cyan, "ICCID = %s \r", modemInfo->iccid);
+    PRINTF(dbgColor__cyan, "Firmware = %s \r", modemInfo->fwver);
+    PRINTF(dbgColor__cyan, "Mfg/Model = %s \r", modemInfo->mfgmodel);
 
     PRINTF(dbgColor__info, "\rRSSI = %d dBm \r",mdminfo_rssi());
 
@@ -98,14 +98,14 @@ void loop() {
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
+void appEventCB(uint8_t eventType, const char *eventMsg)
 {
-    if (notifType > 200)
+    if (eventType > 200)
     {
-        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
+        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", eventMsg);
         while (1) {}
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
+    PRINTF(dbgColor__info, "LQCloud Info: %s\r", eventMsg);
     return;
 }
 
