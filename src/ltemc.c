@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  *************************************************************************** */
-const char *ltemcVersion = "2.2.1";
+const char *ltemcVersion = "3.0.1";
 /* ************************************************************************* */
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
@@ -64,6 +64,7 @@ ltemDevice_t g_ltem;
 
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------ */
+void S__initDevice(bool foundOn);
 
 
 #pragma region Public Functions
@@ -81,8 +82,10 @@ const char *ltem_ltemcVersion()
 /**
  *	@brief Initialize the LTEm1 modem.
  */
-void ltem_create(const ltemPinConfig_t ltem_config, appEventCallback_func eventNotifCallback)
+void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEventCallback_func eventNotifCallback)
 {
+    ASSERT(g_ltem.modemInfo == NULL, srcfile_ltemc_ltemc_c);
+
 	g_ltem.pinConfig = ltem_config;
     g_ltem.spi = spi_create(g_ltem.pinConfig.spiCsPin);
 
@@ -146,31 +149,37 @@ bool ltem_start(bool forceReset)
     {
         if (forceReset)
         {
-            SC16IS7xx_start(false);                             // SPI-UART bridge functionality may/may not be running, init base functions: FIFO, levels, baud, framing
+            SC16IS7xx_start(false);                             // SPI-UART bridge functionality may/may not be running, init base functions: FIFO, levels, baud, framing (IRQ not req'd)
             qbg_reset(true);                                    // do hardware reset (aka power cycle)
         }
     }
     else 
     {
         qbg_powerOn();                                          // turn on BGx
-        // ltem_initDevice(true);                                  // start services from cold start (waits for APP RDY)
-        if (qbg_isPowerOn())                                    // ensure BGx powered on
-        {
-            SC16IS7xx_start();                                  // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
-            if (!foundOn)                                   
-                IOP_awaitAppReady();                            // wait for BGx to signal out firmware ready (URC message)
-
-            IOP_start();                                        // start I/O processor and switch SPI-UART bridge to IRQ mode
-            SC16IS7xx_enableIrqMode();
-
-            qbg_setOptions();                                   // initialize BGx operating settings
-            g_ltem.qbgDeviceState = qbgDeviceState_appReady;    // set device state
-        }
-
     }
+    S__initDevice(foundOn);
     return !foundOn;
 }
 
+
+/**
+ *	@brief Static internal BGx initialization logic shared between start and reset
+ */
+void S__initDevice(bool foundOn)
+{
+    if (qbg_isPowerOn())                                    // ensure BGx powered on
+    {
+        SC16IS7xx_start();                                  // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
+        if (!foundOn)                                   
+            IOP_awaitAppReady();                            // wait for BGx to signal out firmware ready (URC message)
+
+        IOP_attachIrq();                                    // attach I/O processor ISR to IRQ
+        SC16IS7xx_enableIrqMode();                          // enable IRQ generation on SPI-UART bridge (IRQ mode)
+
+        qbg_setOptions();                                   // initialize BGx operating settings
+        g_ltem.qbgDeviceState = qbgDeviceState_appReady;    // set device state
+    }
+}
 
 
 /**
@@ -185,54 +194,29 @@ void ltem_stop()
 }
 
 
-
-/**
- *	@brief Performs a software restart of LTEm device.
- */
-// void ltem_initDevice(bool coldStart)
-// {
-    // if (qbg_isPowerOn())                                // check for HW powered on, status=true. If powered off nothing to do.
-    // {
-    //     SC16IS7xx_start();                              // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
-    //     if (coldStart)                                          // caller notifies if cold BGx (powered ON/reset prior to call)
-    //         IOP_awaitAppReady();                                // wait for BGx to signal out firmware ready (URC message)
-
-    //     IOP_start();                                            // start I/O processor and SPI-UART IRQ mode
-    //     SC16IS7xx_enableIrqMode();
-
-    //     qbg_setOptions();                                       // initialize BGx operating settings
-    //     g_ltem.qbgDeviceState = qbgDeviceState_appReady;        // set device state
-    // }
-// }
-
-
 /**
  *	@brief Performs a reset of LTEm.
  */
 void ltem_reset(bool hardReset)
 {
     qbg_reset(hardReset);                                       // reset module, indirectly SPI/UART (CFUNC or reset pin)
-    ltem_initDevice(true);
+    S__initDevice(!hardReset);
 }
-
-
-/**
- *	@brief Check the BGx for hardware ready (status pin).
- *
- *  @return True is status HIGH, hardware ready.
- */
-bool ltem_chkHwReady()
-{
-	return gpio_readPin(g_ltem.pinConfig.statusPin);
-}
-
 
 
 /**
  *	@brief Performs a HW reset of LTEm1 and optionally executes start sequence.
  */
-qbgDeviceState_t ltem_getDeviceState()
+qbgDeviceState_t ltem_readDeviceState()
 {
+    if (gpio_readPin(g_ltem.pinConfig.statusPin))                  // ensure powered off device doesn't report otherwise
+    {
+        if (g_ltem.qbgDeviceState == qbgDeviceState_powerOff)
+            g_ltem.qbgDeviceState = qbgDeviceState_powerOn; 
+    }
+    else
+        g_ltem.qbgDeviceState = qbgDeviceState_powerOff;
+
     return g_ltem.qbgDeviceState;
 }
 
@@ -242,7 +226,7 @@ qbgDeviceState_t ltem_getDeviceState()
  */
 void ltem_doWork()
 {
-    if (!ltem_chkHwReady())
+    if (!ltem_readDeviceState())
         ltem_notifyApp(appEvent_fault_hardFault, "LTEm I/O Error");
 
     for (size_t i = 0; i < sizeof(g_ltem.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)  // each stream with a doWork() register it at OPEN (removed if last CLOSE)
