@@ -84,7 +84,7 @@ bool qbg_isPowerOn();
 
 /**
  *	@brief Power on the BGx module
- *  @return True if the BGx was not previously powered ON
+ *  @return True if the BGx found previously on or was successfully turned ON
  */
 bool qbg_powerOn();
 

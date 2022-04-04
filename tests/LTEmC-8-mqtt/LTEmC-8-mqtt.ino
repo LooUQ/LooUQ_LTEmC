@@ -126,23 +126,23 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEm1c test8-MQTT\r\n");
-    lqDiag_registerNotifCallback(appNotifyCB);
+    lqDiag_registerEventCallback(appNotifyCB);
 
     diagnosticInfo_t *diags = lqDiag_getDiagnosticsInfo();
 
-    ltem_create(ltem_pinConfig, appNotifyCB);
-    ltem_start();
+    ltem_create(ltem_pinConfig, NULL, appNotifyCB);
+    ltem_start(false);                                                          // start modem, no reset if modem found ON
 
     PRINTF(dbgColor__none, "Waiting on network...\r");
-    networkOperator_t networkOp = ntwk_awaitOperator(30000);
-    if (strlen(networkOp.operName) == 0)
-        appNotifyCB(255, 0, 0, "Timout (30s) waiting for cellular network.");
-    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
+    providerInfo_t *networkProvider = ntwk_awaitProvider(30000);
+    if (strlen(networkProvider->name) == 0)
+        appNotifyCB(255, "Timout (30s) waiting for cellular network.");
+    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
 
-    uint8_t cntxtCnt = ntwk_fetchActivePdpCntxts();
+    uint8_t cntxtCnt = ntwk_readActiveNetworkCount();
     if (cntxtCnt == 0)
     {
-        ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT, pdpCntxtProtocolType_IPV4, "");
+        ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, networkPDPType_IPV4, "");
     }
 
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
@@ -158,19 +158,19 @@ void setup() {
     if (rslt != resultCode__success)
     {
         PRINTF(dbgColor__warn, "Open fail status=%d\r", rslt);
-        appNotifyCB(255, 0, 0, "MQTT open failed");
+        appNotifyCB(255, "MQTT open failed");
     }
     rslt = mqtt_connect(&mqttCtrl, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN, mqttSession_cleanStart);
     if (rslt != resultCode__success)
     {
         PRINTF(dbgColor__warn, "Connect fail status=%d\r", rslt);
-        appNotifyCB(255, 0, 0, "MQTT connect failed.");
+        appNotifyCB(255, "MQTT connect failed.");
     }
     rslt = mqtt_subscribe(&mqttCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1);
     if (rslt != resultCode__success)
     {
         PRINTF(dbgColor__warn, "Subscribe fail status=%d\r", rslt);
-        appNotifyCB(255, 0, 0, "MQTT subscribe to IoTHub C2D messages failed.");
+        appNotifyCB(255, "MQTT subscribe to IoTHub C2D messages failed.");
     }
     lastCycle = pMillis() - cycle_interval;
 }
@@ -246,15 +246,15 @@ void mqttRecvCB(dataContext_t cntxt, uint16_t msgId, const char *topic, char *to
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
-    if (notifType >= lqNotifType__CATASTROPHIC)
+    if (notifType >= appEvent__FAULTS)
     {
         PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
         volatile int halt = 1;
         while (halt) {}
     }
-    else if (notifType >= lqNotifType__WARNING)
+    else if (notifType >= appEvent__WARNINGS)
         PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
     else
         PRINTF(dbgColor__info, "\r\n%s \r\n", notifMsg);

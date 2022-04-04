@@ -106,7 +106,7 @@ void SC16IS7xx_start()
  */
 void SC16IS7xx_enableIrqMode()
 {
-   	// IRQ Enabled: RX chars available, TX spaces available, UART framing error
+   	// IRQ Enabled: RX chars available, TX spaces available, UART framing error : reg = 0x07
 	SC16IS7xx_IER ierSetting = {0};
 	ierSetting.RHR_DATA_AVAIL_INT_EN = 1;
 	ierSetting.THR_EMPTY_INT_EN = 1; 
@@ -116,13 +116,14 @@ void SC16IS7xx_enableIrqMode()
 
 
 /**
- *	@brief Perform simple write/read using SC16IS741A scratchpad register. Used to test SPI communications.
+ *	@brief Read interrupt enable register, check IER for IRQ enabled (register is cleared at reset)
  */
 bool SC16IS7xx_chkCommReady()
 {
-    uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
-    SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, wrVal);
-    return SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr) == wrVal;
+    // uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
+    // SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, wrVal);
+    // return SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr) == wrVal;
+    return SC16IS7xx_readReg(SC16IS7xx_IER_regAddr) == 0x07;
 }
 
 #pragma endregion

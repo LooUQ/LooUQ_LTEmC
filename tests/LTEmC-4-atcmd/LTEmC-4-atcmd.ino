@@ -60,10 +60,10 @@ void setup()
     #endif
 
     PRINTF(dbgColor__red, "LTEmC test4: AT Commands\r");
-    lqDiag_registerNotifCallback(appNotifyCB);                    // configure ASSERTS to callback into application
+    lqDiag_registerEventCallback(appNotifyCB);                    // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifyCB);                     // create LTEmC modem
-    ltem_start();                                                 // ... and start it
+    ltem_create(ltem_pinConfig, NULL, appNotifyCB);               // create LTEmC modem
+    ltem_start(false);                                            // ... and start it
 }
 
 
@@ -83,9 +83,9 @@ void loop()
     */
 
     uint8_t regValue = 0;
-    // char cmdStr[] = "ATI\r\0";
-    //char cmdStr[] = "AT+CPIN?\r\0";
-    char cmdStr[] = "AT+QCCID\r\0";
+    char cmdStr[] = "ATI\r\0";
+    // char cmdStr[] = "AT+CPIN?\r\0";
+    // char cmdStr[] = "AT+QCCID\r\0";
     PRINTF(dbgColor__none, "Invoking cmd: %s \r\n", cmdStr);
 
     if (atcmd_tryInvoke(cmdStr))
@@ -94,7 +94,7 @@ void loop()
         
         if (atResult == resultCode__success)                                                // statusCode == 200 (similar to HTTP codes)
         {
-            char *response = atcmd_getLastResponse();
+            char *response = ATCMD_getLastResponse();
             PRINTF(dbgColor__info, "Got %d chars\r", strlen(response));
             PRINTF(dbgColor__cyan, "Resp: %s\r", response);
                                                                                             // test response v. expected 
@@ -142,7 +142,7 @@ void loop()
 ========================================================================================================================= */
 
 
-void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
     if (notifType > 200)
     {

@@ -82,22 +82,22 @@ void setup() {
 
     PRINTF(dbgColor__red, "\rLTEm1c test9-HTTP\r\n");
 
-    ltem_create(ltem_pinConfig, appNotifCB);
-    ltem_start();
+    ltem_create(ltem_pinConfig, NULL, appNotifCB);                      // no yield req'd for testing
+    ltem_start(false);                                                  // do not reset on modem found ON
 
-    ntwk_setNwScanMode(ntwkScanMode_lteonly);
-    ntwk_setIotOpMode(ntwkIotMode_m1);
+    ntwk_setProviderScanMode(ntwkScanMode_lteonly);
+    ntwk_setIotMode(ntwkIotMode_m1);
 
     PRINTF(dbgColor__none, "Waiting on network...\r");
-    networkOperator_t networkOp = ntwk_awaitOperator(30000);
-    if (strlen(networkOp.operName) == 0)
-        appNotifCB(255, 0, 0, "Timout (30s) waiting for cellular network.");
-    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
+    providerInfo_t *networkProvider = ntwk_awaitProvider(30000);
+    if (strlen(networkProvider->name) == 0)
+        appNotifCB(255, "Timout (30s) waiting for cellular network.");
+    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
 
-    uint8_t cntxtCnt = ntwk_fetchActivePdpCntxts();
+    uint8_t cntxtCnt = ntwk_readActiveNetworkCount();
     if (cntxtCnt == 0)
     {
-        ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT, pdpCntxtProtocolType_IPV4, "");
+        ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, networkPDPType_IPV4, "");
     }
 
     /* Basic connectivity established, moving on to HTTPS setup */
@@ -236,16 +236,16 @@ void httpRecvCB(dataContext_t cntxt, uint16_t httpStatus, char *recvData, uint16
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
+void appNotifCB(uint8_t notifType, const char *notifMsg)
 {
-    if (notifType >= lqNotifType__CATASTROPHIC)
+    if (notifType >= appEvent__FAULTS)
     {
         PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
         volatile int halt = 1;
         while (halt) {}
     }
 
-    else if (notifType >= lqNotifType__WARNING)
+    else if (notifType >= appEvent__WARNINGS)
         PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
 
     else

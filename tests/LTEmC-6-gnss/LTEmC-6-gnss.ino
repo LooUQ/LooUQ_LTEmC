@@ -67,15 +67,15 @@ void setup() {
 
     PRINTF(dbgColor__red, "\rLTEmC Test 6: GNSS\r");
     randomSeed(analogRead(0));
-    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_registerEventCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
-    ltem_start();                                                   // ... and start it
+    ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem, no yield CB req'd for testing
+    ltem_start(false);                                              // ... and start it, no reset if found powered on
 
     // turn on GNSS
     resultCode_t cmdResult = gnss_on();
 
-    ASSERT(cmdResult == 200 || cmdResult == 504, srcfile_gnss_c);
+    ASSERT(cmdResult == 200 || cmdResult == 504, srcfile_ltemc_gnss_c);
 
     if (cmdResult == 200)
         PRINTF(dbgColor__info, "GNSS enabled\r", cmdResult);
@@ -116,7 +116,7 @@ void loop() {
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
     if (notifType > 200)
     {

@@ -60,9 +60,9 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "LTEmC Test2: modem components\r\n");
-    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_registerEventCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
+    ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem
     randomSeed(analogRead(0));
 
     // initialize GPIO, SPI, UART-Bridge, BGx power 
@@ -229,7 +229,7 @@ bool validOkResponse(const char *response)
 
 //typedef void (*eventNotifFunc_t)(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg);
 
-void appNotifyCB(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
     if (notifType > 200)
     {

@@ -17,7 +17,7 @@
                 "-fno-rtti",
                 "-fno-exceptions"
             ],
-            "intelliSenseMode": "gcc-x64",
+            "intelliSenseMode": "windows-gcc-arm",
             "includePath": [
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.5\\libraries\\Adafruit_TinyUSB_Arduino\\src\\arduino",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\tools\\CMSIS\\5.4.0\\CMSIS\\Core\\Include\\",
@@ -27,7 +27,7 @@
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.5\\variants\\feather_m0_express",
                 "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\JLinkRTT\\src",
                 "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\LooUQ-LTEmC\\src",
-                "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\LooUQ-DeviceCommon\\src",
+                "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\LooUQ-DeviceLib\\src",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.5\\libraries\\SPI",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.5\\libraries\\Adafruit_ZeroDMA",
                 "C:\\Users\\GregTerrell\\Documents\\CodeDev\\Arduino\\libraries\\Adafruit_SPIFlash\\src",
@@ -42,7 +42,7 @@
             "forcedInclude": [
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.5\\cores\\arduino\\Arduino.h"
             ],
-            "cStandard": "c11",
+            "cStandard": "c99",
             "cppStandard": "c++11",
             "defines": [
                 "__SKETCH_NAME__=\"\"\"LTEmC-3-iop.ino\"\"\"",
@@ -227,7 +227,6 @@
                 "__FLT32X_HAS_DENORM__=1",
                 "__INT_FAST16_TYPE__=int",
                 "__LDBL_HAS_DENORM__=1",
-                "__cplusplus=201402L",
                 "__cpp_ref_qualifiers=200710",
                 "__DEC128_MAX__=9.999999999999999999999999999999999E6144DL",
                 "__INT_LEAST32_MAX__=0x7fffffffL",
@@ -247,7 +246,6 @@
                 "__UACCUM_MIN__=0.0UK",
                 "__UACCUM_IBIT__=16",
                 "__FLT32_HAS_QUIET_NAN__=1",
-                "__GNUG__=9",
                 "__LONG_LONG_MAX__=0x7fffffffffffffffLL",
                 "__SIZEOF_SIZE_T__=4",
                 "__ULACCUM_MAX__=0XFFFFFFFFFFFFFFFFP-32ULK",

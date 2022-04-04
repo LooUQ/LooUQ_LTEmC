@@ -449,7 +449,7 @@ mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl)
 */
 mqttState_t mqtt_getStatusForContext(dataContext_t cntxt)
 {
-    if (ltem_chkHwReady() && cntxt < dataContext__cnt)
+    if (ltem_readDeviceState() && cntxt < dataContext__cnt)
     {
         atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttConnectStatusParser);
         if (atcmd_tryInvokeWithOptions("AT+QMTCONN?"))

@@ -66,9 +66,9 @@ void setup() {
 
     PRINTF(dbgColor__red, "LTEmC Test3: iop\r");
     randomSeed(analogRead(7));
-    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_registerEventCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
+    ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem (no yield CB for testing)
     startLTEm();                                                    // local initialize\start can't use ltem_start() yet
 
     cmdBuf = ((iop_t*)g_ltem.iop)->rxCBuffer->_buffer;              // readability var
@@ -106,7 +106,8 @@ void loop()
 
 void startLTEm()
 {
-	// on Arduino, ensure pin is in default "logical" state prior to opening
+    // initialize the HOST side of the LTEm interface
+	// ensure pin is in default "logical" state prior to opening
 	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
 	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
 	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
@@ -129,12 +130,13 @@ void startLTEm()
         qbg_powerOn();
 
     SC16IS7xx_start();                                          // start (resets previously powered on) NXP SPI-UART bridge
-    IOP_start();
+    SC16IS7xx_enableIrqMode();
+    IOP_attachIrq();
     IOP_awaitAppReady();                                        // wait for BGx to signal out firmware ready
 }
 
 
-void appNotifyCB(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
     if (notifType > 200)
     {

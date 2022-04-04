@@ -102,13 +102,13 @@ void IOP_create();
 /**
  *	@brief Complete initialization and start running IOP processes.
  */
-void IOP_start();
+void IOP_attachIrq();
 
 
 /**
  *	@brief Stop IOP services.
  */
-void IOP_stopIrq();
+void IOP_detachIrq();
 
 
 /**

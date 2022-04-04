@@ -77,7 +77,7 @@ typedef struct ltemDevice_tag
     void *iop;                              ///< IOP subsystem controls.
     void *atcmd;                            ///< Action subsystem controls.
 	void *modemInfo;                        ///< Data structure holding persistent information about application modem state.
-    void *network;                          ///< Data structure representing the cellular network.
+    void *providerNetworks;                 ///< Data structure representing the cellular network provider.
 
     moduleDoWorkFunc_t streamWorkers[6];    ///< Stream background doWork functions, registered by Open;
 

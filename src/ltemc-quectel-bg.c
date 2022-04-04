@@ -45,6 +45,7 @@
 
 extern ltemDevice_t g_ltem;
 
+
 const char* const qbg_initCmds[] = 
 { 
     "ATE0",                             // don't echo AT commands on serial
@@ -78,7 +79,7 @@ bool qbg_powerOn()
     {
         PRINTF(dbgColor__none, "LTEm found powered on.\r");
         g_ltem.qbgDeviceState = qbgDeviceState_appReady;             // APP READY msg comes only once, shortly after chip start, would have missed it 
-        return false;
+        return true;
     }
 
     g_ltem.qbgDeviceState = qbgDeviceState_powerOff;
@@ -95,11 +96,12 @@ bool qbg_powerOn()
         {
             g_ltem.qbgDeviceState = qbgDeviceState_powerOn;
             PRINTF(dbgColor__none, "DONE\r");
+            return true;
         }
         else
             pDelay(100);                                            // allow background tasks to operate
     }
-    return true;
+    return false;
 }
 
 

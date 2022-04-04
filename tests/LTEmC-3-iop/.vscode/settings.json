@@ -6,6 +6,8 @@
         "limits": "c",
         "type_traits": "c",
         "bitset": "cpp",
-        "platform_stdio.h": "c"
+        "platform_stdio.h": "c",
+        "ltemc-internal.h": "c",
+        "ltemc-quectel-bg.h": "c"
     }
 }

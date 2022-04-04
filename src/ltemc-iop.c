@@ -57,7 +57,7 @@
 
 #pragma region Header
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -79,6 +79,8 @@
 #include "ltemc-mqtt.h"
 
 #include <lq-str.h>
+
+#define NULL 0
 
 #define QBG_APPREADY_MILLISMAX 5000
 
@@ -135,7 +137,7 @@ void IOP_create()
 /**
  *	@brief Complete initialization and start running IOP processes.
  */
-void IOP_start()
+void IOP_attachIrq()
 {
     spi_usingInterrupt(((spi_t*)g_ltem.spi), g_ltem.pinConfig.irqPin);
     gpio_attachIsr(g_ltem.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
@@ -145,7 +147,7 @@ void IOP_start()
 /**
  *	@brief Stop IOP services.
  */
-void IOP_stopIrq()
+void IOP_detachIrq()
 {
     gpio_detachIsr(g_ltem.pinConfig.irqPin);
 }
@@ -644,12 +646,12 @@ void IOP_rxParseForUrcEvents()
             char *connIdPtr = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead + strlen("+QIURC: \"pdpdeact");
             char *endPtr = NULL;
             uint8_t contextId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-            for (size_t i = 0; i <  sizeof(((network_t*)g_ltem.network)->pdpCntxts) / sizeof(pdpCntxt_t); i++)
+            for (size_t i = 0; i <  sizeof(((providerNetworks_t*)g_ltem.providerNetworks)->networks) / sizeof(providerNetworks_t); i++)
             {
-                if (((network_t*)g_ltem.network)->pdpCntxts[i].contextId == contextId)
+                if (((providerNetworks_t*)g_ltem.providerNetworks)->networks[i]->contextId == contextId)
                 {
-                    ((network_t*)g_ltem.network)->pdpCntxts[i].contextId = 0;
-                    ((network_t*)g_ltem.network)->pdpCntxts[i].ipAddress[0] = 0;
+                    ((providerNetworks_t*)g_ltem.providerNetworks)->networks[i]->contextId = 0;
+                    ((providerNetworks_t*)g_ltem.providerNetworks)->networks[i]->ipAddress[0] = 0;
                     break;
                 }
             }

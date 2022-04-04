@@ -63,8 +63,8 @@ void setup() {
     PRINTF(DBGCOLOR_dRed, "\rLTEmC Test10: File System\r\n");
     gpio_openPin(LED_BUILTIN, gpioMode_output);
 
-    ltem_create(ltem_pinConfig, NULL);
-    ltem_start();
+    ltem_create(ltem_pinConfig, NULL, appNotifyCB);
+    ltem_start(true);                                                       // start LTEm, if found on reset it
 }
 
 
@@ -104,6 +104,20 @@ void fileReadReceiver(uint16_t fileHandle, void *fileData, uint16_t dataSz)
 
 /* test helpers
 ========================================================================================================================= */
+
+void appNotifyCB(uint8_t notifType, const char *notifMsg)
+{
+    if (notifType >= appEvent__FAULTS)
+    {
+        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
+        volatile int halt = 1;
+        while (halt) {}
+    }
+    else if (notifType >= appEvent__WARNINGS)
+        PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
+    else
+        PRINTF(dbgColor__info, "\r\n%s \r\n", notifMsg);
+}
 
 void indicateFailure(char failureMsg[])
 {

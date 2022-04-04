@@ -27,7 +27,6 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-//#include <jlinkRtt.h>
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
@@ -91,23 +90,23 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEmC Test:7 Sockets\r\n");
-    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_registerEventCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
-    ltem_start();                                                   // ... and start it
-    PRINTF(dbgColor__none, "BGx %s\r", mdminfo_ltem().fwver);
+    ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem, no yield req'd for testing
+    ltem_start(false);                                              // ... and start it, no reset on modem found on
+    PRINTF(dbgColor__none, "BGx %s\r", mdminfo_ltem()->fwver);
 
     PRINTF(dbgColor__dflt, "Waiting on network...\r");
-    networkOperator_t networkOp = ntwk_awaitOperator(120);
-    if (strlen(networkOp.operName) == 0)
-        appNotifyCB(255, 0, 0, "Timeout (120s) waiting for cellular network.");
+    providerInfo_t *ntwkProvider = ntwk_awaitProvider(120);
+    if (strlen(ntwkProvider->name) == 0)
+        appNotifyCB(255, "Timeout (120s) waiting for cellular network.");
 
-    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
+    PRINTF(dbgColor__info, "Network type is %s on %s\r", ntwkProvider->iotMode, ntwkProvider->name);
 
-    uint8_t cntxtCnt = ntwk_fetchActivePdpCntxts();
+    uint8_t cntxtCnt = ntwk_readActiveNetworkCount();
     if (cntxtCnt == 0)
     {
-        ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT, pdpCntxtProtocolType_IPV4, "");
+        ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, networkPDPType_IPV4, "");
     }
 
     // create a socket control and open it
@@ -121,7 +120,7 @@ void setup() {
     else if (scktResult != resultCode__success)
     {
         PRINTF(dbgColor__error, "Socket 0 open failed, resultCode=%d\r", scktResult);
-        appNotifyCB(255, 0, 0, "Failed to open socket.");
+        appNotifyCB(255, "Failed to open socket.");
     }
 }
 
@@ -174,7 +173,7 @@ void loop()
 
 uint16_t scktRecover()
 {
-    PRINTF(dbgColor__warn, "sgnl=%d, scktState=%d\r", mdminfo_rssi(), sckt_getState(&scktCtrl));
+    PRINTF(dbgColor__warn, "sgnl=%d, scktState=%d\r", mdminfo_signalRSSI(), sckt_getState(&scktCtrl));
     sckt_close(&scktCtrl);
     return sckt_open(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0, true);
 }
@@ -231,16 +230,16 @@ void showStats()
 }
 
 
-void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
+void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
-    if (notifType >= lqNotifType__CATASTROPHIC)
+    if (notifType >= appEvent__FAULTS)
     {
         PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
         volatile int halt = 1;
         while (halt) {}
     }
 
-    else if (notifType >= lqNotifType__WARNING)
+    else if (notifType >= appEvent__WARNINGS)
         PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
 
     else

@@ -58,8 +58,8 @@ extern "C"
 
 
 /**
- *	@brief Get the LTEmC software version.
- *  @return Version as a const char pointer.
+ *	\brief Get the LTEmC software version.
+ *  \return Version as a const char pointer.
  */
 const char *ltem_ltemcVersion();
 
@@ -67,92 +67,84 @@ const char *ltem_ltemcVersion();
 // typedef void (*eventNotifCallback_func)(uint8_t notifCode, const char *message);
 
 /**
- *	@brief Initialize the LTEm1 modem.
- *	@param ltem_config [in] - The LTE modem gpio pin configuration.
- *  @param applicationCallback [in] - If supplied (not NULL), this function will be invoked for significant LTEm events.
+ *	\brief Initialize the LTEm1 modem.
+ *	\param ltem_config [in] - The LTE modem gpio pin configuration.
+ *  \param applicationCallback [in] - If supplied (not NULL), this function will be invoked for significant LTEm events.
  */
-void ltem_create(const ltemPinConfig_t ltem_config, appEventCallback_func eventNotifCallback);
+void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEventCallback_func eventNotifCallback);
 
 
 /**
- *	@brief Uninitialize the LTEm device structures.
+ *	\brief Uninitialize the LTEm device structures.
  */
 void ltem_destroy();
 
 
 /**
- *	@brief Power on and start the modem
- *  @param resetIfPoweredOn [in] Perform a software reset on the modem, if found in a powered on state
- *  @return True if the LTEM powers up with this function invocation (it was not previously powered on)
+ *	\brief Power on and start the modem
+ *  \param resetIfPoweredOn [in] Perform a software reset on the modem, if found in a powered on state
+ *  \return True if the LTEM powers up with this function invocation (it was not previously powered on)
  */
 bool ltem_start(bool resetIfRunning);
 
 
 /**
- *	@brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW
+ *	\brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW
  */
 void ltem_stop();
 
 
 // /**
-//  *	@brief Performs a software restart of LTEm1.
-//  *  @param coldStart [in] Set to true if the LTEm is being hard started, from a reset/power ON
+//  *	\brief Performs a software restart of LTEm1.
+//  *  \param coldStart [in] Set to true if the LTEm is being hard started, from a reset/power ON
 //  */
 // void ltem_initDevice(bool coldStart);
 
 
 /**
- *	@brief Performs a reset of LTEm.
+ *	\brief Performs a reset of LTEm.
  */
 void ltem_reset(bool hardReset);
 
 
 /**
- *	@brief Check the BGx for hardware ready (status pin).
- *  @return True is status HIGH, hardware ready.
+ *	\brief Reads the hardware status and internal application ready field to return device ready state
+ *  \return DeviceState: 0=power off, 1=power on, 2=appl ready
  */
-bool ltem_chkDeviceRdy();
+qbgDeviceState_t ltem_readDeviceState();
 
 
 /**
- *	@brief Performs a HW reset of LTEm1 and optionally executes start sequence.
- *  @return DeviceState enum type indicating device state (power, app ready, etc.).
- */
-qbgDeviceState_t ltem_getDeviceState();
-
-
-
-/**
- *	@brief Background work task runner. To be called in application Loop() periodically.
+ *	\brief Background work task runner. To be called in application Loop() periodically.
  */
 void ltem_doWork();
 
 
 /**
- *	@brief Registers the address (void*) of your application yield callback handler.
- *  @param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ *	\brief Registers the address (void*) of your application yield callback handler.
+ *  \param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
 void ltem_setYieldCallback(yield_func yieldCallback);
 
 
 /**
- *	@brief Registers the address (void*) of your application event notification callback handler.
- *  @param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ *	\brief Registers the address (void*) of your application event notification callback handler.
+ *  \param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
 void ltem_setEventNotifCallback(appEventCallback_func eventNotifCallback);
 
 
 /**
- *	@brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
- *  @param notifyType [in] - Enum of broad notification categories.
- *  @param notifyMsg [in] - Message from origination about the issue being reported.
+ *	\brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
+ *  \param notifyType [in] - Enum of broad notification categories.
+ *  \param notifyMsg [in] - Message from origination about the issue being reported.
  */
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
 
 
 // /**
-//  *	@brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
-//  *  @param faultCode [in] - HTTP style error code.
+//  *	\brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
+//  *  \param faultCode [in] - HTTP style error code.
 //  */
 // void ltem_notifyAssert(uint16_t faultCode)   __attribute__ ((noreturn));
 

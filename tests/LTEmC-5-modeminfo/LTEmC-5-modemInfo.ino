@@ -63,7 +63,7 @@ void setup() {
     randomSeed(analogRead(0));
     lqDiag_registerEventCallback(appEventCB);                       // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appEventCB);                        // create LTEmC modem
+    ltem_create(ltem_pinConfig, NULL, appEventCB);                  // create LTEmC modem, no yield req'd for testing
     ltem_start(false);                                              // ... and start it
 
     PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_ltemcVersion());
@@ -87,7 +87,7 @@ void loop() {
     PRINTF(dbgColor__cyan, "Firmware = %s \r", modemInfo->fwver);
     PRINTF(dbgColor__cyan, "Mfg/Model = %s \r", modemInfo->mfgmodel);
 
-    PRINTF(dbgColor__info, "\rRSSI = %d dBm \r",mdminfo_rssi());
+    PRINTF(dbgColor__info, "\rRSSI = %d dBm \r",mdminfo_signalRSSI());
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));

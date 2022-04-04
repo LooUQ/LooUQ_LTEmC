@@ -5,7 +5,8 @@
         "cstddef": "c",
         "limits": "c",
         "type_traits": "c",
-        "bitset": "cpp"
+        "bitset": "cpp",
+        "ltemc-internal.h": "c"
     },
     "C_Cpp.dimInactiveRegions": true
 }

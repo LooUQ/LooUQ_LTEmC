@@ -131,7 +131,7 @@ int16_t mdminfo_signalRSSI()
     uint8_t csq = 0;
     int8_t rssi = -999;
 
-    if (ltem_chkHwReady())
+    if (ltem_readDeviceState())
     {
         if (atcmd_tryInvoke("AT+CSQ"))
         {

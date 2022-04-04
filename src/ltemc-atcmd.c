@@ -209,10 +209,10 @@ void atcmd_getResult()
             atcmdPtr->isOpenLocked = false;                             // close action to release action lock
             atcmdPtr->execDuration = pMillis() - atcmdPtr->invokedAt;
 
-            if (!ltem_chkHwReady())                                                     // if action timed-out, verify not a device wide failure
-                ltem_notifyApp(appEvent_fault_hardFault, "LTEm Status Fault");              // BGx status pin
+            if (!ltem_readDeviceState())                                                  // if action timed-out, verify not a device wide failure
+                ltem_notifyApp(appEvent_fault_hardLogic, "Fault-LTEm Not On");            // 0 read = BGx status pin low
             else if (!SC16IS7xx_chkCommReady())
-                ltem_notifyApp(appEvent_fault_hardFault, "LTEm SPI Fault");               // UART bridge SPI wr/rd
+                ltem_notifyApp(appEvent_fault_softLogic, "Fault-LTEm SPI");               // UART bridge SPI not initialized correctly, IRQ not enabled
         }
         return;
     }
