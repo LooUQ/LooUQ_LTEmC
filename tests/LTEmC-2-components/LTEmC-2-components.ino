@@ -43,7 +43,8 @@
 #endif
 
                                                     // define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR                         // specify the pin configuration
+//#define HOST_FEATHER_UXPLOR                         // specify the pin configuration
+#define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
 #include <ltemc-internal.h>                         // not usually referenced in application, necessary to access non-public functions
@@ -69,10 +70,12 @@ void setup() {
     initIO();
     spi_start(g_ltem.spi);
 
-    if (qbg_powerOn())
+    
+    if (qbg_isPowerOn())
         PRINTF(dbgColor__dGreen, "LTEm found already powered on.\r\n");
     else
     {
+        qbg_powerOn();
         PRINTF(dbgColor__dGreen, "Powered LTEm on.\r\n");
         pDelay(5);
     }
@@ -120,6 +123,7 @@ void loop() {
     recvResponse(response);
 
     //\r\nQuectel\r\nBG96\r\nRevision: BG96MAR02A07M1G\r\n\r\nOK\r\n", 
+    //ATI\r\r\nQuectel\r\nBG77\r\nRevision: BG77LAR02A04\r\n\r\nOK\r\n"
     // test response v. expected 
 
     const char* validResponse = "\r\nQuectel\r\nBG";                                              // initial characters in response
@@ -141,7 +145,7 @@ void loop() {
             indicateFailure("BGx is not responding to cmds... failed."); 
     }
 
-    if (strlen(response) > 60 )
+    if (strlen(response) > 40 )
     {
         if (strstr(response, validResponse))
         {

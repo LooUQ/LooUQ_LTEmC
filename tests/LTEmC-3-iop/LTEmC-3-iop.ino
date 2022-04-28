@@ -44,7 +44,8 @@
 #endif
 
                                         // define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// #define HOST_FEATHER_UXPLOR             // specify the pin configuration
+#define HOST_FEATHER_LTEM3F
 
 //#include <ltemc.h>
 #include <ltemc-internal.h>             // this appl performs tests on internal, non-public API components 
@@ -108,16 +109,16 @@ void startLTEm()
 {
     // initialize the HOST side of the LTEm interface
 	// ensure pin is in default "logical" state prior to opening
-	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
-	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
-	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
+	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
+	platform_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
 
-	gpio_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	gpio_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	gpio_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	platform_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	platform_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	platform_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
 
-	gpio_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
-	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
+	platform_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
+	platform_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
 
     spi_start(g_ltem.spi);
 
@@ -166,9 +167,9 @@ void indicateFailure(char failureMsg[])
     PRINTF(dbgColor__error, "** Halting Execution \r");
     while (1)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(1000);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(100);
     }
     #endif

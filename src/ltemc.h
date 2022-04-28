@@ -41,6 +41,8 @@
 #include "ltemc-atcmd.h"
 #include "ltemc-mdminfo.h"
 #include "ltemc-network.h"
+#include "ltemc-filesys.h"
+#include "ltemc-gpio.h"
 
 
 /* LTEmC uses 2 global buffers: the IOP transmit buffer and the ATCMD cmd\core buffer.

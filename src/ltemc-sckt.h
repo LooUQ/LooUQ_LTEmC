@@ -60,21 +60,20 @@ typedef void (*scktRecvFunc_t)(streamPeer_t peerId, void *data, uint16_t dataSz)
 */
 typedef struct scktCtrl_tag
 {
-    uint8_t ctrlMagic;                  ///< magic flag to validate incoming requests 
-    dataContext_t dataCntxt;            ///< Data context where this control operates
-    protocol_t protocol;                ///< Controls's protocol : UDP/TCP/SSL.
-    bool useTls;                        ///< flag indicating SSL/TLS applied to stream
-    rxDataBufferCtrl_t recvBufCtrl;     ///< RX smart buffer 
+    uint8_t ctrlMagic;                  /// magic flag to validate incoming requests 
+    socket_t sckt;                      /// Data context where this control operates
+    protocol_t protocol;                /// Controls's protocol : UDP/TCP/SSL.
+    bool useTls;                        /// flag indicating SSL/TLS applied to stream
+    rxDataBufferCtrl_t recvBufCtrl;     /// RX smart buffer 
 
-    scktRecvFunc_t dataRecvCB;          ///< callback to application, signals data ready
-    uint32_t doWorkLastTck;             ///< last check for URC/dataPending
-    //uint32_t doWorkTimeout;             ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
-    bool flushing;                      ///< True if the socket was opened with cleanSession and the socket was found already open.
-    bool dataPending;                   ///< The data pipeline has data (or the likelihood of data), triggered when BGx reports data pending (URC "recv").
-    int16_t irdRemaining;               ///< SIGNED number of outstanding IRD bytes to receive, -1 is unset value
-    uint32_t statsTxCnt;                ///< Number of atomic TX sends
-    uint32_t statsRxCnt;                ///< Number of atomic RX segments (URC/IRD)
-    
+    scktRecvFunc_t dataRecvCB;          /// callback to application, signals data ready
+    uint32_t doWorkLastTck;             /// last check for URC/dataPending
+    //uint32_t doWorkTimeout;             /// set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
+    bool flushing;                      /// True if the socket was opened with cleanSession and the socket was found already open.
+    bool dataPending;                   /// The data pipeline has data (or the likelihood of data), triggered when BGx reports data pending (URC "recv").
+    int16_t irdRemaining;               /// SIGNED number of outstanding IRD bytes to receive, -1 is unset value
+    uint32_t statsTxCnt;                /// Number of atomic TX sends
+    uint32_t statsRxCnt;                /// Number of atomic RX segments (URC/IRD)
 } scktCtrl_t;
 
 
@@ -95,7 +94,7 @@ extern "C"
  *  @param recvCallback [in] - The callback function in your application to be notified of received data ready
  *  @return socket result code similar to http status code, OK = 200
  */
-void sckt_initControl(scktCtrl_t *scktCtrl, dataContext_t dataCntxt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback);
+void sckt_initControl(scktCtrl_t *scktCtrl, socket_t dataCntxt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback);
 
 
 /**

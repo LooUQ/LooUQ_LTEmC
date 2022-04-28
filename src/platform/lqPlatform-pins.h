@@ -50,6 +50,20 @@ const ltemPinConfig_t ltem_pinConfig =
 };
 #endif
 
+#ifdef HOST_FEATHER_LTEM3F
+const ltemPinConfig_t ltem_pinConfig =
+{
+    spiCsPin : 18,                  /// AKA A4
+    irqPin : 19,                    /// AKA A5
+    statusPin : 12,                 /// HIGH indicates ON
+    powerkeyPin : 10,               /// toggle HIGH to change state
+    resetPin : 11,                  /// reset active HIGH
+    ringUrcPin : 0,                 
+    wakePin : 0
+};
+#define LQLTE_MODULE BG77
+#endif
+
 #ifdef HOST_FEATHER_BASIC
 const ltemPinConfig_t ltem_pinConfig =
 {

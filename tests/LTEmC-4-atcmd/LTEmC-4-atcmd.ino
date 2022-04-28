@@ -43,7 +43,8 @@
 
 
 // define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// #define HOST_FEATHER_UXPLOR             // specify the pin configuration
+#define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
 
@@ -164,9 +165,9 @@ void indicateFailure(char failureMsg[])
     bool halt = true;
     while (halt)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(1000);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(100);
     }
     #endif
@@ -179,9 +180,9 @@ void indicateLoop(int loopCnt, int waitNext)
 
     for (int i = 0; i < 6; i++)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(50);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(50);
     }
 

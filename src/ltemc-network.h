@@ -29,79 +29,11 @@
 #define __NETWORK_H__
 
 #include "ltemc.h"
+
+/* ------------------------------------------------------------------------------------------------
+ * Network constants, enums, and structures are declared in the LooUQ global lq-network.h header
+ * --------------------------------------------------------------------------------------------- */
 #include <lq-network.h>
-
-
-// /** 
-//  *  \brief Typed numeric constants for network subsystem.
-// */
-// enum ntwk__constants
-// {
-//     ntwk__pdpContextCnt = 2,
-//     ntwk__providerNameSz = 20
-// };
-
-
-// /** 
-//  *  \brief Enum describing the mode the BGx module is using to look for available networks (carriers).
-// */
-// typedef enum ntwkScanMode_tag
-// {
-//     ntwkScanMode_auto = 0U,         ///< BGx is considering either GSM or LTE carrier connections.
-//     ntwkScanMode_gsmonly = 1U,      ///< GSM only mode: BGx is filtering visible networks and only considering connections to GSM endpoints.
-//     ntwkScanMode_lteonly = 3U       ///< LTE only mode: BGx is filtering visible networks and only considering connections to LTE endpoints.
-// } ntwkScanMode_t;
-
-
-// /** 
-//  *  \brief Enum describing the available options for an IoT protocol when connecting to the network.
-// */
-// typedef enum ntwkIotMode_tag
-// {
-//     ntwkIotMode_m1 = 0U,            ///< CAT-M1 only mode: BGx is filtering visible networks and only considering CAT-M1 connections.
-//     ntwkIotMode_nb1 = 1U,           ///< NB-IOT only mode: BGx is filtering visible networks and only considering NB-IOT connections.
-//     ntwkIotMode_m1nb1 = 2U          ///< The BGx will connect to either a CAT-M1 or NB-IOT network.
-// } ntwk_iotMode_t;
-
-
-// typedef enum pdpCntxtAuthMethods_tag
-// {
-//     pdpCntxtAuthMethods_none = 0,
-//     pdpCntxtAuthMethods_pap = 1,
-//     pdpCntxtAuthMethods_chap = 2,
-//     pdpCntxtAuthMethods_papChap = 3
-// } pdpCntxtAuthMethods_t;
-
-
-
-// /** 
-//  *  \brief Struct respresenting an ACTIVE network carrier/operator.
-// */
-// typedef struct networkOperator_tag
-// {
-// 	char operName[29];                  ///< Carrier name, some carriers may report as 6-digit numeric carrier ID.
-// 	char ntwkMode[11];                  ///< Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
-// } networkOperator_t;
-
-// /** 
-//  *  \brief Struct representing the state of active PDP contexts (aka: APN or data context).
-// */
-// typedef struct pdpContext_tag
-// {
-//     uint8_t contextId;                  ///< context ID recognized by the carrier (valid are 1 to 16)
-//     pdpCntxtProtocolType_t protoType;   ///< IPv4 or IPv6
-// 	char ipAddress[40];                 ///< The IP address obtained from the carrier for this context. The IP address of the modem.
-// } pdpContext_t;
-
-
-// /** 
-//  *  \brief Struct representing the full connectivity with a connected network carrier.
-// */
-// typedef struct network_tag
-// {
-//     providerInfo_t *networkProvider;             ///< Network operator name and protocol
-//     networkInfo_t networks[ntwk__pdpContextCnt];    ///< Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
-// } network_t;
 
 
 #ifdef __cplusplus
@@ -112,89 +44,95 @@ extern "C"
 //const char *ltem_ltemcVersion();
 
 /**
- *	@brief Initialize the IP network contexts structure.
+ *	\brief Initialize the IP network contexts structure.
  */
 void ntwk_create();
 
 
 /**
- *  @brief Configure RAT searching sequence
- *  @details Example: scanSequence = "020301" represents: search LTE-M1, then LTE-NB1, then GSM
- *  @param scanSequence [in] - Character string specifying the RAT scanning order; 00=Automatic[LTE-M1|LTE-NB1|GSM],01=GSM,02=LTE-M1,03=LTE-NB1
+ *  \brief Configure RAT searching sequence
+ *  \details Example: scanSequence = "020301" represents: search LTE-M1, then LTE-NB1, then GSM
+ *  \param [in] scanSequence Character string specifying the RAT scanning order; 00=Automatic[LTE-M1|LTE-NB1|GSM],01=GSM,02=LTE-M1,03=LTE-NB1
 */
 void ntwk_setProviderScanSeq(const char *sequence);
 
 
 /** 
- *  @brief Configure RAT(s) allowed to be searched
- *  @param scanMode [in] - Enum specifying what cell network to scan; 0=Automatic,1=GSM only,3=LTE only
+ *  \brief Configure RAT(s) allowed to be searched
+ *  \param [in] scanMode Enum specifying what cell network to scan; 0=Automatic,1=GSM only,3=LTE only
 */
 void ntwk_setProviderScanMode(ntwkScanMode_t mode);
 
 
 /** 
- *  @brief Configure the network category to be searched under LTE RAT.
- *  @param iotMode [in] - Enum specifying the LTE LPWAN protocol(s) to scan; 0=LTE M1,1=LTE NB1,2=LTE M1 and NB1
+ *  \brief Configure the network category to be searched under LTE RAT.
+ *  \param [in] iotMode Enum specifying the LTE LPWAN protocol(s) to scan; 0=LTE M1,1=LTE NB1,2=LTE M1 and NB1
  */
 void ntwk_setIotMode(ntwk_iotMode_t mode);
 
 
 /**
- *   @brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
- *   @param waitDurSeconds [in] Number of seconds to wait for a network. Supply 0 for no wait.
- *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
+ *   \brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
+ *   \param [in] waitDurSeconds Number of seconds to wait for a network. Supply 0 for no wait.
+ *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
 providerInfo_t *ntwk_awaitProvider(uint16_t waitDurSeconds);
 
 
 /**
- *	@brief Activate PDP Context/APN.
- *  @param cntxtId [in] - The APN to operate on. Typically 0 or 1
- *  @param protoType [in] - The PDP protocol IPV4, IPV6, IPV4V6 (both).
- *  @param apn [in] - The APN name if required by network carrier.
+ *	\brief Set the default/data context number for provider. Default is 1 if not overridden here.
+ *  \param [in] defaultContext The data context to operate on. Typically 0 or 1, up to 15
  */
-bool ntwk_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *apn);
+void ntwk_setProviderDefaultContext(uint8_t defaultContext);
 
 
 /**
- *	@brief Activate PDP Context/APN requiring authentication.
- *  @param cntxtId [in] - The APN to operate on. Typically 0 or 1
- *  @param protoType [in] - The PDP protocol IPV4, IPV6, IPV4V6 (both).
- *  @param pApn [in] - The APN name if required by network carrier.
- *  @param pUserName [in] - String with user name
- *  @param pPW [in] - String with password
- *  @param authMethod [in] - Enum specifying the type of authentication expected by network
+ *	\brief Activate PDP Context/APN.
+ *  \param [in] cntxtId The context ID to operate on. Typically 0 or 1
+ *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
+ *  \param [in] apn The APN name if required by network carrier.
  */
-bool ntwk_activateNetworkWithAuth(uint8_t cntxtId, networkPDPType_t protoType, const char *pApn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
+networkInfo_t *ntwk_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *apn);
+
 
 /**
- *	@brief Deactivate PDP Context/APN.
- *  @param cntxtId [in] - The APN number to operate on.
+ *	\brief Activate PDP Context/APN requiring authentication.
+ *  \param [in] cntxtId The APN to operate on. Typically 0 or 1
+ *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
+ *  \param [in] apn The APN name if required by network carrier.
+ *  \param [in] userName String with user name
+ *  \param [in] pw String with password
+ *  \param [in] authMethod Enum specifying the type of authentication expected by network
+ */
+networkInfo_t *ntwk_activateNetworkWithAuth(uint8_t cntxtId, networkPDPType_t protoType, const char *apn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
+
+/**
+ *	\brief Deactivate PDP Context/APN.
+ *  \param [in] cntxtId The APN number to operate on.
  */
 void ntwk_deactivateNetwork(uint8_t contxtId);
 
 
 /**
- *	@brief Get count of APN active data contexts from BGx.
- * 
- *  @return Count of active data contexts (BGx max is 3).
+ *	\brief Get count of APN active data contexts from BGx.
+ *  \return Count of active data contexts (BGx max is 3).
  */
 uint8_t ntwk_readActiveNetworkCount();
 
 
 /**
- *	@brief Get PDP network information
- *  @param cntxtId [in] - The PDP context ID/index to retreive.
- *  @return Pointer to network (PDP) info in active network table, NULL if context ID not active
+ *	\brief Get PDP network information
+ *  \param [in] cntxtId The PDP context ID/index to retreive.
+ *  \return Pointer to network (PDP) info in active network table, NULL if context ID not active
  */
 networkInfo_t *ntwk_getNetworkInfo(uint8_t contxtId);
 
 
 /** 
- *  @brief Development/diagnostic function to retrieve visible providers from radio.
- *  @details This command can take MINUTES to respond! It is generally considered a command used solely for diagnostics.
- *  @param operatorList [in/out] - Pointer to char buffer to return operator list information retrieved from BGx.
- *  @param listSz [in] - Length of provided buffer.
+ *  \brief Development/diagnostic function to retrieve visible providers from radio.
+ *  \details This command can take MINUTES to respond! It is generally considered a command used solely for diagnostics.
+ *  \param [in,out] operatorList - Pointer to char buffer to return operator list information retrieved from BGx.
+ *  \param [in] listSz - Length of provided buffer.
  */
 void ntwk_getProviders(char *operatorList, uint16_t listSz);
 

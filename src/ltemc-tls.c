@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  ******************************************************************************
- * SSL/TLS configuration for data contexts.
+ * SSL/TLS configuration for data sckts.
  *****************************************************************************/
 
 #define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
@@ -44,28 +44,28 @@
 
 
 
-bool tls_configure(dataContext_t context, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
+bool tls_configure(socket_t sckt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
 {
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d,%d", context, version))                   // set SSL/TLS version
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d,%d", sckt, version))                   // set SSL/TLS version
     {
         if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
             return false;
     }
 
 
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", context, cipherSuite))            // set cipher suite
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", sckt, cipherSuite))            // set cipher suite
     {
         if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
             return false;
     }
 
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", context, certExpirationCheck))  // set certificate expiration check
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", sckt, certExpirationCheck))  // set certificate expiration check
     {
         if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
             return false;
     }
 
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"seclevel\",%d,%d", context, securityLevel))               // set security level, aka what is checked
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"seclevel\",%d,%d", sckt, securityLevel))               // set security level, aka what is checked
     {
         if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
             return false;
@@ -76,11 +76,11 @@ bool tls_configure(dataContext_t context, tlsVersion_t version, tlsCipher_t ciph
 
 
 
-tlsOptions_t tlsGetOptions(dataContext_t context)
+tlsOptions_t tlsGetOptions(socket_t sckt)
 {
     tlsOptions_t result = {0};
 
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d", (uint8_t)context))    // get SSL\TLS version
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d", (uint8_t)sckt))    // get SSL\TLS version
     {   
         if (atcmd_awaitResult() == resultCode__success)
         {

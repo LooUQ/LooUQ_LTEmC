@@ -25,7 +25,7 @@
  * PDP network support
  *****************************************************************************/
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -55,6 +55,7 @@ extern ltemDevice_t g_ltem;
 static resultCode_t S_contextStatusCompleteParser(const char *response, char **endptr);
 static providerInfo_t *S_getNetworkProvider();
 static char *S_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
+static networkInfo_t *S_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *pApn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
 
 
 /* public tcpip functions
@@ -62,31 +63,18 @@ static char *S_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t to
 #pragma region public functions
 
 /**
- *	@brief Initialize the IP network contexts structure.
+ *	\brief Initialize the IP network contexts structure.
  */
 void ntwk_create()
 {
-    providerNetworks_t *providerNetworksPtr = (providerNetworks_t*)calloc(1, sizeof(providerNetworks_t));
-    ASSERT(providerNetworksPtr != NULL, srcfile_ltemc_network_c);
-
-    providerNetworksPtr->provider = calloc(1, sizeof(providerInfo_t));
-    ASSERT(providerNetworksPtr->provider != NULL, srcfile_ltemc_network_c);
-
-    for (size_t i = 0; i < ntwk__pdpContextCnt; i++)
-    {   
-        networkInfo_t *networkPtr = calloc(1, sizeof(networkInfo_t));
-        ASSERT(networkPtr != NULL, srcfile_ltemc_network_c);
-
-        networkPtr->protoType = networkPDPType_IPV4;
-        memset(networkPtr->ipAddress, 0, sizeof(networkPtr->ipAddress));
-        providerNetworksPtr->networks[i] = networkPtr;
-    }
-    g_ltem.providerNetworks = providerNetworksPtr;
+    providerInfo_t *providerInfoPtr = (providerInfo_t*)calloc(1, sizeof(providerInfo_t));
+    ASSERT(providerInfoPtr != NULL, srcfile_ltemc_network_c);
+    g_ltem.providerInfo = providerInfoPtr;
 }
 
 
 /**
- *  @brief Configure RAT searching sequence
+ *  \brief Configure RAT searching sequence
 */
 void ntwk_setProviderScanSeq(const char* scanSequence)
 {
@@ -99,7 +87,7 @@ void ntwk_setProviderScanSeq(const char* scanSequence)
 
 
 /** 
- *  @brief Configure RAT(s) allowed to be searched.
+ *  \brief Configure RAT(s) allowed to be searched.
 */
 void ntwk_setProviderScanMode(ntwkScanMode_t scanMode)
 {
@@ -110,7 +98,7 @@ void ntwk_setProviderScanMode(ntwkScanMode_t scanMode)
 
 
 /** 
- *  @brief Configure the network category to be searched under LTE RAT.
+ *  \brief Configure the network category to be searched under LTE RAT.
  */
 void ntwk_setIotMode(ntwk_iotMode_t iotMode)
 {
@@ -120,7 +108,7 @@ void ntwk_setIotMode(ntwk_iotMode_t iotMode)
 
 
 /**
- *   @brief Wait for a network provider name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
+ *   \brief Wait for a network provider name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
 */
 providerInfo_t *ntwk_awaitProvider(uint16_t waitDurSeconds)
 {
@@ -132,99 +120,181 @@ providerInfo_t *ntwk_awaitProvider(uint16_t waitDurSeconds)
 
     do 
     {
-        provider = S_getNetworkProvider();                                              // perform a single provider query (COPS?): process if provider found, else return NULL
-
-        if (provider != NULL)
-        {
-            PRINTF(dbgColor__dMagenta, "ntwkOp returned in %d ms\r", (endMillis - startMillis) / 1000);
+        provider = S_getNetworkProvider();                  // perform a single provider query (COPS?): process if provider found, else return NULL
+        provider->defaultContext = 1;                       // most networks use context ID = 1, application can override with ntwk_setProviderDefaultContext()
+        if (!STREMPTY(provider->name))
             return provider;
-        }
-        pDelay(1000);                                                                   // this yields, allowing alternate execution
+
+        pDelay(1000);                                       // this yields, allowing alternate execution
         endMillis = pMillis();
     } while (endMillis - startMillis < waitDuration || g_ltem.cancellationRequest);     // timed out waiting || global cancellation
+    return provider;
+}
+
+
+
+/**
+ *   \brief Set the default/data context number for provider. Default is 1 if not overridden here.
+*/
+void ntwk_setProviderDefaultContext(uint8_t defaultContext)
+{
+    ASSERT(defaultContext < 16, srcfile_ltemc_network_c);
+    ((providerInfo_t*)g_ltem.providerInfo)->defaultContext = defaultContext;
+}
+
+
+
+// networkInfo_t *lqcNtwk_activateNetwork(uint8_t contextId, networkPDPType_t networkPDPType, const char *apn)
+// {
+//     ASSERT(ltem_readDeviceState() == qbgDeviceState_appReady, srcfile_cm_lqcloudNtwkLtemc_c);
+//     providerInfo_t *provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(2));                       // this is a query to verify connection to provider
+//     ASSERT(strlen(provider->name) > 0, srcfile_cm_lqcloudNtwkLtemc_c);
+//     PRINTF(dbgColor__white, "Network type is %s on %s\r", provider.iotMode, provider.name);
+//     networkInfo_t *ntwk;
+//     uint8_t pdpCount = ntwk_readActiveNetworkCount();                                           // populates network APN table in LTEmC, > 0 network exists
+//     if (pdpCount == 0)
+//     {
+//         /*  Activating PDP context is network carrier dependent, it is not required on most carrier networks. 
+//             *  If not required... ntwk_activateContext() stills "warms up" the connection.
+//             *
+//             *  If apnCount > 0, assume "data" context is available. Can test with ntwk_getContext(context_ID) != NULL.
+//             */
+//         ntwk_activateNetwork(contextId, networkPDPType, apn);
+//         ntwk = ntwk_getNetworkInfo(contextId);
+//         if (ntwk->isActive)
+//             PRINTF(dbgColor__white, "Network(PDP) Context=1, IPaddr=%s\r", pdpCntxt->ipAddress);
+//     }
+//     return ntwk;
+// }
+
+#define STREMPTY(charvar)  (charvar == NULL || charvar[0] == 0 )
+
+static networkInfo_t *S_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *apn, const char *userName, const char *pw, pdpCntxtAuthMethods_t authMethod)
+{
+    networkInfo_t *ntwk = ntwk_getNetworkInfo(cntxtId);
+    if (ntwk != NULL)
+        return ntwk;                                                                            // network context is already active
+
+    ASSERT(ltem_readDeviceState() == qbgDeviceState_appReady, srcfile_ltemc_network_c);         // ASSET modem is ready
+    providerInfo_t *provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(2));                      // ASSERT provider active
+    ASSERT(strlen(provider->name) > 0, srcfile_ltemc_network_c);
+    PRINTF(dbgColor__white, "Provider is %s, mode=%s\r", provider->name, provider->iotMode);
+
+    /*  Activating PDP context is network carrier dependent, it is not required on most carrier networks. 
+     *  If not required... ntwk_activateContext() stills "warms up" the connection.
+     *
+     *  If apnCount > 0, assume "data" context is available. Can test with ntwk_getContext(context_ID) != NULL.
+     */
+
+    bool ntwkActivated = false;
+    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
+    {
+        atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
+
+        if (STREMPTY(userName) || STREMPTY(pw))
+            atcmd_invokeReuseLock("AT+QICSGP=%d,%d,\"%s\"\r", cntxtId, protoType, apn);
+        else
+            atcmd_invokeReuseLock("AT+QICSGP=%d,%d,\"%s\"\r", cntxtId, protoType, apn, userName, pw, authMethod);
+
+        resultCode_t atResult = atcmd_awaitResult();
+        if (atResult == resultCode__success)
+        {
+            atcmd_setOptions(atcmd__defaultTimeoutMS, S_contextStatusCompleteParser); 
+            atcmd_invokeReuseLock("AT+QIACT=%d\r", cntxtId);
+            atResult = atcmd_awaitResult();
+            if (atResult == resultCode__success)
+                ntwkActivated = true;
+        }
+    }
+    atcmd_close();
+
+    if (ntwkActivated)
+    {
+        ntwk = ntwk_getNetworkInfo(cntxtId);
+        if (ntwk->isActive)
+        {
+            PRINTF(dbgColor__white, "Network(PDP) Context=%d, IPaddr=%s\r", cntxtId, ntwk->ipAddress);
+            return ntwk;
+        }
+    }
+    // if fell through, PDP not available... clear network provider
+    memset((providerInfo_t*)g_ltem.providerInfo, 0, sizeof(providerInfo_t));
     return NULL;
 }
 
 
 /**
- *	@brief Activate PDP Context/APN.
+ *	\brief Activate PDP Context/APN.
  */
-bool ntwk_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *apn)
+networkInfo_t * ntwk_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *apn)
 {
-    if (ntwk_getNetworkInfo(cntxtId) != NULL)
-        return true;
+    return S_activateNetwork(cntxtId, protoType, apn, NULL, NULL, 0);
 
-    bool pdpActivated = false;
-    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
-    {
-        atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
-        atcmd_invokeReuseLock("AT+QICSGP=%d,%d,\"%s\"\r", cntxtId, protoType, apn);
-
-        resultCode_t atResult = atcmd_awaitResult();
-        if (atResult == resultCode__success)
-        {
-            atcmd_setOptions(atcmd__defaultTimeoutMS, S_contextStatusCompleteParser); 
-            atcmd_invokeReuseLock("AT+QIACT=%d\r", cntxtId);
-            atResult = atcmd_awaitResult();
-            if (atResult == resultCode__success)
-                pdpActivated = true;
-        }
-    }
-    atcmd_close();
-
-    if (pdpActivated)
-        ntwk_readActiveNetworkCount();
-
-    if (ntwk_getNetworkInfo(cntxtId) != NULL)
-        return true;
-
-    // if fell through, PDP not available. Clear network provider, next attempt may change network
-    memset(((providerNetworks_t*)g_ltem.providerNetworks)->provider, 0, sizeof(providerInfo_t));
-    return false;
-}
-
-// msgSession msgProto
-
-/**
- *	@brief Activate PDP Context/APN requiring authentication.
- */
-bool ntwk_activateNetworkWithAuth(uint8_t cntxtId, networkPDPType_t protoType, const char *pApn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod)
-{
-    if (ntwk_getNetworkInfo(cntxtId) != NULL)
-        return true;
-
-    bool pdpActivated = false;
-    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
-    {
-        atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
-        atcmd_invokeReuseLock("AT+QICSGP=%d,%d,\"%s\"\r", cntxtId, protoType, pApn, pUserName, pPW, authMethod);
-
-        resultCode_t atResult = atcmd_awaitResult();
-        if (atResult == resultCode__success)
-        {
-            atcmd_setOptions(atcmd__defaultTimeoutMS, S_contextStatusCompleteParser); 
-            atcmd_invokeReuseLock("AT+QIACT=%d\r", cntxtId);
-            atResult = atcmd_awaitResult();
-            if (atResult == resultCode__success)
-                pdpActivated = true;
-        }
-    }
-    atcmd_close();
-
-    if (pdpActivated)
-        ntwk_fetchActivePdpCntxts();
-
-    if (ntwk_getNetworkInfo(cntxtId) != NULL)
-        return true;
-
-    // if fell through, PDP not available. Clear network operator too, next attempt may change network
-    memset(((providerNetworks_t*)g_ltem.providerNetworks)->provider, 0, sizeof(networkInfo_t));
-    return false;
+    // if (ntwk_getNetworkInfo(cntxtId) != NULL)
+    //     return true;
+    // bool pdpActivated = false;
+    // if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
+    // {
+    //     atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
+    //     atcmd_invokeReuseLock("AT+QICSGP=%d,%d,\"%s\"\r", cntxtId, protoType, apn);
+    //     resultCode_t atResult = atcmd_awaitResult();
+    //     if (atResult == resultCode__success)
+    //     {
+    //         atcmd_setOptions(atcmd__defaultTimeoutMS, S_contextStatusCompleteParser); 
+    //         atcmd_invokeReuseLock("AT+QIACT=%d\r", cntxtId);
+    //         atResult = atcmd_awaitResult();
+    //         if (atResult == resultCode__success)
+    //             pdpActivated = true;
+    //     }
+    // }
+    // atcmd_close();
+    // if (pdpActivated)
+    //     ntwk_readActiveNetworkCount();
+    // if (ntwk_getNetworkInfo(cntxtId) != NULL)
+    //     return true;
+    // // if fell through, PDP not available... clear network provider
+    // memset((providerInfo_t*)g_ltem.providerInfo, 0, sizeof(providerInfo_t));
+    // return false;
 }
 
 
 /**
- *	@brief Deactivate PDP Context/APN.
+ *	\brief Activate PDP Context/APN requiring authentication.
+ */
+networkInfo_t * ntwk_activateNetworkWithAuth(uint8_t cntxtId, networkPDPType_t protoType, const char *apn, const char *userName, const char *pw, pdpCntxtAuthMethods_t authMethod)
+{
+    return S_activateNetwork(cntxtId, protoType, apn, userName, pw, authMethod);
+
+    // if (ntwk_getNetworkInfo(cntxtId) != NULL)
+    //     return true;
+    // bool pdpActivated = false;
+    // if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
+    // {
+    //     atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
+    //     atcmd_invokeReuseLock("AT+QICSGP=%d,%d,\"%s\"\r", cntxtId, protoType, pApn, pUserName, pPW, authMethod);
+    //     resultCode_t atResult = atcmd_awaitResult();
+    //     if (atResult == resultCode__success)
+    //     {
+    //         atcmd_setOptions(atcmd__defaultTimeoutMS, S_contextStatusCompleteParser); 
+    //         atcmd_invokeReuseLock("AT+QIACT=%d\r", cntxtId);
+    //         atResult = atcmd_awaitResult();
+    //         if (atResult == resultCode__success)
+    //             pdpActivated = true;
+    //     }
+    // }
+    // atcmd_close();
+    // if (pdpActivated)
+    //     ntwk_fetchActivePdpCntxts();
+    // if (ntwk_getNetworkInfo(cntxtId) != NULL)
+    //     return true;
+    // // if fell through, PDP not available... clear network provider
+    // memset((providerInfo_t*)g_ltem.providerInfo, 0, sizeof(providerInfo_t));
+    // return false;
+}
+
+
+/**
+ *	\brief Deactivate PDP Context/APN.
  */
 void ntwk_deactivateNetwork(uint8_t cntxtId)
 {
@@ -242,7 +312,7 @@ void ntwk_deactivateNetwork(uint8_t cntxtId)
 
 
 /**
- *	@brief Get count of APN active data contexts from BGx.
+ *	\brief Get count of APN active data contexts from BGx.
  */
 uint8_t ntwk_readActiveNetworkCount()
 {
@@ -256,7 +326,7 @@ uint8_t ntwk_readActiveNetworkCount()
         atcmd_invokeReuseLock("AT+QIACT?");
         resultCode_t atResult = atcmd_awaitResult();
 
-        memset(&((providerNetworks_t*)g_ltem.providerNetworks)->networks, 0, sizeof(networkInfo_t) * ntwk__pdpContextCnt);    // empty context table for return, if success refill from parsing
+        memset(&((providerInfo_t*)g_ltem.providerInfo)->networks, 0, sizeof(networkInfo_t) * ntwk__pdpContextCnt);    // empty context table for return, if success refill from parsing
 
         if (atResult != resultCode__success)
         {
@@ -276,19 +346,21 @@ uint8_t ntwk_readActiveNetworkCount()
             nextContext = strstr(ATCMD_getLastResponse(), "+QIACT: ");
 
             // no contexts returned = none active (only active contexts are returned)
-            while (nextContext != NULL && ntwkIndx < ntwk__pdpContextCnt)                           // now parse each pdp context entry
+            while (nextContext != NULL && ntwkIndx < ntwk__pdpContextCnt)                       // now parse each pdp context entry
             {
                 landmarkAt = nextContext;
+                networkInfo_t *ntwk = &((providerInfo_t*)g_ltem.providerInfo)->networks[ntwkIndx];
 
-                ((providerNetworks_t*)g_ltem.providerNetworks)->networks[ntwkIndx]->contextId = strtol(landmarkAt + landmarkSz, &continuePtr, 10);
-                continuePtr = strchr(++continuePtr, ',');                                           // skip context_state: always 1
-                ((providerNetworks_t*)g_ltem.providerNetworks)->networks[ntwkIndx]->protoType = (int)strtol(continuePtr + 1, &continuePtr, 10);
+                ntwk->contextId = strtol(landmarkAt + landmarkSz, &continuePtr, 10);
+                continuePtr = strchr(++continuePtr, ',');                                       // skip context_state: always 1
+                ntwk->protoType = (int)strtol(continuePtr + 1, &continuePtr, 10);
                 continuePtr = S_grabToken(continuePtr + 2, '"', tokenBuf, TOKEN_BUF_SZ);
                 if (continuePtr != NULL)
                 {
-                    strncpy(((providerNetworks_t*)g_ltem.providerNetworks)->networks[ntwkIndx]->ipAddress, tokenBuf, TOKEN_BUF_SZ);
+                    strncpy(ntwk->ipAddress, tokenBuf, TOKEN_BUF_SZ);
+                    ntwk->isActive = true;
                 }
-                nextContext = strstr(nextContext + landmarkSz, "+QIACT: ");
+                nextContext = strstr(nextContext + landmarkSz, "+QIACT: ");                     // URC hdr is repeated for each context
                 ntwkIndx++;
             }
         }
@@ -300,24 +372,30 @@ uint8_t ntwk_readActiveNetworkCount()
 
 
 /**
- *	@brief Get network (PDP) information
+ *	\brief Get network (PDP) information
  */
 networkInfo_t *ntwk_getNetworkInfo(uint8_t contextId)
 {
-    if (ltem_readDeviceState())
+    uint8_t ntwkCnt = 0;
+    do
     {
-        for (size_t i = 0; i < ntwk__pdpContextCnt; i++)
+        if (ltem_readDeviceState())
         {
-            if(((providerNetworks_t*)g_ltem.providerNetworks)->networks[i]->contextId == contextId)
-                return &((providerNetworks_t*)g_ltem.providerNetworks)->networks[i];
+            providerInfo_t *provider = g_ltem.providerInfo;                                         // cast to provider pointer
+            for (size_t i = 0; i < ntwk__pdpContextCnt; i++)
+            {
+                if(provider->networks[i].contextId == contextId && provider->networks[i].isActive)
+                    return &provider->networks[i];
+            }
         }
-    }
+        ntwkCnt = ntwk_readActiveNetworkCount();
+    } while (ntwkCnt > 0);
     return NULL;
 }
 
 
 /** 
- *  @brief Development/diagnostic function to retrieve visible operators from radio.
+ *  \brief Development/diagnostic function to retrieve visible operators from radio.
  */
 void ntwk_getOperators(char *operatorList, uint16_t listSz)
 {
@@ -349,9 +427,8 @@ void ntwk_getOperators(char *operatorList, uint16_t listSz)
 
 
 /**
- *   @brief Tests for the completion of a network APN context activate action.
- * 
- *   @return standard action result integer (http result).
+ *   \brief Tests for the completion of a network APN context activate action.
+ *   \return standard action result integer (http result).
 */
 static resultCode_t S_contextStatusCompleteParser(const char *response, char **endptr)
 {
@@ -361,17 +438,20 @@ static resultCode_t S_contextStatusCompleteParser(const char *response, char **e
 
 
 /**
- *   @brief Get the network operator name and network mode.
- * 
- *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
+ *   \brief Get the network operator name and network mode.
+ *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
 static providerInfo_t *S_getNetworkProvider()
 {
-    if (strlen(((providerNetworks_t*)g_ltem.providerNetworks)->provider->name) > 0)
-        return ((providerNetworks_t*)g_ltem.providerNetworks)->provider;
+    ASSERT(g_ltem.providerInfo != NULL, srcfile_ltemc_network_c);
+
+    if (strlen(((providerInfo_t*)g_ltem.providerInfo)->name) > 0)
+        return (providerInfo_t*)g_ltem.providerInfo;
 
     if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
+        memset(g_ltem.providerInfo, 0, sizeof(providerInfo_t));
+        
         atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
         atcmd_invokeReuseLock("AT+COPS?");
         if (atcmd_awaitResult() == resultCode__success)
@@ -380,35 +460,35 @@ static providerInfo_t *S_getNetworkProvider()
             continuePtr = strchr(ATCMD_getLastResponse(), '"');
             if (continuePtr != NULL)
             {
-                continuePtr = S_grabToken(continuePtr + 1, '"', ((providerNetworks_t*)g_ltem.providerNetworks)->provider->name, ntwk__providerNameSz);
+                continuePtr = S_grabToken(continuePtr + 1, '"', ((providerInfo_t*)g_ltem.providerInfo)->name, ntwk__providerNameSz);
 
                 uint8_t ntwkMode = (uint8_t)strtol(continuePtr + 1, &continuePtr, 10);
                 if (ntwkMode == 8)
-                    strcpy(((providerNetworks_t*)g_ltem.providerNetworks)->provider->iotMode, "M1");
+                    strcpy(((providerInfo_t*)g_ltem.providerInfo)->iotMode, "M1");
                 else
-                    strcpy(((providerNetworks_t*)g_ltem.providerNetworks)->provider->iotMode, "NB1");
+                    strcpy(((providerInfo_t*)g_ltem.providerInfo)->iotMode, "NB1");
             }
         }
         else
         {
-            ((providerNetworks_t*)g_ltem.providerNetworks)->provider->name[0] = 0;
-            ((providerNetworks_t*)g_ltem.providerNetworks)->provider->iotMode[0] = 0;
+            ((providerInfo_t*)g_ltem.providerInfo)->name[0] = 0;
+            ((providerInfo_t*)g_ltem.providerInfo)->iotMode[0] = 0;
         }
         atcmd_close();
-        return ((providerNetworks_t*)g_ltem.providerNetworks)->provider;
+        return (providerInfo_t*)g_ltem.providerInfo;
     }
 }
 
 
 /**
- *  @brief Scans a C-String (char array) for the next delimeted token and null terminates it.
+ *  \brief Scans a C-String (char array) for the next delimeted token and null terminates it.
  * 
- *  @param source [in] - Original char array to scan.
- *  @param delimeter [in] - Character separating tokens (passed as integer value).
- *  @param tokenBuf [out] - Pointer to where token should be copied to.
- *  @param tokenBufSz [in] - Size of buffer to receive token.
+ *  \param [in] source - Original char array to scan.
+ *  \param [in] delimeter - Character separating tokens (passed as integer value).
+ *  \param [out] tokenBuf - Pointer to where token should be copied to.
+ *  \param [in] tokenBufSz - Size of buffer to receive token.
  * 
- *  @return Pointer to the location in the source string immediately following the token.
+ *  \return Pointer to the location in the source string immediately following the token.
 */
 static char *S_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz) 
 {

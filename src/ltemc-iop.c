@@ -57,7 +57,7 @@
 
 #pragma region Header
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -140,7 +140,7 @@ void IOP_create()
 void IOP_attachIrq()
 {
     spi_usingInterrupt(((spi_t*)g_ltem.spi), g_ltem.pinConfig.irqPin);
-    gpio_attachIsr(g_ltem.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
+    platform_attachIsr(g_ltem.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
 }
 
 
@@ -149,7 +149,7 @@ void IOP_attachIrq()
  */
 void IOP_detachIrq()
 {
-    gpio_detachIsr(g_ltem.pinConfig.irqPin);
+    platform_detachIsr(g_ltem.pinConfig.irqPin);
 }
 
 
@@ -583,7 +583,7 @@ static uint16_t S_takeTx(char *data, uint16_t dataSz)
  */
 void IOP_rxParseForUrcEvents()
 {
-    char *urcStartPtr = memchr(((iop_t*)g_ltem.iop)->rxCBuffer->prevHead, '+', 6);             // all URC start with '+', skip leading \r\n 
+    char *urcStartPtr = memchr(((iop_t*)g_ltem.iop)->rxCBuffer->prevHead, '+', 6);             // most URC start with '+', skip leading \r\n 
     if (urcStartPtr)
     {
         if (((iop_t*)g_ltem.iop)->scktMap > 0 && memcmp("+QSSLURC: \"recv", urcStartPtr, strlen("+QSSLURC: \"recv")) == 0)    // shortcircuit if no sockets
@@ -646,12 +646,12 @@ void IOP_rxParseForUrcEvents()
             char *connIdPtr = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead + strlen("+QIURC: \"pdpdeact");
             char *endPtr = NULL;
             uint8_t contextId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-            for (size_t i = 0; i <  sizeof(((providerNetworks_t*)g_ltem.providerNetworks)->networks) / sizeof(providerNetworks_t); i++)
+            for (size_t i = 0; i <  sizeof(((providerInfo_t*)g_ltem.providerInfo)->networks) / sizeof(providerInfo_t); i++)
             {
-                if (((providerNetworks_t*)g_ltem.providerNetworks)->networks[i]->contextId == contextId)
+                if (((providerInfo_t*)g_ltem.providerInfo)->networks[i].contextId == contextId)
                 {
-                    ((providerNetworks_t*)g_ltem.providerNetworks)->networks[i]->contextId = 0;
-                    ((providerNetworks_t*)g_ltem.providerNetworks)->networks[i]->ipAddress[0] = 0;
+                    ((providerInfo_t*)g_ltem.providerInfo)->networks[i].contextId = 0;
+                    ((providerInfo_t*)g_ltem.providerInfo)->networks[i].ipAddress[0] = 0;
                     break;
                 }
             }
@@ -660,13 +660,18 @@ void IOP_rxParseForUrcEvents()
         }
     }
 
-    // else if (g_ltem.qbgDeviceState != qbgDeviceState_appReady && memcmp("\r\nAPP RDY", ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead, strlen("\r\nAPP RDY")) == 0)
-    // {
-    //     PRINTF(dbgColor__cyan, "-p=aRdy");
-    //     g_ltem.qbgDeviceState = qbgDeviceState_appReady;
-    //     // discard this chunk, processed here
-    //     ((iop_t*)g_ltem.iop)->rxCBuffer->head = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead;
-    // }
+    if (g_ltem.qbgDeviceState == qbgDeviceState_powerOn)                                                // device is powered on but not confirmed ready
+    {
+        uint8_t newCharCnt = ((iop_t*)g_ltem.iop)->rxCBuffer->head - ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead;
+        char *target = memchr(((iop_t*)g_ltem.iop)->rxCBuffer->prevHead, (int)'A', newCharCnt);
+        if (target != NULL && memcmp(target, "APP RDY\r\n", 9) == 0)
+        {
+            PRINTF(dbgColor__cyan, "-p=aRdy");
+            g_ltem.qbgDeviceState = qbgDeviceState_appReady;
+            // discard this chunk, processed here
+            ((iop_t*)g_ltem.iop)->rxCBuffer->head = ((iop_t*)g_ltem.iop)->rxCBuffer->prevHead;
+        }
+    }
 }
 
 
@@ -715,9 +720,8 @@ static void S_interruptCallbackISR()
         
         if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)       // priority 2 -- receiver RHR full (src=2), receiver time-out (src=6)
         {                                                           // Service Action: read RXLVL, read FIFO to empty
-            PRINTF(dbgColor__gray, "RX(%d)", iirVal.IRQ_SOURCE);
             rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-            PRINTF(dbgColor__gray, "-sz=%d ", rxLevel);
+            PRINTF(dbgColor__gray, "RX-sz=%d ", rxLevel);
 
             if (rxLevel > 0)
             {
@@ -778,7 +782,7 @@ static void S_interruptCallbackISR()
 
     PRINTF(dbgColor__white, "]\r");
 
-    gpioPinValue_t irqPin = gpio_readPin(g_ltem.pinConfig.irqPin);
+    gpioPinValue_t irqPin = platform_readPin(g_ltem.pinConfig.irqPin);
     if (irqPin == gpioValue_low)
     {
         iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);

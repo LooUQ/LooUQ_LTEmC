@@ -80,15 +80,15 @@ static resultCode_t S_mqttPublishCompleteParser(const char *response, char **end
 /**
  *  @brief Initialize a MQTT protocol control structure.
 */
-void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataContext_t dataCntxt, bool useTls, mqttVersion_t useMqttVersion, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback)
+void mqtt_initControl(mqttCtrl_t *mqttCtrl, socket_t sckt, bool useTls, mqttVersion_t useMqttVersion, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback)
 {
     ASSERT(mqttCtrl != NULL && recvBuf != NULL, srcfile_ltemc_mqtt_c);
-    ASSERT(dataCntxt < dataContext__cnt, srcfile_ltemc_mqtt_c);
+    ASSERT(sckt < socket__cnt, srcfile_ltemc_mqtt_c);
 
     memset(mqttCtrl, 0, sizeof(mqttCtrl_t));
 
     mqttCtrl->ctrlMagic = streams__ctrlMagic;
-    mqttCtrl->dataCntxt = dataCntxt;
+    mqttCtrl->sckt = sckt;
     mqttCtrl->protocol = protocol_mqtt;
     mqttCtrl->useTls = useTls;
 
@@ -128,7 +128,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port)
     // not recycling existing connection, doing the work to open new connection here 
     if (mqttCtrl->useTls)
     {
-        if (atcmd_tryInvoke("AT+QMTCFG=\"ssl\",%d,1,%d", mqttCtrl->dataCntxt, mqttCtrl->dataCntxt))
+        if (atcmd_tryInvoke("AT+QMTCFG=\"ssl\",%d,1,%d", mqttCtrl->sckt, mqttCtrl->sckt))
         {
             if (atcmd_awaitResult() != resultCode__success)
                 return resultCode__internalError;
@@ -136,7 +136,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port)
     }
     if (mqttCtrl->useMqttVersion == mqttVersion_311)
     {
-        if (atcmd_tryInvoke("AT+QMTCFG=\"version\",%d,4", mqttCtrl->dataCntxt))
+        if (atcmd_tryInvoke("AT+QMTCFG=\"version\",%d,4", mqttCtrl->sckt))
         {
             if (atcmd_awaitResult() != resultCode__success)
                 return resultCode__internalError;
@@ -145,12 +145,12 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port)
 
     // TYPICAL: AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
     atcmd_setOptions(PERIOD_FROM_SECONDS(45), S_mqttOpenCompleteParser);
-    if (atcmd_tryInvokeWithOptions("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, host, port))
+    if (atcmd_tryInvokeWithOptions("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->sckt, host, port))
     {
         resultCode_t atResult = atcmd_awaitResult();
         if (atResult >= resultCode__success && atResult <= resultCode__successMax)      // opened mqtt server
         {
-            ((iop_t*)g_ltem.iop)->mqttMap &= 0x01 & mqttCtrl->dataCntxt;
+            ((iop_t*)g_ltem.iop)->mqttMap &= 0x01 & mqttCtrl->sckt;
             mqttCtrl->state = mqttState_open;
             return resultCode__success;
         }
@@ -182,8 +182,8 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port)
 void mqtt_close(mqttCtrl_t *mqttCtrl)
 {
     mqttCtrl->state = mqttState_closed;
-    ((iop_t*)g_ltem.iop)->mqttMap &= ~(0x01 & mqttCtrl->dataCntxt);
-    ((iop_t*)g_ltem.iop)->streamPeers[mqttCtrl->dataCntxt] = NULL;
+    ((iop_t*)g_ltem.iop)->mqttMap &= ~(0x01 & mqttCtrl->sckt);
+    ((iop_t*)g_ltem.iop)->streamPeers[mqttCtrl->sckt] = NULL;
 
     for (size_t i = 0; i < sizeof(mqttCtrl->topicSubs); i++)          // clear topicSubs table
     {
@@ -192,12 +192,12 @@ void mqtt_close(mqttCtrl_t *mqttCtrl)
 
     // if (mqtt->state == mqttState_connected)
     // {
-    //     if (atcmd_tryInvoke("AT+QMTDISC=%d", mqtt->dataCntxt))
+    //     if (atcmd_tryInvoke("AT+QMTDISC=%d", mqtt->sckt))
     //         atcmd_awaitResult(true);
     // }
     if (mqttCtrl->state >= mqttState_open)
     {
-        if (atcmd_tryInvoke("AT+QMTCLOSE=%d", mqttCtrl->dataCntxt))
+        if (atcmd_tryInvoke("AT+QMTCLOSE=%d", mqttCtrl->sckt))
             atcmd_awaitResult();
     }
     mqttCtrl->state == mqttState_closed;
@@ -231,7 +231,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, const char *clientId, const char
         return resultCode__success;
     }
 
-    if (atcmd_tryInvoke("AT+QMTCFG=\"session\",%d,%d", mqttCtrl->dataCntxt, (uint8_t)cleanSession))
+    if (atcmd_tryInvoke("AT+QMTCFG=\"session\",%d,%d", mqttCtrl->sckt, (uint8_t)cleanSession))
     {
         if (atcmd_awaitResult() != resultCode__success)
             return resultCode__internalError;
@@ -241,7 +241,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, const char *clientId, const char
 
     /* MQTT connect command can be quite large, using local buffer here rather than bloat global cmd\core buffer */
     char connectCmd[384] = {0};
-    snprintf(connectCmd, sizeof(connectCmd), "AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->dataCntxt, clientId, username, password);
+    snprintf(connectCmd, sizeof(connectCmd), "AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->sckt, clientId, username, password);
 
     if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))                  // to use oversized buffer need sendCmdData(), which doesn't acquire lock
     {
@@ -302,17 +302,17 @@ resultCode_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t q
     // BGx doesn't provide a test for an existing subscription, but is tolerant of a duplicate create subscription 
     // if sucessful, the topic's subscription will overwrite the IOP peer map without issue as well (same bitmap value)
 
-    // snprintf(actionCmd, MQTT_ACTION_CMD_SZ, "AT+QMTSUB=%d,%d,\"%s\",%d", mqtt->dataCntxt, ++mqtt->msgId, topic, qos);
+    // snprintf(actionCmd, MQTT_ACTION_CMD_SZ, "AT+QMTSUB=%d,%d,\"%s\",%d", mqtt->sckt, ++mqtt->msgId, topic, qos);
     atcmd_setOptions(PERIOD_FROM_SECONDS(30), S_mqttSubscribeCompleteParser);
-    if (atcmd_tryInvokeWithOptions("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->dataCntxt, ++mqttCtrl->msgId, topic, qos))
+    if (atcmd_tryInvokeWithOptions("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->sckt, ++mqttCtrl->msgId, topic, qos))
     {
         atResult = atcmd_awaitResult();
         if (atResult == resultCode__success)
         {
             S_updateSubscriptionsTable(mqttCtrl, true, topic);
 
-            ((iop_t*)g_ltem.iop)->mqttMap |= 0x01 << mqttCtrl->dataCntxt;
-            ((iop_t*)g_ltem.iop)->streamPeers[mqttCtrl->dataCntxt] = mqttCtrl;
+            ((iop_t*)g_ltem.iop)->mqttMap |= 0x01 << mqttCtrl->sckt;
+            ((iop_t*)g_ltem.iop)->streamPeers[mqttCtrl->sckt] = mqttCtrl;
 
             LTEM_registerDoWorker(S_mqttDoWork);                                // need to register worker if 1 or more subscriptions
             return atResult;
@@ -332,15 +332,15 @@ resultCode_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t q
 */
 resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic)
 {
-    // snprintf(actionCmd, MQTT_CONNECT_CMD_SZ, "AT+QMTUNS=%d,%d,\"<topic1>\"", mqtt->dataCntxt, ++mqtt->msgId, topic);
-    if (atcmd_tryInvoke("AT+QMTUNS=%d,%d,\"%s\"", mqttCtrl->dataCntxt, ++mqttCtrl->msgId, topic))
+    // snprintf(actionCmd, MQTT_CONNECT_CMD_SZ, "AT+QMTUNS=%d,%d,\"<topic1>\"", mqtt->sckt, ++mqtt->msgId, topic);
+    if (atcmd_tryInvoke("AT+QMTUNS=%d,%d,\"%s\"", mqttCtrl->sckt, ++mqttCtrl->msgId, topic))
     {
         if (atcmd_awaitResult() == resultCode__success)
         {
             S_updateSubscriptionsTable(mqttCtrl, false, topic);
 
-            ((iop_t*)g_ltem.iop)->mqttMap &= ~(0x01 << mqttCtrl->dataCntxt);
-            ((iop_t*)g_ltem.iop)->streamPeers[mqttCtrl->dataCntxt] = NULL;
+            ((iop_t*)g_ltem.iop)->mqttMap &= ~(0x01 << mqttCtrl->sckt);
+            ((iop_t*)g_ltem.iop)->streamPeers[mqttCtrl->sckt] = NULL;
 
 
             // // unregister worker if this is the last subscription being "unsubscribed"
@@ -377,7 +377,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
     if (ATCMD_awaitLock(timeoutMS))
     {
         uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->msgId++;
-        atcmd_invokeReuseLock("AT+QMTPUB=%d,%d,%d,0,\"%s\"", mqttCtrl->dataCntxt, msgId, qos, topic);
+        atcmd_invokeReuseLock("AT+QMTPUB=%d,%d,%d,0,\"%s\"", mqttCtrl->sckt, msgId, qos, topic);
         pubstate++;
 
         atResult = atcmd_awaitResult();
@@ -414,13 +414,13 @@ mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl)
     // See BG96_MQTT_Application_Note: AT+QMTOPEN? and AT+QMTCONN?
 
     ASSERT(mqttCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_mqtt_c);      // check for bad pointer into MQTT control
-    ASSERT(mqttCtrl->dataCntxt < dataContext__cnt, srcfile_ltemc_mqtt_c);
+    ASSERT(mqttCtrl->sckt < socket__cnt, srcfile_ltemc_mqtt_c);
 
-    uint8_t mqttState = mqtt_getStatusForContext(mqttCtrl->dataCntxt);
+    uint8_t mqttState = mqtt_getStatusForSocket(mqttCtrl->sckt);
 
-    if (!((iop_t*)g_ltem.iop)->mqttMap & 0x01 << mqttCtrl->dataCntxt && mqttState == mqttState_connected)
+    if (!((iop_t*)g_ltem.iop)->mqttMap & 0x01 << mqttCtrl->sckt && mqttState == mqttState_connected)
     {
-        ((iop_t*)g_ltem.iop)->mqttMap |= 0x01 << mqttCtrl->dataCntxt;       // fixup IOP mqtt active mask
+        ((iop_t*)g_ltem.iop)->mqttMap |= 0x01 << mqttCtrl->sckt;       // fixup IOP mqtt active mask
     }
 
     if (mqttState == mqttState_open || mqttState == mqttState_connected)
@@ -447,9 +447,9 @@ mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl)
  * 
  *  @return A mqttState_t value indicating the state of the MQTT connection.
 */
-mqttState_t mqtt_getStatusForContext(dataContext_t cntxt)
+mqttState_t mqtt_getStatusForSocket(socket_t sckt)
 {
-    if (ltem_readDeviceState() && cntxt < dataContext__cnt)
+    if (ltem_readDeviceState() && sckt < socket__cnt)
     {
         atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttConnectStatusParser);
         if (atcmd_tryInvokeWithOptions("AT+QMTCONN?"))
@@ -639,7 +639,7 @@ static void S_mqttDoWork()
                     topicVarPtr = NULL;                                                         // no topic wildcard\variables
                 }
                 *(messagePtr - 3) = '\0';                                                       // null-term topicVars
-                mqttPtr->dataRecvCB(mqttPtr->dataCntxt, msgId, topicPtr, topicVarPtr, messagePtr, messageSz);
+                mqttPtr->dataRecvCB(mqttPtr->sckt, msgId, topicPtr, topicVarPtr, messagePtr, messageSz);
                 IOP_resetRxDataBufferPage(rxBufPtr, thisPage);                                      // done with this page, clear it
                 iopPtr->rxStreamCtrl = NULL;                                                        // exit data mode
                 return;

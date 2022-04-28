@@ -72,19 +72,19 @@ typedef enum protocol_tag
 
 
 /** 
- *  @brief Enum of the available data contexts for BGx (only SSL/TLS capable contexts are supported).
+ *  @brief Enum of the available socket indexes for BGx (only SSL/TLS capable contexts are supported).
  */
-typedef enum dataContext_tag
+typedef enum socket_tag
 {
-    dataContext_0 = 0,
-    dataContext_1 = 1,
-    dataContext_2 = 2,
-    dataContext_3 = 3,
-    dataContext_4 = 4,
-    dataContext_5 = 5,
-    dataContext__cnt = 6,
-    dataContext__none = 0xFF
-} dataContext_t;
+    socket_0 = 0,
+    socket_1 = 1,
+    socket_2 = 2,
+    socket_3 = 3,
+    socket_4 = 4,
+    socket_5 = 5,
+    socket__cnt = 6,
+    socket__none = 0xFF
+} socket_t;
 
 
 /** 
@@ -93,12 +93,12 @@ typedef enum dataContext_tag
  */
 typedef enum streamPeer_tag
 {
-    streamPeer_dataCntxt0 = 0,
-    streamPeer_dataCntxt1 = 1,
-    streamPeer_dataCntxt2 = 2,
-    streamPeer_dataCntxt3 = 3,
-    streamPeer_dataCntxt4 = 4,
-    streamPeer_dataCntxt5 = 5,
+    streamPeer_0 = 0,
+    streamPeer_1 = 1,
+    streamPeer_2 = 2,
+    streamPeer_3 = 3,
+    streamPeer_4 = 4,
+    streamPeer_5 = 5,
     streamPeer_file = 6,
     streamPeer_cnt = 7
 } streamPeer_t;
@@ -191,7 +191,7 @@ typedef void (*moduleDoWorkFunc_t)();
 typedef struct baseCtrl_tag
 {
     uint8_t ctrlMagic;                  ///< magic flag to validate incoming requests 
-    dataContext_t dataCntxt;            ///< Data context where this control operates
+    socket_t dataCntxt;            ///< Data context where this control operates
     protocol_t protocol;                ///< Socket's protocol : UDP/TCP/SSL.
     bool useTls;                        ///< flag indicating SSL/TLS applied to stream
     rxDataBufferCtrl_t recvBufCtrl;     ///< RX smart buffer 

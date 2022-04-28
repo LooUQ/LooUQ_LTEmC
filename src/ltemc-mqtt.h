@@ -139,7 +139,7 @@ typedef struct mqttTopicSub_tag
  *  @param data [in] Pointer to received data buffer
  *  @param dataSz [in] The number of bytes available
 */
-typedef void (*mqttRecvFunc_t)(dataContext_t dataCntxt, uint16_t msgId, const char *topic, char *topicProps, char *message, uint16_t messageSz);
+typedef void (*mqttRecvFunc_t)(socket_t sckt, uint16_t msgId, const char *topic, char *topicProps, char *message, uint16_t messageSz);
 
 
 /** 
@@ -147,21 +147,21 @@ typedef void (*mqttRecvFunc_t)(dataContext_t dataCntxt, uint16_t msgId, const ch
 */
 typedef struct mqttCtrl_tag
 {
-    uint8_t ctrlMagic;                                      ///< magic flag to validate incoming requests 
-    dataContext_t dataCntxt;                                ///< Data context where this control operates
-    protocol_t protocol;                                    ///< Control's protocol : UDP/TCP/SSL, MQTT, HTTP, etc.
-    bool useTls;                                            ///< flag indicating SSL/TLS applied to stream
-    rxDataBufferCtrl_t recvBufCtrl;                         ///< RX smart buffer 
+    uint8_t ctrlMagic;                                      /// magic flag to validate incoming requests 
+    socket_t sckt;                                          /// Socket hosting the protocol
+    protocol_t protocol;                                    /// Control's protocol : UDP/TCP/SSL, MQTT, HTTP, etc.
+    bool useTls;                                            /// flag indicating SSL/TLS applied to stream
+    rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
 
-    mqttRecvFunc_t dataRecvCB;                              ///< callback to application, signals data ready
+    mqttRecvFunc_t dataRecvCB;                              /// callback to application, signals data ready
     mqttVersion_t useMqttVersion;
-    mqttState_t state;                                      ///< Current state of the MQTT protocol services on device.
-    uint16_t msgId;                                         ///< MQTT message ID for QOS, automatically incremented, rolls at max value.
-    bool canReuseConn;                                      ///< default=true, set if an open connection can be reused
-    bool connReused;                                        ///< set by open(), true if the current server connection was found open and reused
-    mqttTopicSub_t topicSubs[mqtt__topic_subscriptionCnt];  ///< Array of MQTT topic subscriptions.
-    uint32_t doWorkLastTck;                                 ///< last check for URC/dataPending
-    uint16_t lastBufferReqd;                                ///< last receive buffer required size, provides feedback to developer to minimize buffer sizing     
+    mqttState_t state;                                      /// Current state of the MQTT protocol services on device.
+    uint16_t msgId;                                         /// MQTT message ID for QOS, automatically incremented, rolls at max value.
+    bool canReuseConn;                                      /// default=true, set if an open connection can be reused
+    bool connReused;                                        /// set by open(), true if the current server connection was found open and reused
+    mqttTopicSub_t topicSubs[mqtt__topic_subscriptionCnt];  /// Array of MQTT topic subscriptions.
+    uint32_t doWorkLastTck;                                 /// last check for URC/dataPending
+    uint16_t lastBufferReqd;                                /// last receive buffer required size, provides feedback to developer to minimize buffer sizing     
 } mqttCtrl_t;
 
 
@@ -182,7 +182,7 @@ extern "C"
  *  @param recvCallback [in] Callback function to be invoked when received data is ready.
  *  @return A mqtt object to govern operations for this protocol stream value indicating the state of the MQTT connection.
 */
-void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataContext_t dataCntxt, bool useTls, mqttVersion_t useMqttVersion, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback);
+void mqtt_initControl(mqttCtrl_t *mqttCtrl, socket_t sckt, bool useTls, mqttVersion_t useMqttVersion, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback);
 
 
 /**
@@ -209,7 +209,7 @@ resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic);
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSeconds);
 
 mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl);
-mqttState_t mqtt_getStatusForContext(dataContext_t cntxt);
+mqttState_t mqtt_getStatusForSocket(socket_t sckt);
 uint8_t mqtt_fetchContextMap(); 
 uint16_t mqtt_getMsgId(mqttCtrl_t *mqttCtrl);
 uint16_t mqtt_getLastBufferReqd(mqttCtrl_t *mqttCtrl);

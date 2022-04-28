@@ -49,7 +49,8 @@ typedef enum srcfile_ltemc_tag
     srcfile_ltemc_nxpSc16is_c,
     srcfile_ltemc_quectelBg_c,
     srcfile_ltemc_sckt_c,
-    srcfile_ltemc_tls_c
+    srcfile_ltemc_tls_c,
+    srcfile_ltemc_gpio_c
 } srcfile_ltemc_t;
 
 

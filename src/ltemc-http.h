@@ -56,7 +56,7 @@ enum http__constants
  *  @param data [in] Pointer to received data buffer
  *  @param dataSz [in] The number of bytes available
 */
-typedef void (*httpRecvFunc_t)(dataContext_t dataCntxt, uint16_t httpRslt, char *data, uint16_t dataSz);
+typedef void (*httpRecvFunc_t)(socket_t sckt, uint16_t httpRslt, char *data, uint16_t dataSz);
 
 
 /** 
@@ -84,26 +84,26 @@ typedef enum httpState_tag
 
 typedef struct httpCtrl_tag
 {
-    uint8_t ctrlMagic;                      ///< magic flag to validate incoming requests 
-    dataContext_t dataCntxt;                ///< Data context where this control operates
-    protocol_t protocol;                    ///< Socket's protocol : UDP/TCP/SSL.
-    bool useTls;                            ///< flag indicating SSL/TLS applied to stream
-    rxDataBufferCtrl_t recvBufCtrl;         ///< RX smart buffer 
+    uint8_t ctrlMagic;                      /// magic flag to validate incoming requests 
+    socket_t sckt;                          /// Data context where this control operates
+    protocol_t protocol;                    /// Socket's protocol : UDP/TCP/SSL.
+    bool useTls;                            /// flag indicating SSL/TLS applied to stream
+    rxDataBufferCtrl_t recvBufCtrl;         /// RX smart buffer 
 
-    httpRecvFunc_t dataRecvCB;              ///< callback to application, signals data ready
-    // uint32_t bufPageSwapTck;                ///< last check for URC/dataPending
-    // uint32_t bufPageTimeout;                ///< set at init for doWork ASSERT, if timeout reached chance for a data overflow
-    char urlHost[http__urlHostSz];          ///< host portion of URL for GET/POST requests
-    bool returnResponseHdrs;                ///< if set true, response headers are included in the returned response
-    char *cstmHdrs;                         ///< custom header content, optional buffer provided by application
-    uint16_t cstmHdrsSz;                    ///< size of custom header buffer
-    char requestType;                       ///< type of current/last request: 'G'=GET, 'P'=POST
-    httpState_t requestState;               ///< current state machine variable for HTTP request
-    uint16_t bgxError;                      ///< BGx sprecific error code returned from GET/POST
-    uint16_t httpStatus;                    ///< set to 0 during a request, initialized to 0xFFFF before any request
-    uint32_t pageSize;                      ///< if provided in page response, the page size 
-    uint32_t pageRemaining;                 ///< set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
-    bool pageCancellation;                  ///< set to abandon further page loading
+    httpRecvFunc_t dataRecvCB;              /// callback to application, signals data ready
+    // uint32_t bufPageSwapTck;                /// last check for URC/dataPending
+    // uint32_t bufPageTimeout;                /// set at init for doWork ASSERT, if timeout reached chance for a data overflow
+    char urlHost[http__urlHostSz];          /// host portion of URL for GET/POST requests
+    bool returnResponseHdrs;                /// if set true, response headers are included in the returned response
+    char *cstmHdrs;                         /// custom header content, optional buffer provided by application
+    uint16_t cstmHdrsSz;                    /// size of custom header buffer
+    char requestType;                       /// type of current/last request: 'G'=GET, 'P'=POST
+    httpState_t requestState;               /// current state machine variable for HTTP request
+    uint16_t bgxError;                      /// BGx sprecific error code returned from GET/POST
+    uint16_t httpStatus;                    /// set to 0 during a request, initialized to 0xFFFF before any request
+    uint32_t pageSize;                      /// if provided in page response, the page size 
+    uint32_t pageRemaining;                 /// set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
+    bool pageCancellation;                  /// set to abandon further page loading
 } httpCtrl_t;
 
 
@@ -123,7 +123,7 @@ extern "C"
  *  @param recvCallback [in] Callback function to receive incoming page data.
  *  @return True if action was invoked, false if not
  */
-void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataCntxt, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
+void http_initControl(httpCtrl_t *httpCtrl, socket_t dataCntxt, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
 
 
 /**
@@ -151,6 +151,10 @@ void http_addDefaultHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap);
  *  @param pw [in] - Password/secret for header.
  */
 void http_addBasicAuthHdr(httpCtrl_t *httpCtrl, const char *user, const char *pw);
+
+
+void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText);
+
 
 /* ------------------------------------------------------------------------------------------------
  *  Request and Response Section 

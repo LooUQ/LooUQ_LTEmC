@@ -43,13 +43,16 @@
 #endif
 
 
-// define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+/* specify the pin configuration
+ * --------------------------------------------------------------------------------------------- */
+// #define HOST_FEATHER_UXPLOR             
+#define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
 #include <ltemc-tls.h>
 #include <ltemc-http.h>
 #include <string.h>
+#include <lq-SAMDutil.h>
 
 #define DEFAULT_NETWORK_CONTEXT 1
 // #define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
@@ -81,6 +84,7 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEm1c test9-HTTP\r\n");
+    PRINTF(dbgColor__white, "RCause=%d\r\n", lqSAMD_getResetCause());
 
     ltem_create(ltem_pinConfig, NULL, appNotifCB);                      // no yield req'd for testing
     ltem_start(false);                                                  // do not reset on modem found ON
@@ -89,7 +93,7 @@ void setup() {
     ntwk_setIotMode(ntwkIotMode_m1);
 
     PRINTF(dbgColor__none, "Waiting on network...\r");
-    providerInfo_t *networkProvider = ntwk_awaitProvider(30000);
+    providerInfo_t *networkProvider = ntwk_awaitProvider(30);
     if (strlen(networkProvider->name) == 0)
         appNotifCB(255, "Timout (30s) waiting for cellular network.");
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
@@ -104,7 +108,7 @@ void setup() {
 
     // most sites use tls, 
     // NOTE: the TLS context MUST == the HTTP context if using SSL\TLS; dataContext_0 is this example
-    tls_configure(dataContext_0, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    tls_configure(socket_0, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
 
     // alternate test sites...
     // https://api.weather.gov/points/44.7582,-85.6022
@@ -122,13 +126,13 @@ void setup() {
      */
 
     // create a control for talking to the website
-    http_initControl(&httpCtrl1, dataContext_0, "https://api.weather.gov", webPageBuf, sizeof(webPageBuf), httpRecvCB);
+    http_initControl(&httpCtrl1, socket_0, "https://api.weather.gov", webPageBuf, sizeof(webPageBuf), httpRecvCB);
     PRINTF(dbgColor__dGreen, "URL Host1=%s\r", httpCtrl1.urlHost);
 
     // you can use httpPtr or &httpCtrl in the line above to pass reference, below the &httpCtrl2 style is required
     // since there is no "ptr" variable created (around line 65) to use here
 
-    http_initControl(&httpCtrl2, dataContext_1, "http://httpbin.org", webPageBuf, sizeof(webPageBuf), httpRecvCB);
+    http_initControl(&httpCtrl2, socket_1, "http://httpbin.org", webPageBuf, sizeof(webPageBuf), httpRecvCB);
     PRINTF(dbgColor__dGreen, "URL Host2=%s\r", httpCtrl2.urlHost);
 }
 
@@ -221,9 +225,9 @@ void loop()
 }
 
 
-// typedef void (*httpRecvFunc_t)(dataContext_t dataCntxt, char *data, uint16_t dataSz);
+// typedef void (*httpRecvFunc_t)(socket_t sckt, char *data, uint16_t dataSz);
 
-void httpRecvCB(dataContext_t cntxt, uint16_t httpStatus, char *recvData, uint16_t dataSz)
+void httpRecvCB(socket_t sckt, uint16_t httpStatus, char *recvData, uint16_t dataSz)
 {
     strncpy(pageBuffer + pageChars, recvData, dataSz);
     pageChars += dataSz;

@@ -131,16 +131,16 @@ void ltem_destroy()
 bool ltem_start(bool forceReset)
 {
   	// on Arduino compatible, ensure pin is in default "logical" state prior to opening
-	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
-	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
-	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
-	gpio_writePin(g_ltem.pinConfig.irqPin, gpioValue_high);
+	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
+	platform_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
+	platform_writePin(g_ltem.pinConfig.irqPin, gpioValue_high);
 
-	gpio_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	gpio_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	gpio_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
-	gpio_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
-	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
+	platform_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	platform_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	platform_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	platform_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
+	platform_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
 
     spi_start(g_ltem.spi);                                              // start host SPI
 
@@ -151,6 +151,7 @@ bool ltem_start(bool forceReset)
         {
             SC16IS7xx_start(false);                             // SPI-UART bridge functionality may/may not be running, init base functions: FIFO, levels, baud, framing (IRQ not req'd)
             qbg_reset(true);                                    // do hardware reset (aka power cycle)
+            foundOn = false;
         }
     }
     else 
@@ -167,18 +168,30 @@ bool ltem_start(bool forceReset)
  */
 void S__initDevice(bool foundOn)
 {
-    if (qbg_isPowerOn())                                    // ensure BGx powered on
+    ASSERT(qbg_isPowerOn(), srcfile_ltemc_ltemc_c);
+
+    SC16IS7xx_start();                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
+    IOP_attachIrq();                                        // attach I/O processor ISR to IRQ
+    SC16IS7xx_enableIrqMode();                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
+
+    if (foundOn)
+        g_ltem.qbgDeviceState = qbgDeviceState_appReady;    // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
+    else
     {
-        SC16IS7xx_start();                                  // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
-        if (!foundOn)                                   
-            IOP_awaitAppReady();                            // wait for BGx to signal out firmware ready (URC message)
-
-        IOP_attachIrq();                                    // attach I/O processor ISR to IRQ
-        SC16IS7xx_enableIrqMode();                          // enable IRQ generation on SPI-UART bridge (IRQ mode)
-
-        qbg_setOptions();                                   // initialize BGx operating settings
-        g_ltem.qbgDeviceState = qbgDeviceState_appReady;    // set device state
+        uint32_t appRdyWaitStart = pMillis();
+        while (g_ltem.qbgDeviceState != qbgDeviceState_appReady)
+        {
+            pDelay(1);                                                      // yields behind the scenes
+            if (pMillis() - appRdyWaitStart > PERIOD_FROM_SECONDS(15) && g_ltem.qbgDeviceState == qbgDeviceState_powerOn)
+                g_ltem.qbgDeviceState = qbgDeviceState_appReady;            // missed it somehow
+        }
     }
+
+    // if (!foundOn)                                   
+    //     IOP_awaitAppReady();                                // wait for BGx to signal out firmware ready (URC message)
+    // else
+
+    qbg_setOptions();                                       // initialize BGx operating settings
 }
 
 
@@ -209,7 +222,7 @@ void ltem_reset(bool hardReset)
  */
 qbgDeviceState_t ltem_readDeviceState()
 {
-    if (gpio_readPin(g_ltem.pinConfig.statusPin))                  // ensure powered off device doesn't report otherwise
+    if (platform_readPin(g_ltem.pinConfig.statusPin))           // ensure powered off device doesn't report otherwise
     {
         if (g_ltem.qbgDeviceState == qbgDeviceState_powerOff)
             g_ltem.qbgDeviceState = qbgDeviceState_powerOn; 

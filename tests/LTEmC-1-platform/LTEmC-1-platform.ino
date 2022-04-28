@@ -46,6 +46,7 @@
 
 // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR                                 // specify the pin configuration
+//#define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
 #include <ltemc-nxp-sc16is.h>                               // need internal references, low-level test here

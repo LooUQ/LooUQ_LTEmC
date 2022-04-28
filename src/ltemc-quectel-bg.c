@@ -66,7 +66,7 @@ bool S_issueStartCommand(const char *cmdStr);
  */
 bool qbg_isPowerOn()
 {
-    return gpio_readPin(g_ltem.pinConfig.statusPin);
+    return platform_readPin(g_ltem.pinConfig.statusPin);
 }
 
 
@@ -85,9 +85,9 @@ bool qbg_powerOn()
     g_ltem.qbgDeviceState = qbgDeviceState_powerOff;
 
     PRINTF(dbgColor__none, "Powering LTEm On...");
-    gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
+    platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
     pDelay(BGX__powerOnDelay);
-    gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+    platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
 
     uint8_t waitAttempts = 0;
     while (waitAttempts++ < 72)                                     // wait for status=ready, HW Guide says 4.8s
@@ -111,11 +111,11 @@ bool qbg_powerOn()
 void qbg_powerOff()
 {
     PRINTF(dbgColor__none, "Powering LTEm Off\r");
-	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
+	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
 	pDelay(BGX__powerOffDelay);
-	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
 
-    while (gpio_readPin(g_ltem.pinConfig.statusPin))
+    while (platform_readPin(g_ltem.pinConfig.statusPin))
     {
         pDelay(100);          // allow background tasks to operate
     }
@@ -133,9 +133,9 @@ void qbg_reset(bool hwReset)
         pDelay(500);
         qbg_powerOn();
 
-        // gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_high);       // hardware reset: reset pin active for 150-460ms 
+        // platform_writePin(g_ltem.pinConfig.resetPin, gpioValue_high);       // hardware reset: reset pin active for 150-460ms 
         // pDelay(250);
-        // gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
+        // platform_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
     }
     else 
     {
@@ -144,7 +144,7 @@ void qbg_reset(bool hwReset)
     }
 
     uint32_t waitStart = pMillis();                                     // start timer to wait for status pin
-    while (!gpio_readPin(g_ltem.pinConfig.statusPin))                   // the reset command blocks caller until status=true or timeout
+    while (!platform_readPin(g_ltem.pinConfig.statusPin))                   // the reset command blocks caller until status=true or timeout
     {
         yield();                                                        // give application some time back for processing
         if (pMillis() - waitStart > PERIOD_FROM_SECONDS(8))

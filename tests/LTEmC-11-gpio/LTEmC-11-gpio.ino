@@ -42,9 +42,8 @@
 #endif
 
 
-/* specify the pin configuration
- * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
+// define options for how to assemble this build
+// #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
@@ -60,9 +59,8 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "LTEm1c test5-modemInfo\r\n");
+    PRINTF(dbgColor__red, "LTEm1c test115-gpio\r\n");
     
-    randomSeed(analogRead(0));
     lqDiag_registerEventCallback(appEventCB);                       // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEventCB);                  // create LTEmC modem, no yield req'd for testing
@@ -70,26 +68,37 @@ void setup() {
 
     PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_ltemcVersion());
 
-    // char opList[300];
-    // ntwk_getOperators(opList, sizeof(opList));
-    // PRINTF(dbgColor__green, "Ops: %s\r", opList);
+    modemInfo_t *modemInfo  = mdminfo_ltem();
+
+    if (strcmp(modemInfo->mfgmodel,"BG77") == 0)
+        PRINTF(dbgColor__info, "Modem Module: BG77\r");
+    else
+    {
+        PRINTF(dbgColor__error, "Modem does not support GPIO\r", mdminfo_ltem()->mfgmodel);
+        while (1);
+    }
+
+    // init GPIO ports controlled by test
+    gpio_configPort(1, gpioDirection_output, gpioPull_NA, gpioPullDrive_NA);
+    gpio_configPort(2, gpioDirection_input, gpioPull_none, gpioPullDrive_NA);
 }
 
-
 int loopCnt = 0;
-modemInfo_t *modemInfo;
 
 
 void loop() {
-    modemInfo = mdminfo_ltem();
 
-    PRINTF(dbgColor__cyan, "\rModem Information\r");
-    PRINTF(dbgColor__cyan, "IMEI = %s \r", modemInfo->imei);
-    PRINTF(dbgColor__cyan, "ICCID = %s \r", modemInfo->iccid);
-    PRINTF(dbgColor__cyan, "Firmware = %s \r", modemInfo->fwver);
-    PRINTF(dbgColor__cyan, "Mfg/Model = %s \r", modemInfo->mfgmodel);
+    // set output ports
 
-    PRINTF(dbgColor__info, "\rRSSI = %d dBm \r",mdminfo_signalRSSI());
+    // read input ports (GPIO and ADC)
+
+    // PRINTF(dbgColor__cyan, "\rModem Information\r");
+    // PRINTF(dbgColor__cyan, "IMEI = %s \r", modemInfo->imei);
+    // PRINTF(dbgColor__cyan, "ICCID = %s \r", modemInfo->iccid);
+    // PRINTF(dbgColor__cyan, "Firmware = %s \r", modemInfo->fwver);
+    // PRINTF(dbgColor__cyan, "Mfg/Model = %s \r", modemInfo->mfgmodel);
+
+    // PRINTF(dbgColor__info, "\rRSSI = %d dBm \r",mdminfo_signalRSSI());
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));

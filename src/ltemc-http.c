@@ -63,16 +63,16 @@ static resultCode_t S_httpPostStatusParser(const char *response, char **endptr);
 /**
  *	@brief Create a HTTP(s) control structure to manage web communications. 
  */
-void http_initControl(httpCtrl_t *httpCtrl, dataContext_t dataCntxt, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback)
+void http_initControl(httpCtrl_t *httpCtrl, socket_t sckt, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback)
 {
     ASSERT(httpCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_ltemc_http_c);
-    ASSERT(dataCntxt < dataContext__cnt, srcfile_ltemc_sckt_c);
+    ASSERT(sckt < socket__cnt, srcfile_ltemc_sckt_c);
     ASSERT(strncmp(urlHost, "HTTP", 4) == 0 || strncmp(urlHost, "http", 4) == 0, srcfile_ltemc_http_c);
 
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
 
     httpCtrl->ctrlMagic = streams__ctrlMagic;
-    httpCtrl->dataCntxt = dataCntxt;
+    httpCtrl->sckt = sckt;
     httpCtrl->protocol = protocol_http;
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
@@ -103,13 +103,14 @@ void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t heade
     ASSERT(headerBuf != NULL, srcfile_ltemc_http_c);
     ASSERT(headerBufSz > 0, srcfile_ltemc_http_c);
 
+    memset(headerBuf, 0, headerBufSz);
     httpCtrl->cstmHdrs = headerBuf;
     httpCtrl->cstmHdrsSz = headerBufSz;
 }
 
 
 /**
- *	@brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
+ *	@brief Adds standard set of http headers to the custom headers buffer, requires previous custom headers enable and buffer registration.
  */
 void http_addDefaultHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
 {
@@ -136,6 +137,18 @@ void http_addDefaultHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
         if (strlen(httpCtrl->cstmHdrs) + 40 < httpCtrl->cstmHdrsSz)
             strcat(httpCtrl->cstmHdrs, "Content-Type: application/octet-stream\r\n");
     }
+}
+
+
+
+void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText)
+{
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
+    ASSERT(httpCtrl->cstmHdrs != NULL, srcfile_ltemc_http_c);
+    ASSERT(strlen(httpCtrl->cstmHdrs) + strlen(hdrText) + 2 < httpCtrl->cstmHdrsSz, srcfile_ltemc_http_c);
+
+    strcat(httpCtrl->cstmHdrs, hdrText);
+    strcat(httpCtrl->cstmHdrs, "\r\n");
 }
 
 
@@ -200,8 +213,8 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
 
         if (httpCtrl->useTls)
         {
-            // AT+QHTTPCFG="sslctxid",<httpCtrl->dataCntxt>
-            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt);
+            // AT+QHTTPCFG="sslctxid",<httpCtrl->sckt>
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->sckt);
             atResult = atcmd_awaitResult();
             if (atResult != resultCode__success)
             {
@@ -299,8 +312,8 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
 
         if (httpCtrl->useTls)
         {
-            // AT+QHTTPCFG="sslctxid",<httpCtrl->dataCntxt>
-            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt);
+            // AT+QHTTPCFG="sslctxid",<httpCtrl->sckt>
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->sckt);
             atResult = atcmd_awaitResult();
             if (atResult != resultCode__success)
             {
@@ -471,13 +484,13 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
             {
                 if (!httpCtrl->pageCancellation)
                 {
-                    httpCtrl->dataRecvCB(httpCtrl->dataCntxt, httpCtrl->httpStatus, pBuf->pages[!pBuf->iopPg].tail, (appAvailable - trailerLen));
+                    httpCtrl->dataRecvCB(httpCtrl->sckt, httpCtrl->httpStatus, pBuf->pages[!pBuf->iopPg].tail, (appAvailable - trailerLen));
                 }
                 IOP_resetRxDataBufferPage(pBuf, !pBuf->iopPg);                              // delivered, reset buffer and reset ready
 
                 if (httpCtrl->requestState == httpState_closing)                            // if page trailer detected
                 {
-                    PRINTF(dbgColor__dGreen, "Closing reqst %d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+                    PRINTF(dbgColor__dGreen, "Closing reqst %d, status=%d\r", httpCtrl->sckt, httpCtrl->httpStatus);
                     httpCtrl->requestState = httpState_idle;
                     break;
                 }

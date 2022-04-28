@@ -10,26 +10,26 @@
 #include <Arduino.h>
 
 
-void gpio_openPin(uint8_t pNum, gpioPinMode_t pMode)
+void platform_openPin(uint8_t pNum, gpioPinMode_t pMode)
 {
     // Arduino sets pinMode to input/output with option pull up/down
     pinMode(pNum, pMode);
 }
 
 
-void gpio_closePin(uint8_t pNum)
+void platform_closePin(uint8_t pNum)
 {
     // Arduino does not require close
 }
 
 
-gpioPinValue_t gpio_readPin(uint8_t pNum)
+gpioPinValue_t platform_readPin(uint8_t pNum)
 {
     return (gpioPinValue_t)digitalRead(pNum);
 }
 
 
-void gpio_writePin(uint8_t pNum, gpioPinValue_t val)
+void platform_writePin(uint8_t pNum, gpioPinValue_t val)
 {
     digitalWrite(pNum, val);
 }
@@ -38,26 +38,26 @@ void gpio_writePin(uint8_t pNum, gpioPinValue_t val)
 /* The attachIsr function requires that no interrupt be pending for the IOP modules (from the LTEmX SPI\UART chip).
  * failure to assure that constraint will likely result in the LTEmC driver locking up in the IOP interrupt service
  * routine. */
-void gpio_attachIsr(uint8_t pinNum, bool enabled, gpioIrqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback)
+void platform_attachIsr(uint8_t pinNum, bool enabled, gpioIrqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback)
 {
     EIC->INTFLAG.reg = 0x01 << g_APinDescription[pinNum].ulExtInt;
     attachInterrupt(digitalPinToInterrupt(pinNum), isrCallback, triggerOn);
 }
 
 
-uint32_t gpio_getIntFlags()
+uint32_t platform_getIntFlags()
 {
     return EIC->INTFLAG.reg;
 }
 
 
-uint32_t gpio_getPinInterrupt(uint32_t pin)
+uint32_t platform_getPinInterrupt(uint32_t pin)
 {
     return g_APinDescription[pin].ulExtInt;
 }
 
 
-void gpio_detachIsr(uint8_t pinNum)
+void platform_detachIsr(uint8_t pinNum)
 {
     detachInterrupt(digitalPinToInterrupt(pinNum));
 }
