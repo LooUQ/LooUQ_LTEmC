@@ -43,6 +43,26 @@ enum atcmd__constants
 };
 
 
+typedef uint16_t (*cmdResponseParser_func)(const char *response, uint16_t *completeSz, uint32_t *responseValue);
+
+// typedef struct atcmd_tag
+// {
+//     char cmdStr[IOP__rxCoreBufferSize];         ///< AT command string to be passed to the BGx module.
+//     uint32_t timeoutMS;                         ///< Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
+//     bool isOpenLocked;                          ///< True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
+//     bool autoLock;                              ///< last invoke was auto and should be closed automatically on complete
+//     uint32_t invokedAt;                         ///< Tick value at the command invocation, used for timeout detection.
+//     char *response;                             ///< The response to the command received from the BGx. Points into IOP core buffer
+//     char *responseTail;                         ///< Pointer to the unparsed section of the response, beyond complete parser's match
+//     uint32_t execDuration;                      ///< duration of command's execution in milliseconds
+//     //uint32_t responseValue;                     /// storage for optional value obtained by response parser
+//     resultCode_t resultCode;
+
+//     uint16_t (*completeParser_func)(const char *response, char **endptr);  ///< Function to parse the response looking for completion.
+//     //responseParser_func *responseParser;
+// } atcmd_t;
+
+
 /** 
  *  @brief Structure to control invocation and management of an AT command with the BGx module.
 */
@@ -81,7 +101,6 @@ extern "C" {
  *	@brief Sets options for BGx AT command control (atcmd). 
  *  @param timeoutMS [in] Number of milliseconds the action can take. Use system default ACTION_TIMEOUTms or your value.
  *  @param customCmdCompleteParser_func [in] Custom command response parser to signal result is complete. NULL for std parser.
- *  @return True if action was invoked, false if not
  */
 void atcmd_setOptions(uint32_t timeoutMS, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr));
 

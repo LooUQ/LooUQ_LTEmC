@@ -210,9 +210,9 @@ void atcmd_getResult()
             atcmdPtr->execDuration = pMillis() - atcmdPtr->invokedAt;
 
             if (!ltem_readDeviceState())                                                  // if action timed-out, verify not a device wide failure
-                ltem_notifyApp(appEvent_fault_hardLogic, "Fault-LTEm Not On");            // 0 read = BGx status pin low
+                ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not On");            // 0 read = BGx status pin low
             else if (!SC16IS7xx_chkCommReady())
-                ltem_notifyApp(appEvent_fault_softLogic, "Fault-LTEm SPI");               // UART bridge SPI not initialized correctly, IRQ not enabled
+                ltem_notifyApp(appEvent_fault_softLogic, "LTEm SPI");               // UART bridge SPI not initialized correctly, IRQ not enabled
         }
         return;
     }
@@ -431,7 +431,7 @@ resultCode_t atcmd_defaultResultParser(const char *response, const char *preambl
     char *terminatorAt = NULL;
 
     uint8_t preambleSz = strlen(preamble);
-    if (preambleSz)                                                 // process preamble requirements
+    if (preambleSz)                                                         // process preamble requirements
     {
         preambleAt = strstr(response, preamble);
         if (preambleReqd && preambleAt == NULL)
@@ -440,19 +440,19 @@ resultCode_t atcmd_defaultResultParser(const char *response, const char *preambl
     else
         preambleAt = response;
     
-    char *termSearchAt = preambleAt ? preambleAt + preambleSz : response;    // if preamble is NULL, start remaing search from response start
+    char *termSearchAt = preambleAt ? preambleAt + preambleSz : response;   // if preamble is NULL, start remaing search from response start
 
-    if (terminator)                                                 // explicit terminator
+    if (terminator)                                                         // explicit terminator
     {
         terminatorAt = strstr(termSearchAt, terminator);
         *endptr = terminatorAt + strlen(terminator);
     }
-    else                                                            // no explicit terminator, look for standard AT responses
+    else                                                                    // no explicit terminator, look for standard AT responses
     {
         terminatorAt = strstr(termSearchAt, OK_COMPLETED_STRING);
         if (terminatorAt)
         {
-            *endptr = terminatorAt + 4;         // + strlen(OK_COMPLETED_STRING)
+            *endptr = terminatorAt + 4;                                     // + strlen(OK_COMPLETED_STRING)
         }
         if (!terminatorAt)                                              
         {
