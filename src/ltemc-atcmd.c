@@ -58,21 +58,21 @@ extern ltemDevice_t g_ltem;
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *	@brief Sets options for BGx AT command control (atcmd). 
+ *	\brief Sets options for BGx AT command control (atcmd). 
  */
-void atcmd_setOptions(uint32_t timeoutMS, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr))
+void atcmd_setOptions(uint32_t timeoutMS, cmdResponseParser_func *cmdResponseParser)
 {
     ((atcmd_t*)g_ltem.atcmd)->timeoutMS = (timeoutMS == 0) ? atcmd__defaultTimeoutMS : timeoutMS;
 
-    if (customCmdCompleteParser_func)
-        ((atcmd_t*)g_ltem.atcmd)->completeParser_func = customCmdCompleteParser_func;
+    if (cmdResponseParser)
+        ((atcmd_t*)g_ltem.atcmd)->responseParserFunc = cmdResponseParser;
     else
-        ((atcmd_t*)g_ltem.atcmd)->completeParser_func = atcmd_okResultParser;
+        ((atcmd_t*)g_ltem.atcmd)->responseParserFunc = atcmd_okResponseParser;
 }
 
 
 /**
- *	@brief Reset AT command options to defaults.
+ *	\brief Reset AT command options to defaults.
  */
 inline void atcmd_restoreOptionDefaults()
 {
@@ -81,7 +81,7 @@ inline void atcmd_restoreOptionDefaults()
 
 
 /**
- *	@brief Invokes a BGx AT command using default option values (automatic locking).
+ *	\brief Invokes a BGx AT command using default option values (automatic locking).
  */
 bool atcmd_tryInvoke(const char *cmdTemplate, ...)
 {
@@ -109,7 +109,7 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
 
 
 /**
- *	@brief Invokes a BGx AT command using set option values, previously set with setOptions() (automatic locking).
+ *	\brief Invokes a BGx AT command using set option values, previously set with setOptions() (automatic locking).
  */
 bool atcmd_tryInvokeWithOptions(const char *cmdTemplate, ...)
 {
@@ -136,7 +136,7 @@ bool atcmd_tryInvokeWithOptions(const char *cmdTemplate, ...)
 
 
 /**
- *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
+ *	\brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
  */
 void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
 {
@@ -158,7 +158,7 @@ void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
 
 
 /**
- *	@brief Closes (completes) a BGx AT command structure and frees action resource (release action lock).
+ *	\brief Closes (completes) a BGx AT command structure and frees action resource (release action lock).
  */
 void atcmd_close()
 {
@@ -168,7 +168,7 @@ void atcmd_close()
 
 
 /**
- *	@brief Performs blind send data transfer to device.
+ *	\brief Performs blind send data transfer to device.
  */
 void atcmd_sendCmdData(const char *data, uint16_t dataSz, const char* eotPhrase)
 {
@@ -183,94 +183,127 @@ void atcmd_sendCmdData(const char *data, uint16_t dataSz, const char* eotPhrase)
 
 
 /**
- *	@brief Checks recv buffer for command response and sets atcmd structure data with result.
+ *	\brief Checks recv buffer for command response and sets atcmd structure data with result.
  */
-void atcmd_getResult()
+resultCode_t atcmd_getResult()
 {
     atcmd_t *atcmdPtr = (atcmd_t*)g_ltem.atcmd;
     iop_t *iopPtr = (iop_t*)g_ltem.iop;
-    atcmdPtr->resultCode = atcmd__parserPendingResult;
+
+    cmdParseRslt_t parseRslt = cmdParseRslt_pending;
+    atcmdPtr->resultCode = 0;
     
     char *endptr = NULL;
-    if (*iopPtr->rxCBuffer->tail != '\0')                               // if cmd buffer not empty, test for command complete with registered parser
+    if (*(iopPtr->rxCBuffer->tail) != '\0')                             // if cmd buffer not empty, test for command complete with registered parser
     {
-        if (atcmdPtr->response == NULL)                                 // set response pointer now that there is new data
-            atcmdPtr->response = iopPtr->rxCBuffer->tail;               // note: this doesn't track with parser, shows full response text 
-
-        atcmdPtr->resultCode = (*atcmdPtr->completeParser_func)(iopPtr->rxCBuffer->tail, &endptr);
-        PRINTF(dbgColor__gray, "prsr=%d \r", atcmdPtr->resultCode);
+        atcmdPtr->response = iopPtr->rxCBuffer->tail;                   // tracked in ATCMD struct for convenience
+        parseRslt = (*atcmdPtr->responseParserFunc)(&g_ltem);           // PARSE response
+        PRINTF(dbgColor__gray, "prsr=%d \r", parseRslt);
     }
 
-    if (atcmdPtr->resultCode == atcmd__parserPendingResult)             // still pending, check for timeout error
+    if (parseRslt & cmdParseRslt_error)                                 // check error bit
+    {
+        if (parseRslt & cmdParseRslt_moduleError)                       // BGx ERROR or CME/CMS
+            atcmdPtr->resultCode = resultCode__methodNotAllowed;
+
+        else if (parseRslt & cmdParseRslt_countShort)                   // did not find expected tokens
+            atcmdPtr->resultCode = resultCode__notFound;
+
+        else
+            atcmdPtr->resultCode = resultCode__internalError;           // covering the unknown
+
+        atcmdPtr->isOpenLocked = false;                                 // close action to release action lock on any error
+        atcmdPtr->execDuration = pMillis() - atcmdPtr->invokedAt;
+    }
+
+    if (parseRslt == cmdParseRslt_pending)                              // still pending, check for timeout error
     {
         if (pElapsed(atcmdPtr->invokedAt, atcmdPtr->timeoutMS))
         {
             atcmdPtr->resultCode = resultCode__timeout;
-            atcmdPtr->isOpenLocked = false;                             // close action to release action lock
+            atcmdPtr->isOpenLocked = false;                                     // close action to release action lock
             atcmdPtr->execDuration = pMillis() - atcmdPtr->invokedAt;
 
-            if (!ltem_readDeviceState())                                                  // if action timed-out, verify not a device wide failure
-                ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not On");            // 0 read = BGx status pin low
+            if (!ltem_readDeviceState())                                        // if action timed-out, verify not a device wide failure
+                ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not On");            // BGx status pin low
             else if (!SC16IS7xx_chkCommReady())
                 ltem_notifyApp(appEvent_fault_softLogic, "LTEm SPI");               // UART bridge SPI not initialized correctly, IRQ not enabled
+
+            return resultCode__timeout;
         }
-        return;
-    }
-    else
-    {
-        iopPtr->rxCBuffer->tail = endptr;                               // adj tail to unparsed cmd stream
-        atcmdPtr->responseTail = endptr;
-                                                                        // if parser left data trailing parsed content in cmd buffer: 
-        if (iopPtr->rxCBuffer->tail < iopPtr->rxCBuffer->head)          // - need to parseImmediate() for URCs, as if they just arrived
-            IOP_rxParseForUrcEvents();
+        return resultCode__unknown;
     }
 
-    if (atcmdPtr->resultCode <= resultCode__successMax)                 // parser completed with success code
+    if (parseRslt & cmdParseRslt_success)                                       // success bit: parser completed with success (may have excessRecv warning)
     {
         if (atcmdPtr->autoLock)
             atcmdPtr->isOpenLocked = false;
         atcmdPtr->execDuration = pMillis() - atcmdPtr->invokedAt;
-        return;
+        atcmdPtr->resultCode = resultCode__success;
     }
 
-    // handled timeout and success results above, if here must be specific error
-    atcmdPtr->isOpenLocked = false;                                     // close action to release action lock on any error
-    atcmdPtr->execDuration = pMillis() - atcmdPtr->invokedAt;
+    if (parseRslt & cmdParseRslt_excessRecv)
+    {
+        IOP_rxParseForUrcEvents();                                              // got more data than AT-Cmd reponse, need to parseImmediate() for URCs
+    }
+    return atcmdPtr->resultCode;
 }
 
 
 /**
- *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
+ *	\brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
  */
 resultCode_t atcmd_awaitResult()
 {
-    resultCode_t result;
-    do
+    cmdParseRslt_t respRslt;                                    // resultCode_t result;
+
+    while (1)
     {
-        atcmd_getResult();
+        respRslt = atcmd_getResult();
+
+        if (respRslt)
+            break;;
         if (g_ltem.cancellationRequest)                         // test for cancellation (RTOS or IRQ)
         {
             ((atcmd_t*)g_ltem.atcmd)->resultCode = resultCode__cancelled;
             break;
         }
-        pYield();                                               // give back control momentarily
-
-    } while (((atcmd_t*)g_ltem.atcmd)->resultCode == atcmd__parserPendingResult);
-    
+        pYield();                                               // give back control momentarily before next loop pass
+    }
     return ((atcmd_t*)g_ltem.atcmd)->resultCode;
 }
 
 /**
- *	@brief Returns the atCmd result code, 0xFFFF or atcmd__parserPendingResult if command is pending completion
+ *	\brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
  */
-resultCode_t atcmd_getLastResult()
+resultCode_t atcmd_getLastResultCode()
 {
     return ((atcmd_t*)g_ltem.atcmd)->resultCode;
 }
 
 
 /**
- *	@brief Returns the atCmd last execution duration in milliseconds
+ *	\brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
+ */
+int32_t atcmd_getLastValue()
+{
+    return ((atcmd_t*)g_ltem.atcmd)->retValue;
+}
+
+
+/**
+ *	\brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
+ */
+char* atcmd_getLastParsed()
+{
+    ASSERT(((atcmd_t*)g_ltem.atcmd)->parsedResponse != NULL, srcfile_ltemc_atcmd_c);
+
+    return ((atcmd_t*)g_ltem.atcmd)->parsedResponse;
+}
+
+
+/**
+ *	\brief Returns the atCmd last execution duration in milliseconds
  */
 uint32_t atcmd_getLastDuration()
 {
@@ -279,7 +312,7 @@ uint32_t atcmd_getLastDuration()
 
 
 /**
- *	@brief Returns the atCmd response text if completed, will be empty C-string prior to completion
+ *	\brief Returns the atCmd response text if completed, will be empty C-string prior to completion
  */
 char *ATCMD_getLastResponse()
 {
@@ -287,17 +320,17 @@ char *ATCMD_getLastResponse()
 }
 
 
-/**
- *	@brief Returns the atCmd response text beyond internal completion parser's progress
- */
-char *ATCMD_getLastResponseTail()
-{
-    return ((atcmd_t*)g_ltem.atcmd)->responseTail;
-}
+// /**
+//  *	\brief Returns the atCmd response text beyond internal completion parser's progress
+//  */
+// char *ATCMD_getLastResponseTail()
+// {
+//     return ((atcmd_t*)g_ltem.atcmd)->response + ((atcmd_t*)g_ltem.atcmd)->parsedLen;
+// }
 
 
 /**
- *	@brief Sends ESC character to ensure BGx is not in text mode (">" prompt awaiting ^Z/ESC, MQTT publish etc.).
+ *	\brief Sends ESC character to ensure BGx is not in text mode (">" prompt awaiting ^Z/ESC, MQTT publish etc.).
  */
 void atcmd_exitTextMode()
 {
@@ -306,7 +339,7 @@ void atcmd_exitTextMode()
 
 
 /**
- *	@brief Sends +++ sequence to transition BGx out of data mode to command mode.
+ *	\brief Sends +++ sequence to transition BGx out of data mode to command mode.
  */
 void atcmd_exitDataMode()
 {
@@ -325,7 +358,7 @@ void atcmd_exitDataMode()
 
 
 /**
- *  @brief Awaits exclusive access to QBG module command interface.
+ *  \brief Awaits exclusive access to QBG module command interface.
 */
 bool ATCMD_awaitLock(uint16_t timeoutMS)
 {
@@ -362,7 +395,7 @@ bool ATCMD_awaitLock(uint16_t timeoutMS)
 
 
 /**
- *	@brief Returns the current atCmd lock state
+ *	\brief Returns the current atCmd lock state
  */
 bool ATCMD_isLockActive()
 {
@@ -371,21 +404,26 @@ bool ATCMD_isLockActive()
 
 
 /**
- *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
+ *	\brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
  */
 void ATCMD_reset(bool releaseOpenLock)
 {
     /* clearing req/resp buffers now for debug clarity, future likely just insert '\0' */
 
+    atcmd_t* atcmdPtr = (atcmd_t*)g_ltem.atcmd;
+
     // request side of action
     if (releaseOpenLock)
     {
-        ((atcmd_t*)g_ltem.atcmd)->isOpenLocked = false;                         // reset current lock
+        atcmdPtr->isOpenLocked = false;                         // reset current lock
     }
 
-    memset(((atcmd_t*)g_ltem.atcmd)->cmdStr, 0, IOP__rxCoreBufferSize);
-    ((atcmd_t*)g_ltem.atcmd)->resultCode = atcmd__parserPendingResult;
-    ((atcmd_t*)g_ltem.atcmd)->invokedAt = 0;
+    memset(((atcmd_t*)g_ltem.atcmd)->cmdStr, 0, IOP__txCmdBufferSize);
+    // memset(((atcmd_t*)g_ltem.atcmd)->response, 0, IOP__rxCoreBufferSize);
+    atcmdPtr->resultCode = 0;
+    atcmdPtr->invokedAt = 0;
+    atcmdPtr->response = NULL;
+    atcmdPtr->parsedResponse = NULL;
 
     // response side
     IOP_resetCoreRxBuffer();
@@ -412,238 +450,336 @@ void ATCMD_reset(bool releaseOpenLock)
 #define CME_PREABLE_SZ 11
 
 
+/**
+ *	\brief Validate the response ends in a BGxx OK value.
+ *	\param [in] modem - Pointer to modem data structure.
+ *  \return parser result
+ */
+cmdParseRslt_t atcmd_okResponseParser(ltemDevice_t *modem)
+{
+    return atcmd__defaultResponseParser(modem, "", false, NULL, 0, 0, NULL);
+}
+
 
 /**
- *	@brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
- *
- *  @param response [in] - The string returned from the getResult function.
- *  @param preamble [in] - The string to look for to signal start of response match.
- *  @param preambleReqd [in] - The preamble string is required, set to false to search for only gap and terminator
- *  @param gapReqd [in] - The minimum char count between preamble (or start) and terminator (0 is valid).
- *  @param terminator [in] - The string to signal the end of the command response.
- *  @param endptr [out] - Char pointer to the next char in response after parser match
- * 
- *  @return HTTP style result code, 0 if parser incomplete (need more response). OK = 200.
+ *	\brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
+ *  \details Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). The "value"
+ *           and "parsedResponse" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getLastValue() and 
+ *           atcmd_getLastParsed() functions respectively.
+ *  \param [in] modem - Pointer to the LTEmC modem structure 
+ *  \param [in] preamble - C-string containing the expected phrase that starts response. 
+ *  \param [in] delimiter - (optional) C-string containing a delimiter between response tokens. If >0, parser applies valueIndx to token list to find "value"
+ *  \param [in] targetCount - (optional) If > 0, indicates the minimum count of chars/tokens between preamble and finale for a "succes" response.
+ *  \param [in] valueIndx - Indicates the position (chars/tokens) of an integer value to grab from the response. If ==0, int conversion is attempted after preamble+whitespace
+ *  \param [in] finale - C-string containing the expected phrase that concludes response. If not provided (NULL or strlen()==0), will be defaulted to "\r\nOK\r\n"
  */
-resultCode_t atcmd_defaultResultParser(const char *response, const char *preamble, bool preambleReqd, uint8_t gapReqd, const char *terminator, char** endptr)
+cmdParseRslt_t atcmd__defaultResponseParser(ltemDevice_t *modem, const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, uint8_t valueIndx, const char *finale)
 {
-    char *preambleAt = NULL;
-    char *terminatorAt = NULL;
+    char lclFinale[16] = "\r\nOK\r\n";                                          // set local finale and delims to defaults, to be overridden with copy if provided
+    char lclDelimiters[5] = ",";
+    atcmd_t *atcmdPtr = (atcmd_t *)modem->atcmd;
+    cmdParseRslt_t parseRslt = cmdParseRslt_pending;
 
-    uint8_t preambleSz = strlen(preamble);
-    if (preambleSz)                                                         // process preamble requirements
+    if (!STREMPTY(finale))                                                      // override default finale phrase
+        strncpy(lclFinale, finale, sizeof(lclFinale));
+
+    if (!STREMPTY(delimiters))                                                  // override default delimeters list
+        strncpy(lclDelimiters, finale, sizeof(lclDelimiters));
+
+    if (atcmdPtr->parsedResponse == NULL)                                       // 1st time through set parsedResponse to the entire response buffer
     {
-        preambleAt = strstr(response, preamble);
-        if (preambleReqd && preambleAt == NULL)
-                return atcmd__parserPendingResult;
+        atcmdPtr->parsedResponse = atcmdPtr->response;
     }
-    else
-        preambleAt = response;
+
+    char *finaleAt;                                                             // check for existance of finale 
+    if (strlen(atcmdPtr->response) < strlen(lclFinale) || (finaleAt = strstr(atcmdPtr->response, lclFinale)) == NULL)
+        return parseRslt;
+
+    /*  No longer pending, analyze the response for param settings */
+
+    finaleAt[0] = '\0';                                                         // NULL term response at finale, removes it from the parsedResponse
+    if (strlen(finaleAt + strlen(lclFinale)) > 0)                               // look for chars in buffer beyond finale (if there, likely +URC)
+        parseRslt = cmdParseRslt_excessRecv;
+
+    char *errorPrefixAt;
+    if ( (errorPrefixAt = strstr(atcmdPtr->response, "ERROR")) != NULL)         // look for error in response
+    {
+        if ((errorPrefixAt = strstr(atcmdPtr->response, "+CM")) != NULL)                    // if CME or CMS error, capture error code returned
+        {
+            atcmdPtr->errorCode = strtol(errorPrefixAt + 12, NULL, 0);                      // "+CME ERROR: " and "+CMS ERROR: " are length = 12
+        }
+        parseRslt |= cmdParseRslt_error | cmdParseRslt_moduleError;
+        return parseRslt;
+    }
+
+    if (strlen(preamble))
+    {
+        char *preambleFoundAt = strstr(atcmdPtr->response, preamble);
+        if (preambleFoundAt)
+            atcmdPtr->parsedResponse = preambleFoundAt + strlen(preamble);      // remove preamble from parsedResponse
+
+        if (preambleReqd && !preambleFoundAt)
+            parseRslt = cmdParseRslt_error | cmdParseRslt_preambleMissing;
+    }
+
+    /*  Parse content between preamble and finale for tokens (reqd cnt) and value extraction
+     *  Only supporting 1 delimiter for now; support for optional delimiters in future won't require func signature change
+     */
+    uint8_t tokenCnt = 0;
+    uint32_t retValue = 0;
+    char *delimAt;
+
+    if (tokensReqd || valueIndx)                                                // need token count
+    {
+        if (strlen(atcmdPtr->parsedResponse))                                   // at least one token is there
+        {
+            tokenCnt = 1;
+            if (valueIndx == 1)
+            {
+                retValue = strtol(atcmdPtr->parsedResponse, NULL, 0);
+            }
+
+            delimAt = atcmdPtr->parsedResponse;
+            do                                                                  // now look for delimeters to get tokens
+            {
+                delimAt++;
+                tokenCnt += (delimAt = strchr(delimAt, (int)delimiters[0])) != NULL;
+                if (tokenCnt == valueIndx)
+                {
+                    retValue = strtol(delimAt + 1, NULL, 0);
+                }
+            } while (delimAt != NULL);
+        }
+        if (tokenCnt < tokensReqd || tokenCnt < valueIndx)
+            parseRslt |= cmdParseRslt_error | cmdParseRslt_countShort;          // add count short error
+    }
+
+    if (parseRslt & cmdParseRslt_error)
+        return parseRslt;
+
+    parseRslt |= cmdParseRslt_success;                                          // preserve set warnings (excess recv, etc.)
+    return parseRslt;
+}
+
+
+// /**
+//  *	\brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
+//  *
+//  *  \param response [in] - The string returned from the getResult function.
+//  *  \param preamble [in] - The string to look for to signal start of response match.
+//  *  \param preambleReqd [in] - The preamble string is required, set to false to search for only gap and terminator
+//  *  \param gapReqd [in] - The minimum char count between preamble (or start) and terminator (0 is valid).
+//  *  \param terminator [in] - The string to signal the end of the command response.
+//  *  \param endptr [out] - Char pointer to the next char in response after parser match
+//  * 
+//  *  \return HTTP style result code, 0 if parser incomplete (need more response). OK = 200.
+//  */
+// cmdParseRslt_t atcmd__defaultResultParser(void *atcmd, const char *response, const char *preamble, bool preambleReqd, uint8_t gapReqd, const char *terminator)
+// {
+//     char *preambleAt = NULL;
+//     char *terminatorAt = NULL;
+//     char *endptr = NULL;
+
+//     uint8_t preambleSz = strlen(preamble);
+//     if (preambleSz)                                                         // process preamble requirements
+//     {
+//         preambleAt = strstr(response, preamble);
+//         if (preambleReqd && preambleAt == NULL)
+//                 return cmdParseRslt_pending;
+//     }
+//     else
+//         preambleAt = response;
     
-    char *termSearchAt = preambleAt ? preambleAt + preambleSz : response;   // if preamble is NULL, start remaing search from response start
+//     char *termSearchAt = preambleAt ? preambleAt + preambleSz : response;   // if preamble is NULL, start remaing search from response start
 
-    if (terminator)                                                         // explicit terminator
-    {
-        terminatorAt = strstr(termSearchAt, terminator);
-        *endptr = terminatorAt + strlen(terminator);
-    }
-    else                                                                    // no explicit terminator, look for standard AT responses
-    {
-        terminatorAt = strstr(termSearchAt, OK_COMPLETED_STRING);
-        if (terminatorAt)
-        {
-            *endptr = terminatorAt + 4;                                     // + strlen(OK_COMPLETED_STRING)
-        }
-        if (!terminatorAt)                                              
-        {
-            terminatorAt = strstr(termSearchAt, CME_PREABLE);                  // no explicit terminator, look for extended CME errors
-            if (terminatorAt)
-            {
-                // return error code, all CME >= 500
-                uint16_t cmeVal = strtol(terminatorAt + CME_PREABLE_SZ, endptr, 10);        // strtol will set endptr
-                return cmeVal;
-            }
-        }
-        if (!terminatorAt)
-        {
-            terminatorAt = strstr(termSearchAt, ERROR_COMPLETED_STRING);        // no explicit terminator, look for ERROR
-            if (terminatorAt)
-            {
-                *endptr = terminatorAt + 7;     // + strlen(ERROR_COMPLETED_STRING)
-                return resultCode__internalError;
-            }
-        }
-        if (!terminatorAt)
-        {
-            terminatorAt = strstr(termSearchAt, FAIL_COMPLETED_STRING);         // no explicit terminator, look for FAIL
-            if (terminatorAt)
-            {
-                *endptr = terminatorAt + 6;     // + strlen(FAIL_COMPLETED_STRING)
-                return resultCode__internalError;
-            }
-        }
-    }
+//     if (terminator)                                                         // explicit terminator
+//     {
+//         terminatorAt = strstr(termSearchAt, terminator);
+//         *endptr = terminatorAt + strlen(terminator);
+//     }
+//     else                                                                    // no explicit terminator, look for standard AT responses
+//     {
+//         terminatorAt = strstr(termSearchAt, OK_COMPLETED_STRING);
+//         if (terminatorAt)
+//         {
+//             *endptr = terminatorAt + 4;                                     // + strlen(OK_COMPLETED_STRING)
+//         }
+//         if (!terminatorAt)                                              
+//         {
+//             terminatorAt = strstr(termSearchAt, CME_PREABLE);                  // no explicit terminator, look for extended CME errors
+//             if (terminatorAt)
+//             {
+//                 // return error code, all CME >= 500
+//                 uint16_t cmeVal = strtol(terminatorAt + CME_PREABLE_SZ, endptr, 10);        // strtol will set endptr
+//                 return cmeVal;
+//             }
+//         }
+//         if (!terminatorAt)
+//         {
+//             terminatorAt = strstr(termSearchAt, ERROR_COMPLETED_STRING);        // no explicit terminator, look for ERROR
+//             if (terminatorAt)
+//             {
+//                 *endptr = terminatorAt + 7;     // + strlen(ERROR_COMPLETED_STRING)
+//                 return resultCode__internalError;
+//             }
+//         }
+//         if (!terminatorAt)
+//         {
+//             terminatorAt = strstr(termSearchAt, FAIL_COMPLETED_STRING);         // no explicit terminator, look for FAIL
+//             if (terminatorAt)
+//             {
+//                 *endptr = terminatorAt + 6;     // + strlen(FAIL_COMPLETED_STRING)
+//                 return resultCode__internalError;
+//             }
+//         }
+//     }
 
-    if (terminatorAt && termSearchAt + gapReqd <= terminatorAt)                 // explicit or implicit term found with sufficient gap
-        return resultCode__success;
-    if (terminatorAt)                                                           // else gap insufficient
-        return resultCode__internalError;
+//     if (terminatorAt && termSearchAt + gapReqd <= terminatorAt)                 // explicit or implicit term found with sufficient gap
+//         return resultCode__success;
+//     if (terminatorAt)                                                           // else gap insufficient
+//         return resultCode__internalError;
 
-    return atcmd__parserPendingResult;                                                 // no term, keep looking
-}
+//     return cmdParseRslt_pending;                                                 // no term, keep looking
+// }
+
+
+// /**
+//  *	\brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
+//  *
+//  *  \param response [in] - The string returned from the getResult function.
+//  *  \param preamble [in] - The string to look for to signal response matches command (scans from end backwards).
+//  *  \param delim [in] - The token delimeter char.
+//  *  \param reqdTokens [in] - The minimum number of tokens expected.
+//  *  \param terminator [in] - Text to look for indicating the sucessful end of command response.
+//  * 
+//  *  \return True if the response meets the conditions in the preamble and token count required.
+//  */
+// cmdParseRslt_t atcmd__tokenCountParser(void *atcmd, const char *response, const char *preamble, char delim, uint8_t reqdTokens, const char *terminator)
+// {
+//     uint8_t delimitersFound = 0;
+//     char *endptr = NULL;
+
+//     char *terminatorAt = strstr(response, terminator);
+//     endptr = terminatorAt + strlen(terminator) + 1;
+
+//     if (terminatorAt != NULL)
+//     {
+//         char *preambleAt = strstr(response, preamble);
+//         if (preambleAt == NULL)
+//             return resultCode__notFound;
+
+//         // now count delimitersFound
+//         char *next = preambleAt + strlen(preamble) + 1;
+
+//         while (next < terminatorAt && next != NULL)
+//         {
+//             next = strchr(++next, delim);
+//             delimitersFound += (next == NULL) ? 0 : 1;
+//         }
+
+//         if (++delimitersFound >= reqdTokens)
+//             return resultCode__success;
+//         return resultCode__notFound;
+//     }
+
+//     char *cmeErrorCodeAt = strstr(response, CME_PREABLE);           // CME error codes generated by BG96
+//     if (cmeErrorCodeAt)
+//     {
+//         // return error code, all CME >= 500
+//         return (strtol(cmeErrorCodeAt + CME_PREABLE_SZ, endptr, 10));
+//     }
+//     return cmdParseRslt_pending;
+// }
+
+
+// /**
+//  *	\brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
+//  *
+//  *  Expected form: +[landmark]: [otherInfo],[RESULT_CODE],[otherInfo][EOL]
+//  * 
+//  *  \param response [in] - Pointer to the command response received from the BGx.
+//  *  \param landmark [in] - Pointer to a landmark phrase to look for in the response
+//  *  \param resultIndx [in] - Zero based index after landmark of numeric fields to find result
+//  *  \param endptr [out] - Pointer to character in response following parser match
+//  *
+//  *  \return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code
+//  */
+// resultCode_t atcmd_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx, char** endptr) 
+// {
+//     char *next = strstr(response, landmark);
+//     if (next == NULL)
+//         return cmdParseRslt_pending;
+
+//     next += strlen(landmark);
+//     int16_t resultVal;
+
+//     for (size_t i = 0; i < resultIndx; i++)
+//     {
+//         if (next == NULL)
+//             break;
+//         next = strchr(next, ',');
+//         next++;         // point past comma
+//     }
+//     if (next != NULL)
+//         resultVal = (uint16_t)strtol(next, endptr, 10);
+
+//     // return a success value 200 + result (range: 200 - 300)
+//     return  (resultVal < 99) ? resultCode__success + resultVal : resultVal;
+// }
+
+
+// /**
+//  *	\brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
+//  *
+//  *  Expected form: +[landmark]: [otherInfo],[RESULT_CODE],[otherInfo][EOL]
+//  *  \param response [in] - Pointer to the command response received from the BGx.
+//  *  \param landmark [in] - Pointer to a landmark phrase to look for in the response.
+//  *  \param resultIndx [in] - Zero based index after landmark of numeric fields to find result.
+//  *  \param terminator [in] - Character string signaling then end of action response parsing.
+//  *  \param endptr [out] - Pointer to character in response following parser match.
+//  *
+//  *  \return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code.
+//  */
+// resultCode_t atcmd_serviceResponseParserTerm(const char *response, const char *landmark, uint8_t resultIndx, const char *terminator, char** endptr) 
+// {
+//     char *next = strstr(response, landmark);
+//     if (next == NULL)
+//         return cmdParseRslt_pending;
+
+//     next += strlen(landmark);
+//     int16_t resultVal;
+
+//     uint8_t respSz = strlen(next);                                                  // check for terminator, usually CR/LF
+//     char * termChk = next + strlen(next) - strlen(terminator);
+//     if (strstr(termChk, terminator) == NULL)
+//         return cmdParseRslt_pending;                                          
+
+//     for (size_t i = 0; i < resultIndx; i++)
+//     {
+//         if (next == NULL)
+//             break;
+//         next = strchr(next, ',');
+//         next++;                                                                     // point past comma
+//     }
+//     if (next != NULL)
+//         resultVal = (uint16_t)strtol(next, endptr, 10);
+
+//     return  (resultVal < 99) ? resultCode__success + resultVal : resultVal;         // return a success value 200 + result (range: 200 - 300)
+// }
 
 
 /**
- *	@brief Performs a standardized parse of command responses. This function can be wrapped to match atcmd commandCompletedParse signature.
+ *	\brief Response parser looking for "ready-to-proceed" prompt in order to send to network
  *
- *  @param response [in] - The string returned from the getResult function.
- *  @param preamble [in] - The string to look for to signal response matches command (scans from end backwards).
- *  @param delim [in] - The token delimeter char.
- *  @param reqdTokens [in] - The minimum number of tokens expected.
- *  @param terminator [in] - Text to look for indicating the sucessful end of command response.
- *  @param endptr [out] - Char pointer to the next char in response after parser match
+ *  \param response [in] The character string received from BGx (so far, may not be complete).
+ *  \param rdyPrompt [in] Prompt text to check for.
+ *  \param endptr [out] Pointer to the char after match.
  * 
- *  @return True if the response meets the conditions in the preamble and token count required.
+ *  \return Result code enum value (http status code)
  */
-resultCode_t atcmd_tokenResultParser(const char *response, const char *preamble, char delim, uint8_t reqdTokens, const char *terminator, char** endptr)
+cmdParseRslt_t ATCMD_readyPromptParser(const char *response, const char *rdyPrompt)
 {
-    uint8_t delimitersFound = 0;
-
-    char *terminatorAt = strstr(response, terminator);
-    *endptr = terminatorAt + strlen(terminator) + 1;
-
-    if (terminatorAt != NULL)
-    {
-        char *preambleAt = strstr(response, preamble);
-        if (preambleAt == NULL)
-            return resultCode__notFound;
-
-        // now count delimitersFound
-        char *next = preambleAt + strlen(preamble) + 1;
-
-        while (next < terminatorAt && next != NULL)
-        {
-            next = strchr(++next, delim);
-            delimitersFound += (next == NULL) ? 0 : 1;
-        }
-
-        if (++delimitersFound >= reqdTokens)
-            return resultCode__success;
-        return resultCode__notFound;
-    }
-
-    char *cmeErrorCodeAt = strstr(response, CME_PREABLE);           // CME error codes generated by BG96
-    if (cmeErrorCodeAt)
-    {
-        // return error code, all CME >= 500
-        return (strtol(cmeErrorCodeAt + CME_PREABLE_SZ, endptr, 10));
-    }
-    return atcmd__parserPendingResult;
-}
-
-
-/**
- *	@brief Validate the response ends in a BGxx OK value.
- *
- *	@param response [in] - Pointer to the command response received from the BGx.
- *  @param endptr [out] - Char pointer to the next char in response after parser match
- *
- *  @return bool If the response string ends in a valid OK sequence
- */
-resultCode_t atcmd_okResultParser(const char *response, char** endptr)
-{
-    return atcmd_defaultResultParser(response, "", false, 0, NULL, endptr);
-}
-
-
-/**
- *	@brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
- *
- *  Expected form: +[landmark]: [otherInfo],[RESULT_CODE],[otherInfo][EOL]
- * 
- *  @param response [in] - Pointer to the command response received from the BGx.
- *  @param landmark [in] - Pointer to a landmark phrase to look for in the response
- *  @param resultIndx [in] - Zero based index after landmark of numeric fields to find result
- *  @param endptr [out] - Pointer to character in response following parser match
- *
- *  @return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code
- */
-resultCode_t atcmd_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx, char** endptr) 
-{
-    char *next = strstr(response, landmark);
-    if (next == NULL)
-        return atcmd__parserPendingResult;
-
-    next += strlen(landmark);
-    int16_t resultVal;
-
-    for (size_t i = 0; i < resultIndx; i++)
-    {
-        if (next == NULL)
-            break;
-        next = strchr(next, ',');
-        next++;         // point past comma
-    }
-    if (next != NULL)
-        resultVal = (uint16_t)strtol(next, endptr, 10);
-
-    // return a success value 200 + result (range: 200 - 300)
-    return  (resultVal < 99) ? resultCode__success + resultVal : resultVal;
-}
-
-
-/**
- *	@brief Parser for open connection response, shared by UDP/TCP/SSL/MQTT.
- *
- *  Expected form: +[landmark]: [otherInfo],[RESULT_CODE],[otherInfo][EOL]
- *  @param response [in] - Pointer to the command response received from the BGx.
- *  @param landmark [in] - Pointer to a landmark phrase to look for in the response.
- *  @param resultIndx [in] - Zero based index after landmark of numeric fields to find result.
- *  @param terminator [in] - Character string signaling then end of action response parsing.
- *  @param endptr [out] - Pointer to character in response following parser match.
- *
- *  @return 200 + RESULT_CODE, if satisfies, otherwise PendingResult code.
- */
-resultCode_t atcmd_serviceResponseParserTerm(const char *response, const char *landmark, uint8_t resultIndx, const char *terminator, char** endptr) 
-{
-    char *next = strstr(response, landmark);
-    if (next == NULL)
-        return atcmd__parserPendingResult;
-
-    next += strlen(landmark);
-    int16_t resultVal;
-
-    uint8_t respSz = strlen(next);                                                  // check for terminator, usually CR/LF
-    char * termChk = next + strlen(next) - strlen(terminator);
-    if (strstr(termChk, terminator) == NULL)
-        return atcmd__parserPendingResult;                                          
-
-    for (size_t i = 0; i < resultIndx; i++)
-    {
-        if (next == NULL)
-            break;
-        next = strchr(next, ',');
-        next++;                                                                     // point past comma
-    }
-    if (next != NULL)
-        resultVal = (uint16_t)strtol(next, endptr, 10);
-
-    return  (resultVal < 99) ? resultCode__success + resultVal : resultVal;         // return a success value 200 + result (range: 200 - 300)
-}
-
-
-/**
- *	@brief Response parser looking for "ready-to-proceed" prompt in order to send to network
- *
- *  @param response [in] The character string received from BGx (so far, may not be complete).
- *  @param rdyPrompt [in] Prompt text to check for.
- *  @param endptr [out] Pointer to the char after match.
- * 
- *  @return Result code enum value (http status code)
- */
-resultCode_t atcmd_readyPromptParser(const char *response, const char *rdyPrompt, char **endptr)
-{
-    *endptr = strstr(response, rdyPrompt);
+    char *endptr = strstr(response, rdyPrompt);
     if (*endptr != NULL)
     {
         *endptr += strlen(rdyPrompt);                   // point past data prompt
@@ -654,55 +790,35 @@ resultCode_t atcmd_readyPromptParser(const char *response, const char *rdyPrompt
     {
         return resultCode__internalError;
     }
-    return atcmd__parserPendingResult;
+    return cmdParseRslt_pending;
 }
 
 
 /**
- *	@brief [private] Transmit data ready to send "data prompt" parser.
+ *	\brief [private] Transmit data ready to send "data prompt" parser.
  *
- *  @param response [in] Character data recv'd from BGx to parse for task complete
- *  @param endptr [out] Char pointer to the char following parsed text
+ *  \param response [in] Character data recv'd from BGx to parse for task complete
+ *  \param endptr [out] Char pointer to the char following parsed text
  * 
- *  @return HTTP style result code, 0 = not complete
+ *  \return HTTP style result code, 0 = not complete
  */
-resultCode_t atcmd_txDataPromptParser(const char *response, char **endptr) 
+cmdParseRslt_t ATCMD_txDataPromptParser(const char *response) 
 {
-    return atcmd_readyPromptParser(response, "> ", endptr);
+    return ATCMD_readyPromptParser(response, "> ");
 }
 
 
 /**
- *	@brief "CONNECT" prompt parser.
+ *	\brief "CONNECT" prompt parser.
  *
- *  @param response [in] Character data recv'd from BGx to parse for task complete
- *  @param endptr [out] Char pointer to the char following parsed text
+ *  \param response [in] Character data recv'd from BGx to parse for task complete
+ *  \param endptr [out] Char pointer to the char following parsed text
  * 
- *  @return HTTP style result code, 0 = not complete
+ *  \return HTTP style result code, 0 = not complete
  */
-resultCode_t atcmd_connectPromptParser(const char *response, char **endptr)
+cmdParseRslt_t ATCMD_connectPromptParser(const char *response)
 {
-    return atcmd_readyPromptParser(response, "CONNECT\r\n", endptr);
-}
-
-
-/**
- *	@brief C-string token grabber.
- */
-char *atcmd_strToken(char *source, int delimiter, char *token, uint8_t tokenMax) 
-{
-    char *delimAt;
-    if (source == NULL)
-        return false;
-
-    delimAt = strchr(source, delimiter);
-    uint8_t tokenSz = delimAt - source;
-    if (tokenSz == 0)
-        return NULL;
-
-    memset(token, 0, tokenMax);
-    strncpy(token, source, MIN(tokenSz, tokenMax-1));
-    return delimAt + 1;
+    return ATCMD_readyPromptParser(response, "CONNECT\r\n");
 }
 
 #pragma endregion  // completionParsers
@@ -712,7 +828,7 @@ char *atcmd_strToken(char *source, int delimiter, char *token, uint8_t tokenMax)
 /*-----------------------------------------------------------------------------------------------*/
 
 // /**
-//  *	@brief Copies response\result information at action conclusion. Designed as a diagnostic aid for failed AT actions.
+//  *	\brief Copies response\result information at action conclusion. Designed as a diagnostic aid for failed AT actions.
 //  */
 // static void S_copyToDiagnostics()
 // {

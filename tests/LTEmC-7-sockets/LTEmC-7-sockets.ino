@@ -110,7 +110,7 @@ void setup() {
     }
 
     // create a socket control and open it
-    sckt_initControl(&scktCtrl, dataContext_0, (protocol_t)SCKTTEST_PROTOCOL, receiveBuffer, sizeof(receiveBuffer), scktRecvCB);
+    sckt_initControl(&scktCtrl, socket_0, (protocol_t)SCKTTEST_PROTOCOL, receiveBuffer, sizeof(receiveBuffer), scktRecvCB);
     resultCode_t scktResult = sckt_open(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0, true);
 
     if (scktResult == resultCode__previouslyOpened)

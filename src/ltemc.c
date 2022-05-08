@@ -84,22 +84,25 @@ const char *ltem_ltemcVersion()
  */
 void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEventCallback_func eventNotifCallback)
 {
-    ASSERT(g_ltem.modemInfo == NULL, srcfile_ltemc_ltemc_c);
+    ASSERT(g_ltem.atcmd == NULL, srcfile_ltemc_ltemc_c);                    // prevent multiple calls, memory leak calloc()
 
 	g_ltem.pinConfig = ltem_config;
     g_ltem.spi = spi_create(g_ltem.pinConfig.spiCsPin);
 
     g_ltem.modemInfo = calloc(1, sizeof(modemInfo_t));
     ASSERT(g_ltem.modemInfo != NULL, srcfile_ltemc_ltemc_c);
-    g_ltem.pdpContext = 1;
 
     IOP_create();
+    
     g_ltem.atcmd = calloc(1, sizeof(atcmd_t));
-    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd_okResultParser);
+    ASSERT(g_ltem.atcmd != NULL, srcfile_ltemc_ltemc_c);
+    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd_okResponseParser);
     ATCMD_reset(true);
-    g_ltem.cancellationRequest = false;
 
     ntwk_create();
+
+    g_ltem.cancellationRequest = false;
+    g_ltem.pdpContext = 1;
     g_ltem.appEventCB = eventNotifCallback;
 }
 
@@ -128,7 +131,7 @@ void ltem_destroy()
 /**
  *	@brief Start the modem.
  */
-bool ltem_start(bool forceReset)
+void ltem_start(bool forceReset)
 {
   	// on Arduino compatible, ensure pin is in default "logical" state prior to opening
 	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
@@ -149,7 +152,6 @@ bool ltem_start(bool forceReset)
     {
         if (forceReset)
         {
-            SC16IS7xx_start(false);                             // SPI-UART bridge functionality may/may not be running, init base functions: FIFO, levels, baud, framing (IRQ not req'd)
             qbg_reset(true);                                    // do hardware reset (aka power cycle)
             foundOn = false;
         }

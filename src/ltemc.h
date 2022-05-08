@@ -85,9 +85,8 @@ void ltem_destroy();
 /**
  *	\brief Power on and start the modem
  *  \param resetIfPoweredOn [in] Perform a software reset on the modem, if found in a powered on state
- *  \return True if the LTEM powers up with this function invocation (it was not previously powered on)
  */
-bool ltem_start(bool resetIfRunning);
+void ltem_start(bool resetIfRunning);
 
 
 /**

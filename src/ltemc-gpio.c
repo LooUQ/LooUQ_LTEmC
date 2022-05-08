@@ -109,7 +109,7 @@ static resultCode_t S__ioValueParser(const char *response, char **endptr)
 
     char *next = strstr(response, landmark);
     if (next == NULL)
-        return atcmd__parserPendingResult;
+        return cmdParseRslt_pending;
 
     next += strlen(landmark);
     int16_t resultVal;

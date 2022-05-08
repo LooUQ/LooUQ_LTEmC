@@ -55,10 +55,10 @@ extern ltemDevice_t g_ltem;
 
 // file scope local function declarations
 static bool S_requestIrdData(socket_t dataPeer, uint16_t reqstSz, bool applyLock);
-static resultCode_t S_tcpudpOpenCompleteParser(const char *response, char **endptr);
-static resultCode_t S_sslOpenCompleteParser(const char *response, char **endptr);
-static resultCode_t S_socketSendCompleteParser(const char *response, char **endptr);
-static resultCode_t S_socketStatusParser(const char *response, char **endptr);
+static cmdParseRslt_t S_tcpudpOpenCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S_sslOpenCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S_socketSendCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S_socketStatusParser(const char *response, char **endptr);
 void S_scktDoWork();
 
 
@@ -247,7 +247,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
     // AT+QISEND command initiates send by signaling we plan to send dataSz bytes on a socket,
     // send has subcommand to actual transfer the bytes, so don't automatically close action cmd
 
-    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd_txDataPromptParser);
+    atcmd_setOptions(atcmd__defaultTimeoutMS, ATCMD_txDataPromptParser);
     if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
         atcmd_invokeReuseLock("AT+QISEND=%d,%d", scktCtrl->sckt, dataSz);      // reusing manual lock
@@ -439,28 +439,29 @@ static bool S_requestIrdData(socket_t dataCntx, uint16_t reqstSz, bool applyLock
 /**
  *	@brief [private] TCP/UDP wrapper for open connection parser.
  */
-static resultCode_t S_tcpudpOpenCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_tcpudpOpenCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd_serviceResponseParser(response, "+QIOPEN: ", 1, endptr);
+    return atcmd__defaultResponseParser(&g_ltem, "+QIOPEN: ", true, NULL, 1, 1, NULL);
 }
 
 
 /**
  *	@brief [private] SSL wrapper for open connection parser.
  */
-static resultCode_t S_sslOpenCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_sslOpenCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd_serviceResponseParser(response, "+QSSLOPEN: ", 1, endptr);
+    return atcmd__defaultResponseParser(&g_ltem, "+QSSLOPEN: ", true, NULL, 1, 1, NULL);
 }
 
 
 /**
  *	@brief [private] SSL wrapper for open connection parser.
  */
-static resultCode_t S_socketSendCompleteParser(const char *response, char **endptr)
+static cmdParseRslt_t S_socketSendCompleteParser(const char *response, char **endptr)
 {
-    return atcmd_defaultResultParser(response, "", false, 0, ASCII_sSENDOK, endptr);
+    return atcmd__defaultResponseParser(&g_ltem, "", false, NULL, 0, 0, ASCII_sSENDOK);
 }
+
 
 /**
  *	@brief [static] Socket status parser
@@ -469,7 +470,7 @@ static resultCode_t S_socketSendCompleteParser(const char *response, char **endp
  *  @param endptr [out] Char pointer to the char following parsed text
  *  @return HTTP style result code, 0 = not complete
  */
-static resultCode_t S_socketStatusParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_socketStatusParser(const char *response, char **endptr) 
 {
     // BGx +QMTCONN Read returns Status = 3 for connected, service parser returns 203
     return atcmd_serviceResponseParser(response, "+QISTATE: ", 5, endptr) == 202 ? resultCode__success : resultCode__unavailable;

@@ -179,7 +179,7 @@ uint8_t mdmInfo_signalPercent()
  */
 static resultCode_t S_iccidCompleteParser(const char *response, char **endptr)
 {
-    return atcmd_defaultResultParser(response, "+ICCID: ", true, 20, "OK\r\n", endptr);
+    return atcmd__defaultResponseParser(&g_ltem, "+ICCID: ", true, "", 20, 0, "OK\r\n");
 }
 
 

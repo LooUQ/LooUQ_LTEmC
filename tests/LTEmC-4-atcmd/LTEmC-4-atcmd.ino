@@ -43,8 +43,8 @@
 
 
 // define options for how to assemble this build
-// #define HOST_FEATHER_UXPLOR             // specify the pin configuration
-#define HOST_FEATHER_LTEM3F
+#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
 
@@ -95,14 +95,13 @@ void loop()
         
         if (atResult == resultCode__success)                                                // statusCode == 200 (similar to HTTP codes)
         {
-            char *response = ATCMD_getLastResponse();
+            char *response = atcmd_getLastParsed();
             PRINTF(dbgColor__info, "Got %d chars\r", strlen(response));
             PRINTF(dbgColor__cyan, "Resp: %s\r", response);
                                                                                             // test response v. expected 
             char *validResponse = "\r\nQuectel\r\nBG";                                      // near beginning (depends on BGx echo)
-            char *trailer = response + (strlen(response) - 4);
-            if (!( strstr(response, validResponse) && strncmp(trailer, "OK\r\n", 4) == 0 ))        // should end with OK
-                indicateFailure("Unexpected command response... failed."); 
+            if (!strstr(response, validResponse))
+                indicateFailure("Expected cmd response missing... failed."); 
         }
         else
         {

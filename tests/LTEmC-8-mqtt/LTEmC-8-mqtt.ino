@@ -148,8 +148,8 @@ void setup() {
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
      * Azure requires TLS 1.2 and MQTT version 3.11 */
 
-    tls_configure(dataContext_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
-    mqtt_initControl(&mqttCtrl, dataContext_0, mqtt__useTls, mqttVersion_311, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
+    tls_configure(socket_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    mqtt_initControl(&mqttCtrl, socket_0, mqtt__useTls, mqttVersion_311, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
     mqttCtrl.canReuseConn = true;
 
     resultCode_t rslt;
@@ -221,7 +221,7 @@ void loop()
 }
 
 
-void mqttRecvCB(dataContext_t cntxt, uint16_t msgId, const char *topic, char *topicVar, char *message, uint16_t messageSz)
+void mqttRecvCB(socket_t cntxt, uint16_t msgId, const char *topic, char *topicVar, char *message, uint16_t messageSz)
 {
     uint16_t newLen = lq_strUriDecode(topicVar, message - topicVar);        // Azure IoTHub URI encodes properties sent as topic suffix 
 

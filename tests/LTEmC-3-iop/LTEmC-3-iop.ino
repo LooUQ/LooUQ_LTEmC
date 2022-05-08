@@ -44,8 +44,8 @@
 #endif
 
                                         // define options for how to assemble this build
-// #define HOST_FEATHER_UXPLOR             // specify the pin configuration
-#define HOST_FEATHER_LTEM3F
+#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// #define HOST_FEATHER_LTEM3F
 
 //#include <ltemc.h>
 #include <ltemc-internal.h>             // this appl performs tests on internal, non-public API components 

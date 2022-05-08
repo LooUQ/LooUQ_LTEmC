@@ -71,17 +71,17 @@ void setup() {
 
     randomSeed(analogRead(7));
 
-	gpio_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
-	gpio_writePin(ltem_pinConfig.resetPin, gpioValue_low);
-	gpio_writePin(ltem_pinConfig.spiCsPin, gpioValue_high);
+	platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(ltem_pinConfig.resetPin, gpioValue_low);
+	platform_writePin(ltem_pinConfig.spiCsPin, gpioValue_high);
     
-	gpio_openPin(ltem_pinConfig.powerkeyPin, gpioMode_output);
-	gpio_openPin(ltem_pinConfig.statusPin, gpioMode_input);
+	platform_openPin(ltem_pinConfig.powerkeyPin, gpioMode_output);
+	platform_openPin(ltem_pinConfig.statusPin, gpioMode_input);
 
-    PRINTF(dbgColor__none, "Modem status = %i \r\n", gpio_readPin(ltem_pinConfig.statusPin));
+    PRINTF(dbgColor__none, "Modem status = %i \r\n", platform_readPin(ltem_pinConfig.statusPin));
    
-    gpio_writePin(8, gpioValue_high);
-    gpio_openPin(8, gpioMode_output);
+    platform_writePin(8, gpioValue_high);
+    platform_openPin(8, gpioMode_output);
 	
     powerModemOn();
 
@@ -139,13 +139,13 @@ void loop() {
 
 void powerModemOn()
 {
-	if (!gpio_readPin(ltem_pinConfig.statusPin))
+	if (!platform_readPin(ltem_pinConfig.statusPin))
 	{
 		PRINTF(0, "Powering LTEm1 On...");
-		gpio_writePin(ltem_pinConfig.powerkeyPin, gpioValue_high);
+		platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_high);
 		pDelay(1000);
-		gpio_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
-		while (!gpio_readPin(ltem_pinConfig.statusPin))
+		platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
+		while (!platform_readPin(ltem_pinConfig.statusPin))
 		{
 			pDelay(500);
 		}
@@ -170,9 +170,9 @@ void indicateLoop(int loopCnt, int waitNext)
 
     for (int i = 0; i < 6; i++)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(50);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(50);
     }
 
@@ -191,9 +191,9 @@ void indicateFailure(char failureMsg[])
     PRINTF(dbgColor__error, "** Halting Execution \r\n");
     while (halt)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(1000);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(100);
     }
 }

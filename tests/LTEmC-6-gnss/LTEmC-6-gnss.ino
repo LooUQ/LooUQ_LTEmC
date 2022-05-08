@@ -77,7 +77,7 @@ void setup() {
     // turn on GNSS
     resultCode_t cmdResult = gnss_on();
 
-    ASSERT(cmdResult == 200 || cmdResult == 504, srcfile_ltemc_gnss_c);
+    ASSERT(cmdResult == 200 || cmdResult == 504, srcfile_ltemc_gnss_c);         // VSCode doesn't handle #defines well in .INO
 
     if (cmdResult == 200)
         PRINTF(dbgColor__info, "GNSS enabled\r", cmdResult);

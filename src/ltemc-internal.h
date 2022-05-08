@@ -41,17 +41,19 @@
 #include "ltemc-nxp-sc16is.h"
 #include "ltemc-quectel-bg.h"
 #include "ltemc-iop.h"
-#include "ltemc-atcmd.h"
-#include "ltemc-mdminfo.h"
-#include "ltemc-network.h"
-#include "ltemc-streams.h"
+// #include "ltemc-atcmd.h"
+// #include "ltemc-mdminfo.h"
+// #include "ltemc-network.h"
+// #include "ltemc-streams.h"
 
-// // optional services
-// #include "ltemc-sckt.h"
-// #include "ltemc-mqtt.h"
-// #include "ltemc-http.h"
-// #include "ltemc-gnss.h"
-// #include "ltemc-geo.h"
+/* optional services not defined/included globally, application using the provided services should add to their application files 
+#include "ltemc-sckt.h"
+#include "ltemc-mqtt.h"
+#include "ltemc-http.h"
+#include "ltemc-gnss.h"
+#include "ltemc-geo.h"
+*/
+
 
 /* LTEmC global fields/properties as Singleton 
  * Kept internal here, future support for multiple LTEmC instances would replace this with function calls to serve instances
@@ -78,29 +80,14 @@ typedef struct ltemDevice_tag
     void *atcmd;                            ///< Action subsystem controls
 	void *modemInfo;                        ///< Data structure holding persistent information about application modem state
     void *providerInfo;                     ///< Data structure representing the cellular network provider and the networks (PDP contexts it provides)
-
     moduleDoWorkFunc_t streamWorkers[6];    ///< Stream background doWork functions, registered by Open;
-
-
-
-    // spiDevice_t *spi;                   ///< SPI device (methods signatures compatible with Arduino).
-    // // uint16_t faultCode;                 ///< debugging fault code set by driver ASSERT flows
-    // appNotifyFunc_t appNotifyCB;         ///< Notification callback to application
-    // uint8_t pdpContext;                 ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.
-    // void *iop;                ///< IOP subsystem controls.
-    // atcmd_t *atcmd;                     ///< Action subsystem controls.
-	// modemInfo_t *modemInfo;             ///< Data structure holding persistent information about application modem state.
-    // network_t *network;                 ///< Data structure representing the cellular network.
-
-    // /* optional services                only taking room for some pointers if not implemented */
-	// void *sockets;                      ///< IP sockets subsystem (TCP/UDP/SSL).
-    // void (*scktWork_func)();            ///< Sockets background do work function
-    // void *mqtt;                         ///< MQTT protocol subsystem.
-    // void (*mqttWork_func)();            ///< MQTT background do work function
-
-    // array of function pointers to each protocol doWork(), create protoCtrl factory will init()
-    // needed for sockets, ...
 } ltemDevice_t;
+
+#include "ltemc-atcmd.h"
+#include "ltemc-mdminfo.h"
+#include "ltemc-network.h"
+#include "ltemc-streams.h"
+
 
 extern ltemDevice_t g_ltem;            ///< The LTEm "object".
 

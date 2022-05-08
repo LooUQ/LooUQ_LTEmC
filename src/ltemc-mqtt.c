@@ -64,12 +64,12 @@ static void S_updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscriptio
 static void S_mqttDoWork();
 static void S_urlDecode(char *src, int len);
 
-static resultCode_t S_mqttOpenStatusParser(const char *response, char **endptr);
-static resultCode_t S_mqttOpenCompleteParser(const char *response, char **endptr);
-static resultCode_t S_mqttConnectStatusParser(const char *response, char **endptr);
-static resultCode_t S_mqttConnectCompleteParser(const char *response, char **endptr);
-static resultCode_t S_mqttSubscribeCompleteParser(const char *response, char **endptr);
-static resultCode_t S_mqttPublishCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S_mqttOpenStatusParser(const char *response, char **endptr);
+static cmdParseRslt_t S_mqttOpenCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S_mqttConnectStatusParser(const char *response, char **endptr);
+static cmdParseRslt_t S_mqttConnectCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S_mqttSubscribeCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S_mqttPublishCompleteParser(const char *response, char **endptr);
 
 
 /* public mqtt functions
@@ -373,7 +373,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
     char msgText[mqtt__messageSz];
     resultCode_t atResult = resultCode__conflict;               // assume lock not obtainable, conflict
 
-    atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSeconds), atcmd_txDataPromptParser);
+    atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSeconds), ATCMD_txDataPromptParser);
     if (ATCMD_awaitLock(timeoutMS))
     {
         uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->msgId++;
@@ -663,7 +663,7 @@ static void S_mqttDoWork()
  * 
  *  @return HTTP style result code, 0 = not complete
  */
-static resultCode_t S_mqttOpenStatusParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_mqttOpenStatusParser(const char *response, char **endptr) 
 {
     resultCode_t parserResult = atcmd_serviceResponseParserTerm(response, "+QMTOPEN: ", 0, "\r\n", endptr);
 
@@ -682,10 +682,10 @@ static resultCode_t S_mqttOpenStatusParser(const char *response, char **endptr)
  * 
  *  @return HTTP style result code or resultCode_, 0 = not complete
  */
-static resultCode_t S_mqttOpenCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_mqttOpenCompleteParser(const char *response, char **endptr) 
 {
-    resultCode_t parserResult = atcmd_serviceResponseParser(response, "+QMTOPEN: ", 1, endptr);
-    return parserResult;
+    cmdParseRslt_t parserRslt = atcmd__defaultResponseParser(&g_ltem, "+QMTOPEN: ", true, NULL, 1, 1, NULL);
+    return parserRslt;
 }
 
 
@@ -697,16 +697,16 @@ static resultCode_t S_mqttOpenCompleteParser(const char *response, char **endptr
  * 
  *  @return HTTP style result code, 0 = not complete
  */
-static resultCode_t S_mqttConnectStatusParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_mqttConnectStatusParser(const char *response, char **endptr) 
 {
     // BGx +QMTCONN Returns status: 1 = connecting, 3 = connected. Service parser returns 200 + status.
     // A simple "OK" response indicates no connection
-    resultCode_t parserResult = atcmd_serviceResponseParser(response, "+QMTCONN: ", 1, endptr);
+    cmdParseRslt_t parserRslt = atcmd__defaultResponseParser(&g_ltem, "+QMTCONN: ", true, NULL, 1, 1, NULL);
 
-    if (parserResult > resultCode__successMax && strstr(response, "OK\r\n"))                        // if no QMTCONN and OK: not connection
+    if (parserRslt > resultCode__successMax && strstr(response, "OK\r\n"))                        // if no QMTCONN and OK: not connection
         return resultCode__notFound;
 
-    return parserResult;
+    return parserRslt;
 }
 
 
@@ -718,9 +718,9 @@ static resultCode_t S_mqttConnectStatusParser(const char *response, char **endpt
  * 
  *  @return HTTP style result code, RESULT_CODE_PENDING = not complete
  */
-static resultCode_t S_mqttConnectCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_mqttConnectCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd_serviceResponseParser(response, "+QMTCONN: ", 2, endptr);
+    return atcmd__defaultResponseParser(&g_ltem, "+QMTCONN: ", true, ",", 2, 2, NULL);
 }
 
 
@@ -732,9 +732,9 @@ static resultCode_t S_mqttConnectCompleteParser(const char *response, char **end
  * 
  *  @return HTTP style result code, RESULT_CODE_PENDING = not complete
  */
-static resultCode_t S_mqttSubscribeCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_mqttSubscribeCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd_serviceResponseParser(response, "+QMTSUB: ", 2, endptr);
+    return atcmd__defaultResponseParser(&g_ltem, "+QMTSUB: ", true, ",", 2, 2, NULL);
 }
 
 
@@ -746,9 +746,9 @@ static resultCode_t S_mqttSubscribeCompleteParser(const char *response, char **e
  * 
  *  @return HTTP style result code, RESULT_CODE_PENDING = not complete
  */
-static resultCode_t S_mqttPublishCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_mqttPublishCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd_serviceResponseParser(response, "+QMTPUB: ", 2, endptr);
+    return atcmd__defaultResponseParser(&g_ltem, "+QMTPUB: ", true, ",", 2, 2, NULL);
 }
 
 

@@ -52,7 +52,7 @@ extern ltemDevice_t g_ltem;
 
 
 // local static functions
-static resultCode_t S_contextStatusCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S_contextStatusCompleteParser(void * atcmd, const char *response);
 static providerInfo_t *S_getNetworkProvider();
 static char *S_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
 static networkInfo_t *S_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *pApn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
@@ -430,9 +430,9 @@ void ntwk_getOperators(char *operatorList, uint16_t listSz)
  *   \brief Tests for the completion of a network APN context activate action.
  *   \return standard action result integer (http result).
 */
-static resultCode_t S_contextStatusCompleteParser(const char *response, char **endptr)
+static cmdParseRslt_t S_contextStatusCompleteParser(void *atcmd, const char *response)
 {
-    return atcmd_defaultResultParser(response, "+QIACT: ", false, 2, "OK\r\n", endptr);
+    return atcmd__defaultResponseParser(&g_ltem, "+QIACT: ", false, NULL, 2, 2, NULL);
 }
 
 

@@ -43,8 +43,8 @@
 #endif
 
                                                     // define options for how to assemble this build
-//#define HOST_FEATHER_UXPLOR                         // specify the pin configuration
-#define HOST_FEATHER_LTEM3F
+#define HOST_FEATHER_UXPLOR                         // specify the pin configuration
+// #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
 #include <ltemc-internal.h>                         // not usually referenced in application, necessary to access non-public functions
@@ -61,17 +61,18 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "LTEmC Test2: modem components\r\n");
-    lqDiag_registerEventCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_registerEventCallback(appNotifyCB);                          // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem
-    randomSeed(analogRead(0));
+    /*  Manually create/initialize modem parts used here
+     */
+	g_ltem.pinConfig = ltem_pinConfig;                                  // initialize the I/O modem internal settings
+    g_ltem.spi = spi_create(g_ltem.pinConfig.spiCsPin);
+    g_ltem.appEventCB = appNotifyCB;                                    // set the callback address
 
-    // initialize GPIO, SPI, UART-Bridge, BGx power 
-    initIO();
+    initIO();                                                           // initialize GPIO, SPI
     spi_start(g_ltem.spi);
-
     
-    if (qbg_isPowerOn())
+    if (qbg_isPowerOn())                                                // verify/apply BGx power
         PRINTF(dbgColor__dGreen, "LTEm found already powered on.\r\n");
     else
     {
@@ -79,7 +80,9 @@ void setup() {
         PRINTF(dbgColor__dGreen, "Powered LTEm on.\r\n");
         pDelay(5);
     }
-    SC16IS7xx_start();     // start NXP SPI-UART bridge
+    SC16IS7xx_start();                                                  // start SPI-UART bridge
+
+    randomSeed(analogRead(0));
 }
 
 
@@ -251,9 +254,9 @@ void indicateLoop(int loopCnt, int waitNext)
 
     for (int i = 0; i < 6; i++)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         delay(50);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         delay(50);
     }
 
@@ -272,9 +275,9 @@ void indicateFailure(char failureMsg[])
     PRINTF(dbgColor__error, "** Halting Execution \r\n");
     while (halt)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         delay(1000);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         delay(100);
     }
 }
@@ -282,16 +285,16 @@ void indicateFailure(char failureMsg[])
 void initIO()
 {
 	// on Arduino, ensure pin is in default "logical" state prior to opening
-	gpio_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
-	gpio_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
-	gpio_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
+	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
+	platform_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
 
-	gpio_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	gpio_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	gpio_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	platform_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	platform_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	platform_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
 
-	gpio_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
-	gpio_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
+	platform_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
+	platform_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
 }
 
 /* Check free memory (stack-heap) 

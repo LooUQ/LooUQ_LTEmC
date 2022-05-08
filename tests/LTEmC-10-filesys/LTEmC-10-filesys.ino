@@ -61,7 +61,7 @@ void setup() {
     #endif
 
     PRINTF(DBGCOLOR_dRed, "\rLTEmC Test10: File System\r\n");
-    gpio_openPin(LED_BUILTIN, gpioMode_output);
+    platform_openPin(LED_BUILTIN, gpioMode_output);
 
     ltem_create(ltem_pinConfig, NULL, appNotifyCB);
     ltem_start(true);                                                       // start LTEm, if found on reset it
@@ -123,7 +123,7 @@ void indicateFailure(char failureMsg[])
 {
 	PRINTF(DBGCOLOR_error, "\r\n** %s \r\n", failureMsg);
     PRINTF(DBGCOLOR_error, "** Test Assertion Failed. \r\n");
-    gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+    platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
 
     int halt = 1;
     while (halt) {}

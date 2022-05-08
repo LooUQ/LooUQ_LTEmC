@@ -17,8 +17,9 @@
                 "-fno-rtti",
                 "-fno-exceptions"
             ],
-            "intelliSenseMode": "windows-gcc-arm",
+            "intelliSenseMode": "gcc-arm",
             "includePath": [
+                "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.5\\libraries\\Adafruit_TinyUSB_Arduino\\src\\arduino",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.5\\libraries\\Adafruit_TinyUSB_Arduino\\src\\arduino",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\tools\\CMSIS\\5.4.0\\CMSIS\\Core\\Include\\",
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\tools\\CMSIS\\5.4.0\\CMSIS\\DSP\\Include\\",
@@ -42,11 +43,8 @@
             "forcedInclude": [
                 "C:\\Users\\GregTerrell\\AppData\\Local\\Arduino15\\packages\\adafruit\\hardware\\samd\\1.7.5\\cores\\arduino\\Arduino.h"
             ],
-            "cStandard": "c99",
-            "cppStandard": "c++11",
-            "defines": [
-               "USBCON"
-            ]
+            "cStandard": "c11",
+            "cppStandard": "c++11"
         }
     ]
 }

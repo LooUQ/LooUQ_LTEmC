@@ -53,8 +53,8 @@ extern ltemDevice_t g_ltem;
 // static void S_httpDoWork();
 static uint16_t S_parseRequestResponse(httpCtrl_t *httpCtrl, const char *responseTail);
 static uint16_t S_setUrl(const char *url, uint16_t timeoutSec);
-static resultCode_t S_httpGetStatusParser(const char *response, char **endptr);
-static resultCode_t S_httpPostStatusParser(const char *response, char **endptr);
+static cmdParseRslt_t S_httpGetStatusParser(const char *response, char **endptr);
+static cmdParseRslt_t S_httpPostStatusParser(const char *response, char **endptr);
 
 
 /* Public Functions
@@ -264,7 +264,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         atResult = atcmd_awaitResult();                                         // wait for "+QHTTPGET trailer
         if (atResult == resultCode__success)
         {
-            httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, ATCMD_getLastResponseTail());
+            httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastParsed());
             if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                 httpCtrl->requestState = httpState_requestComplete;                 // update httpState, got GET/POST response
         }
@@ -351,7 +351,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
         ATCMD_reset(false);                                                                     // reset atCmd control struct WITHOUT clearing lock
-        atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSec), atcmd_connectPromptParser);
+        atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSec), ATCMD_connectPromptParser);
 
         char httpRequestCmd[40];
         uint16_t httpRequestLength = postDataSz;
@@ -367,7 +367,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
             atResult = atcmd_awaitResult();
             if (atResult == resultCode__success)                                        // wait for "+QHTTPPOST trailer
             {
-                httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, ATCMD_getLastResponseTail());
+                httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastParsed());
                 if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                     httpCtrl->requestState = httpState_requestComplete;                 // update httpState, got GET/POST response
             }
@@ -423,7 +423,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
     * ISR will be firing and filling buffers, this block needs to efficiently send them to appl
     *-----------------------------------------------------------------------------------------------*/
 
-    atcmd_setOptions(timeoutMS, atcmd_connectPromptParser);
+    atcmd_setOptions(timeoutMS, ATCMD_connectPromptParser);
     if (ATCMD_awaitLock(timeoutMS))
     {
         iopPtr->rxStreamCtrl = httpCtrl;                            // put IOP in data mode
@@ -552,7 +552,7 @@ static uint16_t S_setUrl(const char *url, uint16_t timeoutSec)
 {
     uint16_t atResult;
 
-    atcmd_setOptions(PERIOD_FROM_SECONDS(10), atcmd_connectPromptParser);
+    atcmd_setOptions(PERIOD_FROM_SECONDS(10), ATCMD_connectPromptParser);
     uint8_t urlState = 0;
     atcmd_invokeReuseLock("AT+QHTTPURL=%d,%d", strlen(url), timeoutSec);
     atResult = atcmd_awaitResult();
@@ -569,14 +569,14 @@ static uint16_t S_setUrl(const char *url, uint16_t timeoutSec)
 }
 
 
-static resultCode_t S_httpGetStatusParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_httpGetStatusParser(const char *response, char **endptr) 
 {
-    return atcmd_serviceResponseParser(response, "+QHTTPGET: ", 0, endptr);
+    return atcmd__defaultResponseParser(&g_ltem, "+QHTTPGET: ", true, NULL, 0, 0, NULL);
 }
 
 
-static resultCode_t S_httpPostStatusParser(const char *response, char **endptr) 
+static cmdParseRslt_t S_httpPostStatusParser(const char *response, char **endptr) 
 {
     // successful parsing returns 200 (success) + code at position 0, 
-    return atcmd_serviceResponseParser(response, "+QHTTPPOST: ", 0, endptr);
+    return atcmd__defaultResponseParser(&g_ltem, "+QHTTPPOST: ", true, NULL, 0, 0, NULL);
 }
