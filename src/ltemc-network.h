@@ -117,7 +117,7 @@ void ntwk_deactivateNetwork(uint8_t contxtId);
  *	\brief Get count of APN active data contexts from BGx.
  *  \return Count of active data contexts (BGx max is 3).
  */
-uint8_t ntwk_readActiveNetworkCount();
+uint8_t ntwk_getActiveNetworkCount();
 
 
 /**

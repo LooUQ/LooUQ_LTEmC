@@ -40,10 +40,10 @@
  */
 enum IOP__Constants
 {
-                                    /* can be reduced based on you protocol selections and your data segment sizes */
-    IOP__txBufferSize = 1800,       // size should be equal or greater than length of largest data transmission
-    IOP__txCmdBufferSize = 192,
-    IOP__rxCoreBufferSize = 192,
+    //                                 /* can be reduced based on you protocol selections and your data segment sizes */
+    // IOP__txBufferSize = 1800,       // size should be equal or greater than length of largest data transmission
+    // IOP__txCmdBufferSize = 192,
+    // IOP__rxCoreBufferSize = 192,
 
     IOP__uartBaudRate = 115200,     // baud rate between BGx and NXP UART
     IOP__uartFIFOBufferSz = 64,
@@ -192,6 +192,10 @@ void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufPtr);
  *  @param page [in] Index to buffer page to be reset.
  */
 void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page);
+
+
+// IOP Internal 
+void IOP_rxParseForEvents();            // atcmd dependency
 
 
 

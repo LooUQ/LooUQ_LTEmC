@@ -1,5 +1,5 @@
 {
-    "sketch": "LTEmC-3-iop.ino",
+    "sketch": "LTEmC-3-iopisr.ino",
     "port": "COM16",
     "board": "adafruit:samd:adafruit_feather_m0_express",
     "output": ".//.build",

@@ -88,6 +88,8 @@ typedef struct httpCtrl_tag
     socket_t sckt;                          /// Data context where this control operates
     protocol_t protocol;                    /// Socket's protocol : UDP/TCP/SSL.
     bool useTls;                            /// flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];              /// URL or IP address of host
+    uint16_t hostPort;                      /// IP port number host is listening on
     rxDataBufferCtrl_t recvBufCtrl;         /// RX smart buffer 
 
     httpRecvFunc_t dataRecvCB;              /// callback to application, signals data ready
@@ -117,13 +119,20 @@ extern "C"
  *	@brief Create a HTTP(s) control structure to manage web communications. 
  *  @param httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
  *	@param dataCntxt [in] The data context (0-5) to use for this communications.
- *  @param urlHost [in] The host portion of the web server URL.
  *  @param recvBuf [in] Pointer to application provided char buffer.
  *  @param recvBufSz [in] Size of the receive buffer.
  *  @param recvCallback [in] Callback function to receive incoming page data.
- *  @return True if action was invoked, false if not
  */
-void http_initControl(httpCtrl_t *httpCtrl, socket_t dataCntxt, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
+void http_initControl(httpCtrl_t *httpCtrl, socket_t dataCntxt, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
+
+
+/**
+ *	@brief Set host connection characteristics. 
+ *  @param httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
+ *  @param hostURL [in] The HOST address of the web server URL.
+ *  @param hostPort [in] The port number for the host web server.
+ */
+void http_setConnection(httpCtrl_t *httpCtrl, const char* hostUrl, uint16_t hostPort);
 
 
 /**

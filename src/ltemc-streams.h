@@ -36,7 +36,8 @@
  */
 enum streams__constants
 {
-    streams__ctrlMagic = 0x5c
+    streams__ctrlMagic = 0x5c,
+    host__urlSz = 120
 };
 
 
@@ -103,6 +104,12 @@ typedef enum streamPeer_tag
     streamPeer_cnt = 7
 } streamPeer_t;
 
+
+typedef enum tls_tag
+{
+    noTLS,
+    useTLS
+} tls_t;
 
 /** 
  *  @brief Receive buffer page. Component struct for the rxDataBufferCtrl_t.
@@ -176,13 +183,6 @@ typedef struct txBufferCtrl_tag
     char *chunkPtr;                     ///< Pointer to the next "chunk" of data to send to modem.
     uint16_t remainSz;                    ///< Remaining number of bytes in buffer to send to modem.
 } txBufferCtrl_t;
-
-
- /** 
- *  @brief Background work function signature.
- *  @details Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
- */
-typedef void (*moduleDoWorkFunc_t)();
 
 
 /** 

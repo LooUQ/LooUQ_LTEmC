@@ -48,7 +48,7 @@
 
 
 // Modem global (singleton)
-extern ltemDevice_t g_ltem;
+extern ltemDevice_t g_lqLTEM;
 
 
 // local static functions
@@ -69,7 +69,7 @@ void ntwk_create()
 {
     providerInfo_t *providerInfoPtr = (providerInfo_t*)calloc(1, sizeof(providerInfo_t));
     ASSERT(providerInfoPtr != NULL, srcfile_ltemc_network_c);
-    g_ltem.providerInfo = providerInfoPtr;
+    g_lqLTEM.providerInfo = providerInfoPtr;
 }
 
 
@@ -108,7 +108,7 @@ void ntwk_setIotMode(ntwk_iotMode_t iotMode)
 
 
 /**
- *   \brief Wait for a network provider name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
+ *   \brief Wait for a network provider name and network mode. Can be cancelled in threaded env via g_lqLTEM->cancellationRequest.
 */
 providerInfo_t *ntwk_awaitProvider(uint16_t waitDurSeconds)
 {
@@ -127,7 +127,7 @@ providerInfo_t *ntwk_awaitProvider(uint16_t waitDurSeconds)
 
         pDelay(1000);                                       // this yields, allowing alternate execution
         endMillis = pMillis();
-    } while (endMillis - startMillis < waitDuration || g_ltem.cancellationRequest);     // timed out waiting || global cancellation
+    } while (endMillis - startMillis < waitDuration || g_lqLTEM.cancellationRequest);     // timed out waiting || global cancellation
     return provider;
 }
 
@@ -139,7 +139,7 @@ providerInfo_t *ntwk_awaitProvider(uint16_t waitDurSeconds)
 void ntwk_setProviderDefaultContext(uint8_t defaultContext)
 {
     ASSERT(defaultContext < 16, srcfile_ltemc_network_c);
-    ((providerInfo_t*)g_ltem.providerInfo)->defaultContext = defaultContext;
+    ((providerInfo_t*)g_lqLTEM.providerInfo)->defaultContext = defaultContext;
 }
 
 
@@ -175,7 +175,7 @@ static networkInfo_t *S_activateNetwork(uint8_t cntxtId, networkPDPType_t protoT
     if (ntwk != NULL)
         return ntwk;                                                                            // network context is already active
 
-    ASSERT(ltem_readDeviceState() == qbgDeviceState_appReady, srcfile_ltemc_network_c);         // ASSET modem is ready
+    ASSERT(ltem_readDeviceState() == deviceState_appReady, srcfile_ltemc_network_c);         // ASSET modem is ready
     providerInfo_t *provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(2));                      // ASSERT provider active
     ASSERT(strlen(provider->name) > 0, srcfile_ltemc_network_c);
     PRINTF(dbgColor__white, "Provider is %s, mode=%s\r", provider->name, provider->iotMode);
@@ -218,7 +218,7 @@ static networkInfo_t *S_activateNetwork(uint8_t cntxtId, networkPDPType_t protoT
         }
     }
     // if fell through, PDP not available... clear network provider
-    memset((providerInfo_t*)g_ltem.providerInfo, 0, sizeof(providerInfo_t));
+    memset((providerInfo_t*)g_lqLTEM.providerInfo, 0, sizeof(providerInfo_t));
     return NULL;
 }
 
@@ -253,7 +253,7 @@ networkInfo_t * ntwk_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType
     // if (ntwk_getNetworkInfo(cntxtId) != NULL)
     //     return true;
     // // if fell through, PDP not available... clear network provider
-    // memset((providerInfo_t*)g_ltem.providerInfo, 0, sizeof(providerInfo_t));
+    // memset((providerInfo_t*)g_lqLTEM.providerInfo, 0, sizeof(providerInfo_t));
     // return false;
 }
 
@@ -288,7 +288,7 @@ networkInfo_t * ntwk_activateNetworkWithAuth(uint8_t cntxtId, networkPDPType_t p
     // if (ntwk_getNetworkInfo(cntxtId) != NULL)
     //     return true;
     // // if fell through, PDP not available... clear network provider
-    // memset((providerInfo_t*)g_ltem.providerInfo, 0, sizeof(providerInfo_t));
+    // memset((providerInfo_t*)g_lqLTEM.providerInfo, 0, sizeof(providerInfo_t));
     // return false;
 }
 
@@ -314,7 +314,7 @@ void ntwk_deactivateNetwork(uint8_t cntxtId)
 /**
  *	\brief Get count of APN active data contexts from BGx.
  */
-uint8_t ntwk_readActiveNetworkCount()
+uint8_t ntwk_getActiveNetworkCount()
 {
     #define IP_QIACT_SZ 8
 
@@ -326,7 +326,7 @@ uint8_t ntwk_readActiveNetworkCount()
         atcmd_invokeReuseLock("AT+QIACT?");
         resultCode_t atResult = atcmd_awaitResult();
 
-        memset(&((providerInfo_t*)g_ltem.providerInfo)->networks, 0, sizeof(networkInfo_t) * ntwk__pdpContextCnt);    // empty context table for return, if success refill from parsing
+        memset(&((providerInfo_t*)g_lqLTEM.providerInfo)->networks, 0, sizeof(networkInfo_t) * ntwk__pdpContextCnt);    // empty context table for return, if success refill from parsing
 
         if (atResult != resultCode__success)
         {
@@ -334,7 +334,7 @@ uint8_t ntwk_readActiveNetworkCount()
             goto finally;
         }
 
-        if (strlen(ATCMD_getLastResponse()) > IP_QIACT_SZ)
+        if (strlen(atcmd_getLastParsed()) > IP_QIACT_SZ)
         {
             #define TOKEN_BUF_SZ 16
             char *nextContext;
@@ -343,13 +343,13 @@ uint8_t ntwk_readActiveNetworkCount()
             uint8_t landmarkSz = IP_QIACT_SZ;
             char tokenBuf[TOKEN_BUF_SZ];
 
-            nextContext = strstr(ATCMD_getLastResponse(), "+QIACT: ");
+            nextContext = strstr(atcmd_getLastParsed(), "+QIACT: ");
 
             // no contexts returned = none active (only active contexts are returned)
             while (nextContext != NULL && ntwkIndx < ntwk__pdpContextCnt)                       // now parse each pdp context entry
             {
                 landmarkAt = nextContext;
-                networkInfo_t *ntwk = &((providerInfo_t*)g_ltem.providerInfo)->networks[ntwkIndx];
+                networkInfo_t *ntwk = &((providerInfo_t*)g_lqLTEM.providerInfo)->networks[ntwkIndx];
 
                 ntwk->contextId = strtol(landmarkAt + landmarkSz, &continuePtr, 10);
                 continuePtr = strchr(++continuePtr, ',');                                       // skip context_state: always 1
@@ -381,14 +381,14 @@ networkInfo_t *ntwk_getNetworkInfo(uint8_t contextId)
     {
         if (ltem_readDeviceState())
         {
-            providerInfo_t *provider = g_ltem.providerInfo;                                         // cast to provider pointer
+            providerInfo_t *provider = g_lqLTEM.providerInfo;                                         // cast to provider pointer
             for (size_t i = 0; i < ntwk__pdpContextCnt; i++)
             {
                 if(provider->networks[i].contextId == contextId && provider->networks[i].isActive)
                     return &provider->networks[i];
             }
         }
-        ntwkCnt = ntwk_readActiveNetworkCount();
+        ntwkCnt = ntwk_getActiveNetworkCount();
     } while (ntwkCnt > 0);
     return NULL;
 }
@@ -405,12 +405,12 @@ void ntwk_getOperators(char *operatorList, uint16_t listSz)
     {
         atcmd_setOptions(PERIOD_FROM_SECONDS(180), atcmd__useDefaultOKCompletionParser);
 
-        if (((modemInfo_t*)g_ltem.modemInfo)->imei[0] == 0)
+        if (((modemInfo_t*)g_lqLTEM.modemInfo)->imei[0] == 0)
         {
             atcmd_invokeReuseLock("AT+COPS=?");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                strncpy(operatorList, ATCMD_getLastResponse() + 9, listSz - 1);
+                strncpy(operatorList, atcmd_getLastParsed() + 9, listSz - 1);
             }
         }
     }
@@ -432,7 +432,7 @@ void ntwk_getOperators(char *operatorList, uint16_t listSz)
 */
 static cmdParseRslt_t S_contextStatusCompleteParser(void *atcmd, const char *response)
 {
-    return atcmd__defaultResponseParser(&g_ltem, "+QIACT: ", false, NULL, 2, 2, NULL);
+    return atcmd__defaultResponseParser("+QIACT: ", false, NULL, 2, 2, NULL);
 }
 
 
@@ -443,39 +443,39 @@ static cmdParseRslt_t S_contextStatusCompleteParser(void *atcmd, const char *res
 */
 static providerInfo_t *S_getNetworkProvider()
 {
-    ASSERT(g_ltem.providerInfo != NULL, srcfile_ltemc_network_c);
+    ASSERT(g_lqLTEM.providerInfo != NULL, srcfile_ltemc_network_c);
 
-    if (strlen(((providerInfo_t*)g_ltem.providerInfo)->name) > 0)
-        return (providerInfo_t*)g_ltem.providerInfo;
+    if (strlen(((providerInfo_t*)g_lqLTEM.providerInfo)->name) > 0)
+        return (providerInfo_t*)g_lqLTEM.providerInfo;
 
     if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
-        memset(g_ltem.providerInfo, 0, sizeof(providerInfo_t));
+        memset(g_lqLTEM.providerInfo, 0, sizeof(providerInfo_t));
         
         atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
         atcmd_invokeReuseLock("AT+COPS?");
         if (atcmd_awaitResult() == resultCode__success)
         {
             char *continuePtr;
-            continuePtr = strchr(ATCMD_getLastResponse(), '"');
+            continuePtr = strchr(atcmd_getLastParsed(), '"');
             if (continuePtr != NULL)
             {
-                continuePtr = S_grabToken(continuePtr + 1, '"', ((providerInfo_t*)g_ltem.providerInfo)->name, ntwk__providerNameSz);
+                continuePtr = S_grabToken(continuePtr + 1, '"', ((providerInfo_t*)g_lqLTEM.providerInfo)->name, ntwk__providerNameSz);
 
                 uint8_t ntwkMode = (uint8_t)strtol(continuePtr + 1, &continuePtr, 10);
                 if (ntwkMode == 8)
-                    strcpy(((providerInfo_t*)g_ltem.providerInfo)->iotMode, "M1");
+                    strcpy(((providerInfo_t*)g_lqLTEM.providerInfo)->iotMode, "M1");
                 else
-                    strcpy(((providerInfo_t*)g_ltem.providerInfo)->iotMode, "NB1");
+                    strcpy(((providerInfo_t*)g_lqLTEM.providerInfo)->iotMode, "NB1");
             }
         }
         else
         {
-            ((providerInfo_t*)g_ltem.providerInfo)->name[0] = 0;
-            ((providerInfo_t*)g_ltem.providerInfo)->iotMode[0] = 0;
+            ((providerInfo_t*)g_lqLTEM.providerInfo)->name[0] = 0;
+            ((providerInfo_t*)g_lqLTEM.providerInfo)->iotMode[0] = 0;
         }
         atcmd_close();
-        return (providerInfo_t*)g_ltem.providerInfo;
+        return (providerInfo_t*)g_lqLTEM.providerInfo;
     }
 }
 

@@ -48,11 +48,11 @@
 #define ICCID_SIZE 20
 
 
-extern ltemDevice_t g_ltem;
+extern ltemDevice_t g_lqLTEM;
 
 
 // private local declarations
-static resultCode_t S_iccidCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S_iccidCompleteParser(ltemDevice_t *modem);
 
 
 /* Public functions
@@ -69,57 +69,57 @@ modemInfo_t *mdminfo_ltem()
     {
         atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
 
-        if (((modemInfo_t*)g_ltem.modemInfo)->imei[0] == 0)
+        if (((modemInfo_t*)g_lqLTEM.modemInfo)->imei[0] == 0)
         {
             atcmd_invokeReuseLock("AT+GSN");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                strncpy(((modemInfo_t*)g_ltem.modemInfo)->imei, ATCMD_getLastResponse() + 2, IMEI_SIZE);        // skip leading /r/n
+                strncpy(((modemInfo_t*)g_lqLTEM.modemInfo)->imei, atcmd_getLastParsed() + 2, IMEI_SIZE);        // skip leading /r/n
             }
         }
 
-        if (((modemInfo_t*)g_ltem.modemInfo)->fwver[0] == 0)
+        if (((modemInfo_t*)g_lqLTEM.modemInfo)->fwver[0] == 0)
         {
             atcmd_invokeReuseLock("AT+QGMR");
             if (atcmd_awaitResult() == resultCode__success)
             {
                 char *term;
-                term = strstr(ATCMD_getLastResponse() + 2, "\r\n");
+                term = strstr(atcmd_getLastParsed() + 2, "\r\n");
                 *term = '\0';
-                strcpy(((modemInfo_t*)g_ltem.modemInfo)->fwver, ATCMD_getLastResponse() + 2);
-                term = strchr(((modemInfo_t*)g_ltem.modemInfo)->fwver, '_');
+                strcpy(((modemInfo_t*)g_lqLTEM.modemInfo)->fwver, atcmd_getLastParsed() + 2);
+                term = strchr(((modemInfo_t*)g_lqLTEM.modemInfo)->fwver, '_');
                 *term = ' ';
             }
         }
 
-        if (((modemInfo_t*)g_ltem.modemInfo)->mfgmodel[0] == 0)
+        if (((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel[0] == 0)
         {
             atcmd_invokeReuseLock("ATI");
             if (atcmd_awaitResult() == resultCode__success)
             {
                 char *term;
-                term = strstr(ATCMD_getLastResponse() + 2, "\r\nRev");
+                term = strstr(atcmd_getLastParsed() + 2, "\r\nRev");
                 *term = '\0';
-                strcpy(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, ATCMD_getLastResponse() + 2);
-                term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\r');
+                strcpy(((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel, atcmd_getLastParsed() + 2);
+                term = strchr(((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel, '\r');
                 *term = ':';
-                term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\n');
+                term = strchr(((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel, '\n');
                 *term = ' ';
             }
         }
 
-        if (((modemInfo_t*)g_ltem.modemInfo)->iccid[0] == 0)
+        if (((modemInfo_t*)g_lqLTEM.modemInfo)->iccid[0] == 0)
         {
             atcmd_setOptions(atcmd__defaultTimeoutMS, S_iccidCompleteParser);
             atcmd_invokeReuseLock("AT+ICCID");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                strncpy(((modemInfo_t*)g_ltem.modemInfo)->iccid, ATCMD_getLastResponse() + ICCID_OFFSET, ICCID_SIZE);
+                strncpy(((modemInfo_t*)g_lqLTEM.modemInfo)->iccid, atcmd_getLastParsed() + ICCID_OFFSET, ICCID_SIZE);
             }
         }
         atcmd_close();
     }
-    return (modemInfo_t*)(g_ltem.modemInfo);
+    return (modemInfo_t*)(g_lqLTEM.modemInfo);
 }
 
 
@@ -138,8 +138,8 @@ int16_t mdminfo_signalRSSI()
             if (atcmd_awaitResult() == resultCode__success)
             {
                 char *term;
-                char *lastResponse = ATCMD_getLastResponse();
-                term = strstr(ATCMD_getLastResponse() + 2, "+CSQ");
+                char *lastResponse = atcmd_getLastParsed();
+                term = strstr(atcmd_getLastParsed() + 2, "+CSQ");
                 csq = strtol(term + 5, NULL, 10);
             }
             rssi = (csq == 99) ? -999 : csq * 2 - 113;        // raw=99: no signal, range -51 to -113
@@ -177,9 +177,9 @@ uint8_t mdmInfo_signalPercent()
 /**
  *	@brief Action response parser for iccid value request. 
  */
-static resultCode_t S_iccidCompleteParser(const char *response, char **endptr)
+static cmdParseRslt_t S_iccidCompleteParser(ltemDevice_t *modem)
 {
-    return atcmd__defaultResponseParser(&g_ltem, "+ICCID: ", true, "", 20, 0, "OK\r\n");
+    return atcmd__defaultResponseParser("+ICCID: ", true, "", 20, 0, "OK\r\n");
 }
 
 

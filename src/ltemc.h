@@ -33,8 +33,9 @@
 
 #include <lq-types.h>
 #include <lq-diagnostics.h>
-
 #include "ltemc-srcfiles.h"
+
+#include "ltemc-types.h"
 #include "lq-platform.h"
 #include "ltemc-quectel-bg.h"
 #include "ltemc-iop.h"
@@ -43,6 +44,13 @@
 #include "ltemc-network.h"
 #include "ltemc-filesys.h"
 #include "ltemc-gpio.h"
+
+
+typedef enum resetAction_tag
+{
+    skipResetIfRunning,
+    resetAlways,
+} resetAction_t;
 
 
 /* LTEmC uses 2 global buffers: the IOP transmit buffer and the ATCMD cmd\core buffer.
@@ -86,7 +94,7 @@ void ltem_destroy();
  *	\brief Power on and start the modem
  *  \param resetIfPoweredOn [in] Perform a software reset on the modem, if found in a powered on state
  */
-void ltem_start(bool resetIfRunning);
+void ltem_start(resetAction_t resetAction);
 
 
 /**
@@ -112,7 +120,7 @@ void ltem_reset(bool hardReset);
  *	\brief Reads the hardware status and internal application ready field to return device ready state
  *  \return DeviceState: 0=power off, 1=power on, 2=appl ready
  */
-qbgDeviceState_t ltem_readDeviceState();
+deviceState_t ltem_getDeviceState();
 
 
 /**
@@ -148,6 +156,13 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
 //  *  \param faultCode [in] - HTTP style error code.
 //  */
 // void ltem_notifyAssert(uint16_t faultCode)   __attribute__ ((noreturn));
+
+
+
+// LTEM Internal
+void LTEM_initIo();
+void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker);
+
 
 
 #ifdef __cplusplus

@@ -87,7 +87,7 @@ void setup() {
     PRINTF(dbgColor__white, "RCause=%d\r\n", lqSAMD_getResetCause());
 
     ltem_create(ltem_pinConfig, NULL, appNotifCB);                      // no yield req'd for testing
-    ltem_start(false);                                                  // do not reset on modem found ON
+    ltem_start((resetAction_t)skipResetIfRunning);                      // do not reset if modem found ON
 
     ntwk_setProviderScanMode(ntwkScanMode_lteonly);
     ntwk_setIotMode(ntwkIotMode_m1);
@@ -98,7 +98,7 @@ void setup() {
         appNotifCB(255, "Timout (30s) waiting for cellular network.");
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
 
-    uint8_t cntxtCnt = ntwk_readActiveNetworkCount();
+    uint8_t cntxtCnt = ntwk_getActiveNetworkCount();
     if (cntxtCnt == 0)
     {
         ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, networkPDPType_IPV4, "");
@@ -126,13 +126,15 @@ void setup() {
      */
 
     // create a control for talking to the website
-    http_initControl(&httpCtrl1, socket_0, "https://api.weather.gov", webPageBuf, sizeof(webPageBuf), httpRecvCB);
+    http_initControl(&httpCtrl1, socket_0, webPageBuf, sizeof(webPageBuf), httpRecvCB);                 // initialize local (internal) structures
+    http_setConnection(&httpCtrl1, "https://api.weather.gov", 443);                                     // set remote web host
     PRINTF(dbgColor__dGreen, "URL Host1=%s\r", httpCtrl1.urlHost);
 
-    // you can use httpPtr or &httpCtrl in the line above to pass reference, below the &httpCtrl2 style is required
-    // since there is no "ptr" variable created (around line 65) to use here
+    // you can optionally setup a httpPtr, EXAMPLE: httpCtrl *httpPtr = &httpCtrl2
+    // Below the &httpCtrl2 style is required since there is no "ptr" variable created (around line 65) to use here
 
-    http_initControl(&httpCtrl2, socket_1, "http://httpbin.org", webPageBuf, sizeof(webPageBuf), httpRecvCB);
+    http_initControl(&httpCtrl2, socket_1, webPageBuf, sizeof(webPageBuf), httpRecvCB);
+    http_setConnection(&httpCtrl2, "http://httpbin.org", 80);
     PRINTF(dbgColor__dGreen, "URL Host2=%s\r", httpCtrl2.urlHost);
 }
 

@@ -61,12 +61,15 @@ typedef void (*scktRecvFunc_t)(streamPeer_t peerId, void *data, uint16_t dataSz)
 typedef struct scktCtrl_tag
 {
     uint8_t ctrlMagic;                  /// magic flag to validate incoming requests 
-    socket_t sckt;                      /// Data context where this control operates
+    socket_t scktNm;                    /// Data context where this control operates
     protocol_t protocol;                /// Controls's protocol : UDP/TCP/SSL.
     bool useTls;                        /// flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];          /// URL or IP address of host
+    uint16_t hostPort;                  /// IP port number host is listening on
     rxDataBufferCtrl_t recvBufCtrl;     /// RX smart buffer 
 
     scktRecvFunc_t dataRecvCB;          /// callback to application, signals data ready
+    uint16_t lclPort;
     uint32_t doWorkLastTck;             /// last check for URC/dataPending
     //uint32_t doWorkTimeout;             /// set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
     bool flushing;                      /// True if the socket was opened with cleanSession and the socket was found already open.
@@ -98,15 +101,22 @@ void sckt_initControl(scktCtrl_t *scktCtrl, socket_t dataCntxt, protocol_t proto
 
 
 /**
- *	@brief Open a data connection (socket) to d data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING)
- *  @param sckt [in] - Pointer to the control block for the socket
- *	@param host [in] - The IP address (string) or domain name of the remote host to communicate with
- *  @param rmtPort [in] - The port number at the remote host
+ *	@brief Set connection parameters for a socket connection (TCP/UDP)
+ *  @param scktCtrl [in/out] Pointer to socket control structure
+ *	@param hostUrl [in] - The IP address (string) or domain name of the remote host to communicate with
+ *  @param hostPort [in] - The port number at the remote host
  *  @param lclPort [in] - The port number on this side of the conversation, set to 0 to auto-assign
+ */
+void sckt_setConnection(scktCtrl_t *scktCtrl, const char *hostUrl, uint16_t hostPort, uint16_t lclPort);
+
+
+/**
+ *	@brief Open a data connection (socket) to d data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING)
+ *  @param scktCtrl [in/out] Pointer to socket control structure
  *  @param cleanSession [in] - If the port is found already open, TRUE: flushes any previous data from the socket session
  *  @return Result code similar to http status code, OK = 200
  */
-resultCode_t sckt_open(scktCtrl_t *scktCtrl, const char *host, uint16_t rmtPort, uint16_t lclPort, bool cleanSession);
+resultCode_t sckt_open(scktCtrl_t *scktCtrl, bool cleanSession);
 
 
 /**

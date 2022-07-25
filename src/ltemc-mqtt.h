@@ -50,7 +50,11 @@ enum mqtt__constants
     mqtt__topic_bufferSz = (mqtt__topic_nameSz + mqtt__topic_propsSz),  ///< Total topic size (name+props) for buffer sizing
     mqtt__topic_publishCmdSz = (mqtt__topic_bufferSz + mqtt__topic_publishCmdOvrhdSz),
 
-    mqtt__propertiesCnt = 12                                            ///< Azure IoTHub 3-sysProps, 3-props, plus your application
+    mqtt__propertiesCnt = 12,                                            ///< Azure IoTHub 3-sysProps, 3-props, plus your application
+
+    mqtt__clientIdSz = 20,
+    mqtt__userNameSz = 40,
+    mqtt__userSecretSz = 120
 };
 
 
@@ -148,12 +152,17 @@ typedef void (*mqttRecvFunc_t)(socket_t sckt, uint16_t msgId, const char *topic,
 typedef struct mqttCtrl_tag
 {
     uint8_t ctrlMagic;                                      /// magic flag to validate incoming requests 
-    socket_t sckt;                                          /// Socket hosting the protocol
+    socket_t scktNm;                                        /// Socket hosting the protocol
     protocol_t protocol;                                    /// Control's protocol : UDP/TCP/SSL, MQTT, HTTP, etc.
     bool useTls;                                            /// flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];                               /// URL or IP address of host
+    uint16_t hostPort;                                      /// IP port number host is listening on
     rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
 
     mqttRecvFunc_t dataRecvCB;                              /// callback to application, signals data ready
+    char clientId[mqtt__clientIdSz];
+    char username[mqtt__userNameSz];
+    char secret[mqtt__userSecretSz];
     mqttVersion_t useMqttVersion;
     mqttState_t state;                                      /// Current state of the MQTT protocol services on device.
     uint16_t msgId;                                         /// MQTT message ID for QOS, automatically incremented, rolls at max value.
@@ -182,7 +191,13 @@ extern "C"
  *  @param recvCallback [in] Callback function to be invoked when received data is ready.
  *  @return A mqtt object to govern operations for this protocol stream value indicating the state of the MQTT connection.
 */
-void mqtt_initControl(mqttCtrl_t *mqttCtrl, socket_t sckt, bool useTls, mqttVersion_t useMqttVersion, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback);
+void mqtt_initControl(mqttCtrl_t *mqttCtrl, socket_t sckt, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback);
+
+
+/**
+ *  @brief Set the remote server connection values.
+*/
+void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t port, bool useTls, mqttVersion_t useMqttVersion, const char *deviceId, const char *userId, const char *secret);
 
 
 /**
@@ -192,7 +207,7 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, socket_t sckt, bool useTls, mqttVers
  *  @param port [in] The IP port number to use for the communications.
  *  @return A resultCode_t value indicating the success or type of failure.
 */
-resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port);
+resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl);
 
 
 /**
@@ -202,7 +217,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port);
 void mqtt_close(mqttCtrl_t *mqttCtrl);
 
 
-resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, const char *clientId, const char *username, const char *password, mqttSession_t cleanSession);
+resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, mqttSession_t cleanSession);
 resultCode_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos);
 resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic);
 

@@ -50,22 +50,11 @@ enum BGX__constants
 {
     BGX__initCommandCnt = 1,
     BGX__initCommandAttempts = 2,
-    BGX__powerOnDelay = 500,
+    BGX__powerOnDelay = 800,
     BGX__powerOffDelay = 1500,
     BGX__resetDelay = 300,
     BGX__baudRate = 115200
 };
-
-
-/** 
- *  \brief Enum describing the current BGx module state
- */
-typedef enum qbgDeviceState_tag
-{
-    qbgDeviceState_powerOff = 0,        ///< BGx is powered off, in this state all components on the LTEm1 are powered down.
-    qbgDeviceState_powerOn = 1,         ///< BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
-    qbgDeviceState_appReady = 2         ///< BGx is powered ON and ready for application/services.
-} qbgDeviceState_t;
 
 
 

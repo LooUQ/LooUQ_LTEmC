@@ -49,9 +49,9 @@
 //#define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
-#include <ltemc-nxp-sc16is.h>                               // need internal references, low-level test here
+#include <ltemc-nxp-sc16is.h>                                           // need internal references, low-level test here
 
-// this test has no reference to global g_ltem1 variable
+// this test has no reference to global g_lqLTEM variable
 // so we need a surrogate spi pointer here to test locally 
 spi_t *spi; 
 
@@ -66,7 +66,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__dRed, "LTEmC Test1: platform I/O \r\n");
+    PRINTF(dbgColor__red, "LTEmC - Test #1: Platform I/O and SPI\r\n");
     PRINTF(dbgColor__none, "LED pin = %i \r\n", LED_BUILTIN);           // could have used 0 as color code, rather than enum dbgColor__none
 
     randomSeed(analogRead(7));

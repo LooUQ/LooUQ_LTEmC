@@ -93,7 +93,7 @@ void setup() {
     lqDiag_registerEventCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem, no yield req'd for testing
-    ltem_start(false);                                              // ... and start it, no reset on modem found on
+    ltem_start((resetAction_t)skipResetIfRunning);                  // ... and start it
     PRINTF(dbgColor__none, "BGx %s\r", mdminfo_ltem()->fwver);
 
     PRINTF(dbgColor__dflt, "Waiting on network...\r");
@@ -103,7 +103,7 @@ void setup() {
 
     PRINTF(dbgColor__info, "Network type is %s on %s\r", ntwkProvider->iotMode, ntwkProvider->name);
 
-    uint8_t cntxtCnt = ntwk_readActiveNetworkCount();
+    uint8_t cntxtCnt = ntwk_getActiveNetworkCount();
     if (cntxtCnt == 0)
     {
         ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, networkPDPType_IPV4, "");
@@ -111,7 +111,8 @@ void setup() {
 
     // create a socket control and open it
     sckt_initControl(&scktCtrl, socket_0, (protocol_t)SCKTTEST_PROTOCOL, receiveBuffer, sizeof(receiveBuffer), scktRecvCB);
-    resultCode_t scktResult = sckt_open(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0, true);
+    sckt_setConnection(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0);
+    resultCode_t scktResult = sckt_open(&scktCtrl,  true);
 
     if (scktResult == resultCode__previouslyOpened)
     {
@@ -175,7 +176,7 @@ uint16_t scktRecover()
 {
     PRINTF(dbgColor__warn, "sgnl=%d, scktState=%d\r", mdminfo_signalRSSI(), sckt_getState(&scktCtrl));
     sckt_close(&scktCtrl);
-    return sckt_open(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0, true);
+    return sckt_open(&scktCtrl, true);
 }
 
 

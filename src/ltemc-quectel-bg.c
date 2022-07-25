@@ -43,7 +43,7 @@
 #include "ltemc-internal.h"
 
 
-extern ltemDevice_t g_ltem;
+extern ltemDevice_t g_lqLTEM;
 
 
 const char* const qbg_initCmds[] = 
@@ -66,7 +66,7 @@ bool S_issueStartCommand(const char *cmdStr);
  */
 bool qbg_isPowerOn()
 {
-    return platform_readPin(g_ltem.pinConfig.statusPin);
+    return platform_readPin(g_lqLTEM.pinConfig.statusPin);
 }
 
 
@@ -78,23 +78,23 @@ bool qbg_powerOn()
     if (qbg_isPowerOn())
     {
         PRINTF(dbgColor__none, "LTEm found powered on.\r");
-        g_ltem.qbgDeviceState = qbgDeviceState_appReady;             // APP READY msg comes only once, shortly after chip start, would have missed it 
+        g_lqLTEM.deviceState = deviceState_appReady;             // APP READY msg comes only once, shortly after chip start, would have missed it 
         return true;
     }
 
-    g_ltem.qbgDeviceState = qbgDeviceState_powerOff;
+    g_lqLTEM.deviceState = deviceState_powerOff;
 
     PRINTF(dbgColor__none, "Powering LTEm On...");
-    platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
+    platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_high);
     pDelay(BGX__powerOnDelay);
-    platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+    platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
 
     uint8_t waitAttempts = 0;
     while (waitAttempts++ < 72)                                     // wait for status=ready, HW Guide says 4.8s
     {
         if (qbg_isPowerOn())
         {
-            g_ltem.qbgDeviceState = qbgDeviceState_powerOn;
+            g_lqLTEM.deviceState = deviceState_powerOn;
             PRINTF(dbgColor__none, "DONE\r");
             return true;
         }
@@ -111,11 +111,11 @@ bool qbg_powerOn()
 void qbg_powerOff()
 {
     PRINTF(dbgColor__none, "Powering LTEm Off\r");
-	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_high);
+	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_high);
 	pDelay(BGX__powerOffDelay);
-	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
 
-    while (platform_readPin(g_ltem.pinConfig.statusPin))
+    while (platform_readPin(g_lqLTEM.pinConfig.statusPin))
     {
         pDelay(100);          // allow background tasks to operate
     }
@@ -133,9 +133,9 @@ void qbg_reset(bool hwReset)
         pDelay(500);
         qbg_powerOn();
 
-        // platform_writePin(g_ltem.pinConfig.resetPin, gpioValue_high);       // hardware reset: reset pin active for 150-460ms 
+        // platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_high);       // hardware reset: reset pin active for 150-460ms 
         // pDelay(250);
-        // platform_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
+        // platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
     }
     else 
     {
@@ -144,7 +144,7 @@ void qbg_reset(bool hwReset)
     }
 
     uint32_t waitStart = pMillis();                                     // start timer to wait for status pin
-    while (!platform_readPin(g_ltem.pinConfig.statusPin))                   // the reset command blocks caller until status=true or timeout
+    while (!platform_readPin(g_lqLTEM.pinConfig.statusPin))                   // the reset command blocks caller until status=true or timeout
     {
         yield();                                                        // give application some time back for processing
         if (pMillis() - waitStart > PERIOD_FROM_SECONDS(8))
@@ -203,7 +203,7 @@ bool qbg_clrDataState()
  */
 const char *qbg_getModuleType()
 {
-    return g_ltem.moduleType;
+    return g_lqLTEM.moduleType;
 }
 
 

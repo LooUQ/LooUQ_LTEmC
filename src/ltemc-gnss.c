@@ -158,7 +158,7 @@ gnssLocation_t gnss_getLocation()
 static cmdParseRslt_t gnssLocCompleteParser(const char *response, char **endptr)
 {
     //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr
-    cmdParseRslt_t parseRslt = atcmd__defaultResponseParser(&g_ltem, "+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, NULL);
+    cmdParseRslt_t parseRslt = atcmd__defaultResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, NULL);
     PRINTF(0, "gnssParser(): result=%i\r", parseRslt);
     return parseRslt;
 }

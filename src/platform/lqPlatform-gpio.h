@@ -33,18 +33,6 @@
 
 #define GPIO_NM 9
 
-typedef struct ltemPinConfig_tag
-{
-    int spiCsPin;
-    int irqPin;
-    int statusPin;
-    int powerkeyPin;
-    int resetPin;
-    int ringUrcPin;
-    int wakePin;
-} ltemPinConfig_t;
-
-
 typedef enum {
     gpioValue_low = 0,
     gpioValue_high = 1

@@ -50,7 +50,7 @@ MODIFY_ACTION                                               \
 SC16IS7xx_writeReg(REG_NAME##_regAddr, REG_NAME##_reg.reg);
 
 
-extern ltemDevice_t g_ltem;
+extern ltemDevice_t g_lqLTEM;
 
 
 #pragma region Public Functions
@@ -141,7 +141,7 @@ uint8_t SC16IS7xx_readReg(uint8_t reg_addr)
 	reg_payload.reg_addr.A = reg_addr;
 	reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-	reg_payload.reg_payload = spi_transferWord(((spi_t*)g_ltem.spi), reg_payload.reg_payload);
+	reg_payload.reg_payload = spi_transferWord(((spi_t*)g_lqLTEM.spi), reg_payload.reg_payload);
 	return reg_payload.reg_data;
 }
 
@@ -156,7 +156,7 @@ void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data)
 	reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 	reg_payload.reg_data = reg_data;
 
-	spi_transferWord(((spi_t*)g_ltem.spi), reg_payload.reg_payload);
+	spi_transferWord(((spi_t*)g_lqLTEM.spi), reg_payload.reg_payload);
 }
 
 
@@ -169,7 +169,7 @@ void SC16IS7xx_read(void* dest, uint8_t dest_len)
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-    spi_transferBuffer(((spi_t*)g_ltem.spi), reg_addr.reg_address, dest, dest_len);
+    spi_transferBuffer(((spi_t*)g_lqLTEM.spi), reg_addr.reg_address, dest, dest_len);
 }
 
 
@@ -182,7 +182,7 @@ void SC16IS7xx_write(const void* src, uint8_t src_len)
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 
-    spi_transferBuffer(((spi_t*)g_ltem.spi), reg_addr.reg_address, src, src_len);
+    spi_transferBuffer(((spi_t*)g_lqLTEM.spi), reg_addr.reg_address, src, src_len);
 }
 
 

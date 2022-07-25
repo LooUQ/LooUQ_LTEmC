@@ -67,12 +67,12 @@ void setup() {
 
     PRINTF(dbgColor__red, "LTEmC Test3: iop\r");
     randomSeed(analogRead(7));
-    lqDiag_registerEventCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_registerEventCallback(appNotifyCB);                  // configure LTEMC ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem (no yield CB for testing)
-    startLTEm();                                                    // local initialize\start can't use ltem_start() yet
+    ltem_create(ltem_pinConfig, NULL, appNotifyCB);             // create LTEmC modem (no yield CB for testing)
+    startLTEm();                                                // local initialize\start can't use ltem_start() yet
 
-    cmdBuf = ((iop_t*)g_ltem.iop)->rxCBuffer->_buffer;              // readability var
+    cmdBuf = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->_buffer;        // readability var
 }
 
 
@@ -80,23 +80,23 @@ int loopCnt = 0;
 
 void loop() 
 {
-    // const char *cmd = "AT+GSN\r\0";                           // short response (contained in 1 rxCtrlBlock)
-    const char *cmd = "AT+GSN;+QCCID;+GSN;+QCCID\r\0";           // long response (requires multiple rxCtrlBlocks)
-    // const char *cmd = "AT+QPOWD\r\0";                         // something is wrong! Is is rx or tx (tx works if BG powers down)
+    // const char *cmd = "AT+GSN\r\0";                          // short response (contained in 1 rxCtrlBlock)
+    const char *cmd = "AT+GSN;+QCCID;+GSN;+QCCID\r\0";          // long response (requires multiple rxCtrlBlocks)
+    // const char *cmd = "AT+QPOWD\r\0";                        // something is wrong! Is is rx or tx (tx works if BG powers down)
 
     PRINTF(0, "Invoking cmd: %s \r\n", cmd);
 
-    IOP_resetCoreRxBuffer();                                // send command
-    IOP_sendTx(cmd, strlen(cmd), true);
+    IOP_resetCoreRxBuffer();                                    // clear out receive buffer
+    IOP_sendTx(cmd, strlen(cmd), true);                         // send command
     PRINTF(0, "Command sent\r\n");
 
-    pDelay(1000);                                           // give BGx time to respond
+    pDelay(1000);                                               // give BGx a second to respond, interrupt should fire and fill cmd rx buffer
 
     PRINTF(dbgColor__green, "Got %d chars (so far)\r", strlen(cmdBuf));
     PRINTF(dbgColor__cyan, "Resp: %s\r", cmdBuf);  
 
     loopCnt ++;
-    indicateLoop(loopCnt, 1000);      // BG reference says 300mS cmd response time, we will wait 1000
+    indicateLoop(loopCnt, 1000);                                // BGx reference says 300mS cmd response time, we will wait 1000
     PRINTF(dbgColor__magenta, "FreeMem=%u\r", getFreeMemory());
 }
 
@@ -109,23 +109,23 @@ void startLTEm()
 {
     // initialize the HOST side of the LTEm interface
 	// ensure pin is in default "logical" state prior to opening
-	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
-	platform_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
-	platform_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
+	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
+	platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
 
-	platform_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	platform_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	platform_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	platform_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	platform_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
 
-	platform_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
-	platform_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
+	platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
+	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
 
-    spi_start(g_ltem.spi);
+    spi_start(g_lqLTEM.spi);
 
     if (qbg_isPowerOn())                                        // power on BGx, returning prior power-state
     {
 		PRINTF(dbgColor__info, "LTEm1 found powered on.\r\n");
-        g_ltem.qbgDeviceState = qbgDeviceState_appReady;        // if already "ON", assume running and check for IRQ latched
+        g_lqLTEM.deviceState = deviceState_appReady;        // if already "ON", assume running and check for IRQ latched
     }
     else
         qbg_powerOn();

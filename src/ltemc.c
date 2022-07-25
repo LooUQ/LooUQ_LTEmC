@@ -44,23 +44,7 @@ const char *ltemcVersion = "3.0.1";
 /* ------------------------------------------------------------------------------------------------
  * GLOBAL LTEm1 Device Objects, One LTEmX supported
  * --------------------------------------------------------------------------------------------- */
-/* ltemDevice_t *g_ltem;
-
-   ltemPinConfig_t g_ltemPinConfig;         ///< GPIO pin configuration for required GPIO and SPI interfacing.
-   spiDevice_t *g_ltemSpiPtr;               ///< SPI device (methods signatures compatible with Arduino).
-   qbgReadyState_t g_ltemQbgReadyState;     ///< Ready state of the BGx module
-   appNotifyFunc_t g_ltemAppNotifyCB;       ///< Notification callback to application
-   uint8_t g_ltemPdpContext;                ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.
-   volatile iop_t *g_ltemIopPtr;            ///< IOP subsystem controls.
-   atcmd_t *g_ltemAtcmdPtr;                 ///< Action subsystem controls.
-   modemInfo_t *g_ltemModemInfoPtr;         ///< Data structure holding persistent information about application modem state.
-   network_t *g_ltemNetworkPtr;             ///< Data structure representing the cellular network.
-   bool g_ltemCancellationRequest;          ///< For RTOS implementations, token to request cancellation of long running task/action.
-*/
-
-// global device object
-ltemDevice_t g_ltem;
-
+ltemDevice_t g_lqLTEM;
 
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------ */
@@ -84,26 +68,26 @@ const char *ltem_ltemcVersion()
  */
 void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEventCallback_func eventNotifCallback)
 {
-    ASSERT(g_ltem.atcmd == NULL, srcfile_ltemc_ltemc_c);                    // prevent multiple calls, memory leak calloc()
+    ASSERT(g_lqLTEM.atcmd == NULL, srcfile_ltemc_ltemc_c);                    // prevent multiple calls, memory leak calloc()
 
-	g_ltem.pinConfig = ltem_config;
-    g_ltem.spi = spi_create(g_ltem.pinConfig.spiCsPin);
+	g_lqLTEM.pinConfig = ltem_config;
+    g_lqLTEM.spi = spi_create(g_lqLTEM.pinConfig.spiCsPin);
 
-    g_ltem.modemInfo = calloc(1, sizeof(modemInfo_t));
-    ASSERT(g_ltem.modemInfo != NULL, srcfile_ltemc_ltemc_c);
+    g_lqLTEM.modemInfo = calloc(1, sizeof(modemInfo_t));
+    ASSERT(g_lqLTEM.modemInfo != NULL, srcfile_ltemc_ltemc_c);
 
     IOP_create();
     
-    g_ltem.atcmd = calloc(1, sizeof(atcmd_t));
-    ASSERT(g_ltem.atcmd != NULL, srcfile_ltemc_ltemc_c);
+    g_lqLTEM.atcmd = calloc(1, sizeof(atcmd_t));
+    ASSERT(g_lqLTEM.atcmd != NULL, srcfile_ltemc_ltemc_c);
     atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd_okResponseParser);
     ATCMD_reset(true);
 
     ntwk_create();
 
-    g_ltem.cancellationRequest = false;
-    g_ltem.pdpContext = 1;
-    g_ltem.appEventCB = eventNotifCallback;
+    g_lqLTEM.cancellationRequest = false;
+    g_lqLTEM.pdpContext = 1;
+    g_lqLTEM.appEventCB = eventNotifCallback;
 }
 
 
@@ -115,15 +99,15 @@ void ltem_destroy()
 {
 	ltem_stop();
 
-	gpio_pinClose(g_ltem.pinConfig.irqPin);
-	gpio_pinClose(g_ltem.pinConfig.powerkeyPin);
-	gpio_pinClose(g_ltem.pinConfig.resetPin);
-	gpio_pinClose(g_ltem.pinConfig.statusPin);
+	gpio_pinClose(g_lqLTEM.pinConfig.irqPin);
+	gpio_pinClose(g_lqLTEM.pinConfig.powerkeyPin);
+	gpio_pinClose(g_lqLTEM.pinConfig.resetPin);
+	gpio_pinClose(g_lqLTEM.pinConfig.statusPin);
 
     ip_destroy();
-    free(g_ltem.atcmd);
+    free(g_lqLTEM.atcmd);
     iop_destroy();
-    spi_destroy(g_ltem.spi);
+    spi_destroy(g_lqLTEM.spi);
 }
 
 
@@ -131,26 +115,26 @@ void ltem_destroy()
 /**
  *	@brief Start the modem.
  */
-void ltem_start(bool forceReset)
+void ltem_start(resetAction_t resetAction)
 {
   	// on Arduino compatible, ensure pin is in default "logical" state prior to opening
-	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
-	platform_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
-	platform_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
-	platform_writePin(g_ltem.pinConfig.irqPin, gpioValue_high);
+	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
+	platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
+	platform_writePin(g_lqLTEM.pinConfig.irqPin, gpioValue_high);
 
-	platform_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	platform_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	platform_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
-	platform_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
-	platform_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
+	platform_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	platform_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
+	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
 
-    spi_start(g_ltem.spi);                                              // start host SPI
+    spi_start(g_lqLTEM.spi);                                              // start host SPI
 
     bool foundOn = qbg_isPowerOn();
     if (foundOn)
     {
-        if (forceReset)
+        if (resetAction)
         {
             qbg_reset(true);                                    // do hardware reset (aka power cycle)
             foundOn = false;
@@ -177,15 +161,15 @@ void S__initDevice(bool foundOn)
     SC16IS7xx_enableIrqMode();                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
 
     if (foundOn)
-        g_ltem.qbgDeviceState = qbgDeviceState_appReady;    // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
+        g_lqLTEM.deviceState = deviceState_appReady;    // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
     else
     {
         uint32_t appRdyWaitStart = pMillis();
-        while (g_ltem.qbgDeviceState != qbgDeviceState_appReady)
+        while (g_lqLTEM.deviceState != deviceState_appReady)
         {
             pDelay(1);                                                      // yields behind the scenes
-            if (pMillis() - appRdyWaitStart > PERIOD_FROM_SECONDS(15) && g_ltem.qbgDeviceState == qbgDeviceState_powerOn)
-                g_ltem.qbgDeviceState = qbgDeviceState_appReady;            // missed it somehow
+            if (pMillis() - appRdyWaitStart > PERIOD_FROM_SECONDS(15) && g_lqLTEM.deviceState == deviceState_powerOn)
+                g_lqLTEM.deviceState = deviceState_appReady;            // missed it somehow
         }
     }
 
@@ -202,9 +186,9 @@ void S__initDevice(bool foundOn)
  */
 void ltem_stop()
 {
-    spi_stop(g_ltem.spi);
+    spi_stop(g_lqLTEM.spi);
     IOP_stopIrq();
-    g_ltem.qbgDeviceState = qbgDeviceState_powerOff;
+    g_lqLTEM.deviceState = deviceState_powerOff;
     qbg_powerOff();
 }
 
@@ -222,17 +206,17 @@ void ltem_reset(bool hardReset)
 /**
  *	@brief Performs a HW reset of LTEm1 and optionally executes start sequence.
  */
-qbgDeviceState_t ltem_readDeviceState()
+deviceState_t ltem_readDeviceState()
 {
-    if (platform_readPin(g_ltem.pinConfig.statusPin))           // ensure powered off device doesn't report otherwise
+    if (platform_readPin(g_lqLTEM.pinConfig.statusPin))           // ensure powered off device doesn't report otherwise
     {
-        if (g_ltem.qbgDeviceState == qbgDeviceState_powerOff)
-            g_ltem.qbgDeviceState = qbgDeviceState_powerOn; 
+        if (g_lqLTEM.deviceState == deviceState_powerOff)
+            g_lqLTEM.deviceState = deviceState_powerOn; 
     }
     else
-        g_ltem.qbgDeviceState = qbgDeviceState_powerOff;
+        g_lqLTEM.deviceState = deviceState_powerOff;
 
-    return g_ltem.qbgDeviceState;
+    return g_lqLTEM.deviceState;
 }
 
 
@@ -244,10 +228,10 @@ void ltem_doWork()
     if (!ltem_readDeviceState())
         ltem_notifyApp(appEvent_fault_hardFault, "LTEm I/O Error");
 
-    for (size_t i = 0; i < sizeof(g_ltem.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)  // each stream with a doWork() register it at OPEN (removed if last CLOSE)
+    for (size_t i = 0; i < sizeof(g_lqLTEM.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)  // each stream with a doWork() register it at OPEN (removed if last CLOSE)
     {
-        if (g_ltem.streamWorkers[i] != NULL)
-            (g_ltem.streamWorkers[i])();
+        if (g_lqLTEM.streamWorkers[i] != NULL)
+            (g_lqLTEM.streamWorkers[i])();
     }
 }
 
@@ -257,8 +241,8 @@ void ltem_doWork()
  */
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
-    if (g_ltem.appEventCB != NULL)                                       
-        (g_ltem.appEventCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
+    if (g_lqLTEM.appEventCB != NULL)                                       
+        (g_lqLTEM.appEventCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
 }
 
 
@@ -269,7 +253,7 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
  */
 void ltem_setEventNotifCallback(appEventCallback_func eventNotifCallback)
 {
-    g_ltem.appEventCB = eventNotifCallback;
+    g_lqLTEM.appEventCB = eventNotifCallback;
 }
 
 /**
@@ -292,9 +276,9 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker)
 {
     bool found = false;
-    for (size_t i = 0; i < sizeof(g_ltem.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)     // wireup sckt_doWork into g_ltemc worker array
+    for (size_t i = 0; i < sizeof(g_lqLTEM.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)     // wireup sckt_doWork into g_ltemc worker array
     {
-        if (g_ltem.streamWorkers[i] == doWorker)
+        if (g_lqLTEM.streamWorkers[i] == doWorker)
         {
             found = true;
             break;
@@ -302,11 +286,11 @@ void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker)
     }
     if (!found)
     {
-        for (size_t i = 0; i < sizeof(g_ltem.streamWorkers); i++)           // not there, find and empty slot
+        for (size_t i = 0; i < sizeof(g_lqLTEM.streamWorkers); i++)           // not there, find and empty slot
         {
-            if (g_ltem.streamWorkers[i] == NULL)
+            if (g_lqLTEM.streamWorkers[i] == NULL)
             {
-                g_ltem.streamWorkers[i] = doWorker;
+                g_lqLTEM.streamWorkers[i] = doWorker;
                 break;
             }
         }

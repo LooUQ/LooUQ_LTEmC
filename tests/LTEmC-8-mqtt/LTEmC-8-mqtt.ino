@@ -131,7 +131,7 @@ void setup() {
     diagnosticInfo_t *diags = lqDiag_getDiagnosticsInfo();
 
     ltem_create(ltem_pinConfig, NULL, appNotifyCB);
-    ltem_start(false);                                                          // start modem, no reset if modem found ON
+    ltem_start((resetAction_t)skipResetIfRunning);                                  // start modem, no reset if modem found ON
 
     PRINTF(dbgColor__none, "Waiting on network...\r");
     providerInfo_t *networkProvider = ntwk_awaitProvider(30000);
@@ -139,7 +139,7 @@ void setup() {
         appNotifyCB(255, "Timout (30s) waiting for cellular network.");
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
 
-    uint8_t cntxtCnt = ntwk_readActiveNetworkCount();
+    uint8_t cntxtCnt = ntwk_getActiveNetworkCount();
     if (cntxtCnt == 0)
     {
         ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, networkPDPType_IPV4, "");
@@ -149,18 +149,21 @@ void setup() {
      * Azure requires TLS 1.2 and MQTT version 3.11 */
 
     tls_configure(socket_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
-    mqtt_initControl(&mqttCtrl, socket_0, mqtt__useTls, mqttVersion_311, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
+    mqtt_initControl(&mqttCtrl, socket_0, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
+
+    mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, (tls_t)useTLS, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
+
     mqttCtrl.canReuseConn = true;
 
     resultCode_t rslt;
 
-    rslt = mqtt_open(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT);
+    rslt = mqtt_open(&mqttCtrl);
     if (rslt != resultCode__success)
     {
         PRINTF(dbgColor__warn, "Open fail status=%d\r", rslt);
         appNotifyCB(255, "MQTT open failed");
     }
-    rslt = mqtt_connect(&mqttCtrl, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN, mqttSession_cleanStart);
+    rslt = mqtt_connect(&mqttCtrl, mqttSession_cleanStart);
     if (rslt != resultCode__success)
     {
         PRINTF(dbgColor__warn, "Connect fail status=%d\r", rslt);

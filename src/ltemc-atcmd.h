@@ -26,7 +26,6 @@
 #ifndef __LTEMC_ATCMD_H__
 #define __LTEMC_ATCMD_H__
 
-//#include "ltemc-iop.h"
 #include "ltemc-internal.h"
 
 /** 
@@ -39,26 +38,24 @@ enum atcmd__constants
 
     atcmd__setLockModeManual = 0,
     atcmd__setLockModeAuto = 1,
-
-    // atcmd__parserPendingResult = 0xFFFF      ///< value returned from response parsers indicating a pattern match has not yet been detected
 };
 
 
-typedef enum cmdParseRslt_tag
-{
-    cmdParseRslt_pending = 0x00,
+// typedef enum cmdParseRslt_tag
+// {
+//     cmdParseRslt_pending = 0x00,
 
-    cmdParseRslt_preambleMissing = 0x01,
-    cmdParseRslt_countShort = 0x02,
-    cmdParseRslt_moduleError = 0x04,
-    cmdParseRslt_excessRecv = 0x20,
+//     cmdParseRslt_preambleMissing = 0x01,
+//     cmdParseRslt_countShort = 0x02,
+//     cmdParseRslt_moduleError = 0x04,
+//     cmdParseRslt_excessRecv = 0x20,
 
-    cmdParseRslt_success = 0x40,
-    cmdParseRslt_error = 0x80,
-} cmdParseRslt_t;
+//     cmdParseRslt_success = 0x40,
+//     cmdParseRslt_error = 0x80,
+// } cmdParseRslt_t;
 
 
-typedef cmdParseRslt_t (*cmdResponseParser_func)(ltemDevice_t *modem);
+// typedef cmdParseRslt_t (*cmdResponseParser_func)(ltemDevice_t *modem);
 
 
 /** 
@@ -66,7 +63,7 @@ typedef cmdParseRslt_t (*cmdResponseParser_func)(ltemDevice_t *modem);
 */
 typedef struct atcmd_tag
 {
-    char cmdStr[IOP__txCmdBufferSize];          /// AT command string to be passed to the BGx module.
+    char cmdStr[bufferSz__cmdTx];               /// AT command string to be passed to the BGx module.
     uint32_t timeoutMS;                         /// Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
     bool isOpenLocked;                          /// True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
     bool autoLock;                              /// last invoke was auto and should be closed automatically on complete
@@ -210,8 +207,38 @@ void atcmd_exitDataMode();
 
 
 
-#pragma region LTEmC Internal Functions
 /*-----------------------------------------------------------------------------------------------*/
+
+// direct use standard parsers
+cmdParseRslt_t atcmd_okResponseParser(ltemDevice_t *modem);
+
+
+/**
+ *	\brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
+ *  \details Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). The "value"
+ *           and "parsedResponse" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getLastValue() and 
+ *           atcmd_getLastParsed() functions respectively.
+ *  \param [in] preamble - C-string containing the expected phrase that starts response. 
+ *  \param [in] delimiters - (optional) C-string containing a delimiter between response tokens. If >0, parser applies valueIndx to token list to find "value"
+ *  \param [in] tokensReqd - (optional) If > 0, indicates the minimum count of tokens between preamble and finale for a "succes" response.
+ *  \param [in] valueIndx - Indicates the position (chars/tokens) of an integer value to grab from the response. If ==0, int conversion is attempted after preamble+whitespace
+ *  \param [in] finale - C-string containing the expected phrase that concludes response. If not provided (NULL or strlen()==0), will be defaulted to "|r|nOK|r|n"
+ */
+cmdParseRslt_t atcmd__defaultResponseParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, uint8_t valueIndx, const char *finale);
+
+
+// base parsers to be wrapped by custom initialization values
+// cmdParseRslt_t atcmd__defaultResponseParser(void *atcmd, const char *response, const char *preamble, bool preambleReqd, uint8_t gap, const char *finale);
+// cmdParseRslt_t atcmd__tokenCountResponseParser(void *atcmd, const char *response, const char *preamble, char separator, uint8_t reqdTokens, const char *finale);
+// cmdParseRslt_t atcmd__serviceResponseParser(void *atcmd, const char *response, const char *preamble, uint8_t resultIndx);
+// cmdParseRslt_t atcmd__serviceResponseParserTerm(void *atcmd, const char *response, const char *preamble, uint8_t resultIndx, const char *finale);
+
+
+
+#pragma region LTEmC Internal Functions
+/* ------------------------------------------------------------------------------------------------
+ * Not intended for user application consumption.
+ **/
 
 /**
  *  \brief Awaits exclusive access to QBG module command interface.
@@ -233,39 +260,15 @@ bool ATCMD_isLockActive();
  */
 void ATCMD_reset(bool releaseLock);
 
-#pragma endregion
-/*-----------------------------------------------------------------------------------------------*/
-
-
-// direct use standard parsers
-cmdParseRslt_t atcmd_okResponseParser(ltemDevice_t *modem);
-
-
-/**
- *	\brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
- *  \details Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). The "value"
- *           and "parsedResponse" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getLastValue() and 
- *           atcmd_getLastParsed() functions respectively.
- *  \param [in] atcmd - Pointer to the atcmd structure 
- *  \param [in] preamble - C-string containing the expected phrase that starts response. 
- *  \param [in] delimiters - (optional) C-string containing a delimiter between response tokens. If >0, parser applies valueIndx to token list to find "value"
- *  \param [in] tokensReqd - (optional) If > 0, indicates the minimum count of tokens between preamble and finale for a "succes" response.
- *  \param [in] valueIndx - Indicates the position (chars/tokens) of an integer value to grab from the response. If ==0, int conversion is attempted after preamble+whitespace
- *  \param [in] finale - C-string containing the expected phrase that concludes response. If not provided (NULL or strlen()==0), will be defaulted to "|r|nOK|r|n"
- */
-cmdParseRslt_t atcmd__defaultResponseParser(ltemDevice_t *modem, const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, uint8_t valueIndx, const char *finale);
-
-// base parsers to be wrapped by custom initialization values
-// cmdParseRslt_t atcmd__defaultResponseParser(void *atcmd, const char *response, const char *preamble, bool preambleReqd, uint8_t gap, const char *finale);
-// cmdParseRslt_t atcmd__tokenCountResponseParser(void *atcmd, const char *response, const char *preamble, char separator, uint8_t reqdTokens, const char *finale);
-// cmdParseRslt_t atcmd__serviceResponseParser(void *atcmd, const char *response, const char *preamble, uint8_t resultIndx);
-// cmdParseRslt_t atcmd__serviceResponseParserTerm(void *atcmd, const char *response, const char *preamble, uint8_t resultIndx, const char *finale);
 
 // LTEmC INTERNAL prompt parsers
 cmdParseRslt_t ATCMD_readyPromptParser(const char *response, const char *rdyPrompt);
 cmdParseRslt_t ATCMD_txDataPromptParser(const char *response);
 cmdParseRslt_t ATCMD_connectPromptParser(const char *response);
 
+#pragma endregion LTEmC Internal Functions
+/* ------------------------------------------------------------------------------------------------
+ * End LTEmC Internal Functions */
 
 #ifdef __cplusplus
 }

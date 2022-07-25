@@ -72,12 +72,10 @@ void setup() {
     lqDiag_registerEventCallback(appNotifyCB);                      // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem, no yield CB req'd for testing
-    ltem_start(false);                                              // ... and start it, no reset if found powered on
+    ltem_start((resetAction_t)skipResetIfRunning);                  // ... and start it
 
     // turn on GNSS
     resultCode_t cmdResult = gnss_on();
-
-    ASSERT(cmdResult == 200 || cmdResult == 504, srcfile_ltemc_gnss_c);         // VSCode doesn't handle #defines well in .INO
 
     if (cmdResult == 200)
         PRINTF(dbgColor__info, "GNSS enabled\r", cmdResult);

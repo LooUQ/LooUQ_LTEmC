@@ -50,7 +50,7 @@
 #define ASCII_sSENDOK "SEND OK\r\n"
 
 
-extern ltemDevice_t g_ltem;
+extern ltemDevice_t g_lqLTEM;
 
 
 // file scope local function declarations
@@ -69,16 +69,16 @@ void S_scktDoWork();
 /**
  *	@brief Create a socket data control(TCP/UDP/SSL).
  */
-void sckt_initControl(scktCtrl_t *scktCtrl, socket_t sckt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback)
+void sckt_initControl(scktCtrl_t *scktCtrl, socket_t scktNm, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback)
 {
     ASSERT(scktCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_ltemc_sckt_c);
-    ASSERT(sckt < socket__cnt, srcfile_ltemc_sckt_c);
+    ASSERT(scktNm < socket__cnt, srcfile_ltemc_sckt_c);
     ASSERT(protocol < protocol_socket, srcfile_ltemc_sckt_c);
 
     memset(scktCtrl, 0, sizeof(scktCtrl_t));
 
     scktCtrl->ctrlMagic = streams__ctrlMagic;
-    scktCtrl->sckt = sckt;
+    scktCtrl->scktNm = scktNm;
     scktCtrl->protocol = protocol;
     scktCtrl->useTls = protocol == protocol_ssl;
 
@@ -96,38 +96,41 @@ void sckt_initControl(scktCtrl_t *scktCtrl, socket_t sckt, protocol_t protocol, 
 
 
 /**
- *	@brief Open a data connection (socket) to d data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
- *
- *  @param sckt [in] - Pointer to the control block for the socket.
- *	@param host [in] - The IP address (string) or domain name of the remote host to communicate with.
- *  @param rmtPort [in] - The port number at the remote host.
- *  @param lclPort [in] - The port number on this side of the conversation, set to 0 to auto-assign.
- *  @param cleanSession [in] - If the port is found already open, TRUE: flushes any previous data from the socket session.
- * 
- *  @return Result code similar to http status code, OK = 200
+ *	@brief Set connection parameters for a socket connection (TCP/UDP)
  */
-resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uint16_t lclPort, bool cleanSession)
+void sckt_setConnection(scktCtrl_t *scktCtrl, const char *hostUrl, uint16_t hostPort, uint16_t lclPort)
+{
+    strcpy(scktCtrl->hostUrl, hostUrl);
+    scktCtrl->hostPort = hostPort;
+    scktCtrl->lclPort = lclPort;
+}
+
+
+/**
+ *	@brief Open a data connection (socket) to d data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
+ */
+resultCode_t sckt_open(scktCtrl_t *sckt, bool cleanSession)
 {
     ASSERT(sckt->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_sckt_c);
-    ASSERT(sckt->sckt < socket__cnt || ((iop_t*)g_ltem.iop)->streamPeers[sckt->sckt] != NULL, srcfile_ltemc_sckt_c);
+    ASSERT(sckt->scktNm < socket__cnt || ((iop_t*)g_lqLTEM.iop)->streamPeers[sckt->scktNm] != NULL, srcfile_ltemc_sckt_c);
     ASSERT(sckt->protocol < protocol_socket, srcfile_ltemc_sckt_c);
 
-    ((iop_t*)g_ltem.iop)->scktMap &= 0x01 << sckt->sckt;
+    ((iop_t*)g_lqLTEM.iop)->scktMap &= 0x01 << sckt->scktNm;
 
     switch (sckt->protocol)
     {
     case protocol_udp:
         atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
-        atcmd_tryInvokeWithOptions("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->sckt, host, rmtPort, lclPort);
+        atcmd_tryInvokeWithOptions("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", g_lqLTEM.pdpContext, sckt->scktNm, sckt->hostUrl, sckt->hostPort, sckt->lclPort);
         break;
   case protocol_tcp:
         atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
-        atcmd_tryInvokeWithOptions("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->sckt, host, rmtPort, lclPort);
+        atcmd_tryInvokeWithOptions("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", g_lqLTEM.pdpContext, sckt->scktNm, sckt->hostUrl, sckt->hostPort, sckt->lclPort);
         break;
 
     case protocol_ssl:
         atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_sslOpenCompleteParser);
-        atcmd_tryInvokeWithOptions("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->sckt, host, rmtPort, lclPort);
+        atcmd_tryInvokeWithOptions("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", g_lqLTEM.pdpContext, sckt->scktNm, sckt->hostUrl, sckt->hostPort, sckt->lclPort);
         break;
     }
     // await result of open from inside switch() above
@@ -136,8 +139,8 @@ resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uin
     // finish initialization and run background tasks to prime data pipeline
     if (atResult == resultCode__success || atResult == sckt__resultCode_previouslyOpen)
     {
-        ((iop_t*)g_ltem.iop)->streamPeers[sckt->sckt] = sckt;
-        ((iop_t*)g_ltem.iop)->scktMap |= 0x01 << sckt->sckt;
+        ((iop_t*)g_lqLTEM.iop)->streamPeers[sckt->scktNm] = sckt;
+        ((iop_t*)g_lqLTEM.iop)->scktMap |= 0x01 << sckt->scktNm;
 
         LTEM_registerDoWorker(S_scktDoWork);
     }
@@ -145,9 +148,9 @@ resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uin
     if (atResult == sckt__resultCode_previouslyOpen)
     {
         atResult = resultCode__previouslyOpened;                                                        // translate 563 BGx response into 200 range
-        ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[sckt->sckt])->flushing = cleanSession;
-        ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[sckt->sckt])->dataPending = true;
-        PRINTF(dbgColor__white, "Flushing sckt=%d\r", sckt->sckt);
+        ((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[sckt->scktNm])->flushing = cleanSession;
+        ((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[sckt->scktNm])->dataPending = true;
+        PRINTF(dbgColor__white, "Flushing sckt=%d\r", sckt->scktNm);
         S_scktDoWork();                                                                                 // run doWork to perform flush
     }
     return atResult;
@@ -163,19 +166,19 @@ void sckt_close(scktCtrl_t *scktCtrl)
     ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic, 0xFE30);
 
     char closeCmd[20] = {0};
-    uint8_t socketBitMask = 0x01 << scktCtrl->sckt;
-    scktCtrl_t *thisSckt = (scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[scktCtrl->sckt];    // for readability
+    uint8_t socketBitMask = 0x01 << scktCtrl->scktNm;
+    scktCtrl_t *thisSckt = (scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[scktCtrl->scktNm];    // for readability
 
     if (thisSckt == 0)                           // not open
         return;
 
     if (thisSckt->useTls)
     {
-        snprintf(closeCmd, 20, "AT+QSSLCLOSE=%d", scktCtrl->sckt);                                 // BGx syntax different for SSL
+        snprintf(closeCmd, 20, "AT+QSSLCLOSE=%d", scktCtrl->scktNm);                                 // BGx syntax different for SSL
     }
     else
     {
-        snprintf(closeCmd, 20, "AT+QICLOSE=%d", scktCtrl->sckt);                                   // BGx syntax different for TCP/UDP
+        snprintf(closeCmd, 20, "AT+QICLOSE=%d", scktCtrl->scktNm);                                   // BGx syntax different for TCP/UDP
     }
     
     if (atcmd_tryInvokeDefaults(closeCmd))
@@ -183,7 +186,7 @@ void sckt_close(scktCtrl_t *scktCtrl)
         if (atcmd_awaitResult() == resultCode__success)
         {
             thisSckt = 0;
-            ((iop_t*)g_ltem.iop)->scktMap &= ~socketBitMask;
+            ((iop_t*)g_lqLTEM.iop)->scktMap &= ~socketBitMask;
         }
     }
 }
@@ -196,10 +199,10 @@ bool sckt_flush(scktCtrl_t *scktCtrl)
 {
     ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic, 0xFE30);
 
-    if ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[scktCtrl->sckt] == NULL)       // not open
+    if ((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[scktCtrl->scktNm] == NULL)       // not open
         return;
 
-    if (s_requestIrdData(scktCtrl->sckt, scktCtrl->recvBufCtrl._bufferSz, true))        // initiate an IRD flow
+    if (s_requestIrdData(scktCtrl->scktNm, scktCtrl->recvBufCtrl._bufferSz, true))        // initiate an IRD flow
     {
         scktCtrl->flushing = true;
         return true;
@@ -228,7 +231,7 @@ bool sckt_getState(scktCtrl_t *sckt)
     ASSERT(sckt->ctrlMagic != streams__ctrlMagic, srcfile_ltemc_sckt_c);
 
     atcmd_setOptions(atcmd__defaultTimeoutMS, S_socketStatusParser);
-    if (!atcmd_tryInvokeWithOptions("AT+QISTATE=1,%d", sckt->sckt))
+    if (!atcmd_tryInvokeWithOptions("AT+QISTATE=1,%d", sckt->scktNm))
         return resultCode__conflict;
 
     return atcmd_awaitResult() == resultCode__success;
@@ -241,7 +244,7 @@ bool sckt_getState(scktCtrl_t *sckt)
 resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
     resultCode_t atResult;
-    ASSERT(scktCtrl != 0 && (((iop_t*)g_ltem.iop)->scktMap & 0x01 << scktCtrl->sckt) != 0, srcfile_ltemc_sckt_c);
+    ASSERT(scktCtrl != 0 && (((iop_t*)g_lqLTEM.iop)->scktMap & 0x01 << scktCtrl->scktNm) != 0, srcfile_ltemc_sckt_c);
     ASSERT(dataSz > 0, srcfile_ltemc_sckt_c);
 
     // AT+QISEND command initiates send by signaling we plan to send dataSz bytes on a socket,
@@ -250,7 +253,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
     atcmd_setOptions(atcmd__defaultTimeoutMS, ATCMD_txDataPromptParser);
     if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
-        atcmd_invokeReuseLock("AT+QISEND=%d,%d", scktCtrl->sckt, dataSz);      // reusing manual lock
+        atcmd_invokeReuseLock("AT+QISEND=%d,%d", scktCtrl->scktNm, dataSz);      // reusing manual lock
         atResult = atcmd_awaitResult();                                             // waiting for data prompt, leaving action open on return if sucessful
 
         // await data prompt atResult successful, now send data sub-command to actually transfer data, now automatically close action after data sent
@@ -278,7 +281,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 //void SCKT__doWork();
 void S_scktDoWork()
 {
-    iop_t *iopPtr = (iop_t*)g_ltem.iop;                 // shortcut to the IOP subsystem
+    iop_t *iopPtr = (iop_t*)g_lqLTEM.iop;                 // shortcut to the IOP subsystem
 
     /* PROCESS ACTIVE DATA STREAM FLOW 
      *-------------------------------------------------------------------------------------------*/
@@ -287,7 +290,7 @@ void S_scktDoWork()
     {
         // readability vars
         scktCtrl_t *scktPtr = ((scktCtrl_t *)iopPtr->rxStreamCtrl);
-        uint8_t sckt = scktPtr->sckt;
+        uint8_t sckt = scktPtr->scktNm;
         ASSERT(scktPtr == iopPtr->streamPeers[sckt], srcfile_ltemc_sckt_c);    // ASSERT sckt cross-links are still valid
         rxDataBufferCtrl_t *bufPtr = &(scktPtr->recvBufCtrl);                       // smart-buffer for this operation
 
@@ -372,7 +375,7 @@ void S_scktDoWork()
         for (uint8_t i = 0; i < socket__cnt; i++)
         {
             nextIrd = (iopPtr->scktLstWrk + i) % socket__cnt;              // rotate to look for next open sckt for IRD request
-            scktCtrl_t *scktPtr = ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[nextIrd]);
+            scktCtrl_t *scktPtr = ((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[nextIrd]);
 
             if (iopPtr->scktMap & 0x01 << nextIrd)                              // socket is OPEN
             {
@@ -411,12 +414,12 @@ void S_scktDoWork()
 static bool S_requestIrdData(socket_t dataCntx, uint16_t reqstSz, bool applyLock)
 {
     ASSERT(dataCntx < socket__cnt, srcfile_ltemc_sckt_c);                                    // ASSERT data context is valid context
-    ASSERT(((iop_t*)g_ltem.iop)->scktMap & 0x01 << dataCntx, srcfile_ltemc_sckt_c);               // ASSERT socket is open 
+    ASSERT(((iop_t*)g_lqLTEM.iop)->scktMap & 0x01 << dataCntx, srcfile_ltemc_sckt_c);               // ASSERT socket is open 
 
     char irdCmd[24] = {0};
     uint16_t requestedSz = (!reqstSz) ? SCKT__IRD_requestMaxSz : MAX(SCKT__IRD_requestMaxSz, reqstSz);
 
-    if (((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[dataCntx])->protocol == protocol_ssl)
+    if (((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[dataCntx])->protocol == protocol_ssl)
         snprintf(irdCmd, 24, "AT+QSSLRECV=%d,%d", dataCntx, requestedSz);
     else
         snprintf(irdCmd, 24, "AT+QIRD=%d,%d", dataCntx, requestedSz);
@@ -425,9 +428,9 @@ static bool S_requestIrdData(socket_t dataCntx, uint16_t reqstSz, bool applyLock
     if (applyLock && !ATCMD_awaitLock(atcmd__defaultTimeoutMS))
         return false;
 
-    ((iop_t*)g_ltem.iop)->rxStreamCtrl = ((iop_t*)g_ltem.iop)->streamPeers[dataCntx];       // set IOP in data mode
-    ((iop_t*)g_ltem.iop)->txSendStartTck = pMillis();
-    ((scktCtrl_t*)((iop_t*)g_ltem.iop)->rxStreamCtrl)->irdRemaining = -1;                   // signal IRD pending with unknown pending
+    ((iop_t*)g_lqLTEM.iop)->rxStreamCtrl = ((iop_t*)g_lqLTEM.iop)->streamPeers[dataCntx];       // set IOP in data mode
+    ((iop_t*)g_lqLTEM.iop)->txSendStartTck = pMillis();
+    ((scktCtrl_t*)((iop_t*)g_lqLTEM.iop)->rxStreamCtrl)->irdRemaining = -1;                   // signal IRD pending with unknown pending
 
     IOP_sendTx(irdCmd, strlen(irdCmd), false);
     IOP_sendTx("\r", 1, true);
@@ -441,7 +444,7 @@ static bool S_requestIrdData(socket_t dataCntx, uint16_t reqstSz, bool applyLock
  */
 static cmdParseRslt_t S_tcpudpOpenCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd__defaultResponseParser(&g_ltem, "+QIOPEN: ", true, NULL, 1, 1, NULL);
+    return atcmd__defaultResponseParser("+QIOPEN: ", true, NULL, 1, 1, NULL);
 }
 
 
@@ -450,7 +453,7 @@ static cmdParseRslt_t S_tcpudpOpenCompleteParser(const char *response, char **en
  */
 static cmdParseRslt_t S_sslOpenCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd__defaultResponseParser(&g_ltem, "+QSSLOPEN: ", true, NULL, 1, 1, NULL);
+    return atcmd__defaultResponseParser("+QSSLOPEN: ", true, NULL, 1, 1, NULL);
 }
 
 
@@ -459,7 +462,7 @@ static cmdParseRslt_t S_sslOpenCompleteParser(const char *response, char **endpt
  */
 static cmdParseRslt_t S_socketSendCompleteParser(const char *response, char **endptr)
 {
-    return atcmd__defaultResponseParser(&g_ltem, "", false, NULL, 0, 0, ASCII_sSENDOK);
+    return atcmd__defaultResponseParser("", false, NULL, 0, 0, ASCII_sSENDOK);
 }
 
 

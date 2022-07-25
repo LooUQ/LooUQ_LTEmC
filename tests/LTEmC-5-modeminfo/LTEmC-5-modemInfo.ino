@@ -44,8 +44,8 @@
 
 /* specify the pin configuration
  * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
-#define HOST_FEATHER_LTEM3F
+#define HOST_FEATHER_UXPLOR             
+// #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
 
@@ -60,13 +60,13 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "LTEm1c test5-modemInfo\r\n");
+    PRINTF(dbgColor__red, "LTEmC test5-modemInfo\r\n");
     
     randomSeed(analogRead(0));
     lqDiag_registerEventCallback(appEventCB);                       // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEventCB);                  // create LTEmC modem, no yield req'd for testing
-    ltem_start(false);                                              // ... and start it
+    ltem_start((resetAction_t)skipResetIfRunning);                  // ... and start it
 
     PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_ltemcVersion());
 
@@ -104,10 +104,10 @@ void appEventCB(uint8_t eventType, const char *eventMsg)
 {
     if (eventType > 200)
     {
-        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", eventMsg);
+        PRINTF(dbgColor__error, "Test HardFault: %s\r", eventMsg);
         while (1) {}
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", eventMsg);
+    PRINTF(dbgColor__info, "Test Info: %s\r", eventMsg);
     return;
 }
 

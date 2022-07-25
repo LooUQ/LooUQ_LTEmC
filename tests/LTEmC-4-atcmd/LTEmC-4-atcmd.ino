@@ -60,11 +60,11 @@ void setup()
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "LTEmC test4: AT Commands\r");
+    PRINTF(dbgColor__red, "LTEmC - Test #4: AT Commands\r");
     lqDiag_registerEventCallback(appNotifyCB);                    // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appNotifyCB);               // create LTEmC modem
-    ltem_start(false);                                            // ... and start it
+    ltem_start((resetAction_t)skipResetIfRunning);                // ... and start it
 }
 
 
@@ -97,7 +97,8 @@ void loop()
         {
             char *response = atcmd_getLastParsed();
             PRINTF(dbgColor__info, "Got %d chars\r", strlen(response));
-            PRINTF(dbgColor__cyan, "Resp: %s\r", response);
+            PRINTF(dbgColor__white, "Resp:");
+            PRINTF(dbgColor__cyan, "%s\r", response);
                                                                                             // test response v. expected 
             char *validResponse = "\r\nQuectel\r\nBG";                                      // near beginning (depends on BGx echo)
             if (!strstr(response, validResponse))

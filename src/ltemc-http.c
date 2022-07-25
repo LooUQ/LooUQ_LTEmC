@@ -46,7 +46,7 @@
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 
-extern ltemDevice_t g_ltem;
+extern ltemDevice_t g_lqLTEM;
 
 /* Local Static Functions
 ------------------------------------------------------------------------------------------------------------------------- */
@@ -63,11 +63,10 @@ static cmdParseRslt_t S_httpPostStatusParser(const char *response, char **endptr
 /**
  *	@brief Create a HTTP(s) control structure to manage web communications. 
  */
-void http_initControl(httpCtrl_t *httpCtrl, socket_t sckt, const char* urlHost, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback)
+void http_initControl(httpCtrl_t *httpCtrl, socket_t sckt, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback)
 {
     ASSERT(httpCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_ltemc_http_c);
     ASSERT(sckt < socket__cnt, srcfile_ltemc_sckt_c);
-    ASSERT(strncmp(urlHost, "HTTP", 4) == 0 || strncmp(urlHost, "http", 4) == 0, srcfile_ltemc_http_c);
 
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
 
@@ -77,7 +76,6 @@ void http_initControl(httpCtrl_t *httpCtrl, socket_t sckt, const char* urlHost, 
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
     httpCtrl->pageCancellation = false;
-    strncpy(httpCtrl->urlHost, urlHost, sizeof(httpCtrl->urlHost));
     httpCtrl->useTls = ((httpCtrl->urlHost)[4] == 'S' || (httpCtrl->urlHost)[4] == 's');
 
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(httpCtrl->recvBufCtrl), recvBuf, recvBufSz);
@@ -91,6 +89,20 @@ void http_initControl(httpCtrl_t *httpCtrl, socket_t sckt, const char* urlHost, 
     httpCtrl->httpStatus = 0xFFFF;
 
     // LTEM_registerDoWorker(S_httpDoWork);                                // register the HTTP background worker with ltem_doWork()
+}
+
+/**
+ *	@brief Set host connection characteristics. 
+ *  @param httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
+ *  @param hostURL [in] The HOST address of the web server URL.
+ *  @param hostPort [in] The port number for the host web server.
+ */
+void http_setConnection(httpCtrl_t *httpCtrl, const char* hostUrl, uint16_t hostPort)
+{
+    ASSERT(strncmp(hostUrl, "HTTP", 4) == 0 || strncmp(hostUrl, "http", 4) == 0, srcfile_ltemc_http_c);
+
+    strncpy(httpCtrl->urlHost, hostUrl, sizeof(httpCtrl->urlHost));
+    httpCtrl->hostPort = hostPort;
 }
 
 
@@ -393,7 +405,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
  */
 resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
 {
-    iop_t *iopPtr = (iop_t*)g_ltem.iop;                             // shortcut to the IOP subsystem
+    iop_t *iopPtr = (iop_t*)g_lqLTEM.iop;                                       // shortcut to the IOP subsystem
     resultCode_t rslt;
     timeoutSec = (timeoutSec == 0) ? http__defaultTimeoutBGxSec : timeoutSec;
     uint32_t timeoutMS = timeoutSec * 1000;
@@ -511,7 +523,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
 
             /* catch REQUEST TIMEOUT here, so we don't wait forever.
             *-----------------------------------------------------------------------------------------------------------*/
-            if (pElapsed(((atcmd_t*)g_ltem.atcmd)->invokedAt, timeoutMS))                   // if check for request timeout
+            if (pElapsed(((atcmd_t*)g_lqLTEM.atcmd)->invokedAt, timeoutMS))                 // if check for request timeout
             {
                 httpCtrl->requestState = httpState_closing;
                 httpCtrl->httpStatus = resultCode__timeout;
@@ -571,12 +583,12 @@ static uint16_t S_setUrl(const char *url, uint16_t timeoutSec)
 
 static cmdParseRslt_t S_httpGetStatusParser(const char *response, char **endptr) 
 {
-    return atcmd__defaultResponseParser(&g_ltem, "+QHTTPGET: ", true, NULL, 0, 0, NULL);
+    return atcmd__defaultResponseParser("+QHTTPGET: ", true, NULL, 0, 0, NULL);
 }
 
 
 static cmdParseRslt_t S_httpPostStatusParser(const char *response, char **endptr) 
 {
     // successful parsing returns 200 (success) + code at position 0, 
-    return atcmd__defaultResponseParser(&g_ltem, "+QHTTPPOST: ", true, NULL, 0, 0, NULL);
+    return atcmd__defaultResponseParser("+QHTTPPOST: ", true, NULL, 0, 0, NULL);
 }

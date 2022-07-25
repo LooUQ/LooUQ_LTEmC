@@ -1,9 +1,9 @@
 /******************************************************************************
- *  \file LTEmC-2-components.ino
+ *  \file LTEmC-2-bgx.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
- *  Copyright (c) 2020 LooUQ Incorporated.
+ *  Copyright (c) 2020-2022 LooUQ Incorporated.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -42,13 +42,15 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-                                                    // define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR                         // specify the pin configuration
-// #define HOST_FEATHER_LTEM3F
+                                                    /* specify the pin configuration */
+#define HOST_FEATHER_UXPLOR                         // LooUQ UXplor development adapter for Feather
+// #define HOST_FEATHER_LTEM3F                      // LooUQ CR-LTEM3F device
 
 #include <ltemc.h>
-#include <ltemc-internal.h>                         // not usually referenced in application, necessary to access non-public functions
-#include <ltemc-nxp-sc16is.h>
+                                                    /* not usually referenced in user application */
+#include <ltemc-types.h>                            // - necessary to access internal buffers
+#include <ltemc-nxp-sc16is.h>                       // - necessary to perform direct component access via SPI
+ltemDevice_t g_lqLTEM;                              // - normally created in the ltemc.c file, this test is low-level and performs direct IO
 
 void setup() {
     #ifdef SERIAL_DBG
@@ -60,17 +62,16 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "LTEmC Test2: modem components\r\n");
+    PRINTF(dbgColor__red, "LTEmC - Test #2: BGx communications\r\n");
     lqDiag_registerEventCallback(appNotifyCB);                          // configure ASSERTS to callback into application
-
-    /*  Manually create/initialize modem parts used here
-     */
-	g_ltem.pinConfig = ltem_pinConfig;                                  // initialize the I/O modem internal settings
-    g_ltem.spi = spi_create(g_ltem.pinConfig.spiCsPin);
-    g_ltem.appEventCB = appNotifyCB;                                    // set the callback address
+    
+                                                                        /*  Manually create/initialize modem parts used here */
+	g_lqLTEM.pinConfig = ltem_pinConfig;                                // initialize the I/O modem internal settings
+    g_lqLTEM.spi = spi_create(g_lqLTEM.pinConfig.spiCsPin);
+    g_lqLTEM.appEventCB = appNotifyCB;                                  // set the callback address
 
     initIO();                                                           // initialize GPIO, SPI
-    spi_start(g_ltem.spi);
+    spi_start(g_lqLTEM.spi);
     
     if (qbg_isPowerOn())                                                // verify/apply BGx power
         PRINTF(dbgColor__dGreen, "LTEm found already powered on.\r\n");
@@ -285,16 +286,16 @@ void indicateFailure(char failureMsg[])
 void initIO()
 {
 	// on Arduino, ensure pin is in default "logical" state prior to opening
-	platform_writePin(g_ltem.pinConfig.powerkeyPin, gpioValue_low);
-	platform_writePin(g_ltem.pinConfig.resetPin, gpioValue_low);
-	platform_writePin(g_ltem.pinConfig.spiCsPin, gpioValue_high);
+	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
+	platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
 
-	platform_openPin(g_ltem.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	platform_openPin(g_ltem.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	platform_openPin(g_ltem.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	platform_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	platform_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
 
-	platform_openPin(g_ltem.pinConfig.statusPin, gpioMode_input);
-	platform_openPin(g_ltem.pinConfig.irqPin, gpioMode_inputPullUp);
+	platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
+	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
 }
 
 /* Check free memory (stack-heap) 
