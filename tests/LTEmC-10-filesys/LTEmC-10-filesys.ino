@@ -64,7 +64,7 @@ void setup() {
     platform_openPin(LED_BUILTIN, gpioMode_output);
 
     ltem_create(ltem_pinConfig, NULL, appNotifyCB);
-    ltem_start(true);                                                       // start LTEm, if found on reset it
+    ltem_start(resetAlways);                                                       // start LTEm, if found on reset it
 }
 
 

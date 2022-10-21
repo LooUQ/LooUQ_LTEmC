@@ -46,6 +46,7 @@ typedef struct ltemPinConfig_tag
     int powerkeyPin;
     int resetPin;
     int ringUrcPin;
+    int connected;
     int wakePin;
 } ltemPinConfig_t;
 

@@ -50,7 +50,7 @@ enum BGX__constants
 {
     BGX__initCommandCnt = 1,
     BGX__initCommandAttempts = 2,
-    BGX__powerOnDelay = 800,
+    BGX__powerOnDelay = 1000,
     BGX__powerOffDelay = 1500,
     BGX__resetDelay = 300,
     BGX__baudRate = 115200

@@ -42,11 +42,8 @@
 #include "ltemc-internal.h"
 
 
-#define IMEI_OFFSET 2
 #define IMEI_SIZE 15
-#define ICCID_OFFSET 10
 #define ICCID_SIZE 20
-
 
 extern ltemDevice_t g_lqLTEM;
 
@@ -74,7 +71,7 @@ modemInfo_t *mdminfo_ltem()
             atcmd_invokeReuseLock("AT+GSN");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                strncpy(((modemInfo_t*)g_lqLTEM.modemInfo)->imei, atcmd_getLastParsed() + 2, IMEI_SIZE);        // skip leading /r/n
+                strncpy(((modemInfo_t*)g_lqLTEM.modemInfo)->imei, atcmd_getLastResponse() + 2, IMEI_SIZE);        // skip leading /r/n
             }
         }
 
@@ -84,9 +81,9 @@ modemInfo_t *mdminfo_ltem()
             if (atcmd_awaitResult() == resultCode__success)
             {
                 char *term;
-                term = strstr(atcmd_getLastParsed() + 2, "\r\n");
+                term = strstr(atcmd_getLastResponse() + 2, "\r\n");
                 *term = '\0';
-                strcpy(((modemInfo_t*)g_lqLTEM.modemInfo)->fwver, atcmd_getLastParsed() + 2);
+                strcpy(((modemInfo_t*)g_lqLTEM.modemInfo)->fwver, atcmd_getLastResponse() + 2);
                 term = strchr(((modemInfo_t*)g_lqLTEM.modemInfo)->fwver, '_');
                 *term = ' ';
             }
@@ -98,9 +95,9 @@ modemInfo_t *mdminfo_ltem()
             if (atcmd_awaitResult() == resultCode__success)
             {
                 char *term;
-                term = strstr(atcmd_getLastParsed() + 2, "\r\nRev");
+                term = strstr(atcmd_getLastResponse() + 2, "\r\nRev");
                 *term = '\0';
-                strcpy(((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel, atcmd_getLastParsed() + 2);
+                strcpy(((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel, atcmd_getLastResponse() + 2);
                 term = strchr(((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel, '\r');
                 *term = ':';
                 term = strchr(((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel, '\n');
@@ -114,7 +111,7 @@ modemInfo_t *mdminfo_ltem()
             atcmd_invokeReuseLock("AT+ICCID");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                strncpy(((modemInfo_t*)g_lqLTEM.modemInfo)->iccid, atcmd_getLastParsed() + ICCID_OFFSET, ICCID_SIZE);
+                strncpy(((modemInfo_t*)g_lqLTEM.modemInfo)->iccid, atcmd_getLastResponse(), ICCID_SIZE);
             }
         }
         atcmd_close();
@@ -138,8 +135,8 @@ int16_t mdminfo_signalRSSI()
             if (atcmd_awaitResult() == resultCode__success)
             {
                 char *term;
-                char *lastResponse = atcmd_getLastParsed();
-                term = strstr(atcmd_getLastParsed() + 2, "+CSQ");
+                char *lastResponse = atcmd_getLastResponse();
+                term = strstr(atcmd_getLastResponse() + 2, "+CSQ");
                 csq = strtol(term + 5, NULL, 10);
             }
             rssi = (csq == 99) ? -999 : csq * 2 - 113;        // raw=99: no signal, range -51 to -113
@@ -179,7 +176,7 @@ uint8_t mdmInfo_signalPercent()
  */
 static cmdParseRslt_t S_iccidCompleteParser(ltemDevice_t *modem)
 {
-    return atcmd__defaultResponseParser("+ICCID: ", true, "", 20, 0, "OK\r\n");
+    return atcmd__stdResponseParser("+ICCID: ", true, "", 0, 0, "\r\n\r\nOK\r\n", 20);
 }
 
 

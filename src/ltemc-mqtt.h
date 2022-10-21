@@ -183,9 +183,7 @@ extern "C"
 /**
  *  @brief Initialize a MQTT protocol control structure.
  *  @param mqttCtrl [in] Pointer to MQTT control structure governing communications.
- *  @param dataCntxt [in] Data context to host this protocol stream.
- *  @param useTls [in] Specifies if a SSL/TLS configuration has been applied to data context to protect communications.
- *  @param useMqttVersion [in] Specifies the MQTT protocol revision to use for communications.
+ *  @param sckt [in] Socket/data context to host this protocol stream.
  *  @param recvBuf [in] Pointer to application provided receive data buffer.
  *  @param recvBufSz [in] Size of provided data buffer.
  *  @param recvCallback [in] Callback function to be invoked when received data is ready.

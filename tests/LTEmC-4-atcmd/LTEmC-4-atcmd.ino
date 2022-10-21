@@ -43,6 +43,7 @@
 
 
 // define options for how to assemble this build
+// #define HOST_FEATHER_UXPLOR_1             // specify the pin configuration
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
 // #define HOST_FEATHER_LTEM3F
 
@@ -95,7 +96,7 @@ void loop()
         
         if (atResult == resultCode__success)                                                // statusCode == 200 (similar to HTTP codes)
         {
-            char *response = atcmd_getLastParsed();
+            char *response = atcmd_getLastResponse();
             PRINTF(dbgColor__info, "Got %d chars\r", strlen(response));
             PRINTF(dbgColor__white, "Resp:");
             PRINTF(dbgColor__cyan, "%s\r", response);
@@ -147,10 +148,10 @@ void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
     if (notifType > 200)
     {
-        PRINTF( dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
+        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", notifMsg);
         while (1) {}
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
+    PRINTF(dbgColor__info, "LTEMc Info: %s\r", notifMsg);
     return;
 }
 

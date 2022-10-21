@@ -276,7 +276,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         atResult = atcmd_awaitResult();                                         // wait for "+QHTTPGET trailer
         if (atResult == resultCode__success)
         {
-            httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastParsed());
+            httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastResponse());
             if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                 httpCtrl->requestState = httpState_requestComplete;                 // update httpState, got GET/POST response
         }
@@ -379,7 +379,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
             atResult = atcmd_awaitResult();
             if (atResult == resultCode__success)                                        // wait for "+QHTTPPOST trailer
             {
-                httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastParsed());
+                httpCtrl->httpStatus = S_parseRequestResponse(httpCtrl, atcmd_getLastResponse());
                 if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                     httpCtrl->requestState = httpState_requestComplete;                 // update httpState, got GET/POST response
             }
@@ -583,12 +583,12 @@ static uint16_t S_setUrl(const char *url, uint16_t timeoutSec)
 
 static cmdParseRslt_t S_httpGetStatusParser(const char *response, char **endptr) 
 {
-    return atcmd__defaultResponseParser("+QHTTPGET: ", true, NULL, 0, 0, NULL);
+    return atcmd__stdResponseParser("+QHTTPGET: ", true, NULL, 0, 0, NULL, 0);
 }
 
 
 static cmdParseRslt_t S_httpPostStatusParser(const char *response, char **endptr) 
 {
     // successful parsing returns 200 (success) + code at position 0, 
-    return atcmd__defaultResponseParser("+QHTTPPOST: ", true, NULL, 0, 0, NULL);
+    return atcmd__stdResponseParser("+QHTTPPOST: ", true, NULL, 0, 0, NULL, 0);
 }

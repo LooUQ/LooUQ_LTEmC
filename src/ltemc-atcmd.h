@@ -68,13 +68,12 @@ typedef struct atcmd_tag
     bool isOpenLocked;                          /// True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
     bool autoLock;                              /// last invoke was auto and should be closed automatically on complete
     uint32_t invokedAt;                         /// Tick value at the command invocation, used for timeout detection.
-    char *response;                             /// PTR into IOP "core" buffer, the response to the command received from the BGx.
+    char *response;                             /// PTR into IOP "core" buffer, the response to the command received from the BGx. Parser with NULL terminate.
     uint32_t execDuration;                      /// duration of command's execution in milliseconds
     resultCode_t resultCode;                    /// consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
     cmdResponseParser_func responseParserFunc;  /// parser function to analyze AT cmd response and optionally extract value
     uint16_t errorCode;                         /// BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
     int32_t retValue;                           /// optional signed int value extracted from response
-    char *parsedResponse;                       /// optional char (c-string) value embedded in response, is expected to be NULL terminated by parser
 } atcmd_t;
 
 
@@ -167,7 +166,19 @@ resultCode_t atcmd_awaitResult();
 /**
  *	\brief Returns the atCmd result code or 0 if command is pending completion
  */
-resultCode_t atcmd_getLastResultCode();
+resultCode_t atcmd_getLastResult();
+
+
+/**
+ *	\brief Returns the atCmd parsed response (preamble to finale) if completed. An empty C-string will returned prior to completion.
+ */
+char *atcmd_getLastResponse();
+
+
+/**
+ *	\brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
+ */
+int32_t atcmd_getLastValue();
 
 
 /**
@@ -183,28 +194,15 @@ uint32_t atcmd_getLastDuration();
 
 
 /**
- *	\brief Returns the atCmd parsed response (preamble to finale) if completed. An empty C-string will returned prior to completion.
+ *	\brief Sends +++ sequence to transition BGx out of data mode to command mode.
  */
-char *atcmd_getLastParsed();
-
-
-/**
- *	\brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
- */
-int32_t atcmd_getLastValue();
+void atcmd_exitDataMode();
 
 
 /**
  *	\brief Sends ESC character to ensure BGx is not in text mode (">" prompt awaiting ^Z/ESC, MQTT publish etc.).
  */
 void atcmd_exitTextMode();
-
-
-/**
- *	\brief Sends +++ sequence to transition BGx out of data mode to command mode.
- */
-void atcmd_exitDataMode();
-
 
 
 /*-----------------------------------------------------------------------------------------------*/
@@ -215,16 +213,20 @@ cmdParseRslt_t atcmd_okResponseParser(ltemDevice_t *modem);
 
 /**
  *	\brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
- *  \details Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). The "value"
- *           and "parsedResponse" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getLastValue() and 
- *           atcmd_getLastParsed() functions respectively.
+ *  \details Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). 
+ *           Note: If no stop condition is specified, finale, tokensReqd, and lengthReqd are all omitted, the parser will return with 
+ *                 the first block of characters received.
+ *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getLastValue()
+ *           and atcmd_getLastResponse() functions respectively.
  *  \param [in] preamble - C-string containing the expected phrase that starts response. 
- *  \param [in] delimiters - (optional) C-string containing a delimiter between response tokens. If >0, parser applies valueIndx to token list to find "value"
- *  \param [in] tokensReqd - (optional) If > 0, indicates the minimum count of tokens between preamble and finale for a "succes" response.
- *  \param [in] valueIndx - Indicates the position (chars/tokens) of an integer value to grab from the response. If ==0, int conversion is attempted after preamble+whitespace
- *  \param [in] finale - C-string containing the expected phrase that concludes response. If not provided (NULL or strlen()==0), will be defaulted to "|r|nOK|r|n"
+ *  \param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
+ *  \param [in] delimiters - (optional: 0=nN/A) C-string containing the expected delimiter between response tokens.
+ *  \param [in] tokensReqd - (optional: 0=N/A) The minimum count of tokens between preamble and finale for a SUCCESS response.
+ *  \param [in] valueIndx - (optional: 0=N/A) Indicates the 1-n position (chars/tokens) of an integer value to grab from the response.
+ *  \param [in] finale - (optional: NULL,empty str, use full response) C-string containing the expected phrase that concludes response.
+ *  \param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
  */
-cmdParseRslt_t atcmd__defaultResponseParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, uint8_t valueIndx, const char *finale);
+cmdParseRslt_t atcmd__stdResponseParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, uint8_t valueIndx, const char *finale, uint16_t lengthReqd);
 
 
 // base parsers to be wrapped by custom initialization values

@@ -37,7 +37,7 @@
 
 #include "platform/lqPlatform-gpio.h"
 
-#ifdef HOST_FEATHER_UXPLOR
+#ifdef HOST_FEATHER_UXPLOR_1
 const ltemPinConfig_t ltem_pinConfig =
 {
     spiCsPin : 13,
@@ -49,6 +49,21 @@ const ltemPinConfig_t ltem_pinConfig =
     wakePin : 0
 };
 #endif
+
+#ifdef HOST_FEATHER_UXPLOR
+const ltemPinConfig_t ltem_pinConfig =
+{
+    spiCsPin : 13,
+    irqPin : 12,
+    statusPin : 19,                 ///< (aka A5) HIGH indicates ON 
+    powerkeyPin : 11,               ///< toggle HIGH to change state
+    resetPin : 10,                  ///< reset active HIGH
+    ringUrcPin : 15,                /// (aka A2)
+    connected : 17,                 /// (aka A3)
+    wakePin : 18                    /// (aka A4)
+};
+#endif
+
 
 #ifdef HOST_FEATHER_LTEM3F
 const ltemPinConfig_t ltem_pinConfig =

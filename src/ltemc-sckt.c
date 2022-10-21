@@ -444,7 +444,7 @@ static bool S_requestIrdData(socket_t dataCntx, uint16_t reqstSz, bool applyLock
  */
 static cmdParseRslt_t S_tcpudpOpenCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd__defaultResponseParser("+QIOPEN: ", true, NULL, 1, 1, NULL);
+    return atcmd__stdResponseParser("+QIOPEN: ", true, NULL, 1, 1, NULL, 0);
 }
 
 
@@ -453,7 +453,7 @@ static cmdParseRslt_t S_tcpudpOpenCompleteParser(const char *response, char **en
  */
 static cmdParseRslt_t S_sslOpenCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd__defaultResponseParser("+QSSLOPEN: ", true, NULL, 1, 1, NULL);
+    return atcmd__stdResponseParser("+QSSLOPEN: ", true, NULL, 1, 1, NULL, 0);
 }
 
 
@@ -462,7 +462,7 @@ static cmdParseRslt_t S_sslOpenCompleteParser(const char *response, char **endpt
  */
 static cmdParseRslt_t S_socketSendCompleteParser(const char *response, char **endptr)
 {
-    return atcmd__defaultResponseParser("", false, NULL, 0, 0, ASCII_sSENDOK);
+    return atcmd__stdResponseParser("", false, NULL, 0, 0, ASCII_sSENDOK, 0);
 }
 
 

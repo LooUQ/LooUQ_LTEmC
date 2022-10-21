@@ -334,7 +334,7 @@ uint8_t ntwk_getActiveNetworkCount()
             goto finally;
         }
 
-        if (strlen(atcmd_getLastParsed()) > IP_QIACT_SZ)
+        if (strlen(atcmd_getLastResponse()) > IP_QIACT_SZ)
         {
             #define TOKEN_BUF_SZ 16
             char *nextContext;
@@ -343,7 +343,7 @@ uint8_t ntwk_getActiveNetworkCount()
             uint8_t landmarkSz = IP_QIACT_SZ;
             char tokenBuf[TOKEN_BUF_SZ];
 
-            nextContext = strstr(atcmd_getLastParsed(), "+QIACT: ");
+            nextContext = strstr(atcmd_getLastResponse(), "+QIACT: ");
 
             // no contexts returned = none active (only active contexts are returned)
             while (nextContext != NULL && ntwkIndx < ntwk__pdpContextCnt)                       // now parse each pdp context entry
@@ -410,7 +410,7 @@ void ntwk_getOperators(char *operatorList, uint16_t listSz)
             atcmd_invokeReuseLock("AT+COPS=?");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                strncpy(operatorList, atcmd_getLastParsed() + 9, listSz - 1);
+                strncpy(operatorList, atcmd_getLastResponse() + 9, listSz - 1);
             }
         }
     }
@@ -432,7 +432,7 @@ void ntwk_getOperators(char *operatorList, uint16_t listSz)
 */
 static cmdParseRslt_t S_contextStatusCompleteParser(void *atcmd, const char *response)
 {
-    return atcmd__defaultResponseParser("+QIACT: ", false, NULL, 2, 2, NULL);
+    return atcmd__stdResponseParser("+QIACT: ", false, NULL, 2, 2, NULL, 0);
 }
 
 
@@ -457,7 +457,7 @@ static providerInfo_t *S_getNetworkProvider()
         if (atcmd_awaitResult() == resultCode__success)
         {
             char *continuePtr;
-            continuePtr = strchr(atcmd_getLastParsed(), '"');
+            continuePtr = strchr(atcmd_getLastResponse(), '"');
             if (continuePtr != NULL)
             {
                 continuePtr = S_grabToken(continuePtr + 1, '"', ((providerInfo_t*)g_lqLTEM.providerInfo)->name, ntwk__providerNameSz);

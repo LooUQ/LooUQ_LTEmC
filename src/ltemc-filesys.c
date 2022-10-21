@@ -136,7 +136,7 @@ fileOpenResult_t filesys_open(const char* fileName, fileOpenMode_t openMode, fil
     }
     // parse response
     // +QFOPEN: <filehandle>
-    continuePtr = atcmd_getLastParsed() + FILE_INFO_DATAOFFSET;         // skip past +QFLDS: 
+    continuePtr = atcmd_getLastResponse() + FILE_INFO_DATAOFFSET;         // skip past +QFLDS: 
     fileResult.fileHandle = strtol(continuePtr, &continuePtr, 10);  
 
     finally:

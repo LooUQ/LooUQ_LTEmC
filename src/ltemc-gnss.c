@@ -115,7 +115,7 @@ gnssLocation_t gnss_getLocation()
 
         PRINTF(dbgColor__warn, "getLocation(): parse starting...\r");
 
-        char *parsedResponse = atcmd_getLastParsed();
+        char *parsedResponse = atcmd_getLastResponse();
         char *delimAt;
 
 
@@ -158,7 +158,7 @@ gnssLocation_t gnss_getLocation()
 static cmdParseRslt_t gnssLocCompleteParser(const char *response, char **endptr)
 {
     //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr
-    cmdParseRslt_t parseRslt = atcmd__defaultResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, NULL);
+    cmdParseRslt_t parseRslt = atcmd__stdResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, NULL, 0);
     PRINTF(0, "gnssParser(): result=%i\r", parseRslt);
     return parseRslt;
 }
