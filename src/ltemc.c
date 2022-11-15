@@ -42,13 +42,29 @@ const char *ltemcVersion = "3.0.1";
 #include "ltemc-internal.h"
 
 /* ------------------------------------------------------------------------------------------------
- * GLOBAL LTEm1 Device Objects, One LTEmX supported
+ * GLOBAL LTEm Device Objects, One LTEmX supported
  * --------------------------------------------------------------------------------------------- */
 ltemDevice_t g_lqLTEM;
 
+
+/* BGx module initialization commands (start script)
+ * ---------------------------------------------------------------------------------------------
+ * used in ltemc-quectel-bg.c for module initialization, declared here for convenience
+ * LTEmC requires that no-echo is there, append any ADDITIONAL global module setting command in the list.
+ * Ex: Radio setup (RAT search, IoT mode, etc.) 
+ * ------------------------------------------------------------------------------------------------ */
+const char* const qbg_initCmds[] = 
+{ 
+    "ATE0",                 // don't echo AT commands on serial
+};
+
+// makes for compile time automatic sz determination
+int8_t qbg_initCmdsCnt = sizeof(qbg_initCmds)/sizeof(const char* const);            
+
+
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------ */
-void S__initDevice(bool foundOn);
+void S__initLTEmDevice(bool ltemReset);
 
 
 #pragma region Public Functions
@@ -97,7 +113,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
  */
 void ltem_destroy()
 {
-	ltem_stop();
+	ltem_stop(false);
 
 	gpio_pinClose(g_lqLTEM.pinConfig.irqPin);
 	gpio_pinClose(g_lqLTEM.pinConfig.powerkeyPin);
@@ -129,54 +145,57 @@ void ltem_start(resetAction_t resetAction)
 	platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
 	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
 
-    spi_start(g_lqLTEM.spi);                                              // start host SPI
+    spi_start(g_lqLTEM.spi);                                                // start host SPI
 
-    bool foundOn = qbg_isPowerOn();
-    if (foundOn)
+    bool ltemReset = true;
+    if (qbg_isPowerOn())
     {
-        if (resetAction)
-        {
-            qbg_reset(true);                                    // do hardware reset (aka power cycle)
-            foundOn = false;
-        }
+        if (resetAction == skipIfOn)
+            ltemReset = false;
+        else
+            qbg_reset(resetAction);                                        // do requested reset (sw, hw, pwrCycle)
     }
     else 
     {
-        qbg_powerOn();                                          // turn on BGx
+       qbg_powerOn();                                                       // turn on BGx
     }
-    S__initDevice(foundOn);
-    return !foundOn;
+    S__initLTEmDevice(ltemReset);
 }
 
 
 /**
  *	@brief Static internal BGx initialization logic shared between start and reset
  */
-void S__initDevice(bool foundOn)
+void S__initLTEmDevice(bool ltemReset)
 {
     ASSERT(qbg_isPowerOn(), srcfile_ltemc_ltemc_c);
 
     SC16IS7xx_start();                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
-    IOP_attachIrq();                                        // attach I/O processor ISR to IRQ
-    SC16IS7xx_enableIrqMode();                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
 
-    if (foundOn)
-        g_lqLTEM.deviceState = deviceState_appReady;    // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
-    else
+    if (ltemReset)
     {
-        uint32_t appRdyWaitStart = pMillis();
-        while (g_lqLTEM.deviceState != deviceState_appReady)
+        if (IOP_awaitAppReady())
         {
-            pDelay(1);                                                      // yields behind the scenes
-            if (pMillis() - appRdyWaitStart > PERIOD_FROM_SECONDS(15) && g_lqLTEM.deviceState == deviceState_powerOn)
-                g_lqLTEM.deviceState = deviceState_appReady;            // missed it somehow
+            PRINTF(dbgColor__info, "AppRdy recv'd\r");
+        }
+        else
+        {
+            if (g_lqLTEM.deviceState == deviceState_powerOn)
+            {
+                PRINTF(dbgColor__warn, "AppRdy timeout\r");
+                g_lqLTEM.deviceState = deviceState_appReady;        // missed it somehow
+            }
+
         }
     }
+    else
+    {
+        g_lqLTEM.deviceState = deviceState_appReady;        // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
+        PRINTF(dbgColor__info, "AppRdy LTEm ON\r");
+    }
 
-    // if (!foundOn)                                   
-    //     IOP_awaitAppReady();                                // wait for BGx to signal out firmware ready (URC message)
-    // else
-
+    IOP_attachIrq();                                        // attach I/O processor ISR to IRQ
+    SC16IS7xx_enableIrqMode();                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
     qbg_setOptions();                                       // initialize BGx operating settings
 }
 
@@ -198,8 +217,8 @@ void ltem_stop()
  */
 void ltem_reset(bool hardReset)
 {
-    qbg_reset(hardReset);                                       // reset module, indirectly SPI/UART (CFUNC or reset pin)
-    S__initDevice(!hardReset);
+    qbg_reset(hardReset);                                           // reset module, indirectly SPI/UART (CFUNC or reset pin)
+    S__initLTEmDevice(false);
 }
 
 
@@ -208,7 +227,7 @@ void ltem_reset(bool hardReset)
  */
 deviceState_t ltem_readDeviceState()
 {
-    if (platform_readPin(g_lqLTEM.pinConfig.statusPin))           // ensure powered off device doesn't report otherwise
+    if (platform_readPin(g_lqLTEM.pinConfig.statusPin))             // ensure powered off device doesn't report otherwise
     {
         if (g_lqLTEM.deviceState == deviceState_powerOff)
             g_lqLTEM.deviceState = deviceState_powerOn; 
@@ -299,8 +318,6 @@ void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker)
 
 
 #pragma endregion
-
-
 
 #pragma region Static Function Definitions
 #pragma endregion

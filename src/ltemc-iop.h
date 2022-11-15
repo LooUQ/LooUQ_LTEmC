@@ -121,7 +121,7 @@ void IOP_registerStream(streamPeer_t stream, iopStreamCtrl_t *streamCtrl);
 /**
  *	@brief Verify LTEm firmware has started and is ready for driver operations.
  */
-void IOP_awaitAppReady();
+bool IOP_awaitAppReady();
 
 
 /**

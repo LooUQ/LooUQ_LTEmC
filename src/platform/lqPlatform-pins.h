@@ -23,7 +23,7 @@
  *
  *****************************************************************************
  * Psuedo-Header referenced ONLY by application after defining host. This in turn
- * creates an initialized ltem1_pinConfig variable.
+ * creates an initialized ltem_pinConfig variable.
  *****************************************************************************/
 
 
@@ -37,7 +37,10 @@
 
 #include "platform/lqPlatform-gpio.h"
 
-#ifdef HOST_FEATHER_UXPLOR_1
+#define STATUS_LOW_PULLDOWN
+
+
+#ifdef HOST_FEATHER_UXPLOR_L
 const ltemPinConfig_t ltem_pinConfig =
 {
     spiCsPin : 13,
@@ -95,12 +98,12 @@ const ltemPinConfig_t ltem_pinConfig =
 #ifdef HOST_RASPI_UXPLOR
 const ltemPinConfig_t ltem_pinConfig = 
 {
-    .spiCsPin = 0, 			//< J8_24
-	.irqPin = 22U,		    //< J8_15
-	.statusPin = 13U,		//< J8_22
-	.powerkeyPin = 24U,		//< J8_18
-	.resetPin = 23U,		//< J8_16
-	.ringUrcPin = 0,
-    .wakePin = 0
+    spiCsPin = 0, 			//< J8_24
+	irqPin = 22U,		    //< J8_15
+	statusPin = 13U,		//< J8_22
+	powerkeyPin = 24U,		//< J8_18
+	resetPin = 23U,		//< J8_16
+	ringUrcPin = 0,
+    wakePin = 0
 };
 #endif

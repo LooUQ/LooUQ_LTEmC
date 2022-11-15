@@ -134,7 +134,7 @@ void setup() {
     ltem_start((resetAction_t)skipResetIfRunning);                                  // start modem, no reset if modem found ON
 
     PRINTF(dbgColor__none, "Waiting on network...\r");
-    providerInfo_t *networkProvider = ntwk_awaitProvider(30000);
+    providerInfo_t *networkProvider = ntwk_awaitProvider(30);
     if (strlen(networkProvider->name) == 0)
         appNotifyCB(255, "Timout (30s) waiting for cellular network.");
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
@@ -142,7 +142,7 @@ void setup() {
     uint8_t cntxtCnt = ntwk_getActiveNetworkCount();
     if (cntxtCnt == 0)
     {
-        ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, networkPDPType_IPV4, "");
+        ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, pdpProtocolType_IPV4, "");
     }
 
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub

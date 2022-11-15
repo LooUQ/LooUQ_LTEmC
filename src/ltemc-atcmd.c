@@ -225,7 +225,7 @@ resultCode_t atcmd_getResult()
             atcmdPtr->execDuration = pMillis() - atcmdPtr->invokedAt;
 
             if (!ltem_readDeviceState())                                        // if action timed-out, verify not a device wide failure
-                ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not On");            // BGx status pin low
+                ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not ON");            // BGx status pin low
             else if (!SC16IS7xx_chkCommReady())
                 ltem_notifyApp(appEvent_fault_softLogic, "LTEm SPI");               // UART bridge SPI not initialized correctly, IRQ not enabled
 

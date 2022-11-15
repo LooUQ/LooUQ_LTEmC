@@ -44,7 +44,8 @@
 
 /* specify the pin configuration
  * --------------------------------------------------------------------------------------------- */
-#define HOST_FEATHER_UXPLOR             
+//#define HOST_FEATHER_UXPLOR   
+#define HOST_FEATHER_UXPLOR_L          
 // #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>

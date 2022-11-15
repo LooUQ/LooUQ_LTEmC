@@ -101,7 +101,7 @@ void setup() {
     uint8_t cntxtCnt = ntwk_getActiveNetworkCount();
     if (cntxtCnt == 0)
     {
-        ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, networkPDPType_IPV4, "");
+        ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, pdpProtocolType_IPV4, "");
     }
 
     /* Basic connectivity established, moving on to HTTPS setup */

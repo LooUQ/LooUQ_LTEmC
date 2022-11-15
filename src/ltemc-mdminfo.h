@@ -77,6 +77,14 @@ int16_t mdminfo_signalRSSI();
 */
 uint8_t mdmInfo_signalPercent();
 
+
+/** 
+ *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone) 
+ *  @return The radio signal strength factored into a count of bars for UI display
+ * */
+uint8_t mdminfo_signalBars(uint8_t displayBarCount);
+
+
 #ifdef __cplusplus
 }
 #endif

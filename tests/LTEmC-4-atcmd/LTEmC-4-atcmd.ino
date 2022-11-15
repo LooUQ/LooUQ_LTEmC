@@ -42,9 +42,9 @@
 #endif
 
 
-// define options for how to assemble this build
-// #define HOST_FEATHER_UXPLOR_1             // specify the pin configuration
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// define options, specify the pin configuration
+#define HOST_FEATHER_UXPLOR_L
+// #define HOST_FEATHER_UXPLOR
 // #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
@@ -61,11 +61,12 @@ void setup()
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "LTEmC - Test #4: AT Commands\r");
-    lqDiag_registerEventCallback(appNotifyCB);                    // configure ASSERTS to callback into application
+    PRINTF(dbgColor__red, "\r\rLTEmC - Test #4: AT Commands\r");
+    lqDiag_registerEventCallback(appNotifyCB);                      // enable ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, appNotifyCB);               // create LTEmC modem
-    ltem_start((resetAction_t)skipResetIfRunning);                // ... and start it
+    ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem
+    ltem_start(swReset);                                            // ... and start it
+    //ltem_start((resetAction_t)skipResetIfRunning);
 }
 
 
@@ -85,9 +86,9 @@ void loop()
     */
 
     uint8_t regValue = 0;
-    char cmdStr[] = "ATI\r\0";
-    // char cmdStr[] = "AT+CPIN?\r\0";
-    // char cmdStr[] = "AT+QCCID\r\0";
+    char cmdStr[] = "ATI";
+    // char cmdStr[] = "AT+CPIN?";
+    // char cmdStr[] = "AT+QCCID";
     PRINTF(dbgColor__none, "Invoking cmd: %s \r\n", cmdStr);
 
     if (atcmd_tryInvoke(cmdStr))

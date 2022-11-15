@@ -6,6 +6,7 @@
         "limits": "c",
         "type_traits": "c",
         "bitset": "cpp",
-        "cfloat": "cpp"
+        "cfloat": "cpp",
+        "ltemc-internal.h": "c"
     }
 }

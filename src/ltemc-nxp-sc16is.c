@@ -25,7 +25,7 @@
  * NXP SC16is__ (740,741,750,760) support used in LooUQ designs
  *****************************************************************************/
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -75,8 +75,7 @@ void SC16IS7xx_start()
     // reset bridge to a known state, possible this is restart (already powered on)
     SC16IS7xx_writeReg(SC16IS7xx_UARTRST_regAddr, SC16IS7xx__SW_resetMask);
 
-    /* Need EFR[4]=1 to enable bridge enhanced functions: TX trigger and TLR settings for IRQ 
-     */
+    // Need EFR[4]=1 to enable bridge enhanced functions: TX trigger and TLR settings for IRQ 
     SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__REGSET_enhanced);
     REG_MODIFY(SC16IS7xx_EFR, SC16IS7xx_EFR_reg.ENHANCED_FNS_EN = 1;)
     SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__REGSET_general);
@@ -106,7 +105,7 @@ void SC16IS7xx_start()
  */
 void SC16IS7xx_enableIrqMode()
 {
-   	// IRQ Enabled: RX chars available, TX spaces available, UART framing error : reg = 0x07
+   	// IRQ to enable: RX chars available, TX spaces available, UART framing error : reg = 0x07
 	SC16IS7xx_IER ierSetting = {0};
 	ierSetting.RHR_DATA_AVAIL_INT_EN = 1;
 	ierSetting.THR_EMPTY_INT_EN = 1; 
@@ -120,10 +119,10 @@ void SC16IS7xx_enableIrqMode()
  */
 bool SC16IS7xx_chkCommReady()
 {
-    // uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
-    // SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, wrVal);
-    // return SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr) == wrVal;
-    return SC16IS7xx_readReg(SC16IS7xx_IER_regAddr) == 0x07;
+    uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
+    SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, wrVal);
+    return SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr) == wrVal;
+    // return SC16IS7xx_readReg(SC16IS7xx_IER_regAddr) == 0x07;
 }
 
 #pragma endregion
@@ -221,9 +220,9 @@ void SC16IS7xx_flushRxFifo()
  */
 void SC16IS74__displayFifoStatus(const char *dispMsg)
 {
-    PRINTF(dbgColor_gray, "%s...\r\n", dispMsg);
+    PRINTF(dbgColor__gray, "%s...\r\n", dispMsg);
     uint8_t bufFill = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-    PRINTF(dbgColor_gray, "  -- RX buf level=%d\r\n", bufFill);
+    PRINTF(dbgColor__gray, "  -- RX buf level=%d\r\n", bufFill);
     bufFill = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
-    PRINTF(dbgColor_gray, "  -- TX buf level=%d\r\n", bufFill);
+    PRINTF(dbgColor__gray, "  -- TX buf level=%d\r\n", bufFill);
 }

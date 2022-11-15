@@ -73,10 +73,10 @@ void ntwk_setIotMode(ntwk_iotMode_t mode);
 
 /**
  *   \brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
- *   \param [in] waitDurSeconds Number of seconds to wait for a network. Supply 0 for no wait.
+ *   \param [in] waitSec Number of seconds to wait for a network. Supply 0 for no wait.
  *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-providerInfo_t *ntwk_awaitProvider(uint16_t waitDurSeconds);
+providerInfo_t *ntwk_awaitProvider(uint16_t waitSec);
 
 
 /**
@@ -92,25 +92,25 @@ void ntwk_setProviderDefaultContext(uint8_t defaultContext);
  *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
  *  \param [in] apn The APN name if required by network carrier.
  */
-networkInfo_t *ntwk_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *apn);
+networkInfo_t *ntwk_activateNetwork(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn);
 
 
 /**
  *	\brief Activate PDP Context/APN requiring authentication.
- *  \param [in] cntxtId The APN to operate on. Typically 0 or 1
+ *  \param [in] pdpContextId The PDP context to work with, typically 0 or 1.
  *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
  *  \param [in] apn The APN name if required by network carrier.
  *  \param [in] userName String with user name
  *  \param [in] pw String with password
  *  \param [in] authMethod Enum specifying the type of authentication expected by network
  */
-networkInfo_t *ntwk_activateNetworkWithAuth(uint8_t cntxtId, networkPDPType_t protoType, const char *apn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
+networkInfo_t *ntwk_activateNetworkWithAuth(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
 
 /**
  *	\brief Deactivate PDP Context/APN.
- *  \param [in] cntxtId The APN number to operate on.
+ *  \param [in] contextId The APN number to operate on.
  */
-void ntwk_deactivateNetwork(uint8_t contxtId);
+void ntwk_deactivateNetwork(uint8_t contextId);
 
 
 /**

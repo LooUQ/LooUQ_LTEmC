@@ -46,13 +46,6 @@
 #include "ltemc-gpio.h"
 
 
-typedef enum resetAction_tag
-{
-    skipResetIfRunning,
-    resetAlways,
-} resetAction_t;
-
-
 /* LTEmC uses 2 global buffers: the IOP transmit buffer and the ATCMD cmd\core buffer.
  * These are sized in the ltemc-iop.h and ltemc-atcmd.h header files respectively.
  * LooUQ set defaults sizes are:
@@ -98,7 +91,7 @@ void ltem_start(resetAction_t resetAction);
 
 
 /**
- *	\brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW
+ *	\brief Powers off the modem without destroying memory objects. Power modem back on with ltem_start()
  */
 void ltem_stop();
 

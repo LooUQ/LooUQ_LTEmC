@@ -55,7 +55,7 @@ extern ltemDevice_t g_lqLTEM;
 static cmdParseRslt_t S_contextStatusCompleteParser(void * atcmd, const char *response);
 static providerInfo_t *S_getNetworkProvider();
 static char *S_grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
-static networkInfo_t *S_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *pApn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
+static networkInfo_t *S_activateNetwork(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *pApn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
 
 
 /* public tcpip functions
@@ -110,13 +110,13 @@ void ntwk_setIotMode(ntwk_iotMode_t iotMode)
 /**
  *   \brief Wait for a network provider name and network mode. Can be cancelled in threaded env via g_lqLTEM->cancellationRequest.
 */
-providerInfo_t *ntwk_awaitProvider(uint16_t waitDurSeconds)
+providerInfo_t *ntwk_awaitProvider(uint16_t waitSec)
 {
     // networkInfo_t ntwk;
     providerInfo_t *provider;
     uint32_t startMillis, endMillis;
     startMillis = endMillis = pMillis();
-    uint32_t waitDuration = (waitDurSeconds > 300) ? 300000 : waitDurSeconds * 1000;    // max is 5 minutes
+    uint32_t waitDuration = (waitSec > 300) ? 300000 : waitSec * 1000;    // max is 5 minutes
 
     do 
     {
@@ -144,7 +144,7 @@ void ntwk_setProviderDefaultContext(uint8_t defaultContext)
 
 
 
-// networkInfo_t *lqcNtwk_activateNetwork(uint8_t contextId, networkPDPType_t networkPDPType, const char *apn)
+// networkInfo_t *lqcNtwk_activateNetwork(uint8_t pdpContextId, networkPDPType_t networkPDPType, const char *apn)
 // {
 //     ASSERT(ltem_readDeviceState() == qbgDeviceState_appReady, srcfile_cm_lqcloudNtwkLtemc_c);
 //     providerInfo_t *provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(2));                       // this is a query to verify connection to provider
@@ -159,8 +159,8 @@ void ntwk_setProviderDefaultContext(uint8_t defaultContext)
 //             *
 //             *  If apnCount > 0, assume "data" context is available. Can test with ntwk_getContext(context_ID) != NULL.
 //             */
-//         ntwk_activateNetwork(contextId, networkPDPType, apn);
-//         ntwk = ntwk_getNetworkInfo(contextId);
+//         ntwk_activateNetwork(pdpContextId, networkPDPType, apn);
+//         ntwk = ntwk_getNetworkInfo(pdpContextId);
 //         if (ntwk->isActive)
 //             PRINTF(dbgColor__white, "Network(PDP) Context=1, IPaddr=%s\r", pdpCntxt->ipAddress);
 //     }
@@ -169,7 +169,7 @@ void ntwk_setProviderDefaultContext(uint8_t defaultContext)
 
 #define STREMPTY(charvar)  (charvar == NULL || charvar[0] == 0 )
 
-static networkInfo_t *S_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *apn, const char *userName, const char *pw, pdpCntxtAuthMethods_t authMethod)
+static networkInfo_t *S_activateNetwork(uint8_t cntxtId, pdpProtocolType_t protoType, const char *apn, const char *userName, const char *pw, pdpCntxtAuthMethods_t authMethod)
 {
     networkInfo_t *ntwk = ntwk_getNetworkInfo(cntxtId);
     if (ntwk != NULL)
@@ -226,9 +226,9 @@ static networkInfo_t *S_activateNetwork(uint8_t cntxtId, networkPDPType_t protoT
 /**
  *	\brief Activate PDP Context/APN.
  */
-networkInfo_t * ntwk_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType, const char *apn)
+networkInfo_t * ntwk_activateNetwork(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn)
 {
-    return S_activateNetwork(cntxtId, protoType, apn, NULL, NULL, 0);
+    return S_activateNetwork(pdpContextId, protoType, apn, NULL, NULL, 0);
 
     // if (ntwk_getNetworkInfo(cntxtId) != NULL)
     //     return true;
@@ -261,9 +261,9 @@ networkInfo_t * ntwk_activateNetwork(uint8_t cntxtId, networkPDPType_t protoType
 /**
  *	\brief Activate PDP Context/APN requiring authentication.
  */
-networkInfo_t * ntwk_activateNetworkWithAuth(uint8_t cntxtId, networkPDPType_t protoType, const char *apn, const char *userName, const char *pw, pdpCntxtAuthMethods_t authMethod)
+networkInfo_t * ntwk_activateNetworkWithAuth(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn, const char *userName, const char *pw, pdpCntxtAuthMethods_t authMethod)
 {
-    return S_activateNetwork(cntxtId, protoType, apn, userName, pw, authMethod);
+    return S_activateNetwork(pdpContextId, protoType, apn, userName, pw, authMethod);
 
     // if (ntwk_getNetworkInfo(cntxtId) != NULL)
     //     return true;
@@ -351,9 +351,9 @@ uint8_t ntwk_getActiveNetworkCount()
                 landmarkAt = nextContext;
                 networkInfo_t *ntwk = &((providerInfo_t*)g_lqLTEM.providerInfo)->networks[ntwkIndx];
 
-                ntwk->contextId = strtol(landmarkAt + landmarkSz, &continuePtr, 10);
+                ntwk->pdpContextId = strtol(landmarkAt + landmarkSz, &continuePtr, 10);
                 continuePtr = strchr(++continuePtr, ',');                                       // skip context_state: always 1
-                ntwk->protoType = (int)strtol(continuePtr + 1, &continuePtr, 10);
+                ntwk->pdpProtocolType = (int)strtol(continuePtr + 1, &continuePtr, 10);
                 continuePtr = S_grabToken(continuePtr + 2, '"', tokenBuf, TOKEN_BUF_SZ);
                 if (continuePtr != NULL)
                 {
@@ -374,7 +374,7 @@ uint8_t ntwk_getActiveNetworkCount()
 /**
  *	\brief Get network (PDP) information
  */
-networkInfo_t *ntwk_getNetworkInfo(uint8_t contextId)
+networkInfo_t *ntwk_getNetworkInfo(uint8_t pdpContextId)
 {
     uint8_t ntwkCnt = 0;
     do
@@ -384,7 +384,7 @@ networkInfo_t *ntwk_getNetworkInfo(uint8_t contextId)
             providerInfo_t *provider = g_lqLTEM.providerInfo;                                         // cast to provider pointer
             for (size_t i = 0; i < ntwk__pdpContextCnt; i++)
             {
-                if(provider->networks[i].contextId == contextId && provider->networks[i].isActive)
+                if(provider->networks[i].pdpContextId == pdpContextId && provider->networks[i].isActive)
                     return &provider->networks[i];
             }
         }

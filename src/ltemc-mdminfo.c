@@ -163,6 +163,17 @@ uint8_t mdmInfo_signalPercent()
     return (uint8_t)rssi;
 }
 
+
+/** 
+ *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone) 
+ * */
+uint8_t mdminfo_signalBars(uint8_t displayBarCount)
+{
+    uint8_t barSpan = (113 - 51) / displayBarCount;
+    int16_t rssi = mdminfo_signalRSSI();
+    return (uint8_t)((rssi + 113 + barSpan) / barSpan);
+}
+
 #pragma endregion
 
 

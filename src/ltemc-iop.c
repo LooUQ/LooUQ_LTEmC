@@ -82,7 +82,7 @@
 
 #define NULL 0
 
-#define QBG_APPREADY_MILLISMAX 5000
+#define QBG_APPREADY_MILLISMAX 10000
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
@@ -164,7 +164,7 @@ void IOP_registerStream(streamPeer_t streamIndx, iopStreamCtrl_t *streamCtrl)
 /**
  *	@brief Verify LTEm firmware has started and is ready for driver operations.
  */
-void IOP_awaitAppReady()
+bool IOP_awaitAppReady()
 {
     char buf[120] = {0};
     char *head = &buf;
@@ -184,12 +184,15 @@ void IOP_awaitAppReady()
                 char *foundAt = strstr(buf, "APP RDY");
                 if (foundAt)
                 {
+                    PRINTF(dbgColor__white, "AppRdy @ %lums\r", pMillis() - waitStart);
                     g_lqLTEM.deviceState = deviceState_appReady;
-                    return;
+                    return true;
                 }
             }
         }
     }
+    PRINTF(dbgColor__warn, "AppRdy Timeout");
+    return false;
 }
 
 
@@ -647,9 +650,9 @@ void IOP_rxParseForUrcEvents()
             uint8_t contextId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
             for (size_t i = 0; i <  sizeof(((providerInfo_t*)g_lqLTEM.providerInfo)->networks) / sizeof(providerInfo_t); i++)
             {
-                if (((providerInfo_t*)g_lqLTEM.providerInfo)->networks[i].contextId == contextId)
+                if (((providerInfo_t*)g_lqLTEM.providerInfo)->networks[i].pdpContextId == contextId)
                 {
-                    ((providerInfo_t*)g_lqLTEM.providerInfo)->networks[i].contextId = 0;
+                    ((providerInfo_t*)g_lqLTEM.providerInfo)->networks[i].pdpContextId = 0;
                     ((providerInfo_t*)g_lqLTEM.providerInfo)->networks[i].ipAddress[0] = 0;
                     break;
                 }
@@ -659,18 +662,18 @@ void IOP_rxParseForUrcEvents()
         }
     }
 
-    if (g_lqLTEM.deviceState == deviceState_powerOn)                                                // device is powered on but not confirmed ready
-    {
-        uint8_t newCharCnt = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head - ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead;
-        char *target = memchr(((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead, (int)'A', newCharCnt);
-        if (target != NULL && memcmp(target, "APP RDY\r\n", 9) == 0)
-        {
-            PRINTF(dbgColor__cyan, "-p=aRdy");
-            g_lqLTEM.deviceState = deviceState_appReady;
-            // discard this chunk, processed here
-            ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead;
-        }
-    }
+    // if (g_lqLTEM.deviceState == deviceState_powerOn)                                                // device is powered on but not confirmed ready
+    // {
+    //     uint8_t newCharCnt = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head - ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead;
+    //     char *target = memchr(((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead, (int)'A', newCharCnt);
+    //     if (target != NULL && memcmp(target, "APP RDY\r\n", 9) == 0)
+    //     {
+    //         PRINTF(dbgColor__cyan, "-p=aRdy");
+    //         g_lqLTEM.deviceState = deviceState_appReady;
+    //         // discard this chunk, processed here
+    //         ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead;
+    //     }
+    // }
 }
 
 

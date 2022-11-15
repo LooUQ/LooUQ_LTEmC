@@ -53,5 +53,4 @@
 #include "ltemc-geo.h"
 */
 
-
 #endif  /* !__LTEMC_INTERNAL_H__ */
