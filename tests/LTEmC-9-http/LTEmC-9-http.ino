@@ -46,7 +46,12 @@
 /* specify the pin configuration
  * --------------------------------------------------------------------------------------------- */
 // #define HOST_FEATHER_UXPLOR             
-#define HOST_FEATHER_LTEM3F
+// #define HOST_FEATHER_LTEM3F
+#define HOST_FEATHER_UXPLOR_L
+
+#define PDP_DATA_CONTEXT 1
+#define PDP_APN_NAME "iot.aer.net"
+
 
 #include <ltemc.h>
 #include <ltemc-tls.h>
@@ -54,7 +59,6 @@
 #include <string.h>
 #include <lq-SAMDutil.h>
 
-#define DEFAULT_NETWORK_CONTEXT 1
 // #define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
 // #define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') appNotifyCB(255, failMsg)
 
@@ -83,25 +87,27 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "\rLTEm1c test9-HTTP\r\n");
+    PRINTF(dbgColor__red, "\rLTEmC test9-HTTP\r");
     PRINTF(dbgColor__white, "RCause=%d\r\n", lqSAMD_getResetCause());
 
-    ltem_create(ltem_pinConfig, NULL, appNotifCB);                      // no yield req'd for testing
-    ltem_start((resetAction_t)skipResetIfRunning);                      // do not reset if modem found ON
+    ltem_create(ltem_pinConfig, NULL, appNotifCB);              // no yield req'd for testing
+    ltem_setProviderScanMode(ntwkScanMode_lteonly);
+    ltem_setIotMode(ntwkIotMode_m1);
+    ltem_setDefaultNetwork(PDP_DATA_CONTEXT, PDP_PROTOCOL_IPV4, PDP_APN_NAME);
+    ltem_start((resetAction_t)swReset);
 
-    ntwk_setProviderScanMode(ntwkScanMode_lteonly);
-    ntwk_setIotMode(ntwkIotMode_m1);
-
-    PRINTF(dbgColor__none, "Waiting on network...\r");
-    providerInfo_t *networkProvider = ntwk_awaitProvider(30);
-    if (strlen(networkProvider->name) == 0)
-        appNotifCB(255, "Timout (30s) waiting for cellular network.");
-    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
-
-    uint8_t cntxtCnt = ntwk_getActiveNetworkCount();
-    if (cntxtCnt == 0)
+    providerInfo_t *provider;
+    while(true)
     {
-        ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, pdpProtocolType_IPV4, "");
+        provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
+        if (STREMPTY(provider->name))
+            PRINTF(dbgColor__warn, "Searching for provider...");
+        else
+            break;
+    }
+    if (strlen(provider->name) > 0)
+    {
+        PRINTF(dbgColor__info, "Connected to %s using %s, %d networks available.\r", provider->name, provider->iotMode, provider->networkCnt);
     }
 
     /* Basic connectivity established, moving on to HTTPS setup */
@@ -128,14 +134,14 @@ void setup() {
     // create a control for talking to the website
     http_initControl(&httpCtrl1, socket_0, webPageBuf, sizeof(webPageBuf), httpRecvCB);                 // initialize local (internal) structures
     http_setConnection(&httpCtrl1, "https://api.weather.gov", 443);                                     // set remote web host
-    PRINTF(dbgColor__dGreen, "URL Host1=%s\r", httpCtrl1.urlHost);
+    PRINTF(dbgColor__dGreen, "URL Host1=%s\r", httpCtrl1.hostUrl);
 
     // you can optionally setup a httpPtr, EXAMPLE: httpCtrl *httpPtr = &httpCtrl2
     // Below the &httpCtrl2 style is required since there is no "ptr" variable created (around line 65) to use here
 
     http_initControl(&httpCtrl2, socket_1, webPageBuf, sizeof(webPageBuf), httpRecvCB);
     http_setConnection(&httpCtrl2, "http://httpbin.org", 80);
-    PRINTF(dbgColor__dGreen, "URL Host2=%s\r", httpCtrl2.urlHost);
+    PRINTF(dbgColor__dGreen, "URL Host2=%s\r", httpCtrl2.hostUrl);
 }
 
 resultCode_t rslt;

@@ -40,7 +40,8 @@
 #endif
 
 #include "ltemc-mqtt.h"
-#include <lq-str.h>
+#include "ltemc-internal.h"
+
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define ASCII_CtrlZ_STR "\x1A"
@@ -60,16 +61,16 @@ enum
 /* Local Function Declarations
  ----------------------------------------------------------------------------------------------- */
 
-static void S_updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscription, const char *topic);
-static void S_mqttDoWork();
-static void S_urlDecode(char *src, int len);
+static void S__updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscription, const char *topic);
+static void S__mqttDoWork();
+static void S__urlDecode(char *src, int len);
 
-static cmdParseRslt_t S_mqttOpenStatusParser(const char *response, char **endptr);
-static cmdParseRslt_t S_mqttOpenCompleteParser(const char *response, char **endptr);
-static cmdParseRslt_t S_mqttConnectStatusParser(const char *response, char **endptr);
-static cmdParseRslt_t S_mqttConnectCompleteParser(const char *response, char **endptr);
-static cmdParseRslt_t S_mqttSubscribeCompleteParser(const char *response, char **endptr);
-static cmdParseRslt_t S_mqttPublishCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__mqttOpenStatusParser(const char *response, char **endptr);
+static cmdParseRslt_t S__mqttOpenCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__mqttConnectStatusParser(const char *response, char **endptr);
+static cmdParseRslt_t S__mqttConnectCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__mqttSubscribeCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__mqttPublishCompleteParser(const char *response, char **endptr);
 
 
 /* public mqtt functions
@@ -93,7 +94,7 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, socket_t scktNm, uint8_t *recvBuf, u
 
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(mqttCtrl->recvBufCtrl), recvBuf, recvBufSz);
 
-    ASSERT_W(recvBufSz == bufferSz, srcfile_ltemc_mqtt_c, "RxBufSz != multiple of 128B");
+    ASSERT_W(recvBufSz == bufferSz, srcfile_ltemc_mqtt_c, "MQTT-RxBufSz not*128B");
     ASSERT(bufferSz > 64, srcfile_ltemc_mqtt_c);
 
     mqttCtrl->dataRecvCB = recvCallback;
@@ -154,13 +155,12 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
     }
 
     // TYPICAL: AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
-    atcmd_setOptions(PERIOD_FROM_SECONDS(45), S_mqttOpenCompleteParser);
-    if (atcmd_tryInvokeWithOptions("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->scktNm, mqttCtrl->hostUrl, mqttCtrl->hostPort))
+    if (atcmd_tryInvoke("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->scktNm, mqttCtrl->hostUrl, mqttCtrl->hostPort))
     {
-        resultCode_t atResult = atcmd_awaitResult();
+        resultCode_t atResult = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(45), S__mqttOpenCompleteParser);
         if (atResult >= resultCode__success && atResult <= resultCode__successMax)      // opened mqtt server
         {
-            ((iop_t*)g_lqLTEM.iop)->mqttMap &= 0x01 & mqttCtrl->scktNm;
+            g_lqLTEM.iop->mqttMap &= 0x01 & mqttCtrl->scktNm;
             mqttCtrl->state = mqttState_open;
             return resultCode__success;
         }
@@ -192,8 +192,8 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
 void mqtt_close(mqttCtrl_t *mqttCtrl)
 {
     mqttCtrl->state = mqttState_closed;
-    ((iop_t*)g_lqLTEM.iop)->mqttMap &= ~(0x01 & mqttCtrl->scktNm);
-    ((iop_t*)g_lqLTEM.iop)->streamPeers[mqttCtrl->scktNm] = NULL;
+    g_lqLTEM.iop->mqttMap &= ~(0x01 & mqttCtrl->scktNm);
+    g_lqLTEM.iop->streamPeers[mqttCtrl->scktNm] = NULL;
 
     for (size_t i = 0; i < sizeof(mqttCtrl->topicSubs); i++)          // clear topicSubs table
     {
@@ -247,8 +247,6 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, mqttSession_t cleanSession)
             return resultCode__internalError;
     }
 
-    atcmd_setOptions(PERIOD_FROM_SECONDS(60), S_mqttConnectCompleteParser);
-
     /* MQTT connect command can be quite large, using local buffer here rather than bloat global cmd\core buffer */
     char connectCmd[384] = {0};
     snprintf(connectCmd, sizeof(connectCmd), "AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->scktNm, mqttCtrl->clientId, mqttCtrl->username, mqttCtrl->secret);
@@ -256,7 +254,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, mqttSession_t cleanSession)
     if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))                  // to use oversized buffer need sendCmdData(), which doesn't acquire lock
     {
         atcmd_sendCmdData(connectCmd, strlen(connectCmd), "\r");
-        atResult = atcmd_awaitResult();                             // in autolock mode, so this will release lock
+        atResult = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), S__mqttConnectCompleteParser);                             // in autolock mode, so this will release lock
 
         if (atResult == resultCode__success)
         {
@@ -313,18 +311,17 @@ resultCode_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t q
     // if sucessful, the topic's subscription will overwrite the IOP peer map without issue as well (same bitmap value)
 
     // snprintf(actionCmd, MQTT_ACTION_CMD_SZ, "AT+QMTSUB=%d,%d,\"%s\",%d", mqtt->sckt, ++mqtt->msgId, topic, qos);
-    atcmd_setOptions(PERIOD_FROM_SECONDS(30), S_mqttSubscribeCompleteParser);
-    if (atcmd_tryInvokeWithOptions("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->scktNm, ++mqttCtrl->msgId, topic, qos))
+    if (atcmd_tryInvoke("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->scktNm, ++mqttCtrl->msgId, topic, qos))
     {
-        atResult = atcmd_awaitResult();
+        atResult = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(30), S__mqttSubscribeCompleteParser);
         if (atResult == resultCode__success)
         {
-            S_updateSubscriptionsTable(mqttCtrl, true, topic);
+            S__updateSubscriptionsTable(mqttCtrl, true, topic);
 
-            ((iop_t*)g_lqLTEM.iop)->mqttMap |= 0x01 << mqttCtrl->scktNm;
-            ((iop_t*)g_lqLTEM.iop)->streamPeers[mqttCtrl->scktNm] = mqttCtrl;
+            g_lqLTEM.iop->mqttMap |= 0x01 << mqttCtrl->scktNm;
+            g_lqLTEM.iop->streamPeers[mqttCtrl->scktNm] = mqttCtrl;
 
-            LTEM_registerDoWorker(S_mqttDoWork);                                // need to register worker if 1 or more subscriptions
+            LTEM_registerDoWorker(S__mqttDoWork);                                // need to register worker if 1 or more subscriptions
             return atResult;
         }
     }
@@ -347,10 +344,10 @@ resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic)
     {
         if (atcmd_awaitResult() == resultCode__success)
         {
-            S_updateSubscriptionsTable(mqttCtrl, false, topic);
+            S__updateSubscriptionsTable(mqttCtrl, false, topic);
 
-            ((iop_t*)g_lqLTEM.iop)->mqttMap &= ~(0x01 << mqttCtrl->scktNm);
-            ((iop_t*)g_lqLTEM.iop)->streamPeers[mqttCtrl->scktNm] = NULL;
+            g_lqLTEM.iop->mqttMap &= ~(0x01 << mqttCtrl->scktNm);
+            g_lqLTEM.iop->streamPeers[mqttCtrl->scktNm] = NULL;
 
 
             // // unregister worker if this is the last subscription being "unsubscribed"
@@ -383,20 +380,18 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
     char msgText[mqtt__messageSz];
     resultCode_t atResult = resultCode__conflict;               // assume lock not obtainable, conflict
 
-    atcmd_setOptions(PERIOD_FROM_SECONDS(timeoutSeconds), ATCMD_txDataPromptParser);
     if (ATCMD_awaitLock(timeoutMS))
     {
         uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->msgId++;
         atcmd_invokeReuseLock("AT+QMTPUB=%d,%d,%d,0,\"%s\"", mqttCtrl->scktNm, msgId, qos, topic);
         pubstate++;
 
-        atResult = atcmd_awaitResult();
+        atResult = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(timeoutSeconds), ATCMD_txDataPromptParser);
         if (atResult == resultCode__success)                        // wait for data prompt for data, now complete sub-command to actually transfer data
         {
             pubstate++;
-            atcmd_setOptions(timeoutMS, S_mqttPublishCompleteParser);
             atcmd_sendCmdData(message, strlen(message), ASCII_CtrlZ_STR);
-            atResult = atcmd_awaitResult();
+            atResult = atcmd_awaitResultWithOptions(timeoutMS, S__mqttPublishCompleteParser);
             if (atResult == resultCode__success)
             {
                 atcmd_close();
@@ -428,9 +423,9 @@ mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl)
 
     uint8_t mqttState = mqtt_getStatusForSocket(mqttCtrl->scktNm);
 
-    if (!((iop_t*)g_lqLTEM.iop)->mqttMap & 0x01 << mqttCtrl->scktNm && mqttState == mqttState_connected)
+    if (!g_lqLTEM.iop->mqttMap & 0x01 << mqttCtrl->scktNm && mqttState == mqttState_connected)
     {
-        ((iop_t*)g_lqLTEM.iop)->mqttMap |= 0x01 << mqttCtrl->scktNm;       // fixup IOP mqtt active mask
+        g_lqLTEM.iop->mqttMap |= 0x01 << mqttCtrl->scktNm;       // fixup IOP mqtt active mask
     }
 
     if (mqttState == mqttState_open || mqttState == mqttState_connected)
@@ -461,38 +456,15 @@ mqttState_t mqtt_getStatusForSocket(socket_t sckt)
 {
     if (ltem_readDeviceState() && sckt < socket__cnt)
     {
-        atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttConnectStatusParser);
-        if (atcmd_tryInvokeWithOptions("AT+QMTCONN?"))
+        if (atcmd_tryInvoke("AT+QMTCONN?"))
         {
-            resultCode_t atResult = atcmd_awaitResult();
+            resultCode_t atResult = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(5), S__mqttConnectStatusParser);
             if (atResult == 203)
                 return mqttState_connected;
             else if (atResult == 202)
                 return mqttState_open;
         }
     }
-    //     if (statusResult == 0 || *host != '\0')
-    //     {
-    //         atcmd_setOptions(PERIOD_FROM_SECONDS(5), S_mqttOpenStatusParser);
-    //         if (atcmd_tryInvokeWithOptions("AT+QMTOPEN?"))
-    //         {
-    //             resultCode_t atResult = atcmd_awaitResult();
-    //             if (atResult == resultCode__success)
-    //             {
-    //                 if (*host != '\0')                                  // host matching requested, check modem response host == requested host
-    //                 {
-    //                     char *hostNamePtr = strchr(ATCMD_getLastResponse(), '"');
-    //                     if (hostNamePtr == NULL && strncmp(hostNamePtr + 1, host, strlen(host)) != 0)
-    //                         return mqttState_invalidHost;
-    //                 }
-    //                 ((iop_t*)g_ltem.iop)->mqttMap |= 0x01 << cntxt;
-    //                 statusResult = mqttState_open;
-    //             }
-    //             if (atResult == 204)
-    //                 statusResult = mqttState_invalidHost;
-    //         }
-    //     }
-    // }
     return mqttState_closed;
 }
 
@@ -528,7 +500,7 @@ uint16_t mqtt_getLastBufferReqd(mqttCtrl_t *mqttCtrl)
 #pragma region private functions
 
 
-static void S_updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscription, const char *topic)
+static void S__updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscription, const char *topic)
 {
     uint8_t topicSz = strlen(topic);
     bool wildcard = *(topic + topicSz - 1) == '#';      // test for MQTT multilevel wildcard, store separately for future topic parsing on recv
@@ -566,11 +538,9 @@ static void S_updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscriptio
 /**
  *  @brief Performs background tasks to advance MQTT pipeline dataflows.
 */
-static void S_mqttDoWork()
+static void S__mqttDoWork()
 {
-    iop_t *iopPtr = (iop_t*)g_lqLTEM.iop;
-
-    if (iopPtr->rxStreamCtrl != NULL && ((baseCtrl_t*)iopPtr->rxStreamCtrl)->protocol == protocol_mqtt)
+    if (g_lqLTEM.iop->rxStreamCtrl != NULL && g_lqLTEM.iop->rxStreamCtrl->protocol == protocol_mqtt)
     {
         /* parse received MQTT message into topic, wildcard (topic vars) and message
          * EXAMPLE: +QMTRECV: 0,0, "topic/wildcard","This is the payload related to topic" */
@@ -581,7 +551,7 @@ static void S_mqttDoWork()
         uint16_t messageSz = 0;
 
         // readability variables
-        mqttCtrl_t *mqttPtr = ((mqttCtrl_t*)iopPtr->rxStreamCtrl);
+        mqttCtrl_t *mqttPtr = ((mqttCtrl_t*)g_lqLTEM.iop->rxStreamCtrl);
         rxDataBufferCtrl_t *rxBufPtr = &mqttPtr->recvBufCtrl;
 
         /* Check for message complete in IOP page, if not record progress for timeout detection and exit 
@@ -592,15 +562,15 @@ static void S_mqttDoWork()
             uint32_t idleTime = IOP_getRxIdleDuration();
             if (idleTime > IOP__rxDefaultTimeout)
             {
-                ltem_notifyApp(appEvent_prto_recvFault, "MQTT message recv timeout");
+                ltem_notifyApp(appEvent_proto_recvFault, "MQTT message recv timeout");
                 IOP_resetRxDataBufferPage(rxBufPtr, rxBufPtr->iopPg);                            // clear partial page recv content
-                iopPtr->rxStreamCtrl = NULL;                                                     // exit data mode
+                g_lqLTEM.iop->rxStreamCtrl = NULL;                                               // exit data mode
             }
             return;
         }
 
         // iopPg has trailer text, swap in new page and process (parse) the current iopPg
-        mqttPtr->lastBufferReqd = rxPageDataAvailable(rxBufPtr, rxBufPtr->iopPg);
+        mqttPtr->lastBufferReqd = IOP_rxPageDataAvailable(rxBufPtr, rxBufPtr->iopPg);
         IOP_swapRxBufferPage(rxBufPtr);
         uint8_t thisPage = !rxBufPtr->iopPg;
         
@@ -617,15 +587,15 @@ static void S_mqttDoWork()
         if (topicPtr == NULL)                                                                   // malformed
         {
             IOP_resetRxDataBufferPage(rxBufPtr, thisPage);                                      // done with this page, clear it
-            iopPtr->rxStreamCtrl = NULL;                                                        // exit data mode
+            g_lqLTEM.iop->rxStreamCtrl = NULL;                                                        // exit data mode
             return;
         }                                                             
         rxBufPtr->pages[thisPage].tail = ++topicPtr;                                            // point past opening dblQuote
-        rxBufPtr->pages[thisPage].tail = memchr(rxBufPtr->pages[thisPage].tail, '"', rxPageDataAvailable(rxBufPtr,thisPage));
+        rxBufPtr->pages[thisPage].tail = memchr(rxBufPtr->pages[thisPage].tail, '"', IOP_rxPageDataAvailable(rxBufPtr,thisPage));
         if (rxBufPtr->pages[thisPage].tail == NULL)                                             // malformed, overflowed somehow
         {
             IOP_resetRxDataBufferPage(rxBufPtr, thisPage);                                      // done with this page, clear it
-            iopPtr->rxStreamCtrl = NULL;                                                        // exit data mode
+            g_lqLTEM.iop->rxStreamCtrl = NULL;                                                        // exit data mode
             return;
         }
 
@@ -650,12 +620,11 @@ static void S_mqttDoWork()
                 }
                 *(messagePtr - 3) = '\0';                                                       // null-term topicVars
                 mqttPtr->dataRecvCB(mqttPtr->scktNm, msgId, topicPtr, topicVarPtr, messagePtr, messageSz);
-                IOP_resetRxDataBufferPage(rxBufPtr, thisPage);                                      // done with this page, clear it
-                iopPtr->rxStreamCtrl = NULL;                                                        // exit data mode
+                IOP_resetRxDataBufferPage(rxBufPtr, thisPage);                                  // done with this page, clear it
+                g_lqLTEM.iop->rxStreamCtrl = NULL;                                              // exit data mode
                 return;
             }
         }
-        
         // finally:
         //     IOP_resetRxDataBufferPage(rxBufPtr, thisPage);                                      // done with this page, clear it
         //     iopPtr->rxStreamCtrl = NULL;                                                        // exit data mode
@@ -673,7 +642,7 @@ static void S_mqttDoWork()
  * 
  *  @return HTTP style result code, 0 = not complete
  */
-static cmdParseRslt_t S_mqttOpenStatusParser(const char *response, char **endptr) 
+static cmdParseRslt_t S__mqttOpenStatusParser(const char *response, char **endptr) 
 {
     resultCode_t parserResult = atcmd_serviceResponseParserTerm(response, "+QMTOPEN: ", 0, "\r\n", endptr);
 
@@ -692,9 +661,9 @@ static cmdParseRslt_t S_mqttOpenStatusParser(const char *response, char **endptr
  * 
  *  @return HTTP style result code or resultCode_, 0 = not complete
  */
-static cmdParseRslt_t S_mqttOpenCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S__mqttOpenCompleteParser(const char *response, char **endptr) 
 {
-    cmdParseRslt_t parserRslt = atcmd__stdResponseParser("+QMTOPEN: ", true, NULL, 1, 1, NULL, 0);
+    cmdParseRslt_t parserRslt = atcmd_stdResponseParser("+QMTOPEN: ", true, NULL, 1, 1, NULL, 0);
     return parserRslt;
 }
 
@@ -707,11 +676,11 @@ static cmdParseRslt_t S_mqttOpenCompleteParser(const char *response, char **endp
  * 
  *  @return HTTP style result code, 0 = not complete
  */
-static cmdParseRslt_t S_mqttConnectStatusParser(const char *response, char **endptr) 
+static cmdParseRslt_t S__mqttConnectStatusParser(const char *response, char **endptr) 
 {
     // BGx +QMTCONN Returns status: 1 = connecting, 3 = connected. Service parser returns 200 + status.
     // A simple "OK" response indicates no connection
-    cmdParseRslt_t parserRslt = atcmd__stdResponseParser("+QMTCONN: ", true, NULL, 1, 1, NULL, 0);
+    cmdParseRslt_t parserRslt = atcmd_stdResponseParser("+QMTCONN: ", true, NULL, 1, 1, NULL, 0);
 
     if (parserRslt > resultCode__successMax && strstr(response, "OK\r\n"))                        // if no QMTCONN and OK: not connection
         return resultCode__notFound;
@@ -728,9 +697,9 @@ static cmdParseRslt_t S_mqttConnectStatusParser(const char *response, char **end
  * 
  *  @return HTTP style result code, RESULT_CODE_PENDING = not complete
  */
-static cmdParseRslt_t S_mqttConnectCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S__mqttConnectCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd__stdResponseParser("+QMTCONN: ", true, ",", 2, 2, NULL, 0);
+    return atcmd_stdResponseParser("+QMTCONN: ", true, ",", 2, 2, NULL, 0);
 }
 
 
@@ -742,9 +711,9 @@ static cmdParseRslt_t S_mqttConnectCompleteParser(const char *response, char **e
  * 
  *  @return HTTP style result code, RESULT_CODE_PENDING = not complete
  */
-static cmdParseRslt_t S_mqttSubscribeCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S__mqttSubscribeCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd__stdResponseParser("+QMTSUB: ", true, ",", 2, 2, NULL, 0);
+    return atcmd_stdResponseParser("+QMTSUB: ", true, ",", 2, 2, NULL, 0);
 }
 
 
@@ -756,9 +725,9 @@ static cmdParseRslt_t S_mqttSubscribeCompleteParser(const char *response, char *
  * 
  *  @return HTTP style result code, RESULT_CODE_PENDING = not complete
  */
-static cmdParseRslt_t S_mqttPublishCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S__mqttPublishCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd__stdResponseParser("+QMTPUB: ", true, ",", 2, 2, NULL, 0);
+    return atcmd_stdResponseParser("+QMTPUB: ", true, ",", 2, 2, NULL, 0);
 }
 
 

@@ -30,10 +30,11 @@
 
 #include "ltemc.h"
 
+
 /* ------------------------------------------------------------------------------------------------
  * Network constants, enums, and structures are declared in the LooUQ global lq-network.h header
  * --------------------------------------------------------------------------------------------- */
-#include <lq-network.h>
+//#include <lq-network.h>
 
 
 #ifdef __cplusplus
@@ -50,25 +51,27 @@ void ntwk_create();
 
 
 /**
- *  \brief Configure RAT searching sequence
- *  \details Example: scanSequence = "020301" represents: search LTE-M1, then LTE-NB1, then GSM
- *  \param [in] scanSequence Character string specifying the RAT scanning order; 00=Automatic[LTE-M1|LTE-NB1|GSM],01=GSM,02=LTE-M1,03=LTE-NB1
-*/
-void ntwk_setProviderScanSeq(const char *sequence);
-
-
-/** 
- *  \brief Configure RAT(s) allowed to be searched
- *  \param [in] scanMode Enum specifying what cell network to scan; 0=Automatic,1=GSM only,3=LTE only
-*/
-void ntwk_setProviderScanMode(ntwkScanMode_t mode);
-
-
-/** 
- *  \brief Configure the network category to be searched under LTE RAT.
- *  \param [in] iotMode Enum specifying the LTE LPWAN protocol(s) to scan; 0=LTE M1,1=LTE NB1,2=LTE M1 and NB1
+ *	\brief Configure PDP Context.
+ *  \param [in] cntxtId The context ID to operate on. Typically 0 or 1
+ *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
+ *  \param [in] apn The APN name if required by network carrier.
+ *  
  */
-void ntwk_setIotMode(ntwk_iotMode_t mode);
+void *ntwk_configureNetwork(uint8_t pdpContextId, const char *protoType, const char *apn);
+
+
+/* Deferred Implementation: Cannot find a network provider requiring authentication and Quectel doesn't support beyond IPV4
+*/
+// /**
+//  *	\brief Configure PDP Context requiring authentication.
+//  *  \param [in] pdpContextId The PDP context to work with, typically 0 or 1.
+//  *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
+//  *  \param [in] apn The APN name if required by network carrier.
+//  *  \param [in] userName String with user name
+//  *  \param [in] pw String with password
+//  *  \param [in] authMethod Enum specifying the type of authentication expected by network
+//  */
+// networkInfo_t *ntwk_configureNetworkWithAuth(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
 
 
 /**
@@ -79,38 +82,27 @@ void ntwk_setIotMode(ntwk_iotMode_t mode);
 providerInfo_t *ntwk_awaitProvider(uint16_t waitSec);
 
 
-/**
- *	\brief Set the default/data context number for provider. Default is 1 if not overridden here.
- *  \param [in] defaultContext The data context to operate on. Typically 0 or 1, up to 15
- */
-void ntwk_setProviderDefaultContext(uint8_t defaultContext);
+// /**
+//  *	\brief Set the default/data context number for provider. Default is 1 if not overridden here.
+//  *  \param [in] defaultContext The data context to operate on. Typically 0 or 1, up to 15
+//  */
+// void ntwk_setProviderDefaultContext(uint8_t defaultContext);
 
-
-/**
- *	\brief Activate PDP Context/APN.
- *  \param [in] cntxtId The context ID to operate on. Typically 0 or 1
- *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
- *  \param [in] apn The APN name if required by network carrier.
- */
-networkInfo_t *ntwk_activateNetwork(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn);
-
-
-/**
- *	\brief Activate PDP Context/APN requiring authentication.
- *  \param [in] pdpContextId The PDP context to work with, typically 0 or 1.
- *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
- *  \param [in] apn The APN name if required by network carrier.
- *  \param [in] userName String with user name
- *  \param [in] pw String with password
- *  \param [in] authMethod Enum specifying the type of authentication expected by network
- */
-networkInfo_t *ntwk_activateNetworkWithAuth(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
 
 /**
  *	\brief Deactivate PDP Context/APN.
  *  \param [in] contextId The APN number to operate on.
  */
 void ntwk_deactivateNetwork(uint8_t contextId);
+
+
+
+
+/**
+ *   \brief Get current provider information. If not connected to a provider will be an empty providerInfo struct
+ *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
+*/
+providerInfo_t *ntwk_getProviderInfo();
 
 
 /**

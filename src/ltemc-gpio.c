@@ -25,7 +25,6 @@
  *****************************************************************************/
 
 //#define _DEBUG
-#include "ltemc-internal.h"
 #include "ltemc-gpio.h"
 
 

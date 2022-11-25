@@ -29,20 +29,24 @@
 #define __LTEMC_HTTP_H__
 
 #include <lq-types.h>
-#include "ltemc-streams.h"
-#include "ltemc-internal.h"
-
+#include "ltemc-types.h"
 
 /** 
  *  @brief Typed numeric constants used in HTTP module.
 */
 enum http__constants
 {
+    http__getRequestLength = 128,
+    http__postRequestLength = 128,
+
     http__noResponseHeaders = 0, 
     http__returnResponseHeaders = 1, 
     http__useDefaultTimeout = 0,
     http__defaultTimeoutBGxSec = 60,
-    http__urlHostSz = 128
+    http__urlHostSz = 128,
+    http__rqstTypeSz = 5,                               /// GET or POST
+    http__customHdrSmallWarning = 40,
+    http__reqdResponseSz = 22                           /// BGx HTTP(S) Application Note
 };
 
 
@@ -84,22 +88,24 @@ typedef enum httpState_tag
 
 typedef struct httpCtrl_tag
 {
-    uint8_t ctrlMagic;                      /// magic flag to validate incoming requests 
-    socket_t sckt;                          /// Data context where this control operates
+    /* Top section of xCtrl structure is the same for all LTEmC implemented protocol suites TCP/HTTP/MQTT etc. */
+    uint16_t ctrlMagic;                     /// magic flag to validate incoming requests 
+    socket_t sckt;                          /// Local data context where this control operates (1-6)
     protocol_t protocol;                    /// Socket's protocol : UDP/TCP/SSL.
     bool useTls;                            /// flag indicating SSL/TLS applied to stream
     char hostUrl[host__urlSz];              /// URL or IP address of host
-    uint16_t hostPort;                      /// IP port number host is listening on
+    char hostPort[host__portSz];            /// IP port number host is listening on (allows for 65535/0)
     rxDataBufferCtrl_t recvBufCtrl;         /// RX smart buffer 
+    /* End of Common Structure Fields */
 
+    /* HTTP(S) Specific Fields */
     httpRecvFunc_t dataRecvCB;              /// callback to application, signals data ready
     // uint32_t bufPageSwapTck;                /// last check for URC/dataPending
     // uint32_t bufPageTimeout;                /// set at init for doWork ASSERT, if timeout reached chance for a data overflow
-    char urlHost[http__urlHostSz];          /// host portion of URL for GET/POST requests
     bool returnResponseHdrs;                /// if set true, response headers are included in the returned response
     char *cstmHdrs;                         /// custom header content, optional buffer provided by application
     uint16_t cstmHdrsSz;                    /// size of custom header buffer
-    char requestType;                       /// type of current/last request: 'G'=GET, 'P'=POST
+    char requestType[http__rqstTypeSz];     /// type of current/last request: 'G'=GET, 'P'=POST
     httpState_t requestState;               /// current state machine variable for HTTP request
     uint16_t bgxError;                      /// BGx sprecific error code returned from GET/POST
     uint16_t httpStatus;                    /// set to 0 during a request, initialized to 0xFFFF before any request
@@ -130,7 +136,7 @@ void http_initControl(httpCtrl_t *httpCtrl, socket_t dataCntxt, char *recvBuf, u
  *	@brief Set host connection characteristics. 
  *  @param httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
  *  @param hostURL [in] The HOST address of the web server URL.
- *  @param hostPort [in] The port number for the host web server.
+ *  @param hostPort [in] The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
  */
 void http_setConnection(httpCtrl_t *httpCtrl, const char* hostUrl, uint16_t hostPort);
 
@@ -145,11 +151,11 @@ void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *hdrBuffer, uint16_t hdrBu
 
 
 /**
- *	@brief 
+ *	@brief Adds common http headers to the custom headers buffer. REQUIRES previous enable of custom headers and buffer registration.
  *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
  *	@param headerMap [in] - Bitmap for which standard headers to use.
  */
-void http_addDefaultHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap);
+void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap);
 
 
 /**

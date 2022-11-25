@@ -43,8 +43,15 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-                                        // define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+/* specify the pin configuration
+ * --------------------------------------------------------------------------------------------- */
+// #define HOST_FEATHER_UXPLOR             
+// #define HOST_FEATHER_LTEM3F
+#define HOST_FEATHER_UXPLOR_L
+
+#define PDP_DATA_CONTEXT 1
+#define PDP_APN_NAME "iot.aer.net"
+
 
 #include <ltemc.h>
 #include <lq-diagnostics.h>
@@ -53,7 +60,6 @@
 #include <ltemc-tls.h>
 #include <ltemc-mqtt.h>
 
-#define DEFAULT_NETWORK_CONTEXT 1
 #define PERIOD_FROM_SECONDS(period)  (period * 1000)
 #define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
 
@@ -80,7 +86,7 @@
 
 #define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
 #define MQTT_PORT 8883
-#define MQTT_DATACONTEXT 5
+#define MQTT_SOCKET 5
 
 /* put your AZ IoTHub info here, SAS Token is available by using the "Azure IoT explorer" (https://github.com/Azure/azure-iot-explorer/releases/tag/v0.10.16)
  * Note that SAS tokens have an experiry from 5 minutes to years. Yes... the one below is expired. 
@@ -131,7 +137,8 @@ void setup() {
     diagnosticInfo_t *diags = lqDiag_getDiagnosticsInfo();
 
     ltem_create(ltem_pinConfig, NULL, appNotifyCB);
-    ltem_start((resetAction_t)skipResetIfRunning);                                  // start modem, no reset if modem found ON
+    ltem_setDefaultNetwork(PDP_DATA_CONTEXT, PDP_PROTOCOL_IPV4, PDP_APN_NAME);
+    ltem_start((resetAction_t)swReset);
 
     PRINTF(dbgColor__none, "Waiting on network...\r");
     providerInfo_t *networkProvider = ntwk_awaitProvider(30);
@@ -139,12 +146,27 @@ void setup() {
         appNotifyCB(255, "Timout (30s) waiting for cellular network.");
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
 
-    uint8_t cntxtCnt = ntwk_getActiveNetworkCount();
-    if (cntxtCnt == 0)
-    {
-        ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, pdpProtocolType_IPV4, "");
-    }
+    PRINTF(dbgColor__none, "Waiting on network...\r");
+    providerInfo_t *networkProvider = ntwk_awaitProvider(30);
+    if (strlen(networkProvider->name) == 0)
+        appNotifyCB(255, "Timout (30s) waiting for cellular network.");
+    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
 
+    providerInfo_t *provider;
+    while(true)
+    {
+        provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
+        if (STREMPTY(provider->name))
+        {
+            PRINTF(dbgColor__warn, "Searching for provider...");
+        }
+        else
+            break;
+    }
+    if (strlen(provider->name) > 0)
+    {
+        PRINTF(dbgColor__info, "Connected to %s using %s, %d networks available.\r", provider->name, provider->iotMode, provider->networkCnt);
+    }
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
      * Azure requires TLS 1.2 and MQTT version 3.11 */
 

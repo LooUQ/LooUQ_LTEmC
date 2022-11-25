@@ -39,17 +39,13 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-#include "ltemc-internal.h"
-
-
-#define IMEI_SIZE 15
-#define ICCID_SIZE 20
+#include "ltemc-types.h"
 
 extern ltemDevice_t g_lqLTEM;
 
 
 // private local declarations
-static cmdParseRslt_t S_iccidCompleteParser(ltemDevice_t *modem);
+static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
 
 
 /* Public functions
@@ -64,18 +60,16 @@ modemInfo_t *mdminfo_ltem()
 {
     if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
     {
-        atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
-
-        if (((modemInfo_t*)g_lqLTEM.modemInfo)->imei[0] == 0)
+        if (g_lqLTEM.modemInfo->imei[0] == 0)
         {
             atcmd_invokeReuseLock("AT+GSN");
-            if (atcmd_awaitResult() == resultCode__success)
+            if (atcmd_awaitResultWithOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser) == resultCode__success)
             {
-                strncpy(((modemInfo_t*)g_lqLTEM.modemInfo)->imei, atcmd_getLastResponse() + 2, IMEI_SIZE);        // skip leading /r/n
+                strncpy(g_lqLTEM.modemInfo->imei, atcmd_getLastResponse() + 2, ntwk__imeiSz);        // skip leading /r/n
             }
         }
 
-        if (((modemInfo_t*)g_lqLTEM.modemInfo)->fwver[0] == 0)
+        if (g_lqLTEM.modemInfo->fwver[0] == 0)
         {
             atcmd_invokeReuseLock("AT+QGMR");
             if (atcmd_awaitResult() == resultCode__success)
@@ -83,13 +77,13 @@ modemInfo_t *mdminfo_ltem()
                 char *term;
                 term = strstr(atcmd_getLastResponse() + 2, "\r\n");
                 *term = '\0';
-                strcpy(((modemInfo_t*)g_lqLTEM.modemInfo)->fwver, atcmd_getLastResponse() + 2);
-                term = strchr(((modemInfo_t*)g_lqLTEM.modemInfo)->fwver, '_');
+                strcpy(g_lqLTEM.modemInfo->fwver, atcmd_getLastResponse() + 2);
+                term = strchr(g_lqLTEM.modemInfo->fwver, '_');
                 *term = ' ';
             }
         }
 
-        if (((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel[0] == 0)
+        if (g_lqLTEM.modemInfo->mfgmodel[0] == 0)
         {
             atcmd_invokeReuseLock("ATI");
             if (atcmd_awaitResult() == resultCode__success)
@@ -97,21 +91,20 @@ modemInfo_t *mdminfo_ltem()
                 char *term;
                 term = strstr(atcmd_getLastResponse() + 2, "\r\nRev");
                 *term = '\0';
-                strcpy(((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel, atcmd_getLastResponse() + 2);
-                term = strchr(((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel, '\r');
+                strcpy(g_lqLTEM.modemInfo->mfgmodel, atcmd_getLastResponse() + 2);
+                term = strchr(g_lqLTEM.modemInfo->mfgmodel, '\r');
                 *term = ':';
-                term = strchr(((modemInfo_t*)g_lqLTEM.modemInfo)->mfgmodel, '\n');
+                term = strchr(g_lqLTEM.modemInfo->mfgmodel, '\n');
                 *term = ' ';
             }
         }
 
-        if (((modemInfo_t*)g_lqLTEM.modemInfo)->iccid[0] == 0)
+        if (g_lqLTEM.modemInfo->iccid[0] == 0)
         {
-            atcmd_setOptions(atcmd__defaultTimeoutMS, S_iccidCompleteParser);
             atcmd_invokeReuseLock("AT+ICCID");
-            if (atcmd_awaitResult() == resultCode__success)
+            if (atcmd_awaitResultWithOptions(atcmd__defaultTimeoutMS, S__iccidCompleteParser) == resultCode__success)
             {
-                strncpy(((modemInfo_t*)g_lqLTEM.modemInfo)->iccid, atcmd_getLastResponse(), ICCID_SIZE);
+                strncpy(g_lqLTEM.modemInfo->iccid, atcmd_getLastResponse(), ntwk__iccidSz);
             }
         }
         atcmd_close();
@@ -185,9 +178,9 @@ uint8_t mdminfo_signalBars(uint8_t displayBarCount)
 /**
  *	@brief Action response parser for iccid value request. 
  */
-static cmdParseRslt_t S_iccidCompleteParser(ltemDevice_t *modem)
+static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem)
 {
-    return atcmd__stdResponseParser("+ICCID: ", true, "", 0, 0, "\r\n\r\nOK\r\n", 20);
+    return atcmd_stdResponseParser("+ICCID: ", true, "", 0, 0, "\r\n\r\nOK\r\n", 20);
 }
 
 

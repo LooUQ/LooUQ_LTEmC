@@ -28,34 +28,34 @@
 #ifndef __LTEMC_QUECTEL_QBG_H__
 #define __LTEMC_QUECTEL_QBG_H__
 
-#include <stddef.h>
-#include <stdbool.h>
-#include <ltemc-internal.h>
+#include "ltemc-internal.h"
 
+// #define BGX_RATSEQ_AUTO    "00"
+// #define BGX_RATSEQ_GSM     "01"
+// #define BGX_RATSEQ_CATM1   "02"
+// #define BGX_RATSEQ_NBIOT   "03"
 
-#define BGX_RATSEQ_AUTO    "00"
-#define BGX_RATSEQ_GSM     "01"
-#define BGX_RATSEQ_CATM1   "02"
-#define BGX_RATSEQ_NBIOT   "03"
+/* Quectel_QBG_Hardware_Design_V1.2.pdf
+#define QBG_POWERON_DELAY      500U
+#define QBG_POWEROFF_DELAY     1500U
+#define QBG_RESET_DELAY        300U
+#define QBG_BAUDRATE_DEFAULT   115200U
+*/
 
-// Quectel_QBG_Hardware_Design_V1.2.pdf
-// #define QBG_POWERON_DELAY      500U
-// #define QBG_POWEROFF_DELAY     1500U
-// #define QBG_RESET_DELAY        300U
-// #define QBG_BAUDRATE_DEFAULT   115200U
 
 /** 
  *  \brief Typed numeric constants used in the BGx subsystem
  */
 enum BGX__constants
 {
-    // BGX__initCommandCnt = 1,
-    // BGX__initCommandAttempts = 2,
-    BGX__powerOnDelay = 1000,
+    BGX__powerOnDelay = 500,
     BGX__powerOffDelay = 1500,
-    BGX__resetDelay = 300,
+    BGX__resetDelay = 500,
     BGX__baudRate = 115200
 };
+
+
+
 
 #ifdef __cplusplus
 extern "C"
@@ -67,45 +67,44 @@ extern "C"
  * 	@brief Check for BGx power status
  *  @return True if BGx is powered ON
  */
-bool qbg_isPowerOn();
+bool QBG_isPowerOn();
 
 
 /**
  *	@brief Power on the BGx module
- *  @return True if the BGx found previously on or was successfully turned ON
  */
-bool qbg_powerOn();
+void QBG_powerOn();
 
 
 /**
  *	@brief Powers off the BGx module
  */
-void qbg_powerOff();
+void QBG_powerOff();
 
 
 /**
  *	@brief Perform a hardware or software reset of the BGx module
  */
-void qbg_reset(resetAction_t resetAction);
+void QBG_reset(resetAction_t resetAction);
 
 
 /**
  *	@brief Initializes the BGx module
  */
-void qbg_setOptions();
+void QBG_setOptions();
 
 
 /**
  *	@brief Attempts recovery command control of the BGx module left in data mode
  */
-bool qbg_clrDataState();
+bool QBG_clrDataState();
 
 
 /**
  *	@brief Initializes the BGx module.
  *  @return C-string representation of the module name (ex: BG96, BG95)
  */
-const char *qbg_getModuleType();
+const char *QBG_getModuleType();
 
 
 #ifdef __cplusplus

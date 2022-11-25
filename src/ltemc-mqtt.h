@@ -28,8 +28,8 @@
 #ifndef __MQTT_H__
 #define __MQTT_H__
 
-#include "ltemc-internal.h"
 
+#include "ltemc-types.h"
 
 /** 
  *  @brief typed numeric constants used by MQTT subsystem.
@@ -151,14 +151,17 @@ typedef void (*mqttRecvFunc_t)(socket_t sckt, uint16_t msgId, const char *topic,
 */
 typedef struct mqttCtrl_tag
 {
-    uint8_t ctrlMagic;                                      /// magic flag to validate incoming requests 
+    /* Top section of xCtrl structure is the same for all LTEmC implemented protocol suites TCP/HTTP/MQTT etc. */
+    uint16_t ctrlMagic;                                     /// magic flag to validate incoming requests 
     socket_t scktNm;                                        /// Socket hosting the protocol
     protocol_t protocol;                                    /// Control's protocol : UDP/TCP/SSL, MQTT, HTTP, etc.
     bool useTls;                                            /// flag indicating SSL/TLS applied to stream
-    char hostUrl[host__urlSz];                               /// URL or IP address of host
-    uint16_t hostPort;                                      /// IP port number host is listening on
+    char hostUrl[host__urlSz];                              /// URL or IP address of host
+    char hostPort[6];                                       /// IP port number host is listening on (allows for 65535/0)
     rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
+    /* End of Common Structure Fields */
 
+    /* MQTT(S) Specific Fields */
     mqttRecvFunc_t dataRecvCB;                              /// callback to application, signals data ready
     char clientId[mqtt__clientIdSz];
     char username[mqtt__userNameSz];

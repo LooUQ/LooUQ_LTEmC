@@ -29,8 +29,9 @@
 #define __LTEMC_SCKT_H__
 
 #include <lq-types.h>
-#include "ltemc-streams.h"
-#include "ltemc-internal.h"
+#include "ltemc-types.h"
+// #include "ltemc-streams.h"
+// #include "ltemc-internal.h"
 
 /** 
  *  @brief Typed numeric constants for the sockets subsystem

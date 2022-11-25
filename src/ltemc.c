@@ -41,6 +41,11 @@ const char *ltemcVersion = "3.0.1";
 
 #include "ltemc-internal.h"
 
+
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+
+
 /* ------------------------------------------------------------------------------------------------
  * GLOBAL LTEm Device Objects, One LTEmX supported
  * --------------------------------------------------------------------------------------------- */
@@ -71,15 +76,6 @@ void S__initLTEmDevice(bool ltemReset);
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *	@brief Get the LTEmC software version.
- */
-const char *ltem_ltemcVersion()
-{
-    return ltemcVersion;
-}
-
-
-/**
  *	@brief Initialize the LTEm1 modem.
  */
 void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEventCallback_func eventNotifCallback)
@@ -89,6 +85,9 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
 	g_lqLTEM.pinConfig = ltem_config;
     g_lqLTEM.spi = spi_create(g_lqLTEM.pinConfig.spiCsPin);
 
+    g_lqLTEM.modemSettings =  calloc(1, sizeof(modemSettings_t));
+    ASSERT(g_lqLTEM.modemSettings != NULL, srcfile_ltemc_ltemc_c);
+
     g_lqLTEM.modemInfo = calloc(1, sizeof(modemInfo_t));
     ASSERT(g_lqLTEM.modemInfo != NULL, srcfile_ltemc_ltemc_c);
 
@@ -96,8 +95,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     
     g_lqLTEM.atcmd = calloc(1, sizeof(atcmd_t));
     ASSERT(g_lqLTEM.atcmd != NULL, srcfile_ltemc_ltemc_c);
-    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd_okResponseParser);
-    ATCMD_reset(true);
+    atcmd_reset(true);
 
     ntwk_create();
 
@@ -129,6 +127,63 @@ void ltem_destroy()
 
 
 /**
+ *  \brief Configure RAT searching sequence
+*/
+void ltem_setProviderScanSeq(const char* scanSequence)
+{
+    /*AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
+    */
+    strcpy(g_lqLTEM.modemSettings->scanSequence, scanSequence);
+    if (ltem_getDeviceState() == deviceState_appReady)
+    {
+        atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence);
+        atcmd_awaitResult();
+    }
+}
+
+
+/** 
+ *  \brief Configure RAT(s) allowed to be searched.
+*/
+void ltem_setProviderScanMode(ntwkScanMode_t scanMode)
+{
+    /* AT+QCFG="nwscanmode"[,<scanmode>[,<effect>]]
+    */
+    g_lqLTEM.modemSettings->scanMode = scanMode; 
+    if (ltem_getDeviceState() == deviceState_appReady)
+    {
+        atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode);
+        atcmd_awaitResult();
+    }
+}
+
+
+/** 
+ *  \brief Configure the network category to be searched under LTE RAT.
+ */
+void ltem_setIotMode(ntwkIotMode_t iotMode)
+{
+    /* AT+QCFG="iotopmode",<mode>
+    */
+    g_lqLTEM.modemSettings->iotMode = iotMode; 
+    if (ltem_getDeviceState() == deviceState_appReady)
+    {
+        atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode);
+        atcmd_awaitResult();
+    }
+}
+
+
+/**
+ *	\brief Build default data context configuration for modem to use on startup.
+ */
+void ltem_setDefaultNetwork(uint8_t pdpContextId, const char *protoType, const char *apn)
+{
+    ntwk_setDefaulNetworkConfig(pdpContextId, protoType, apn);
+}
+
+
+/**
  *	@brief Start the modem.
  */
 void ltem_start(resetAction_t resetAction)
@@ -148,16 +203,16 @@ void ltem_start(resetAction_t resetAction)
     spi_start(g_lqLTEM.spi);                                                // start host SPI
 
     bool ltemReset = true;
-    if (qbg_isPowerOn())
+    if (QBG_isPowerOn())
     {
         if (resetAction == skipIfOn)
             ltemReset = false;
         else
-            qbg_reset(resetAction);                                        // do requested reset (sw, hw, pwrCycle)
+            QBG_reset(resetAction);                                        // do requested reset (sw, hw, pwrCycle)
     }
     else 
     {
-       qbg_powerOn();                                                       // turn on BGx
+       QBG_powerOn();                                                       // turn on BGx
     }
     S__initLTEmDevice(ltemReset);
 }
@@ -168,7 +223,8 @@ void ltem_start(resetAction_t resetAction)
  */
 void S__initLTEmDevice(bool ltemReset)
 {
-    ASSERT(qbg_isPowerOn(), srcfile_ltemc_ltemc_c);
+    ASSERT(QBG_isPowerOn(), srcfile_ltemc_ltemc_c);
+    ASSERT(SC16IS7xx_isCommReady(), srcfile_ltemc_ltemc_c);
 
     SC16IS7xx_start();                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
 
@@ -196,7 +252,10 @@ void S__initLTEmDevice(bool ltemReset)
 
     IOP_attachIrq();                                        // attach I/O processor ISR to IRQ
     SC16IS7xx_enableIrqMode();                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
-    qbg_setOptions();                                       // initialize BGx operating settings
+    QBG_setOptions();                                       // initialize BGx operating settings
+    NTWK_initRatOptions();                                  // initialize BGx Radio Access Technology (RAT) options
+    NTWK_applyDefaulNetwork();                              // configures default PDP context for likely autostart with provider attach
+    ntwk_awaitProvider(2);                                  // attempt to warm-up provider/PDP briefly. If longer duration required, leave that to application
 }
 
 
@@ -208,7 +267,7 @@ void ltem_stop()
     spi_stop(g_lqLTEM.spi);
     IOP_stopIrq();
     g_lqLTEM.deviceState = deviceState_powerOff;
-    qbg_powerOff();
+    QBG_powerOff();
 }
 
 
@@ -217,21 +276,27 @@ void ltem_stop()
  */
 void ltem_reset(bool hardReset)
 {
-    qbg_reset(hardReset);                                           // reset module, indirectly SPI/UART (CFUNC or reset pin)
+    QBG_reset(hardReset);                                           // reset module, indirectly SPI/UART (CFUNC or reset pin)
     S__initLTEmDevice(false);
+}
+
+
+/**
+ *	@brief Get the LTEmC software version.
+ */
+const char *ltem_getSwVersion()
+{
+    return ltemcVersion;
 }
 
 
 /**
  *	@brief Performs a HW reset of LTEm1 and optionally executes start sequence.
  */
-deviceState_t ltem_readDeviceState()
+deviceState_t ltem_getDeviceState()
 {
-    if (platform_readPin(g_lqLTEM.pinConfig.statusPin))             // ensure powered off device doesn't report otherwise
-    {
-        if (g_lqLTEM.deviceState == deviceState_powerOff)
-            g_lqLTEM.deviceState = deviceState_powerOn; 
-    }
+    if (QBG_isPowerOn())             // ensure powered off device doesn't report otherwise
+        g_lqLTEM.deviceState = MAX(g_lqLTEM.deviceState, deviceState_powerOn); 
     else
         g_lqLTEM.deviceState = deviceState_powerOff;
 
@@ -244,10 +309,10 @@ deviceState_t ltem_readDeviceState()
  */
 void ltem_doWork()
 {
-    if (!ltem_readDeviceState())
+    if (ltem_getDeviceState() != deviceState_appReady)
         ltem_notifyApp(appEvent_fault_hardFault, "LTEm I/O Error");
 
-    for (size_t i = 0; i < sizeof(g_lqLTEM.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)  // each stream with a doWork() register it at OPEN (removed if last CLOSE)
+    for (size_t i = 0; i < sizeof(g_lqLTEM.streamWorkers) / sizeof(doWork_func); i++)  // each stream with a doWork() register it at OPEN (removed if last CLOSE)
     {
         if (g_lqLTEM.streamWorkers[i] != NULL)
             (g_lqLTEM.streamWorkers[i])();
@@ -292,10 +357,10 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 #pragma region LTEmC Internal Functions (ltemc-internal.h)
 /*-----------------------------------------------------------------------------------------------*/
 
-void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker)
+void LTEM_registerDoWorker(doWork_func *doWorker)
 {
     bool found = false;
-    for (size_t i = 0; i < sizeof(g_lqLTEM.streamWorkers) / sizeof(moduleDoWorkFunc_t); i++)     // wireup sckt_doWork into g_ltemc worker array
+    for (size_t i = 0; i < sizeof(g_lqLTEM.streamWorkers) / sizeof(doWork_func); i++)     // wireup sckt_doWork into g_ltemc worker array
     {
         if (g_lqLTEM.streamWorkers[i] == doWorker)
         {

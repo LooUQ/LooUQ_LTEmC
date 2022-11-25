@@ -42,6 +42,7 @@
 
 
 #include "ltemc-sckt.h"
+#include "ltemc-internal.h"
 
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -49,17 +50,16 @@
 
 #define ASCII_sSENDOK "SEND OK\r\n"
 
-
 extern ltemDevice_t g_lqLTEM;
 
 
 // file scope local function declarations
-static bool S_requestIrdData(socket_t dataPeer, uint16_t reqstSz, bool applyLock);
-static cmdParseRslt_t S_tcpudpOpenCompleteParser(const char *response, char **endptr);
-static cmdParseRslt_t S_sslOpenCompleteParser(const char *response, char **endptr);
-static cmdParseRslt_t S_socketSendCompleteParser(const char *response, char **endptr);
-static cmdParseRslt_t S_socketStatusParser(const char *response, char **endptr);
-void S_scktDoWork();
+static bool S__requestIrdData(socket_t dataPeer, uint16_t reqstSz, bool applyLock);
+static cmdParseRslt_t S__tcpudpOpenCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__sslOpenCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__socketSendCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr);
+void S__scktDoWork();
 
 
 #pragma region public sockets (IP:TCP/UDP/SSL) functions
@@ -112,24 +112,24 @@ void sckt_setConnection(scktCtrl_t *scktCtrl, const char *hostUrl, uint16_t host
 resultCode_t sckt_open(scktCtrl_t *sckt, bool cleanSession)
 {
     ASSERT(sckt->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_sckt_c);
-    ASSERT(sckt->scktNm < socket__cnt || ((iop_t*)g_lqLTEM.iop)->streamPeers[sckt->scktNm] != NULL, srcfile_ltemc_sckt_c);
+    ASSERT(sckt->scktNm < socket__cnt || g_lqLTEM.iop->streamPeers[sckt->scktNm] != NULL, srcfile_ltemc_sckt_c);
     ASSERT(sckt->protocol < protocol_socket, srcfile_ltemc_sckt_c);
 
-    ((iop_t*)g_lqLTEM.iop)->scktMap &= 0x01 << sckt->scktNm;
+    g_lqLTEM.iop->scktMap &= 0x01 << sckt->scktNm;
 
     switch (sckt->protocol)
     {
     case protocol_udp:
-        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
+        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S__tcpudpOpenCompleteParser);
         atcmd_tryInvokeWithOptions("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", g_lqLTEM.pdpContext, sckt->scktNm, sckt->hostUrl, sckt->hostPort, sckt->lclPort);
         break;
   case protocol_tcp:
-        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
+        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S__tcpudpOpenCompleteParser);
         atcmd_tryInvokeWithOptions("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", g_lqLTEM.pdpContext, sckt->scktNm, sckt->hostUrl, sckt->hostPort, sckt->lclPort);
         break;
 
     case protocol_ssl:
-        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_sslOpenCompleteParser);
+        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S__sslOpenCompleteParser);
         atcmd_tryInvokeWithOptions("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", g_lqLTEM.pdpContext, sckt->scktNm, sckt->hostUrl, sckt->hostPort, sckt->lclPort);
         break;
     }
@@ -139,17 +139,17 @@ resultCode_t sckt_open(scktCtrl_t *sckt, bool cleanSession)
     // finish initialization and run background tasks to prime data pipeline
     if (atResult == resultCode__success || atResult == sckt__resultCode_previouslyOpen)
     {
-        ((iop_t*)g_lqLTEM.iop)->streamPeers[sckt->scktNm] = sckt;
-        ((iop_t*)g_lqLTEM.iop)->scktMap |= 0x01 << sckt->scktNm;
+        g_lqLTEM.iop->streamPeers[sckt->scktNm] = sckt;
+        g_lqLTEM.iop->scktMap |= 0x01 << sckt->scktNm;
 
-        LTEM_registerDoWorker(S_scktDoWork);
+        LTEM_registerDoWorker(S__scktDoWork);
     }
     
     if (atResult == sckt__resultCode_previouslyOpen)
     {
         atResult = resultCode__previouslyOpened;                                                        // translate 563 BGx response into 200 range
-        ((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[sckt->scktNm])->flushing = cleanSession;
-        ((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[sckt->scktNm])->dataPending = true;
+        ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[sckt->scktNm])->flushing = cleanSession;
+        ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[sckt->scktNm])->dataPending = true;
         PRINTF(dbgColor__white, "Flushing sckt=%d\r", sckt->scktNm);
         S_scktDoWork();                                                                                 // run doWork to perform flush
     }
@@ -167,7 +167,7 @@ void sckt_close(scktCtrl_t *scktCtrl)
 
     char closeCmd[20] = {0};
     uint8_t socketBitMask = 0x01 << scktCtrl->scktNm;
-    scktCtrl_t *thisSckt = (scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[scktCtrl->scktNm];    // for readability
+    scktCtrl_t *thisSckt = (scktCtrl_t *)g_lqLTEM.iop->streamPeers[scktCtrl->scktNm];    // for readability
 
     if (thisSckt == 0)                           // not open
         return;
@@ -186,7 +186,7 @@ void sckt_close(scktCtrl_t *scktCtrl)
         if (atcmd_awaitResult() == resultCode__success)
         {
             thisSckt = 0;
-            ((iop_t*)g_lqLTEM.iop)->scktMap &= ~socketBitMask;
+            g_lqLTEM.iop->scktMap &= ~socketBitMask;
         }
     }
 }
@@ -199,10 +199,10 @@ bool sckt_flush(scktCtrl_t *scktCtrl)
 {
     ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic, 0xFE30);
 
-    if ((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[scktCtrl->scktNm] == NULL)       // not open
+    if ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[scktCtrl->scktNm] == NULL)              // not open
         return;
 
-    if (s_requestIrdData(scktCtrl->scktNm, scktCtrl->recvBufCtrl._bufferSz, true))        // initiate an IRD flow
+    if (s_requestIrdData(scktCtrl->scktNm, scktCtrl->recvBufCtrl._bufferSz, true))      // initiate an IRD flow
     {
         scktCtrl->flushing = true;
         return true;
@@ -230,7 +230,7 @@ bool sckt_getState(scktCtrl_t *sckt)
 {
     ASSERT(sckt->ctrlMagic != streams__ctrlMagic, srcfile_ltemc_sckt_c);
 
-    atcmd_setOptions(atcmd__defaultTimeoutMS, S_socketStatusParser);
+    atcmd_setOptions(atcmd__defaultTimeoutMS, S__socketStatusParser);
     if (!atcmd_tryInvokeWithOptions("AT+QISTATE=1,%d", sckt->scktNm))
         return resultCode__conflict;
 
@@ -244,7 +244,7 @@ bool sckt_getState(scktCtrl_t *sckt)
 resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
     resultCode_t atResult;
-    ASSERT(scktCtrl != 0 && (((iop_t*)g_lqLTEM.iop)->scktMap & 0x01 << scktCtrl->scktNm) != 0, srcfile_ltemc_sckt_c);
+    ASSERT(scktCtrl != 0 && (g_lqLTEM.iop->scktMap & 0x01 << scktCtrl->scktNm) != 0, srcfile_ltemc_sckt_c);
     ASSERT(dataSz > 0, srcfile_ltemc_sckt_c);
 
     // AT+QISEND command initiates send by signaling we plan to send dataSz bytes on a socket,
@@ -259,7 +259,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
         // await data prompt atResult successful, now send data sub-command to actually transfer data, now automatically close action after data sent
         if (atResult == resultCode__success)
         {
-            atcmd_setOptions(atcmd__defaultTimeoutMS, S_socketSendCompleteParser);
+            atcmd_setOptions(atcmd__defaultTimeoutMS, S__socketSendCompleteParser);
             atcmd_sendCmdData(data, dataSz, "");    // parse for BGx send complete
             atResult = atcmd_awaitResult();
             scktCtrl->statsTxCnt++;
@@ -279,20 +279,18 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 */
 // private to LTEmc
 //void SCKT__doWork();
-void S_scktDoWork()
+void S__scktDoWork()
 {
-    iop_t *iopPtr = (iop_t*)g_lqLTEM.iop;                 // shortcut to the IOP subsystem
-
     /* PROCESS ACTIVE DATA STREAM FLOW 
      *-------------------------------------------------------------------------------------------*/
-    if (iopPtr->rxStreamCtrl != NULL &&                                     // there is an active receive stream peer
-        ((baseCtrl_t *)iopPtr->rxStreamCtrl)->protocol < protocol_socket)   // AND it is a socket
+    if (g_lqLTEM.iop->rxStreamCtrl != NULL &&                                         // there is an active receive stream peer
+        g_lqLTEM.iop->rxStreamCtrl->protocol < protocol_socket)                       // AND it is a socket
     {
         // readability vars
-        scktCtrl_t *scktPtr = ((scktCtrl_t *)iopPtr->rxStreamCtrl);
+        scktCtrl_t *scktPtr = ((scktCtrl_t *)g_lqLTEM.iop->rxStreamCtrl);
         uint8_t sckt = scktPtr->scktNm;
-        ASSERT(scktPtr == iopPtr->streamPeers[sckt], srcfile_ltemc_sckt_c);    // ASSERT sckt cross-links are still valid
-        rxDataBufferCtrl_t *bufPtr = &(scktPtr->recvBufCtrl);                       // smart-buffer for this operation
+        ASSERT(scktPtr == g_lqLTEM.iop->streamPeers[sckt], srcfile_ltemc_sckt_c);     // ASSERT sckt cross-links are still valid
+        rxDataBufferCtrl_t *bufPtr = &(scktPtr->recvBufCtrl);                   // smart-buffer for this operation
 
         uint16_t dataAvailable = 0;
         do
@@ -302,7 +300,7 @@ void S_scktDoWork()
             {
                 PRINTF(dbgColor__cyan, "scktDoWork-IRDOpen iopPg=%d, [0]=%d, [1]=%d\r", bufPtr->iopPg, rxPageDataAvailable(bufPtr, 0), rxPageDataAvailable(bufPtr, 1));
                                                                                                     // -- 1st data chuck has data header with size of queued data in BGx
-                iopPtr->txSendStartTck = 0;                                                         // stop IRD request timeout timer
+                g_lqLTEM.iop->txSendStartTck = 0;                                                         // stop IRD request timeout timer
                 char *irdSzAt = bufPtr->pages[!bufPtr->iopPg]._buffer + 9;                          // data prefix from BGx:  len("\r\n+QIRD: ") == 9
                 ASSERT(bufPtr->pages[!bufPtr->iopPg]._buffer[7] == ':', srcfile_ltemc_sckt_c);      // check BGx response if not valid IRD, we are lost
                 scktPtr->irdRemaining = strtol(irdSzAt, &bufPtr->pages[!bufPtr->iopPg].tail, 10);   // parse IRD segment sz:  \r\n+QIRD: <dataSz>, tail points to data
@@ -312,11 +310,11 @@ void S_scktDoWork()
             /* Process the data available following the IRD header */
             dataAvailable = rxPageDataAvailable(bufPtr, !bufPtr->iopPg);
 
-            if (scktPtr->irdRemaining > 0 && dataAvailable)                         // IRD segment not complete, send available to appl
+            if (scktPtr->irdRemaining > 0 && dataAvailable)                     // IRD segment not complete, send available to appl
             {
                 PRINTF(dbgColor__cyan, "scktDoWork-sendApp ird=%d, da=%d\r", scktPtr->irdRemaining, dataAvailable);
 
-                uint16_t applAvailable = MIN(dataAvailable, scktPtr->irdRemaining);     // send what we have, up to irdRemaining
+                uint16_t applAvailable = MIN(dataAvailable, scktPtr->irdRemaining);                 // send what we have, up to irdRemaining
                 if (!scktPtr->flushing)
                 {
                     /* data ready event, send to application
@@ -324,20 +322,20 @@ void S_scktDoWork()
                     scktPtr->dataRecvCB(sckt, bufPtr->pages[!bufPtr->iopPg].tail, applAvailable);
                     scktPtr->irdRemaining -= applAvailable;
                 }
-                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);                  // delivered, clear buffer page
+                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);              // delivered, clear buffer page
             }
 
-            if (scktPtr->irdRemaining == 0)                                         // IRD segement complete
+            if (scktPtr->irdRemaining == 0)                                     // IRD segement complete
             {
                 PRINTF(dbgColor__cyan, "scktDoWork-CloseCk iopPg=%d, [0]=%d, [1]=%d\r", bufPtr->iopPg, rxPageDataAvailable(bufPtr, 0), rxPageDataAvailable(bufPtr, 1));
 
                 PRINTF(dbgColor__dGreen, "closeIRD sckt=%d\r", sckt);
-                iopPtr->rxStreamCtrl = NULL;                                        // take IOP out of data mode
+                g_lqLTEM.iop->rxStreamCtrl = NULL;                                    // take IOP out of data mode
                 scktPtr->dataPending = false;
                 scktPtr->flushing = false;
-                scktPtr->doWorkLastTck = pMillis();                                 // leaving URC\IRD servicing, restart URC cycle
-                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);                  // IRD response buffer processed, clear buffer page
-                atcmd_close();                                                      // close IRD request action and release action lock
+                scktPtr->doWorkLastTck = pMillis();                             // leaving URC\IRD servicing, restart URC cycle
+                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);              // IRD response buffer processed, clear buffer page
+                atcmd_close();                                                  // close IRD request action and release action lock
                 break;
             }
 
@@ -345,7 +343,7 @@ void S_scktDoWork()
             if  (rxPageDataAvailable(bufPtr, bufPtr->iopPg) && IOP_getRxIdleDuration() > 200)
             {
                 PRINTF(dbgColor__cyan, "Idle sckt=%d, swapToPg=%d\r", sckt, bufPtr->iopPg);
-                IOP_swapRxBufferPage(bufPtr);                                       // pull page forward
+                IOP_swapRxBufferPage(bufPtr);                                   // pull page forward
             }
             dataAvailable = rxPageDataAvailable(bufPtr, !bufPtr->iopPg);
 
@@ -355,12 +353,11 @@ void S_scktDoWork()
          * irdReqstAt is a global (singleton) in ltemc-sckt, only one request can be threaded through BGx
          *-----------------------------------------------------------------------------------------------------------*/
 
-        if (pElapsed(iopPtr->txSendStartTck, 10000))              // if check for IRD timeout
-        // if (pElapsed(iopPtr->txSendStartTck, ATCMD__defaultTimeoutMS))              // if check for IRD timeout
+        if (pElapsed(g_lqLTEM.iop->txSendStartTck, 10000))                            // if check for IRD timeout
         {
-            iopPtr->txSendStartTck = 0;                                             // no longer waiting for IRD response
-            atcmd_close();                                                          // release action lock
-            ltem_notifyApp(appEvent_prto_recvFault , "IRD timeout");
+            g_lqLTEM.iop->txSendStartTck = 0;                                         // no longer waiting for IRD response
+            atcmd_close();                                                      // release action lock
+            ltem_notifyApp(appEvent_proto_recvFault , "IRD timeout");
         }
     }
 
@@ -368,16 +365,16 @@ void S_scktDoWork()
      *------------------------------------------------------------------------------------------------------
      * Now see if any other sockets are open and have dataPending reported by BGx (+QIURC/+QSSLURC event)
      *----------------------------------------------------------------------------------------------------*/
-    if (!ATCMD_isLockActive() && iopPtr->scktMap)                               // if no ATCMD underway AND there are sockets open 
+    if (!ATCMD_isLockActive() && g_lqLTEM.iop->scktMap)                               // if no ATCMD underway AND there are sockets open 
     {
-        iopPtr->scktLstWrk = ++iopPtr->scktLstWrk % socket__cnt;           // IRD fairness: if mult sckts. Skip last, get next possible context
+        g_lqLTEM.iop->scktLstWrk = ++g_lqLTEM.iop->scktLstWrk % socket__cnt;           // IRD fairness: if mult sckts. Skip last, get next possible context
         uint8_t nextIrd;
         for (uint8_t i = 0; i < socket__cnt; i++)
         {
-            nextIrd = (iopPtr->scktLstWrk + i) % socket__cnt;              // rotate to look for next open sckt for IRD request
-            scktCtrl_t *scktPtr = ((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[nextIrd]);
+            nextIrd = (g_lqLTEM.iop->scktLstWrk + i) % socket__cnt;              // rotate to look for next open sckt for IRD request
+            scktCtrl_t *scktPtr = ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[nextIrd]);
 
-            if (iopPtr->scktMap & 0x01 << nextIrd)                              // socket is OPEN
+            if (g_lqLTEM.iop->scktMap & 0x01 << nextIrd)                              // socket is OPEN
             {
                 ASSERT_W(!pElapsed(scktPtr->doWorkLastTck, IOP__rxDefaultTimeout), srcfile_ltemc_sckt_c, "doWork freq slow:bffr ovrflw risk");
                 scktPtr->doWorkLastTck = pMillis();                             // last check for URC\data pending check cycle
@@ -386,7 +383,7 @@ void S_scktDoWork()
                 {
                     if (S_requestIrdData((socket_t)nextIrd, 0, true))      // Request maximum data (IRD) with action lock 
                     {                                                           // this puts IOP in data mode (IRD is hybrid of cmd and data)
-                        ((scktCtrl_t*)iopPtr->rxStreamCtrl)->statsRxCnt++;      // tally RX (IRD) segments, full IRD counts as only 1
+                        ((scktCtrl_t*)g_lqLTEM.iop->rxStreamCtrl)->statsRxCnt++;      // tally RX (IRD) segments, full IRD counts as only 1
                         PRINTF(dbgColor__dGreen, "SCKT-openIRD sckt=%d\r", i);
                         break;                              // If the IRD request gets a lock, the IRD process starts for the socket[i]
                                                             // If the request cannot get a lock (maybe a send\transmit cmd is underway) it silently returns
@@ -398,7 +395,7 @@ void S_scktDoWork()
                 }
             }
         }
-        iopPtr->scktLstWrk = nextIrd;
+        g_lqLTEM.iop->scktLstWrk = nextIrd;
     }
 }
 
@@ -411,15 +408,15 @@ void S_scktDoWork()
 /**
  *  @brief [private] Invoke IRD command to request BGx for socket (read) data
  */
-static bool S_requestIrdData(socket_t dataCntx, uint16_t reqstSz, bool applyLock)
+static bool S__requestIrdData(socket_t dataCntx, uint16_t reqstSz, bool applyLock)
 {
     ASSERT(dataCntx < socket__cnt, srcfile_ltemc_sckt_c);                                    // ASSERT data context is valid context
-    ASSERT(((iop_t*)g_lqLTEM.iop)->scktMap & 0x01 << dataCntx, srcfile_ltemc_sckt_c);               // ASSERT socket is open 
+    ASSERT(g_lqLTEM.iop->scktMap & 0x01 << dataCntx, srcfile_ltemc_sckt_c);               // ASSERT socket is open 
 
     char irdCmd[24] = {0};
     uint16_t requestedSz = (!reqstSz) ? SCKT__IRD_requestMaxSz : MAX(SCKT__IRD_requestMaxSz, reqstSz);
 
-    if (((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[dataCntx])->protocol == protocol_ssl)
+    if (((scktCtrl_t *)g_lqLTEM.iop->streamPeers[dataCntx])->protocol == protocol_ssl)
         snprintf(irdCmd, 24, "AT+QSSLRECV=%d,%d", dataCntx, requestedSz);
     else
         snprintf(irdCmd, 24, "AT+QIRD=%d,%d", dataCntx, requestedSz);
@@ -428,9 +425,9 @@ static bool S_requestIrdData(socket_t dataCntx, uint16_t reqstSz, bool applyLock
     if (applyLock && !ATCMD_awaitLock(atcmd__defaultTimeoutMS))
         return false;
 
-    ((iop_t*)g_lqLTEM.iop)->rxStreamCtrl = ((iop_t*)g_lqLTEM.iop)->streamPeers[dataCntx];       // set IOP in data mode
-    ((iop_t*)g_lqLTEM.iop)->txSendStartTck = pMillis();
-    ((scktCtrl_t*)((iop_t*)g_lqLTEM.iop)->rxStreamCtrl)->irdRemaining = -1;                   // signal IRD pending with unknown pending
+    g_lqLTEM.iop->rxStreamCtrl = g_lqLTEM.iop->streamPeers[dataCntx];               // set IOP in data mode
+    g_lqLTEM.iop->txSendStartTck = pMillis();
+    ((scktCtrl_t*)g_lqLTEM.iop->rxStreamCtrl)->irdRemaining = -1;                   // signal IRD pending with unknown pending
 
     IOP_sendTx(irdCmd, strlen(irdCmd), false);
     IOP_sendTx("\r", 1, true);

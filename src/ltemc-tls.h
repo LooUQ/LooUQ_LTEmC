@@ -28,87 +28,8 @@
 #ifndef __LTEMC_TLS_H__
 #define __LTEMC_TLS_H__
 
-#include "ltemc-streams.h"
-#include <lq-diagnostics.h>
-
-/** 
- *  @brief Enum of available SSL version options for an SSL connection
-*/
-typedef enum tlsVersion_tag
-{
-    tlsVersion_none = 255,
-    tlsVersion_ssl30 = 0,
-    tlsVersion_tls10 = 1,
-    tlsVersion_tls11 = 2,
-    tlsVersion_tls12 = 3,
-    tlsVersion_any = 4,                                 // BGx default
-
-    tlsVersion_default = 4
-} tlsVersion_t;
-
-
-/** 
- *  @brief Enum of the available cipher suites for TLS processing
-*/
-typedef enum tlsCipher_tag
-{
-    tlsCipher_rsaAes256CbcSha = 0X0035,
-    tlsCipher_rsaAes128CbcSha = 0X002F,
-    tlsCipher_rsaRc4128Sha = 0x0005,
-    tlsCipher_rsaRc4128Md5 = 0x0004,
-    tlsCipher_rsa3desEdeCbcSha = 0x000A,
-    tlsCipher_rsaAes256CbcSha256 = 0x003D,
-
-    tlsCipher_ecdheRsaRc4128Sha = 0xC011,
-    tlsCipher_ecdheRsa3desEdeCbcSha = 0xC012,
-    tlsCipher_ecdheRsaAes128CbcSha = 0xC013,
-    tlsCipher_ecdheRsaAes256CbcSha = 0xC014,
-    tlsCipher_ecdheRsaAes128CbcSha256 = 0xC027,
-    tlsCipher_ecdheRsaAes256CbcSha384 = 0xC028,
-    tlsCipher_ecdheRsaAes128GcmSha256 = 0xC02F,
-
-    tlsCipher_any = 0xFFFF,                             // BGx default
-
-    tlsCipher_default = 0xFFFF
-} tlsCipher_t;
-
-
-/** 
- *  @brief Enum of the options for certificate expiration date/time checking
-*/
-typedef enum tlsCertExpiration_tag
-{
-    tlsCertExpiration_check = 0,
-    tlsCertExpiration_ignore = 1,                 // BGx default
-
-    tlsCertExpiration_default = 1
-} tlsCertExpiration_t;
-
-
-/** 
- *  @brief Enum of the certification validation options
-*/
-typedef enum tlsSecurityLevel_tag
-{
-    tlsSecurityLevel_noAuthentication = 0,              // BGx default
-    tlsSecurityLevel_serverAuthentication = 1,
-    tlsSecurityLevel_serverClientAuthentication = 2,
-
-    tlsSecurityLevel_default = 0
-} tlsSecurityLevel_t;
-
-
-/** 
- *  @brief Return struct for get TLC information
-*/
-typedef struct tlsOptions_tag
-{
-    tlsVersion_t version;
-    tlsCipher_t cipher;
-    tlsCertExpiration_t certExpCheck;
-    tlsSecurityLevel_t securityLevel;
-    char trCertPath[80];
-} tlsOptions_t;
+//#include <lq-diagnostics.h>
+#include "ltemc-types.h"
 
 
 #ifdef __cplusplus

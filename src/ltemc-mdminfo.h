@@ -29,33 +29,11 @@
 #define _MODEMINFO_H_
 
 #include "ltemc.h"
-#include "lq-network.h"
-
-
-// #include <stddef.h>
-// #include <stdint.h>
-
-#define MDMINFO_IMEI_SZ = 16
-#define MDMINFO_ICCID_SZ = 21
-#define MDMINFO_FWVER_SZ = 41
-#define MDMINFO_MFGINFO_SZ 41
-
-// /** 
-//  *  \brief Struct holding information about the physical BGx module.
-// */
-// typedef struct modemInfo_tag
-// {
-// 	char imei[16];          ///< IMEI (15 digits) International Mobile Equipment Identity, set in the BGx itself at manufacture.
-// 	char iccid [21];        ///< ICCID (20 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
-// 	char mfgmodel [21];     ///< The Quectel model number of the BGx device.
-// 	char fwver [41];        ///< Firmware version of the BGx device.
-// } modemInfo_t;
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  *  @brief Get the LTEm1 static device identification/provisioning information.

@@ -38,6 +38,7 @@
 #include <stdbool.h>
 #endif // __cplusplus
 
+#include "ltemc-types.h"
 #include "platform/lqPlatform-spi.h"
 
 
@@ -417,7 +418,7 @@ void SC16IS7xx_enableIrqMode();
 /**
  *	@brief Perform simple write/read using SC16IS741A scratchpad register. Used to test SPI communications.
  */
-bool SC16IS7xx_chkCommReady();
+bool SC16IS7xx_isCommReady();
 
 
 /**

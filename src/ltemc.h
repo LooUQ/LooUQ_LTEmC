@@ -31,19 +31,26 @@
 // #define IOP_RX_COREBUF_SZ 256
 // #define IOP_TX_BUFFER_SZ 1460
 
-#include <lq-types.h>
-#include <lq-diagnostics.h>
-#include "ltemc-srcfiles.h"
+#include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
+#include <lq-diagnostics.h>                     /// ASSERT and diagnostic data collection
+#include "ltemc-srcfiles.h"                     /// source file manifest for ASSERT use
 
-#include "ltemc-types.h"
-#include "lq-platform.h"
-#include "ltemc-quectel-bg.h"
-#include "ltemc-iop.h"
-#include "ltemc-atcmd.h"
-#include "ltemc-mdminfo.h"
-#include "ltemc-network.h"
-#include "ltemc-filesys.h"
-#include "ltemc-gpio.h"
+#include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
+
+#include "lq-platform.h"                        /// platform abstractions (arduino, etc.)
+#include "ltemc-atcmd.h"                        /// command processor interface
+#include "ltemc-mdminfo.h"                      /// modem information
+#include "ltemc-network.h"                      /// cellular provider and packet network 
+
+/* Add the following LTEmC feature sets as required for your project
+*/
+// #include "ltemc-gnss.h"                         /// GNSS/GPS location services
+// #include "ltemc-sckt.h"                         /// tcp/udp socket communications
+// #include "ltemc-tls"                            /// SSL/TLS support
+// #include "ltemc-http"                           /// HTTP(S) support: GET/POST requests
+// #include "ltemc-mqtt"                           /// MQTT(S) support
+// #include "ltemc-filesys.h"                      /// use of BGx module file system functionality
+// #include "ltemc-gpio.h"                         /// use of BGx module GPIO expansion functionality
 
 
 /* LTEmC uses 2 global buffers: the IOP transmit buffer and the ATCMD cmd\core buffer.
@@ -54,17 +61,11 @@
  */
 /* ----------------------------------------------------------------------------------- */
 
+
 #ifdef __cplusplus
 extern "C"
 {
 #endif // __cplusplus
-
-
-/**
- *	\brief Get the LTEmC software version.
- *  \return Version as a const char pointer.
- */
-const char *ltem_ltemcVersion();
 
 
 // typedef void (*eventNotifCallback_func)(uint8_t notifCode, const char *message);
@@ -81,6 +82,36 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
  *	\brief Uninitialize the LTEm device structures.
  */
 void ltem_destroy();
+
+/**
+ *  \brief Configure RAT searching sequence
+ *  \details Example: scanSequence = "020301" represents: search LTE-M1, then LTE-NB1, then GSM
+ *  \param [in] scanSequence Character string specifying the RAT scanning order; 00=Automatic[LTE-M1|LTE-NB1|GSM],01=GSM,02=LTE-M1,03=LTE-NB1
+*/
+void ltem_setProviderScanSeq(const char *sequence);
+
+
+/** 
+ *  \brief Configure RAT(s) allowed to be searched
+ *  \param [in] scanMode Enum specifying what cell network to scan; 0=Automatic,1=GSM only,3=LTE only
+*/
+void ltem_setProviderScanMode(ntwkScanMode_t mode);
+
+
+/** 
+ *  \brief Configure the network category to be searched under LTE RAT.
+ *  \param [in] iotMode Enum specifying the LTE LPWAN protocol(s) to scan; 0=LTE M1,1=LTE NB1,2=LTE M1 and NB1
+ */
+void ltem_setIotMode(ntwkIotMode_t mode);
+
+
+/**
+ *	\brief Build default data context configuration for modem to use on startup.
+ *  \param [in] cntxtId The context ID to operate on. Typically 0 or 1
+ *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
+ *  \param [in] apn The APN name if required by network carrier.
+ */
+void ltem_setDefaultNetwork(uint8_t pdpContextId, const char *protoType, const char *apn);
 
 
 /**
@@ -107,6 +138,12 @@ void ltem_stop();
  *	\brief Performs a reset of LTEm.
  */
 void ltem_reset(bool hardReset);
+
+/**
+ *	\brief Get the LTEmC software version.
+ *  \return Version as a const char pointer.
+ */
+const char *ltem_getSwVersion();
 
 
 /**
@@ -154,7 +191,7 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
 
 // LTEM Internal
 void LTEM_initIo();
-void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker);
+void LTEM_registerDoWorker(doWork_func *doWorker);
 
 
 

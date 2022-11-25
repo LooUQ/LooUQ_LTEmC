@@ -38,9 +38,8 @@
 #define PRINTF(c_, f_, ...) 
 #endif
 
-#include "ltemc-nxp-sc16is.h"
-#include "ltemc-internal.h"
 #include "lq-platform.h"
+#include "ltemc-nxp-sc16is.h"
 
 
 #define REG_MODIFY(REG_NAME, MODIFY_ACTION)                 \
@@ -117,7 +116,7 @@ void SC16IS7xx_enableIrqMode()
 /**
  *	@brief Read interrupt enable register, check IER for IRQ enabled (register is cleared at reset)
  */
-bool SC16IS7xx_chkCommReady()
+bool SC16IS7xx_isCommReady()
 {
     uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
     SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, wrVal);
@@ -140,7 +139,7 @@ uint8_t SC16IS7xx_readReg(uint8_t reg_addr)
 	reg_payload.reg_addr.A = reg_addr;
 	reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-	reg_payload.reg_payload = spi_transferWord(((spi_t*)g_lqLTEM.spi), reg_payload.reg_payload);
+	reg_payload.reg_payload = spi_transferWord(g_lqLTEM.spi, reg_payload.reg_payload);
 	return reg_payload.reg_data;
 }
 
@@ -155,7 +154,7 @@ void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data)
 	reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 	reg_payload.reg_data = reg_data;
 
-	spi_transferWord(((spi_t*)g_lqLTEM.spi), reg_payload.reg_payload);
+	spi_transferWord(g_lqLTEM.spi, reg_payload.reg_payload);
 }
 
 
@@ -168,7 +167,7 @@ void SC16IS7xx_read(void* dest, uint8_t dest_len)
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-    spi_transferBuffer(((spi_t*)g_lqLTEM.spi), reg_addr.reg_address, dest, dest_len);
+    spi_transferBuffer(g_lqLTEM.spi, reg_addr.reg_address, dest, dest_len);
 }
 
 
@@ -181,7 +180,7 @@ void SC16IS7xx_write(const void* src, uint8_t src_len)
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 
-    spi_transferBuffer(((spi_t*)g_lqLTEM.spi), reg_addr.reg_address, src, src_len);
+    spi_transferBuffer(g_lqLTEM.spi, reg_addr.reg_address, src, src_len);
 }
 
 

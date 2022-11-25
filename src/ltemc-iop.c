@@ -57,7 +57,7 @@
 
 #pragma region Header
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -73,14 +73,12 @@
 
 
 #include "ltemc-iop.h"
-#include "ltemc-nxp-sc16is.h"
 #include "ltemc-internal.h"
-#include "ltemc-sckt.h"
+#include "ltemc-sckt.h"                                 // protocols that are tightly coupled to I/O processing
 #include "ltemc-mqtt.h"
 
-#include <lq-str.h>
 
-#define NULL 0
+//#define NULL 0
 
 #define QBG_APPREADY_MILLISMAX 10000
 
@@ -122,14 +120,14 @@ void IOP_create()
     g_lqLTEM.iop = calloc(1, sizeof(iop_t));
     ASSERT(g_lqLTEM.iop != NULL, srcfile_ltemc_iop_c);
 
-    ((iop_t*)g_lqLTEM.iop)->txBuf = S_createTxBuffer();
-    ((iop_t*)g_lqLTEM.iop)->rxCBuffer = S_createRxCoreBuffer(bufferSz__coreRx);        // create cmd/default RX buffer
-    ((iop_t*)g_lqLTEM.iop)->scktMap = 0;
-    ((iop_t*)g_lqLTEM.iop)->scktLstWrk = 0;
-    ((iop_t*)g_lqLTEM.iop)->mqttMap = 0;
-    // ((iop_t*)g_lqLTEM.iop)->httpMap = 0;
-    ((iop_t*)g_lqLTEM.iop)->rxStreamCtrl = NULL;                                          // != NULL, data mode on stream peer pointed
-    memset(((iop_t*)g_lqLTEM.iop)->streamPeers, 0, sizeof(void *) * streamPeer_cnt);
+    g_lqLTEM.iop->txBuf = S_createTxBuffer();
+    g_lqLTEM.iop->rxCBuffer = S_createRxCoreBuffer(bufferSz__coreRx);        // create cmd/default RX buffer
+    g_lqLTEM.iop->scktMap = 0;
+    g_lqLTEM.iop->scktLstWrk = 0;
+    g_lqLTEM.iop->mqttMap = 0;
+    // g_lqLTEM.iop->httpMap = 0;
+    g_lqLTEM.iop->rxStreamCtrl = NULL;                                      // != NULL, data mode on stream peer pointed
+    memset(g_lqLTEM.iop->streamPeers, 0, sizeof(void *) * streamPeer_cnt);
 }
 
 
@@ -138,7 +136,7 @@ void IOP_create()
  */
 void IOP_attachIrq()
 {
-    spi_usingInterrupt(((spi_t*)g_lqLTEM.spi), g_lqLTEM.pinConfig.irqPin);
+    spi_usingInterrupt(g_lqLTEM.spi, g_lqLTEM.pinConfig.irqPin);
     platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
 }
 
@@ -157,7 +155,7 @@ void IOP_detachIrq()
  */
 void IOP_registerStream(streamPeer_t streamIndx, iopStreamCtrl_t *streamCtrl)
 {
-    ((iop_t*)g_lqLTEM.iop)->streamPeers[streamIndx] = streamCtrl;
+    g_lqLTEM.iop->streamPeers[streamIndx] = streamCtrl;
 }
 
 
@@ -171,9 +169,9 @@ bool IOP_awaitAppReady()
     uint8_t rxLevel = 0;
     uint32_t waitStart = pMillis();
 
-    while (pMillis() - waitStart < QBG_APPREADY_MILLISMAX)      // typical wait: 700-1450 mS
+    while (pMillis() - waitStart < QBG_APPREADY_MILLISMAX)                  // typical wait: 700-1450 mS
     {
-        pYield();                                               // give application time for non-comm startup activities or watchdog
+        pYield();                                                           // give application time for non-comm startup activities or watchdog
         rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
         if (rxLevel > 0)
         {
@@ -202,13 +200,10 @@ bool IOP_awaitAppReady()
  */
 uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate)
 {
-    uint16_t queuedSz = S_putTx(sendData, sendSz);    // put sendData into global send buffer
-    // if (queuedSz < sendSz)
-    //     ltem1_notifyApp(ltem1NotifType_bufferOverflow, "iop-tx buffer overflow");
-
-    if (sendImmediate)                                  // if sender done adding, send initial block of data
-    {                                                       // IOP ISR will continue sending chunks until global buffer empty
-        char txData[SC16IS7xx__FIFO_bufferSz] = {0};       // max size of the NXP TX FIFO
+    uint16_t queuedSz = S_putTx(sendData, sendSz);                          // put sendData into global send buffer
+    if (sendImmediate)                                                      // if sender done adding, send initial block of data
+    {                                                                       // IOP ISR will continue sending chunks until global buffer empty
+        char txData[SC16IS7xx__FIFO_bufferSz] = {0};                        // max size of the NXP TX FIFO
         do
         {
             uint8_t bufAvailable = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
@@ -217,37 +212,36 @@ uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate)
                 break;
             else
             {
-                ((iop_t*)g_lqLTEM.iop)->txSendStartTck = pMillis();
+                g_lqLTEM.iop->txSendStartTck = pMillis();
                 PRINTF(dbgColor__dCyan, "txChunk=%s\r", txData);
                 SC16IS7xx_write(txData, dataToSendSz);
                 break;
             }
-        } while (true);                                     // loop until send at least 1 char
+        } while (true);                                                     // loop until send at least 1 char
     }
-    return queuedSz;                                     // return number of chars queued, not char send cnt
+    return queuedSz;                                                        // return number of chars queued, not char send cnt
 }
 
 
 /**
- *	@brief Check for RX progress/idle.
+ *	@brief Get the idle time in milliseconds since last RX I/O.
  */
 uint32_t IOP_getRxIdleDuration()
 {
-    ASSERT(((iop_t*)g_lqLTEM.iop)->rxStreamCtrl != NULL, srcfile_ltemc_iop_c);
+    ASSERT(g_lqLTEM.iop->rxStreamCtrl != NULL, srcfile_ltemc_iop_c);
 
-    rxDataBufferCtrl_t rxBuf = ((rxDataBufferCtrl_t)((baseCtrl_t*)((iop_t*)g_lqLTEM.iop)->rxStreamCtrl)->recvBufCtrl);
+    rxDataBufferCtrl_t rxBuf = ((rxDataBufferCtrl_t)g_lqLTEM.iop->rxStreamCtrl->recvBufCtrl);
     uint16_t fillNow = rxBuf.pages[rxBuf.iopPg].head - rxBuf.pages[rxBuf.iopPg]._buffer;
 
     uint32_t retVal = 0;
-
-    if (((iop_t*)g_lqLTEM.iop)->rxLastFillLevel == fillNow)           // idle now
+    if (g_lqLTEM.iop->rxLastFillLevel == fillNow)                           // idle now
     {
-        retVal = pMillis() - ((iop_t*)g_lqLTEM.iop)->rxLastFillChgTck;
+        retVal = pMillis() - g_lqLTEM.iop->rxLastFillChgTck;
     }
     else
     {
-        ((iop_t*)g_lqLTEM.iop)->rxLastFillChgTck = pMillis();
-        ((iop_t*)g_lqLTEM.iop)->rxLastFillLevel = fillNow;
+        g_lqLTEM.iop->rxLastFillChgTck = pMillis();
+        g_lqLTEM.iop->rxLastFillLevel = fillNow;
     }
     return retVal;
 }
@@ -256,7 +250,7 @@ uint32_t IOP_getRxIdleDuration()
 /**
  *	@brief Finds a string in the last X characters of the IOP RX stream.
  */
-char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *pNeedle, const char *pTerm)
+char *IOP_findInRxReverse(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *pNeedle, const char *pTerm)
 {
     uint8_t needleLen = strlen(pNeedle);
     uint8_t termLen = strlen(pTerm);
@@ -272,7 +266,7 @@ char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *p
         //    uint8_t searchPg;
     // bool foundNeedle = false;
     char *pNeedleAt = NULL;
-    uint8_t termSrchState = (termLen == 0) ? 2 : 0;                     // termSrchState: 0=nothing yet, 1=start found, 2=full match found
+    uint8_t termSrchState = (termLen == 0) ? 2 : 0;                         // termSrchState: 0=nothing yet, 1=start found, 2=full match found
 
     uint8_t searchPg = pBuf->iopPg;
     char *pSearch = pBuf->pages[pBuf->iopPg].head - rewindCnt;
@@ -292,7 +286,7 @@ char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *p
         }
 
         pSearch++;
-        if (pSearch == pBuf->pages[!pBuf->iopPg].head)              // end of RCV page, continue search in IOP page
+        if (pSearch == pBuf->pages[!pBuf->iopPg].head)                      // end of RCV page, continue search in IOP page
         {
             searchPg = pBuf->iopPg;
             pSearch = pBuf->pages[pBuf->iopPg]._buffer;
@@ -306,7 +300,7 @@ char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *p
             return NULL;
 
         pSearch++;
-        if (pSearch == pBuf->pages[!pBuf->iopPg].head)              // end of RCV page, continue search in IOP page
+        if (pSearch == pBuf->pages[!pBuf->iopPg].head)                      // end of RCV page, continue search in IOP page
         {
             searchPg = pBuf->iopPg;
             pSearch = pBuf->pages[pBuf->iopPg]._buffer;
@@ -323,7 +317,7 @@ char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *p
         }
 
         pSearch++;
-        if (pSearch == pBuf->pages[!pBuf->iopPg].head)              // end of RCV page, continue search in IOP page
+        if (pSearch == pBuf->pages[!pBuf->iopPg].head)                      // end of RCV page, continue search in IOP page
         {
             searchPg = pBuf->iopPg;
             pSearch = pBuf->pages[pBuf->iopPg]._buffer;
@@ -341,7 +335,7 @@ char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *p
                 return NULL;
 
             pSearch++;
-            if (pSearch == pBuf->pages[!pBuf->iopPg].head)          // end of RCV page, continue search in IOP page
+            if (pSearch == pBuf->pages[!pBuf->iopPg].head)                  // end of RCV page, continue search in IOP page
             {
                 searchPg = pBuf->iopPg;
                 pSearch = pBuf->pages[pBuf->iopPg]._buffer;
@@ -355,7 +349,7 @@ char *IOP_findRxAhead(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *p
 /**
  *	@brief Get a contiguous block of characters from the RX data buffer pages.
  */
-uint16_t IOP_fetchRxAhead(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeCnt, char *pChars)
+uint16_t IOP_fetchFromRx(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeCnt, char *pChars)
 {
     ASSERT(pBuf->_buffer <= pStart && pStart <= pBuf->_bufferEnd, srcfile_ltemc_iop_c);
     memset(pChars, 0, takeCnt + 1);
@@ -394,7 +388,7 @@ uint16_t IOP_fetchRxAhead(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeC
  */
 void IOP_resetCoreRxBuffer()
 {
-    rxCoreBufferCtrl_t *rxCBuf = ((iop_t*)g_lqLTEM.iop)->rxCBuffer;
+    rxCoreBufferCtrl_t *rxCBuf = g_lqLTEM.iop->rxCBuffer;
 
     memset(rxCBuf->_buffer, 0, (rxCBuf->head - rxCBuf->_buffer));
     rxCBuf->head = rxCBuf->prevHead = rxCBuf->tail = rxCBuf->_buffer;
@@ -426,11 +420,9 @@ uint16_t IOP_initRxBufferCtrl(rxDataBufferCtrl_t *bufCtrl, uint8_t *rxBuf, uint1
  */
 void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufCtrl)
 {
-    ((iop_t*)g_lqLTEM.iop)->rxLastFillLevel = 0;
-    // ((iop_t*)g_lqLTEM.iop)->rxLastFillChgTck = 0;
-
-    bufCtrl->_nextIopPg = !bufCtrl->iopPg;     // set intent, used to check state if swap interrupted
-    bufCtrl->bufferSync = true;                // set bufferSync, IOP ISR will finish swap if interrupted
+    g_lqLTEM.iop->rxLastFillLevel = 0;
+    bufCtrl->_nextIopPg = !bufCtrl->iopPg;                                  // set intent, used to check state if swap interrupted
+    bufCtrl->bufferSync = true;                                             // set bufferSync, IOP ISR will finish swap if interrupted
 
     if (bufCtrl->iopPg != bufCtrl->_nextIopPg)
         bufCtrl->iopPg = bufCtrl->_nextIopPg;
@@ -444,7 +436,7 @@ void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufCtrl)
  */
 static inline rxDataBufferCtrl_t *S_isrRxBufferSync()
 {
-    rxDataBufferCtrl_t* bufCtrl = &(((baseCtrl_t*)((iop_t*)g_lqLTEM.iop)->rxStreamCtrl)->recvBufCtrl);
+    rxDataBufferCtrl_t* bufCtrl = &(g_lqLTEM.iop->rxStreamCtrl->recvBufCtrl);
 
     if (bufCtrl->bufferSync && bufCtrl->iopPg != bufCtrl->_nextIopPg)       // caught the swap underway and interrupted prior to swap change
             bufCtrl->iopPg = bufCtrl->_nextIopPg;                           // so finish swap and use it in ISR
@@ -458,8 +450,8 @@ static inline rxDataBufferCtrl_t *S_isrRxBufferSync()
  */
 void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page)
 {
-    ((iop_t*)g_lqLTEM.iop)->rxLastFillLevel = 0;
-    ((iop_t*)g_lqLTEM.iop)->rxLastFillChgTck = 0;
+    g_lqLTEM.iop->rxLastFillLevel = 0;
+    g_lqLTEM.iop->rxLastFillChgTck = 0;
 
     //memset(bufPtr->pages[page]._buffer, 0, (bufPtr->pages[page].head - bufPtr->pages[page]._buffer));
     bufPtr->pages[page].head = bufPtr->pages[page].prevHead = bufPtr->pages[page].tail = bufPtr->pages[page]._buffer;
@@ -537,14 +529,14 @@ static uint16_t S_putTx(const char *data, uint16_t dataSz)
 
     for (size_t i = 0; i < dataSz; i++)
     {
-        if(cbuf_push(((iop_t*)g_lqLTEM.iop)->txBuf, data[i]))
+        if(cbuf_push(g_lqLTEM.iop->txBuf, data[i]))
         {
             putCnt++;
             continue;
         }
         break;
     }
-    ((iop_t*)g_lqLTEM.iop)->txPend += putCnt;
+    g_lqLTEM.iop->txPend += putCnt;
     return putCnt;
 }
 
@@ -562,14 +554,14 @@ static uint16_t S_takeTx(char *data, uint16_t dataSz)
 
     for (size_t i = 0; i < dataSz; i++)
     {
-        if (cbuf_pop(((iop_t*)g_lqLTEM.iop)->txBuf, data + i))
+        if (cbuf_pop(g_lqLTEM.iop->txBuf, data + i))
         {
             takeCnt++;
             continue;
         }
         break;
     }
-    ((iop_t*)g_lqLTEM.iop)->txPend -= takeCnt;
+    g_lqLTEM.iop->txPend -= takeCnt;
     return takeCnt;
 }
 
@@ -585,95 +577,83 @@ static uint16_t S_takeTx(char *data, uint16_t dataSz)
  */
 void IOP_rxParseForUrcEvents()
 {
-    char *urcStartPtr = memchr(((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead, '+', 6);             // most URC start with '+', skip leading \r\n 
+    char *urcStartPtr = memchr(g_lqLTEM.iop->rxCBuffer->prevHead, '+', 6);                                              // most URC start with '+', skip leading \r\n 
     if (urcStartPtr)
     {
-        if (((iop_t*)g_lqLTEM.iop)->scktMap > 0 && memcmp("+QSSLURC: \"recv", urcStartPtr, strlen("+QSSLURC: \"recv")) == 0)    // shortcircuit if no sockets
+        if (g_lqLTEM.iop->scktMap > 0 && memcmp("+QSSLURC: \"recv", urcStartPtr, strlen("+QSSLURC: \"recv")) == 0)      // shortcircuit if no sockets
         {
             PRINTF(dbgColor__cyan, "-p=sslURC");
-            char *connIdPtr = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead + strlen("+QSSLURC: \"recv");
+            char *connIdPtr = g_lqLTEM.iop->rxCBuffer->prevHead + strlen("+QSSLURC: \"recv");
             char *endPtr = NULL;
             uint8_t socketId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-            ((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[socketId])->dataPending = true;
+            ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[socketId])->dataPending = true;
             // discard this chunk, processed here
-            ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead;
+            g_lqLTEM.iop->rxCBuffer->head = g_lqLTEM.iop->rxCBuffer->prevHead;
         }
 
-        else if (((iop_t*)g_lqLTEM.iop)->scktMap && memcmp("+QIURC: \"recv", urcStartPtr, strlen("+QIURC: \"recv")) == 0)       // shortcircuit if no sockets
+        else if (g_lqLTEM.iop->scktMap && memcmp("+QIURC: \"recv", urcStartPtr, strlen("+QIURC: \"recv")) == 0)         // shortcircuit if no sockets
         {
             PRINTF(dbgColor__cyan, "-p=ipURC");
-            char *cntxIdPtr = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead + strlen("+QIURC: \"recv");
+            char *cntxIdPtr = g_lqLTEM.iop->rxCBuffer->prevHead + strlen("+QIURC: \"recv");
             char *endPtr = NULL;
             uint8_t cntxId = (uint8_t)strtol(cntxIdPtr, &endPtr, 10);
-            ((scktCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[cntxId])->dataPending = true;
+            ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[cntxId])->dataPending = true;
             // discard this chunk, processed here
-            ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead;
+            g_lqLTEM.iop->rxCBuffer->head = g_lqLTEM.iop->rxCBuffer->prevHead;
         }
 
-        else if (((iop_t*)g_lqLTEM.iop)->mqttMap && memcmp("+QMTRECV:", urcStartPtr, strlen("+QMTRECV")) == 0)
+        else if (g_lqLTEM.iop->mqttMap && memcmp("+QMTRECV:", urcStartPtr, strlen("+QMTRECV")) == 0)
         {
             PRINTF(dbgColor__cyan, "-p=mqttR");
             //char *endPtr = NULL;
-            uint8_t cntxtId = S_convertCharToContextId(*(urcStartPtr + strlen("+QMTRECV: ")));                  // parse for context #
+            uint8_t cntxtId = S_convertCharToContextId(*(urcStartPtr + strlen("+QMTRECV: ")));              // parse for context #
 
-            ASSERT(((iop_t*)g_lqLTEM.iop)->rxStreamCtrl == NULL, srcfile_ltemc_iop_c);                            // ASSERT: not inside another stream recv
+            ASSERT(g_lqLTEM.iop->rxStreamCtrl == NULL, srcfile_ltemc_iop_c);                                // ASSERT: not inside another stream recv
 
-            // this chunk, contains both meta data for receive followed by actual data, need to copy the data chunk to start of rxDataBuffer for this context
-            ((iop_t*)g_lqLTEM.iop)->rxStreamCtrl = ((mqttCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[cntxtId]);    // put IOP in datamode for context 
-            rxDataBufferCtrl_t *dBufPtr = &(((baseCtrl_t*)((iop_t*)g_lqLTEM.iop)->rxStreamCtrl)->recvBufCtrl);    // get reference to context specific data RX buffer
+            /* this chunk, contains both meta data for receive followed by actual data, need to copy the data chunk to start of rxDataBuffer for this context
+            */
+            g_lqLTEM.iop->rxStreamCtrl = g_lqLTEM.iop->streamPeers[cntxtId];                                // put IOP in datamode for context 
+            rxDataBufferCtrl_t *dBufPtr = &g_lqLTEM.iop->rxStreamCtrl->recvBufCtrl;                         // get reference to context specific data RX buffer
 
             // move received from core\cmd buffer to context data buffer, preserving prefix text for overflow detection (prefix & trailer text must be in same buffer)
-            memcpy(dBufPtr->pages[dBufPtr->iopPg]._buffer, urcStartPtr, ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head - urcStartPtr);
-            dBufPtr->pages[dBufPtr->iopPg].head += ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head - urcStartPtr;
+            memcpy(dBufPtr->pages[dBufPtr->iopPg]._buffer, urcStartPtr, g_lqLTEM.iop->rxCBuffer->head - urcStartPtr);
+            dBufPtr->pages[dBufPtr->iopPg].head += g_lqLTEM.iop->rxCBuffer->head - urcStartPtr;
 
-            ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead;                  // drop recv'd from cmd\core buffer, processed here
+            g_lqLTEM.iop->rxCBuffer->head = g_lqLTEM.iop->rxCBuffer->prevHead;                              // drop recv'd from cmd\core buffer, processed here
         }
 
-        else if (((iop_t*)g_lqLTEM.iop)->mqttMap &&
+        else if (g_lqLTEM.iop->mqttMap &&
                  (memcmp("+QMTSTAT:", urcStartPtr, 8) == 0 || 
                  memcmp("+QMTDISC", urcStartPtr, 8) == 0))
         {
             PRINTF(dbgColor__cyan, "-p=mqttS");
-            char *cntxIdPtr = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead + 10;               // look past "+QMTSTAT: " or "+QMTDISC: "
+            char *cntxIdPtr = g_lqLTEM.iop->rxCBuffer->prevHead + 10;                                       // look past "+QMTSTAT: " or "+QMTDISC: "
             char *endPtr = NULL;
             uint8_t cntxId = (uint8_t)strtol(cntxIdPtr, &endPtr, 10);
-            ((iop_t*)g_lqLTEM.iop)->mqttMap &= ~(0x01 << cntxId);
-            ((mqttCtrl_t *)((iop_t*)g_lqLTEM.iop)->streamPeers[cntxId])->state = mqttState_closed;
+            g_lqLTEM.iop->mqttMap &= ~(0x01 << cntxId);
+            ((mqttCtrl_t *)g_lqLTEM.iop->streamPeers[cntxId])->state = mqttState_closed;
         }
 
         else if (memcmp("+QIURC: \"pdpdeact", urcStartPtr, strlen("+QIURC: \"pdpdeact")) == 0)
         {
             PRINTF(dbgColor__cyan, "-p=pdpD");
 
-            char *connIdPtr = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead + strlen("+QIURC: \"pdpdeact");
+            char *connIdPtr = g_lqLTEM.iop->rxCBuffer->prevHead + strlen("+QIURC: \"pdpdeact");
             char *endPtr = NULL;
             uint8_t contextId = (uint8_t)strtol(connIdPtr, &endPtr, 10);
-            for (size_t i = 0; i <  sizeof(((providerInfo_t*)g_lqLTEM.providerInfo)->networks) / sizeof(providerInfo_t); i++)
+            for (size_t i = 0; i <  sizeof(g_lqLTEM.providerInfo->networks) / sizeof(providerInfo_t); i++)
             {
-                if (((providerInfo_t*)g_lqLTEM.providerInfo)->networks[i].pdpContextId == contextId)
+                if (g_lqLTEM.providerInfo->networks[i].pdpContextId == contextId)
                 {
-                    ((providerInfo_t*)g_lqLTEM.providerInfo)->networks[i].pdpContextId = 0;
-                    ((providerInfo_t*)g_lqLTEM.providerInfo)->networks[i].ipAddress[0] = 0;
+                    g_lqLTEM.providerInfo->networks[i].pdpContextId = 0;
+                    g_lqLTEM.providerInfo->networks[i].ipAddress[0] = 0;
                     break;
                 }
             }
             // discard this chunk, processed here
-            ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead;
+            g_lqLTEM.iop->rxCBuffer->head = g_lqLTEM.iop->rxCBuffer->prevHead;
         }
     }
-
-    // if (g_lqLTEM.deviceState == deviceState_powerOn)                                                // device is powered on but not confirmed ready
-    // {
-    //     uint8_t newCharCnt = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head - ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead;
-    //     char *target = memchr(((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead, (int)'A', newCharCnt);
-    //     if (target != NULL && memcmp(target, "APP RDY\r\n", 9) == 0)
-    //     {
-    //         PRINTF(dbgColor__cyan, "-p=aRdy");
-    //         g_lqLTEM.deviceState = deviceState_appReady;
-    //         // discard this chunk, processed here
-    //         ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead;
-    //     }
-    // }
 }
 
 
@@ -705,7 +685,7 @@ static void S_interruptCallbackISR()
     do
     {
         uint8_t regReads = 0;
-        while(iirVal.IRQ_nPENDING == 1 && regReads < 120)           // wait for register, IRQ was signaled; safety limit at 120 in case of error gpio
+        while(iirVal.IRQ_nPENDING == 1 && regReads < 120)                               // wait for register, IRQ was signaled; safety limit at 120 in case of error gpio
         {
             iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
             PRINTF(dbgColor__dRed, "*");
@@ -713,24 +693,24 @@ static void S_interruptCallbackISR()
         }
 
 
-        if (iirVal.IRQ_SOURCE == 3)                                 // priority 1 -- receiver line status error : clear fifo of bad char
+        if (iirVal.IRQ_SOURCE == 3)                                                     // priority 1 -- receiver line status error : clear fifo of bad char
         {
             PRINTF(dbgColor__error, "RXErr ");
             SC16IS7xx_flushRxFifo();
         }
 
         
-        if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)       // priority 2 -- receiver RHR full (src=2), receiver time-out (src=6)
-        {                                                           // Service Action: read RXLVL, read FIFO to empty
+        if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)                           // priority 2 -- receiver RHR full (src=2), receiver time-out (src=6)
+        {                                                                               // Service Action: read RXLVL, read FIFO to empty
             rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
             PRINTF(dbgColor__gray, "RX-sz=%d ", rxLevel);
 
             if (rxLevel > 0)
             {
-                iop_t *iopPtr = ((iop_t*)g_lqLTEM.iop);
-                if (iopPtr->rxStreamCtrl != NULL)                                               // in DATA mode
+                iop_t *iopPtr = g_lqLTEM.iop;
+                if (iopPtr->rxStreamCtrl != NULL)                                       // in DATA mode
                 {
-                    rxDataBufferCtrl_t *dBufPtr = S_isrRxBufferSync();                          // get rxStream's data buffer control, sync pending page swap
+                    rxDataBufferCtrl_t *dBufPtr = S_isrRxBufferSync();                  // get rxStream's data buffer control, sync pending page swap
                     uint8_t iopPg = dBufPtr->iopPg;
                     SC16IS7xx_read(dBufPtr->pages[iopPg].head, rxLevel);
                     dBufPtr->pages[iopPg].head += rxLevel;
@@ -745,19 +725,19 @@ static void S_interruptCallbackISR()
                         dBufPtr->_overflow =  dBufPtr->pages[dBufPtr->_nextIopPg].head != dBufPtr->pages[dBufPtr->_nextIopPg]._buffer;
                     }
                 }
-                else                                                                            // in COMMAND\EVENT mode (aka not data mode), use core buffer
+                else                                                                    // in COMMAND\EVENT mode (aka not data mode), use core buffer
                 {
                     PRINTF(dbgColor__white, "-cmd ");
-                    SC16IS7xx_read(((iop_t*)g_lqLTEM.iop)->rxCBuffer->head, rxLevel);
-                    ((iop_t*)g_lqLTEM.iop)->rxCBuffer->prevHead = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head;  // save last head if RX moved/discarded
-                    ((iop_t*)g_lqLTEM.iop)->rxCBuffer->head += rxLevel;
-                    IOP_rxParseForUrcEvents();                                                          // parse recv'd for events or immediate processing and discard
+                    SC16IS7xx_read(g_lqLTEM.iop->rxCBuffer->head, rxLevel);
+                    g_lqLTEM.iop->rxCBuffer->prevHead = g_lqLTEM.iop->rxCBuffer->head;  // save last head if RX moved/discarded
+                    g_lqLTEM.iop->rxCBuffer->head += rxLevel;
+                    IOP_rxParseForUrcEvents();                                          // parse recv'd for events or immediate processing and discard
                 }
             }
         }
 
         
-        if (iirVal.IRQ_SOURCE == 1)                                 // priority 3 -- transmit THR (threshold) : TX ready for more data
+        if (iirVal.IRQ_SOURCE == 1)                                                     // priority 3 -- transmit THR (threshold) : TX ready for more data
         {
             uint8_t buf[SC16IS7xx__FIFO_bufferSz] = {0};
             uint8_t thisTxSz;
@@ -792,7 +772,6 @@ static void S_interruptCallbackISR()
         rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
 
         PRINTF(dbgColor__warn, "IRQ failed to reset!!! nIRQ=%d, iir=%d, txLvl=%d, rxLvl=%d \r", iirVal.IRQ_nPENDING, iirVal.reg, txAvailable, rxLevel);
-        //ltem1_notifyApp(ltem1NotifType_resetFailed, "IRQ failed to reset.");
         goto retryIsr;
     }
 }

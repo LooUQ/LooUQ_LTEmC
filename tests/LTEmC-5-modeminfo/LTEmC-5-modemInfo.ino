@@ -67,7 +67,7 @@ void setup() {
     lqDiag_registerEventCallback(appEventCB);                       // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEventCB);                  // create LTEmC modem, no yield req'd for testing
-    ltem_start((resetAction_t)skipResetIfRunning);                  // ... and start it
+    ltem_start((resetAction_t)swReset);                             // ... and start it
 
     PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_ltemcVersion());
 
