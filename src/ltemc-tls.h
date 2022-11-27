@@ -48,7 +48,7 @@ extern "C"
  *  @param certExpirationCheck [in] Options for how the certificate's expiration information is processed
  *  @param securityLevel [in] Authentication mode: 0=no auth, 1=server auth, 2=server/client auth
  */
-bool tls_configure(socket_t sckt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel);
+bool tls_configure(dataCntxt_t sckt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel);
 
 
 /** 
@@ -57,7 +57,7 @@ bool tls_configure(socket_t sckt, tlsVersion_t version, tlsCipher_t cipherSuite,
  *  @param contxt [in] TLS/SSL context to configure
  *  @return TLS options structure with the settings currently applied to the specified context
  */
-tlsOptions_t tlsGetOptions(socket_t sckt);
+tlsOptions_t tlsGetOptions(dataCntxt_t sckt);
 
 
 /* Maintenance of customer trustd root (TR) certificates requires the file_ module functionality (under developement Q3-2021)

@@ -70,8 +70,8 @@ uint32_t lastCycle;
 // ltem1 variables
 /* To avoid having to prefix httpCtrl1 with & in calls below, you can create a pointer
  * variable with: "httpCtrl_t *httpCtrl1 = &httpCtrl;"   */
-httpCtrl_t httpCtrl1;                    
-httpCtrl_t httpCtrl2;
+httpCtrl_t httpCtrlG;
+httpCtrl_t httpCtrlP;
 httpCtrl_t *httpPtr;                            // used for common READ 
 
 static char webPageBuf[1024];
@@ -114,7 +114,7 @@ void setup() {
 
     // most sites use tls, 
     // NOTE: the TLS context MUST == the HTTP context if using SSL\TLS; dataContext_0 is this example
-    tls_configure(socket_0, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    tls_configure(dataCntxt_0, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
 
     // alternate test sites...
     // https://api.weather.gov/points/44.7582,-85.6022
@@ -131,17 +131,17 @@ void setup() {
      * -- https://forecast.weather.gov/obslocal.php?warnzone=MIZ026&local_place=Traverse%20City%20MI&zoneid=EDT&offset=14400
      */
 
-    // create a control for talking to the website
-    http_initControl(&httpCtrl1, socket_0, webPageBuf, sizeof(webPageBuf), httpRecvCB);                 // initialize local (internal) structures
-    http_setConnection(&httpCtrl1, "https://api.weather.gov", 443);                                     // set remote web host
-    PRINTF(dbgColor__dGreen, "URL Host1=%s\r", httpCtrl1.hostUrl);
+    // // create a control for talking to the website
+    http_initControl(&httpCtrlG, dataCntxt_0, webPageBuf, sizeof(webPageBuf), httpRecvCB);                  // initialize local (internal) structures
+    http_setConnection(&httpCtrlG, "https://api.weather.gov", 443);                                         // set remote web host
+    PRINTF(dbgColor__dGreen, "URL Host1=%s\r", httpCtrlG.hostUrl);
 
     // you can optionally setup a httpPtr, EXAMPLE: httpCtrl *httpPtr = &httpCtrl2
     // Below the &httpCtrl2 style is required since there is no "ptr" variable created (around line 65) to use here
 
-    http_initControl(&httpCtrl2, socket_1, webPageBuf, sizeof(webPageBuf), httpRecvCB);
-    http_setConnection(&httpCtrl2, "http://httpbin.org", 80);
-    PRINTF(dbgColor__dGreen, "URL Host2=%s\r", httpCtrl2.hostUrl);
+    http_initControl(&httpCtrlP, dataCntxt_1, webPageBuf, sizeof(webPageBuf), httpRecvCB);
+    http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
+    PRINTF(dbgColor__dGreen, "URL Host2=%s\r", httpCtrlP.hostUrl);
 }
 
 resultCode_t rslt;
@@ -162,10 +162,10 @@ void loop()
         {
             // resultCode_t http_get(httpCtrl_t *httpCtrl, const char* url, uint8_t timeoutSeconds);
             // default HTTP timeout is 60 seconds
-            rslt = http_get(&httpCtrl1, "/points/44.7582,-85.6022", http__noResponseHeaders, http__useDefaultTimeout);
+            rslt = http_get(&httpCtrlG, "/points/44.7582,-85.6022", http__noResponseHeaders, http__useDefaultTimeout);
             if (rslt == resultCode__success)
             {
-                httpPtr = &httpCtrl1;
+                httpPtr = &httpCtrlG;
                 PRINTF(dbgColor__info, "GET invoked successfully\r");
             }
             else
@@ -176,10 +176,10 @@ void loop()
             char postData[] = "{ \"field1\": 1, \"field2\": \"field2\" }";
 
             // resultCode_t http_post(httpCtrl_t *httpCtrl, const char* url, const char* postData, uint16_t dataSz, uint8_t timeoutSeconds);
-            rslt = http_post(&httpCtrl2, "/anything", http__noResponseHeaders, postData, strlen(postData), http__useDefaultTimeout);
+            rslt = http_post(&httpCtrlP, "/anything", http__noResponseHeaders, postData, strlen(postData), http__useDefaultTimeout);
             if (rslt == resultCode__success)
             {
-                httpPtr = &httpCtrl2;
+                httpPtr = &httpCtrlP;
                 PRINTF(dbgColor__info, "POST invoked successfully\r");
             }
             else
@@ -202,6 +202,7 @@ void loop()
 
         if (rslt == resultCode__success)
         {
+            PRINTF(dbgColor__white, "Request complete, expecting %d chars.\r", httpPtr->pageSize);
             if (rslt = http_readPage(httpPtr, 20))
             {
                 switch (rslt)
@@ -235,7 +236,7 @@ void loop()
 
 // typedef void (*httpRecvFunc_t)(socket_t sckt, char *data, uint16_t dataSz);
 
-void httpRecvCB(socket_t sckt, uint16_t httpStatus, char *recvData, uint16_t dataSz)
+void httpRecvCB(dataCntxt_t dataCntxt, uint16_t httpStatus, char *recvData, uint16_t dataSz)
 {
     strncpy(pageBuffer + pageChars, recvData, dataSz);
     pageChars += dataSz;

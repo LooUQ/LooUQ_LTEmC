@@ -33,10 +33,63 @@
 
 #include "ltemc.h"
 #include <lq-str.h>                         /// most LTEmC modules use LooUQ string functions
+#include "ltemc-types.h"
 
 #include "ltemc-quectel-bg.h"
 #include "ltemc-nxp-sc16is.h"
 #include "ltemc-iop.h"
+
+
+
+/* ================================================================================================================================
+ * LTEmC Global Structure
+ *
+ * LTEmC device is created as a global singleton variable
+ * ==============================================================================================================================*/
+
+/* Metric Type Definitions
+ * ------------------------------------------------------------------------------------------------------------------------------*/
+typedef struct ltemMetrics_tag
+{
+    // metrics
+    uint32_t cmdInvokes;
+
+} ltemMetrics_t;
+
+
+ /** 
+ *  \brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
+ * 
+ *  Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
+ */
+typedef struct ltemDevice_tag
+{
+	ltemPinConfig_t pinConfig;                  /// GPIO pin configuration for required GPIO and SPI interfacing
+    bool cancellationRequest;                   /// For RTOS implementations, token to request cancellation of long running task/action
+    deviceState_t deviceState;                  /// Device state of the BGx module
+    appEventCallback_func appEventCB;           /// Event notification callback to parent application
+    char moduleType[8];                         /// c-str indicating module type. BG96, BG95-M3, BG77, etc. (so far)
+    void *spi;                                  /// SPI device (methods signatures compatible with Arduino)
+    iop_t *iop;                                 /// IOP subsystem controls
+    atcmd_t *atcmd;                             /// Action subsystem controls
+    modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
+	modemInfo_t *modemInfo;                     /// Data structure holding persistent information about application modem state
+    providerInfo_t *providerInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
+    doWork_func streamWorkers[ltem__streamCnt];/// Stream background doWork functions, registered by Open;
+
+    ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
+} ltemDevice_t;
+
+
+/* ================================================================================================================================
+ * LTEmC Global Structure */
+
+extern ltemDevice_t g_lqLTEM;                   // The LTEm "object".
+
+/* LTEmC device is created as a global singleton variable
+ * ==============================================================================================================================*/
+
+
 
 
 #ifdef __cplusplus
@@ -121,6 +174,12 @@ void NTWK_applyDefaulNetwork();
 /* ------------------------------------------------------------------------------------------------
  * End NTWK LTEmC Internal Functions */
 
+
+
+
+/*
+---------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------*/
 
 #ifdef __cplusplus
 }

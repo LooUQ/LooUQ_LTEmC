@@ -30,18 +30,16 @@
 
 #include <lq-types.h>
 #include "ltemc-types.h"
-// #include "ltemc-streams.h"
-// #include "ltemc-internal.h"
+
 
 /** 
  *  @brief Typed numeric constants for the sockets subsystem
  */
 enum sckt__constants
 {
-    sckt__resultCode_previouslyOpen = 563,
+    sckt__resultCode_alreadyOpen = 563,
     sckt__defaultOpenTimeoutMS = 60000,
-
-    SCKT__IRD_requestMaxSz = 1500
+    sckt__irdRequestMaxSz = 1500
 };
 
 
@@ -61,23 +59,23 @@ typedef void (*scktRecvFunc_t)(streamPeer_t peerId, void *data, uint16_t dataSz)
 */
 typedef struct scktCtrl_tag
 {
-    uint8_t ctrlMagic;                  /// magic flag to validate incoming requests 
-    socket_t scktNm;                    /// Data context where this control operates
-    protocol_t protocol;                /// Controls's protocol : UDP/TCP/SSL.
-    bool useTls;                        /// flag indicating SSL/TLS applied to stream
-    char hostUrl[host__urlSz];          /// URL or IP address of host
-    uint16_t hostPort;                  /// IP port number host is listening on
-    rxDataBufferCtrl_t recvBufCtrl;     /// RX smart buffer 
+    uint16_t ctrlMagic;                                     /// magic flag to validate incoming requests 
+    dataCntxt_t dataCntxt;                                  /// Data context where this control operates
+    protocol_t protocol;                                    /// Controls's protocol : UDP/TCP/SSL.
+    bool useTls;                                            /// flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];                              /// URL or IP address of host
+    char hostPort[host__portSz];                            /// IP port number host is listening on
+    rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
 
-    scktRecvFunc_t dataRecvCB;          /// callback to application, signals data ready
+    uint8_t pdpContextId;                                   /// TCP/UDP can operate on any PDP context
+    scktRecvFunc_t dataRecvCB;                              /// callback to application, signals data ready
     uint16_t lclPort;
-    uint32_t doWorkLastTck;             /// last check for URC/dataPending
-    //uint32_t doWorkTimeout;             /// set at init for doWork ASSERT, if timeout reached chance for a data overflow on socket
-    bool flushing;                      /// True if the socket was opened with cleanSession and the socket was found already open.
-    bool dataPending;                   /// The data pipeline has data (or the likelihood of data), triggered when BGx reports data pending (URC "recv").
-    int16_t irdRemaining;               /// SIGNED number of outstanding IRD bytes to receive, -1 is unset value
-    uint32_t statsTxCnt;                /// Number of atomic TX sends
-    uint32_t statsRxCnt;                /// Number of atomic RX segments (URC/IRD)
+    uint32_t doWorkLastTck;                                 /// last check for URC/dataPending
+    bool flushing;                                          /// True if the socket was opened with cleanSession and the socket was found already open.
+    bool dataPending;                                       /// The data pipeline has data (or the likelihood of data), triggered when BGx reports data pending (URC "recv").
+    int16_t irdRemaining;                                   /// SIGNED number of outstanding IRD bytes to receive, -1 is unset value
+    uint32_t statsTxCnt;                                    /// Number of atomic TX sends
+    uint32_t statsRxCnt;                                    /// Number of atomic RX segments (URC/IRD)
 } scktCtrl_t;
 
 
@@ -91,14 +89,15 @@ extern "C"
 /**
  *	@brief Create a socket data control(TCP/UDP/SSL).
  *  @param scktCtrl [in/out] Pointer to socket control structure
- *	@param dataCntxt [in] - Data context (0-5) to host socket
+ *  @param pdpContextId [in] - The PDP context supporting this data connection TCP/UDP can run over non-default PDP contexts
+ *	@param socketId [in] - Data context (0-5) to host socket
  *	@param protocol [in] - The IP protocol to use for the connection (TCP/UDP/SSL clients)
  *  @param recvBuf [in] - Pointer to application created receive buffer
  *  @param recvBufSz [in] - Size of allocated receive buffer
  *  @param recvCallback [in] - The callback function in your application to be notified of received data ready
  *  @return socket result code similar to http status code, OK = 200
  */
-void sckt_initControl(scktCtrl_t *scktCtrl, socket_t dataCntxt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback);
+void sckt_initControl(scktCtrl_t *scktCtrl, uint8_t pdpContextId, dataCntxt_t dataCntxt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback);
 
 
 /**
@@ -108,7 +107,7 @@ void sckt_initControl(scktCtrl_t *scktCtrl, socket_t dataCntxt, protocol_t proto
  *  @param hostPort [in] - The port number at the remote host
  *  @param lclPort [in] - The port number on this side of the conversation, set to 0 to auto-assign
  */
-void sckt_setConnection(scktCtrl_t *scktCtrl, const char *hostUrl, uint16_t hostPort, uint16_t lclPort);
+void sckt_setConnection(scktCtrl_t *scktCtrl, const char *hostUrl, const uint16_t hostPort, uint16_t lclPort);
 
 
 /**

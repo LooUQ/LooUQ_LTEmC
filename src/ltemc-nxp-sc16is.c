@@ -40,6 +40,7 @@
 
 #include "lq-platform.h"
 #include "ltemc-nxp-sc16is.h"
+#include "ltemc-internal.h"
 
 
 #define REG_MODIFY(REG_NAME, MODIFY_ACTION)                 \

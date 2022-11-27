@@ -40,6 +40,8 @@
 #endif
 
 #include "ltemc-network.h"
+#include "ltemc-internal.h"
+
 
 #define PROTOCOLS_CMD_BUFFER_SZ 80
 #define MIN(x, y) (((x)<(y)) ? (x):(y))
@@ -157,7 +159,7 @@ providerInfo_t *ntwk_awaitProvider(uint16_t waitSec)
     startMillis = endMillis = pMillis();
     uint32_t waitDuration = (waitSec > 300) ? 300000 : waitSec * 1000;      // max is 5 minutes
 
-    if (ATCMD_awaitLock())                                                  // open a reusable lock to complete multiple steps
+    if (ATCMD_awaitLock(waitSec))                                           // open a reusable lock to complete multiple steps
     {
         S__clearProviderInfo();
         do 

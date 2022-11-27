@@ -40,13 +40,6 @@ enum bufferSizes
 
 };
 
-enum ltem__constants
-{
-    ltem__streamCnt = 6,
-    ltem__swVerSz = 12,
-    ltem__errorDetailSz = 6
-};
-
 typedef struct ltemPinConfig_tag
 {
     int spiCsPin;
@@ -59,6 +52,12 @@ typedef struct ltemPinConfig_tag
     int wakePin;
 } ltemPinConfig_t;
 
+enum ltem__constants
+{
+    ltem__streamCnt = 6,
+    ltem__swVerSz = 12,
+    ltem__errorDetailSz = 6
+};
 
 /** 
  *  \brief Enum describing the current device/module state
@@ -117,7 +116,7 @@ typedef enum ntwkIotMode_tag
 /** 
  *  \brief Typed numeric constants for network subsystem.
 */
-enum ntwk__constants
+enum ntwk
 {
     ntwk__pdpContextCnt = 4,            // varies by carrier: Verizon=2, (Aeris)ATT=3
     ntwk__providerNameSz = 20,
@@ -321,6 +320,40 @@ typedef volatile struct rxCoreBufferCtrl_tag
     char *prevHead;             ///< if the last chunk is copied or consumed immediately used to restore head
 } rxCoreBufferCtrl_t;
 
+/* "Streams" Module Type Definitions
+ * Data protocols
+ * ------------------------------------------------------------------------------------------------------------------------------*/
+
+/** 
+ *  @brief Typed numeric constants for stream peers subsystem (sockets, mqtt, http)
+ */
+enum streams__constants
+{
+    streams__ctrlMagic = 0x186F,
+    host__urlSz = 120,
+    host__portSz = 6
+};
+
+
+/** 
+ *  @brief Enum of data stream peer types
+ */
+typedef enum dataStreamType_tag
+{
+    dataStream_none = 0,
+    dataStream_sckt = 2,
+    dataStream_mqtt = 3,
+    dataStream_http = 4,
+    dataStream_file = 5
+} dataStreamType_tag;
+
+
+typedef enum tls_tag
+{
+    noTLS,
+    useTLS
+} tls_t;
+
 
 // /** 
 //  *  @brief Abstract pointer type that is cast into the specific stream control.
@@ -347,19 +380,19 @@ typedef enum streamPeer_tag
 
 
 /** 
- *  @brief Enum of the available socket indexes for BGx (only SSL/TLS capable contexts are supported).
+ *  @brief Enum of the available dataCntxt indexes for BGx (only SSL/TLS capable contexts are supported).
  */
-typedef enum socket_tag
+typedef enum dataCntxt_tag
 {
-    socket_0 = 0,
-    socket_1 = 1,
-    socket_2 = 2,
-    socket_3 = 3,
-    socket_4 = 4,
-    socket_5 = 5,
-    socket__cnt = 6,
-    socket__none = 0xFF
-} socket_t;
+    dataCntxt_0 = 0,
+    dataCntxt_1 = 1,
+    dataCntxt_2 = 2,
+    dataCntxt_3 = 3,
+    dataCntxt_4 = 4,
+    dataCntxt_5 = 5,
+    dataCntxt__cnt = 6,
+    dataCntxt__none = 0xFF
+} dataCntxt_t;
 
 
 /** 
@@ -385,11 +418,13 @@ typedef enum protocol_tag
  */
 typedef struct iopStreamCtrl_tag
 {
-    uint8_t ctrlMagic;                  /// magic flag to validate incoming requests 
-    socket_t dataCntxt;                 /// Data context where this control operates
-    protocol_t protocol;                /// Socket's protocol : UDP/TCP/SSL.
-    bool useTls;                        /// flag indicating SSL/TLS applied to stream
-    rxDataBufferCtrl_t recvBufCtrl;     /// RX smart buffer 
+    uint16_t ctrlMagic;                                     /// magic flag to validate incoming requests 
+    dataCntxt_t dataCntxt;                                  /// Data context where this control operates (only SSL/TLS contexts 1-6)
+    protocol_t protocol;                                    /// Socket's protocol : UDP/TCP/SSL.
+    bool useTls;                                            /// flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];                              /// URL or IP address of host
+    char hostPort[host__portSz];                            /// IP port number host is listening on (allows for 65535/0)
+    rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
 } iopStreamCtrl_t;
 
 
@@ -489,40 +524,6 @@ typedef struct atcmdResult_tag
 
 
 
-/* "Streams" Module Type Definitions
- * Data protocols
- * ------------------------------------------------------------------------------------------------------------------------------*/
-
-/** 
- *  @brief Typed numeric constants for stream peers subsystem (sockets, mqtt, http)
- */
-enum streams__constants
-{
-    streams__ctrlMagic = 0x186F,
-    host__urlSz = 120,
-    host__portSz = 6
-};
-
-
-/** 
- *  @brief Enum of data stream peer types
- */
-typedef enum dataStreamType_tag
-{
-    dataStream_none = 0,
-    dataStream_sckt = 2,
-    dataStream_mqtt = 3,
-    dataStream_http = 4,
-    dataStream_file = 5
-} dataStreamType_tag;
-
-
-typedef enum tls_tag
-{
-    noTLS,
-    useTLS
-} tls_t;
-
 
 /* SSL/TLS Module Type Definitions
  * ------------------------------------------------------------------------------------------------------------------------------*/
@@ -609,83 +610,31 @@ typedef struct tlsOptions_tag
 
 
 
-/* Metric Type Definitions
- * ------------------------------------------------------------------------------------------------------------------------------*/
-typedef struct ltemMetrics_tag
-{
-    // metrics
-    uint32_t cmdInvokes;
-
-} ltemMetrics_t;
 
 
 
-/* ================================================================================================================================
- * LTEmC Global Structure
- *
- * LTEmC device is created as a global singleton variable
- * ==============================================================================================================================*/
-
- /** 
- *  \brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
- * 
- *  Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
- */
-typedef struct ltemDevice_tag
-{
-	ltemPinConfig_t pinConfig;                  /// GPIO pin configuration for required GPIO and SPI interfacing
-    bool cancellationRequest;                   /// For RTOS implementations, token to request cancellation of long running task/action
-    deviceState_t deviceState;                  /// Device state of the BGx module
-    appEventCallback_func appEventCB;           /// Event notification callback to parent application
-    uint8_t instNm;                             /// LTEm instance number 0=undefined, 1..254
-    char moduleType[8];                         /// c-str indicating module type. BG96, BG95-M3, BG77, etc. (so far)
-    void *spi;                                  /// SPI device (methods signatures compatible with Arduino)
-    uint8_t pdpContext;                         /// The primary packet data protocol (PDP) context with the network carrier for application transfers
-
-    iop_t *iop;                                 /// IOP subsystem controls
-    atcmd_t *atcmd;                             /// Action subsystem controls
-    modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
-	modemInfo_t *modemInfo;                     /// Data structure holding persistent information about application modem state
-    providerInfo_t *providerInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
-    doWork_func streamWorkers[ltem__streamCnt];/// Stream background doWork functions, registered by Open;
-
-    ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
-} ltemDevice_t;
 
 
-typedef struct ltemc_sensor
-{
-    int id;
-
-    uint32_t sampleLastAt;                  /// last sample taken instance (milli count)
-    uint32_t samplePeriod;                  /// the planned interval between samples
-    uint16_t sampleCount;                   /// the number of invokes for the sampleCallback, cleared with each alert/report
-    void *sampleCallback;                   /// user defined function to perform sample acquisition and report formatting
-
-    uint32_t rptLastAt;                     /// last reporting instance (milli count)
-    uint32_t rptPeriod;                     /// the planned interval between device to LQCloud sensor samples reporting
-    char *rptBuffer;                        /// character buffer to store sample event output
-    uint16_t rptBufferSz;                   /// buffer size in characters, includes the intended /0 char string terminating symbol
-
-    uint32_t alertAt;                       /// source millis cnt at event sourcing
-};
 
 
-/*  LQCloud/device time syncronization; at each LQCloud interaction cloud will send new epochRef (Unix time of cloud)
- *  Device will record this value along with the current millis count. This information is sent to cloud with 
- *  (epochRef and elapsed, where elapsed = now (millis) - epochAt) alert/report connection to allow LQCloud to correlate
- *  device information at a specific date/time.
- * 
- *  Timing derived from millisecond counter, such as Arduini millis(); max at 49.7 days 
- */
-typedef struct ltemcEpoch
-{
-    char epochRef[12];                      /// unix epoch reported at last alert/report interaction with LQCloud
-    uint32_t epochAt;                       /// millis counter at the last alert/report interaction with LQCloud
-};
 
 
-extern ltemDevice_t g_lqLTEM;            ///< The LTEm "object".
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

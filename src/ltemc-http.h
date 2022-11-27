@@ -60,7 +60,7 @@ enum http__constants
  *  @param data [in] Pointer to received data buffer
  *  @param dataSz [in] The number of bytes available
 */
-typedef void (*httpRecvFunc_t)(socket_t sckt, uint16_t httpRslt, char *data, uint16_t dataSz);
+typedef void (*httpRecvFunc_t)(dataCntxt_t sckt, uint16_t httpRslt, char *data, uint16_t dataSz);
 
 
 /** 
@@ -89,29 +89,27 @@ typedef enum httpState_tag
 typedef struct httpCtrl_tag
 {
     /* Top section of xCtrl structure is the same for all LTEmC implemented protocol suites TCP/HTTP/MQTT etc. */
-    uint16_t ctrlMagic;                     /// magic flag to validate incoming requests 
-    socket_t sckt;                          /// Local data context where this control operates (1-6)
-    protocol_t protocol;                    /// Socket's protocol : UDP/TCP/SSL.
-    bool useTls;                            /// flag indicating SSL/TLS applied to stream
-    char hostUrl[host__urlSz];              /// URL or IP address of host
-    char hostPort[host__portSz];            /// IP port number host is listening on (allows for 65535/0)
-    rxDataBufferCtrl_t recvBufCtrl;         /// RX smart buffer 
+    uint16_t ctrlMagic;                                     /// magic flag to validate incoming requests 
+    dataCntxt_t dataCntxt;                                  /// Data context where this control operates (only SSL/TLS contexts 1-6)
+    protocol_t protocol;                                    /// Socket's protocol : UDP/TCP/SSL.
+    bool useTls;                                            /// flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];                              /// URL or IP address of host
+    char hostPort[host__portSz];                            /// IP port number host is listening on (allows for 65535/0)
+    rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
     /* End of Common Structure Fields */
 
     /* HTTP(S) Specific Fields */
-    httpRecvFunc_t dataRecvCB;              /// callback to application, signals data ready
-    // uint32_t bufPageSwapTck;                /// last check for URC/dataPending
-    // uint32_t bufPageTimeout;                /// set at init for doWork ASSERT, if timeout reached chance for a data overflow
-    bool returnResponseHdrs;                /// if set true, response headers are included in the returned response
-    char *cstmHdrs;                         /// custom header content, optional buffer provided by application
-    uint16_t cstmHdrsSz;                    /// size of custom header buffer
-    char requestType[http__rqstTypeSz];     /// type of current/last request: 'G'=GET, 'P'=POST
-    httpState_t requestState;               /// current state machine variable for HTTP request
-    uint16_t bgxError;                      /// BGx sprecific error code returned from GET/POST
-    uint16_t httpStatus;                    /// set to 0 during a request, initialized to 0xFFFF before any request
-    uint32_t pageSize;                      /// if provided in page response, the page size 
-    uint32_t pageRemaining;                 /// set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
-    bool pageCancellation;                  /// set to abandon further page loading
+    httpRecvFunc_t dataRecvCB;                              /// callback to application, signals data ready
+    bool returnResponseHdrs;                                /// if set true, response headers are included in the returned response
+    char *cstmHdrs;                                         /// custom header content, optional buffer provided by application
+    uint16_t cstmHdrsSz;                                    /// size of custom header buffer
+    char requestType[http__rqstTypeSz];                     /// type of current/last request: 'G'=GET, 'P'=POST
+    httpState_t requestState;                               /// current state machine variable for HTTP request
+    uint16_t bgxError;                                      /// BGx sprecific error code returned from GET/POST
+    uint16_t httpStatus;                                    /// set to 0 during a request, initialized to 0xFFFF before any request
+    uint32_t pageSize;                                      /// if provided in page response, the page size 
+    uint32_t pageRemaining;                                 /// set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
+    bool pageCancellation;                                  /// set to abandon further page loading
 } httpCtrl_t;
 
 
@@ -129,7 +127,7 @@ extern "C"
  *  @param recvBufSz [in] Size of the receive buffer.
  *  @param recvCallback [in] Callback function to receive incoming page data.
  */
-void http_initControl(httpCtrl_t *httpCtrl, socket_t dataCntxt, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
+void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
 
 
 /**
@@ -138,7 +136,7 @@ void http_initControl(httpCtrl_t *httpCtrl, socket_t dataCntxt, char *recvBuf, u
  *  @param hostURL [in] The HOST address of the web server URL.
  *  @param hostPort [in] The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
  */
-void http_setConnection(httpCtrl_t *httpCtrl, const char* hostUrl, uint16_t hostPort);
+void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t hostPort);
 
 
 /**

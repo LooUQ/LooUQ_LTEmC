@@ -24,6 +24,7 @@
         "ltemc-filecodes.h": "c",
         "ltemc-atcmd.h": "c",
         "jlinkrtt.h": "c",
-        "ltemc-nxp-sc16is.h": "c"
+        "ltemc-nxp-sc16is.h": "c",
+        "ltemc-network.h": "c"
     }
 }

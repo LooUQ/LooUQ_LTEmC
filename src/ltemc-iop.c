@@ -57,7 +57,7 @@
 
 #pragma region Header
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -708,7 +708,15 @@ static void S_interruptCallbackISR()
             if (rxLevel > 0)
             {
                 iop_t *iopPtr = g_lqLTEM.iop;
-                if (iopPtr->rxStreamCtrl != NULL)                                       // in DATA mode
+                if (iopPtr->rxStreamCtrl == NULL)                                       // in COMMAND\EVENT mode, use core buffer
+                {
+                    PRINTF(dbgColor__white, "-cmd ");
+                    SC16IS7xx_read(g_lqLTEM.iop->rxCBuffer->head, rxLevel);
+                    g_lqLTEM.iop->rxCBuffer->prevHead = g_lqLTEM.iop->rxCBuffer->head;  // save last head, to allow for recv'd data locally moved/discarded
+                    g_lqLTEM.iop->rxCBuffer->head += rxLevel;
+                    IOP_rxParseForUrcEvents();                                          // parse recv'd for events or immediate processing and discard
+                }
+                else                                                                    // in DATA mode, use stream's data buffers
                 {
                     rxDataBufferCtrl_t *dBufPtr = S_isrRxBufferSync();                  // get rxStream's data buffer control, sync pending page swap
                     uint8_t iopPg = dBufPtr->iopPg;
@@ -717,21 +725,13 @@ static void S_interruptCallbackISR()
                     uint16_t fillLevel = dBufPtr->pages[iopPg].head - dBufPtr->pages[iopPg]._buffer;
 
                     PRINTF(dbgColor__cyan, "-data(%d:%d) ", iopPg, fillLevel);
-                    if (fillLevel > dBufPtr->_pageSz - IOP__uartFIFOBufferSz)
+                    if (fillLevel > dBufPtr->_pageSz - IOP__uartFIFOBufferSz)           // if less than 1 UART_buffer of recv buffer available, swap buffer page
                     {
                         PRINTF(dbgColor__cyan, "-BSw>%d ", !iopPg);
                         IOP_swapRxBufferPage(dBufPtr);
                         // check buffer page swapped in for head past page start: OVERFLOW
                         dBufPtr->_overflow =  dBufPtr->pages[dBufPtr->_nextIopPg].head != dBufPtr->pages[dBufPtr->_nextIopPg]._buffer;
                     }
-                }
-                else                                                                    // in COMMAND\EVENT mode (aka not data mode), use core buffer
-                {
-                    PRINTF(dbgColor__white, "-cmd ");
-                    SC16IS7xx_read(g_lqLTEM.iop->rxCBuffer->head, rxLevel);
-                    g_lqLTEM.iop->rxCBuffer->prevHead = g_lqLTEM.iop->rxCBuffer->head;  // save last head if RX moved/discarded
-                    g_lqLTEM.iop->rxCBuffer->head += rxLevel;
-                    IOP_rxParseForUrcEvents();                                          // parse recv'd for events or immediate processing and discard
                 }
             }
         }

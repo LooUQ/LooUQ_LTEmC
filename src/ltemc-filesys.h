@@ -31,7 +31,14 @@
 #include "ltemc.h"
 
 
-enum filesys__constants
+
+
+
+
+/*
+------------------------------------------------------------------------------------------------ */
+
+enum filesys
 {
     filesys__cmdSz = 81,
     filesys__dataOffsetInfo = 10,
@@ -122,6 +129,8 @@ typedef struct filePositionResult_tag
     uint16_t fileOffset;
     resultCode_t resultCode;
 } filePositionResult_t;
+
+
 
 /** 
  *  @brief typedef for the socket services data receiver function. Connects filesystem processing to the application (receive).

@@ -100,7 +100,6 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     ntwk_create();
 
     g_lqLTEM.cancellationRequest = false;
-    g_lqLTEM.pdpContext = 1;
     g_lqLTEM.appEventCB = eventNotifCallback;
 }
 

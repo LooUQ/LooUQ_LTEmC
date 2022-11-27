@@ -39,7 +39,7 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-#include "ltemc-types.h"
+#include "ltemc-internal.h"
 
 extern ltemDevice_t g_lqLTEM;
 
@@ -121,7 +121,7 @@ int16_t mdminfo_signalRSSI()
     uint8_t csq = 0;
     int8_t rssi = -999;
 
-    if (ltem_readDeviceState())
+    if (ltem_getDeviceState())
     {
         if (atcmd_tryInvoke("AT+CSQ"))
         {

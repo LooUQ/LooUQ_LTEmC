@@ -95,26 +95,26 @@ uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate);
 uint32_t IOP_getRxIdleDuration();
 
 
-/**
- *	@brief Finds a string in the last X characters of the IOP RX stream.
- *  @param pBuf [in] - Pointer data receive buffer.
- *  @param rewindCnt [in] - The number of chars to search backward.
- *	@param pNeedle [in] - The string to find.
- *  @param pTerm [in] - Optional phrase that must be found after needle phrase.
- *  @return Pointer to the character after the needle match (if found), otherwise return NULL.
- */
-char *IOP_findInRxReverse(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *pNeedle, const char *pTerm);
+// /**
+//  *	@brief Finds a string in the last X characters of the IOP RX stream.
+//  *  @param pBuf [in] - Pointer data receive buffer.
+//  *  @param rewindCnt [in] - The number of chars to search backward.
+//  *	@param pNeedle [in] - The string to find.
+//  *  @param pTerm [in] - Optional phrase that must be found after needle phrase.
+//  *  @return Pointer to the character after the needle match (if found), otherwise return NULL.
+//  */
+// char *IOP_findInRxReverse(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *pNeedle, const char *pTerm);
 
 
-/**
- *	@brief Get a contiguous block of characters from the RX data buffer pages.
- *  @param pBuf [in] - Pointer data receive buffer.
- *	@param pStart [in] - Address within the RX buffer to start retrieving chars.
- *  @param takeCnt [in] - The number of chars to return.
- *  @param pChars [out] - Buffer to hold retrieved characters, must be takeCnt + 1. Buffer will be null terminated.
- *  @return Pointer to the character after the needle match (if found), otherwise return NULL.
- */
-uint16_t IOP_fetchFromRx(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeCnt, char *pChars);
+// /**
+//  *	@brief Get a contiguous block of characters from the RX data buffer pages.
+//  *  @param pBuf [in] - Pointer data receive buffer.
+//  *	@param pStart [in] - Address within the RX buffer to start retrieving chars.
+//  *  @param takeCnt [in] - The number of chars to return.
+//  *  @param pChars [out] - Buffer to hold retrieved characters, must be takeCnt + 1. Buffer will be null terminated.
+//  *  @return Pointer to the character after the needle match (if found), otherwise return NULL.
+//  */
+// uint16_t IOP_fetchFromRx(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeCnt, char *pChars);
 
 
 /**
