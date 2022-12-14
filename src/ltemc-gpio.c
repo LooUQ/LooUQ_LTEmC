@@ -73,13 +73,11 @@ int8_t gpio_read(uint8_t portNumber)
     ASSERT(portNumber > 0 && portNumber <= gpio__BG77__maxPin, srcfile_ltemc_gpio_c);
     ASSERT_W(portNumber > 0 && portNumber <= gpio__LTEM3F__maxPin, srcfile_ltemc_gpio_c, "Bad port num");
 
-    atcmd_setOptions(atcmd__defaultTimeoutMS, S__ioValueParser);
+    atcmd_setOptions(atcmd__defaultTimeout, S__ioValueParser);
     atcmd_tryInvokeWithOptions("AT+QCFG=\"gpio\",2,%d/%d", portNumber);
     if (atcmd_awaitResult() == resultCode__success)
     {
     }
-
-    
 }
 
 

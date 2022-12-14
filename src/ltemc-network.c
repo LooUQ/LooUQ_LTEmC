@@ -167,13 +167,13 @@ providerInfo_t *ntwk_awaitProvider(uint16_t waitSec)
             atcmd_invokeReuseLock("AT+COPS?");                              // get PROVIDER cellular carrier
             if (atcmd_awaitResult() == resultCode__success)
             {
-                char *continueAt;
-                continueAt = strchr(atcmd_getLastResponse(), '"');
-                if (continueAt != NULL)
+                char *pContinue;
+                pContinue = strchr(atcmd_getResponse(), '"');
+                if (pContinue != NULL)
                 {
-                    continueAt = S__grabToken(continueAt + 1, '"', g_lqLTEM.providerInfo->name, ntwk__providerNameSz);
+                    pContinue = S__grabToken(pContinue + 1, '"', g_lqLTEM.providerInfo->name, ntwk__providerNameSz);
 
-                    uint8_t ntwkMode = (uint8_t)strtol(continueAt + 1, &continueAt, 10);
+                    uint8_t ntwkMode = (uint8_t)strtol(pContinue + 1, &pContinue, 10);
                     if (ntwkMode == 8)
                         strcpy(g_lqLTEM.providerInfo->iotMode, "M1");
                     else
@@ -195,37 +195,37 @@ providerInfo_t *ntwk_awaitProvider(uint16_t waitSec)
         */
         if (!STREMPTY(g_lqLTEM.providerInfo->name))
         {
-            char *continueAt;
+            char *pContinue;
             uint8_t ntwkIndx = 0;
 
             atcmd_invokeReuseLock("AT+CGACT?");
-            if (atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(20), atcmd__useDefaultOKCompletionParser) == resultCode__success)
+            if (atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(20), NULL) == resultCode__success)
             {
-                continueAt = strstr(atcmd_getLastResponse(), "+CGACT: ");
-                while (continueAt != NULL && ntwkIndx < ntwk__pdpContextCnt)
+                pContinue = strstr(atcmd_getResponse(), "+CGACT: ");
+                while (pContinue != NULL && ntwkIndx < ntwk__pdpContextCnt)
                 {
-                    g_lqLTEM.providerInfo->networks[ntwkIndx].pdpContextId = strtol(continueAt + 8, &continueAt, 10);
-                    g_lqLTEM.providerInfo->networks[ntwkIndx].isActive = *(++continueAt) == '1';
+                    g_lqLTEM.providerInfo->networks[ntwkIndx].pdpContextId = strtol(pContinue + 8, &pContinue, 10);
+                    g_lqLTEM.providerInfo->networks[ntwkIndx].isActive = *(++pContinue) == '1';
                     // only supported protocol now is IPv4, alias IP
                     strcpy(g_lqLTEM.providerInfo->networks[ntwkIndx].pdpProtocolType, PDP_PROTOCOL_IPV4);
-                    continueAt = strstr(continueAt, "+CGACT: ");
-                    if (continueAt == NULL)
+                    pContinue = strstr(pContinue, "+CGACT: ");
+                    if (pContinue == NULL)
                         break;
                     ntwkIndx++;
                 }
             }
             // get IP addresses
-            for (size_t i = 0; i < ntwkIndx; i++)
+            for (size_t i = 0; i <= ntwkIndx; i++)
             {
                 if (g_lqLTEM.providerInfo->networks[i].isActive)
                 {
                     atcmd_invokeReuseLock("AT+CGPADDR=%d", g_lqLTEM.providerInfo->networks[i].pdpContextId);
                     if (atcmd_awaitResult() == resultCode__success)
                     {
-                        continueAt = strstr(atcmd_getLastResponse(), "+CGPADDR: ");
-                        continueAt = strchr(continueAt + 10, ',') + 1;
-                        char *termAt = strchr(continueAt, '\r');
-                        strncpy(g_lqLTEM.providerInfo->networks[i].ipAddress, continueAt, MIN(termAt - continueAt, ntwk__ipAddressSz));
+                        pContinue = strstr(atcmd_getResponse(), "+CGPADDR: ");
+                        pContinue = strchr(pContinue + 10, ',') + 1;
+                        char *pLineEnd = strchr(pContinue, '\r');
+                        strncpy(g_lqLTEM.providerInfo->networks[i].ipAddress, pContinue, MIN(pLineEnd - pContinue, ntwk__ipAddressSz));
                     }
                 }
                 else
@@ -248,7 +248,7 @@ void ntwk_activateNetwork(uint8_t cntxtId)
 {
     if (atcmd_tryInvoke("AT+CGACT=1,%d", cntxtId))
     {
-        resultCode_t atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeoutMS, S__contextStatusCompleteParser);
+        resultCode_t atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
         if ( atResult == resultCode__success)
             ntwk_awaitProvider(5);
     }
@@ -262,7 +262,7 @@ void ntwk_deactivateNetwork(uint8_t cntxtId)
 {
     if (atcmd_tryInvoke("AT+CGACT=0,%d", cntxtId))
     {
-        resultCode_t atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeoutMS, S__contextStatusCompleteParser);
+        resultCode_t atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
         if ( atResult == resultCode__success)
             ntwk_awaitProvider(5);
     }
@@ -314,14 +314,14 @@ void ntwk_getProviders(char *providersList, uint16_t listSz)
     /* AT+COPS=? */
     ASSERT_W(false, srcfile_ltemc_network_c, "ntwk_getProviders() blocks and is SLOW!");
 
-    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
+    if (ATCMD_awaitLock(atcmd__defaultTimeout))
     {
         if (g_lqLTEM.modemInfo->imei[0] == 0)
         {
             atcmd_invokeReuseLock("AT+COPS=?");
-            if (atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(180), atcmd__useDefaultOKCompletionParser) == resultCode__success)
+            if (atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(180), NULL) == resultCode__success)
             {
-                strncpy(providersList, atcmd_getLastResponse() + 9, listSz - 1);
+                strncpy(providersList, atcmd_getResponse() + 9, listSz - 1);
             }
         }
     }

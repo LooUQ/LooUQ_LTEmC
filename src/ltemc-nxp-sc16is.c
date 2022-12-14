@@ -117,7 +117,7 @@ void SC16IS7xx_enableIrqMode()
 /**
  *	@brief Read interrupt enable register, check IER for IRQ enabled (register is cleared at reset)
  */
-bool SC16IS7xx_isCommReady()
+bool SC16IS7xx_isAvailable()
 {
     uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
     SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, wrVal);
@@ -192,6 +192,19 @@ void SC16IS7xx_resetFifo(sc16IS7xx_FifoResetAction_t resetAction)
 {
     // fcr is a RdOnly register, flush and FIFO enable are both in this register 
     SC16IS7xx_writeReg(SC16IS7xx_FCR_regAddr,  resetAction |= SC16IS7xx__FCR_IOP_FIFO_ENABLE);
+}
+
+
+/**
+ *	@brief Perform reset on bridge FIFO
+ */
+void SC16IS7xx_sendBreak()
+{
+    uint8_t lcrReg = SC16IS7xx_readReg(SC16IS7xx_LCR_regAddr);
+
+    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr,  lcrReg |= SC16IS7xx__LCR_break);
+    pDelay(2);
+    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr,  lcrReg &= ~SC16IS7xx__LCR_break);
 }
 
 

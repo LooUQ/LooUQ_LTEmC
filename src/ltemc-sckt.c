@@ -231,7 +231,7 @@ bool sckt_getState(scktCtrl_t *sckt)
 {
     ASSERT(sckt->ctrlMagic != streams__ctrlMagic, srcfile_ltemc_sckt_c);
 
-    atcmd_setOptions(atcmd__defaultTimeoutMS, S__socketStatusParser);
+    atcmd_setOptions(atcmd__defaultTimeout, S__socketStatusParser);
     if (!atcmd_tryInvokeWithOptions("AT+QISTATE=1,%d", sckt->dataCntxt))
         return resultCode__conflict;
 
@@ -251,8 +251,8 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
     // AT+QISEND command initiates send by signaling we plan to send dataSz bytes on a socket,
     // send has subcommand to actual transfer the bytes, so don't automatically close action cmd
 
-    atcmd_setOptions(atcmd__defaultTimeoutMS, ATCMD_txDataPromptParser);
-    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
+    atcmd_setOptions(atcmd__defaultTimeout, ATCMD_txDataPromptParser);
+    if (ATCMD_awaitLock(atcmd__defaultTimeout))
     {
         atcmd_invokeReuseLock("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz);      // reusing manual lock
         atResult = atcmd_awaitResult();                                             // waiting for data prompt, leaving action open on return if sucessful
@@ -260,7 +260,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
         // await data prompt atResult successful, now send data sub-command to actually transfer data, now automatically close action after data sent
         if (atResult == resultCode__success)
         {
-            atcmd_setOptions(atcmd__defaultTimeoutMS, S__socketSendCompleteParser);
+            atcmd_setOptions(atcmd__defaultTimeout, S__socketSendCompleteParser);
             atcmd_sendCmdData(data, dataSz, "");    // parse for BGx send complete
             atResult = atcmd_awaitResult();
             scktCtrl->statsTxCnt++;
@@ -423,7 +423,7 @@ static bool S__requestIrdData(dataCntxt_t dataCntx, uint16_t reqstSz, bool apply
         snprintf(irdCmd, 24, "AT+QIRD=%d,%d", dataCntx, requestedSz);
     // PRINTF(dbgColor__white, "rqstIrd lck=%d, cmd=%s\r", applyLock, irdCmd);
 
-    if (applyLock && !ATCMD_awaitLock(atcmd__defaultTimeoutMS))
+    if (applyLock && !ATCMD_awaitLock(atcmd__defaultTimeout))
         return false;
 
     g_lqLTEM.iop->rxStreamCtrl = g_lqLTEM.iop->streamPeers[dataCntx];               // set IOP in data mode

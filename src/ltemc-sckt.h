@@ -64,7 +64,7 @@ typedef struct scktCtrl_tag
     protocol_t protocol;                                    /// Controls's protocol : UDP/TCP/SSL.
     bool useTls;                                            /// flag indicating SSL/TLS applied to stream
     char hostUrl[host__urlSz];                              /// URL or IP address of host
-    char hostPort[host__portSz];                            /// IP port number host is listening on
+    uint16_t hostPort;                                      /// IP port number host is listening on (allows for 65535/0)
     rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
 
     uint8_t pdpContextId;                                   /// TCP/UDP can operate on any PDP context

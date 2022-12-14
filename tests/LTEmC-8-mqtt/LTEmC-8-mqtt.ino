@@ -60,6 +60,9 @@
 #include <ltemc-tls.h>
 #include <ltemc-mqtt.h>
 
+#include <lq-SAMDutil.h>                // allows read of reset cause
+
+
 #define PERIOD_FROM_SECONDS(period)  (period * 1000)
 #define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
 
@@ -82,11 +85,13 @@
  * 
  * HostName=iothub-dev-pelogical.azure-devices.net;DeviceId=867198053158865;SharedAccessSignature=SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F867198053158865&sig=YlW6PuH4MA93cINEhgstihwQxWt4Zr9iY9Tnkl%2BuQK4%3D&se=1608052225
  * ^^^                          REMOVE, NOT PART OF THE SAS TOKEN                              ^^^              KEEP ALL FOLLOWING '='
+
+    https://learn.microsoft.com/en-us/azure/iot-hub/iot-hub-mqtt-support
 */
 
-#define MQTT_IOTHUB "iothub-dev-pelogical.azure-devices.net"
+#define MQTT_IOTHUB "iothub-a-prod-loouq.azure-devices.net"
 #define MQTT_PORT 8883
-#define MQTT_SOCKET 5
+#define MQTT_DATACONTEXT (dataCntxt_t)0
 
 /* put your AZ IoTHub info here, SAS Token is available by using the "Azure IoT explorer" (https://github.com/Azure/azure-iot-explorer/releases/tag/v0.10.16)
  * Note that SAS tokens have an experiry from 5 minutes to years. Yes... the one below is expired. 
@@ -94,17 +99,16 @@
  * 
  * If you are a LQCloud user get your SAS token from the Devices..Device Details panel.
  */
-#define MQTT_IOTHUB_DEVICEID "864508030074113"
-#define MQTT_IOTHUB_USERID "iothub-dev-pelogical.azure-devices.net/" MQTT_IOTHUB_DEVICEID "/?api-version=2018-06-30"
+#define MQTT_IOTHUB_DEVICEID "864581067556419"
+#define MQTT_IOTHUB_USERID MQTT_IOTHUB "/" MQTT_IOTHUB_DEVICEID "/?api-version=2021-04-12"
 
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F864508030074113&sig=qxMZCJbzrH2IEvX8nWDSrRQU7jrIl55UxD%2BcSBA%2BxAE%3D&se=1675872394"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-a-prod-loouq.azure-devices.net%2Fdevices%2F864581067556419&sig=3qiMFHcr%2Bx1ZNBZOksApZsZIuFUg8GgM%2BjEPTg%2B6rFc%3D&se=1670510775"
 //#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F863940053438001&sig=jOd0DSmbtHenUtuenv5x3ScKlTAMLaYR2R%2B%2Fz46oWqo%3D&se=1637909480"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
 #define MQTT_MSG_PROPERTIES "mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:18.97"
 #define MQTT_MSG_BODY_TEMPLATE "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/mId=~%d&mV=1.0&mTyp=tdat&evC=user&evN=wind-telemetry&evV=Wind Speed:%0.2f"
-
 
 // test setup
 uint16_t cycle_interval = 15000;
@@ -131,10 +135,9 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "\rLTEm1c test8-MQTT\r\n");
-    lqDiag_registerEventCallback(appNotifyCB);
-
-    diagnosticInfo_t *diags = lqDiag_getDiagnosticsInfo();
+    uint8_t resetCause = lqSAMD_getResetCause();
+    PRINTF(dbgColor__red, "\rLTEmC test8-MQTT\r\n");
+    PRINTF(dbgColor__none,"RCause=%d \r", resetCause);
 
     ltem_create(ltem_pinConfig, NULL, appNotifyCB);
     ltem_setDefaultNetwork(PDP_DATA_CONTEXT, PDP_PROTOCOL_IPV4, PDP_APN_NAME);
@@ -146,11 +149,11 @@ void setup() {
         appNotifyCB(255, "Timout (30s) waiting for cellular network.");
     PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
 
-    PRINTF(dbgColor__none, "Waiting on network...\r");
-    providerInfo_t *networkProvider = ntwk_awaitProvider(30);
-    if (strlen(networkProvider->name) == 0)
-        appNotifyCB(255, "Timout (30s) waiting for cellular network.");
-    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
+    // PRINTF(dbgColor__none, "Waiting on network...\r");
+    // providerInfo_t *networkProvider = ntwk_awaitProvider(30);
+    // if (strlen(networkProvider->name) == 0)
+    //     appNotifyCB(255, "Timout (30s) waiting for cellular network.");
+    // PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
 
     providerInfo_t *provider;
     while(true)
@@ -170,42 +173,32 @@ void setup() {
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
      * Azure requires TLS 1.2 and MQTT version 3.11 */
 
-    tls_configure(socket_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
-    mqtt_initControl(&mqttCtrl, socket_0, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
+    tls_configure(dataCntxt_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    mqtt_initControl(&mqttCtrl, MQTT_DATACONTEXT, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
+    mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, true, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
 
-    mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, (tls_t)useTLS, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
 
-    mqttCtrl.canReuseConn = true;
 
-    resultCode_t rslt;
 
-    rslt = mqtt_open(&mqttCtrl);
-    if (rslt != resultCode__success)
+
+    if (mqttInit() == resultCode__success)
+        PRINTF(dbgColor__info, "MQTT initialized, starting publish loop\r\r");
+    else
     {
-        PRINTF(dbgColor__warn, "Open fail status=%d\r", rslt);
-        appNotifyCB(255, "MQTT open failed");
+        PRINTF(dbgColor__warn, "Failed to initialize MQTT\r");
+        while (true) {}
     }
-    rslt = mqtt_connect(&mqttCtrl, mqttSession_cleanStart);
-    if (rslt != resultCode__success)
-    {
-        PRINTF(dbgColor__warn, "Connect fail status=%d\r", rslt);
-        appNotifyCB(255, "MQTT connect failed.");
-    }
-    rslt = mqtt_subscribe(&mqttCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1);
-    if (rslt != resultCode__success)
-    {
-        PRINTF(dbgColor__warn, "Subscribe fail status=%d\r", rslt);
-        appNotifyCB(255, "MQTT subscribe to IoTHub C2D messages failed.");
-    }
-    lastCycle = pMillis() - cycle_interval;
 }
 
+bool kickIt = true;
 
 void loop() 
 {
-    if (pElapsed(lastCycle, cycle_interval))
+    if (kickIt || pElapsed(lastCycle, cycle_interval))
     {
         lastCycle = pMillis();
+        kickIt = false;
+        loopCnt++;
 
         double windspeed = random(0, 4999) * 0.01;
 
@@ -213,30 +206,25 @@ void loop()
         snprintf(mqttMessage, 200, "MQTT message for loop=%d", loopCnt);
 
         resultCode_t rslt;
-
-        // /* no retry */
-        // rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage, 15);
-
-        // if (rslt != resultCode__success)
-        //     PRINTF(dbgColor__warn, "Publish failed!\r");
-
-
-        /* retry until timeout */
         uint32_t publishTck = pMillis();
-        do
+
+        PRINTF(dbgColor__white, "Publishing message: %d\r", loopCnt);
+        rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage, 30);
+        if (rslt != resultCode__success)
         {
-            rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage, 30);
-            if (rslt != resultCode__success)
-            {
-                PRINTF(dbgColor__warn, "Publish attempts timed out, Publish Failed!\r");
-                break;
-            }
-            /* if the publish is being blocked by a recv, critical that doWork() given opportunity to finish IO */
-            ltem_doWork();                                                              
+            PRINTF(dbgColor__warn, "Publish Failed! >> %d\r", rslt);
 
-        } while (rslt != resultCode__success);
+            mqtt_close(&mqttCtrl);
 
-        loopCnt++;
+            PRINTF(dbgColor__cyan, "\rPostClose MQTT state: %d\r", mqtt_getStatus(&mqttCtrl));
+
+            if (mqttInit() != resultCode__success)
+                while (true) {}
+        }
+
+        /* if the publish is being blocked by a recv, critical that doWork() given opportunity to finish IO */
+        ltem_doWork();                                                              
+
         PRINTF(dbgColor__magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
     }
 
@@ -246,7 +234,28 @@ void loop()
 }
 
 
-void mqttRecvCB(socket_t cntxt, uint16_t msgId, const char *topic, char *topicVar, char *message, uint16_t messageSz)
+resultCode_t mqttInit()
+{
+    resultCode_t rslt = mqtt_open(&mqttCtrl);
+    if (rslt != resultCode__success)
+    {
+        PRINTF(dbgColor__warn, "Open fail status=%d\r", rslt);
+    }
+    rslt = mqtt_connect(&mqttCtrl, true);
+    if (rslt != resultCode__success)
+    {
+        PRINTF(dbgColor__warn, "Connect fail status=%d\r", rslt);
+    }
+    rslt = mqtt_subscribe(&mqttCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1);
+    if (rslt != resultCode__success)
+    {
+        PRINTF(dbgColor__warn, "Subscribe fail status=%d\r", rslt);
+    }
+    return rslt;
+}
+
+
+void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId, const char *topic, char *topicVar, char *message, uint16_t messageSz)
 {
     uint16_t newLen = lq_strUriDecode(topicVar, message - topicVar);        // Azure IoTHub URI encodes properties sent as topic suffix 
 
@@ -256,7 +265,8 @@ void mqttRecvCB(socket_t cntxt, uint16_t msgId, const char *topic, char *topicVa
     PRINTF(dbgColor__cyan, "   props: %s\r", topicVar);
     PRINTF(dbgColor__cyan, " message: %s\r", message);
 
-    // Azure IoTHub appends properties collection to the topic (that is why Azure requires wildcard topic)
+    // Azure IoTHub appends properties collection to the topic 
+    // That is why Azure requires wildcard topic
     keyValueDict_t mqttProps = lq_createQryStrDictionary(topicVar, strlen(topicVar));
     PRINTF(dbgColor__info, "Props(%d)\r", mqttProps.count);
     for (size_t i = 0; i < mqttProps.count; i++)
@@ -271,6 +281,7 @@ void mqttRecvCB(socket_t cntxt, uint16_t msgId, const char *topic, char *topicVa
 /* test helpers
 ========================================================================================================================= */
 
+// captures error callbacks from LTEmC (registered above)
 void appNotifyCB(uint8_t notifType, const char *notifMsg)
 {
     if (notifType >= appEvent__FAULTS)

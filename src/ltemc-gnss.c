@@ -103,10 +103,10 @@ gnssLocation_t gnss_getLocation()
     //atcmd_t *gnssCmd = atcmd_build("AT+QGPSLOC=2", GNSS_CMD_RESULTBUF_SZ, 500, gnssLocCompleteParser);
     // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08  + \r\nOK\r\n
 
-    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
+    if (ATCMD_awaitLock(atcmd__defaultTimeout))
     {
         atcmd_invokeReuseLock("AT+QGPSLOC=2");
-        resultCode_t atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeoutMS, gnssLocCompleteParser);
+        resultCode_t atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, gnssLocCompleteParser);
 
         gnssResult.statusCode = atResult;
         if (atResult != resultCode__success)                                            // return on failure, continue on success
@@ -114,7 +114,7 @@ gnssLocation_t gnss_getLocation()
 
         PRINTF(dbgColor__warn, "getLocation(): parse starting...\r");
 
-        char *parsedResponse = atcmd_getLastResponse();
+        char *parsedResponse = atcmd_getResponse();
         char *delimAt;
 
 
@@ -157,7 +157,7 @@ gnssLocation_t gnss_getLocation()
 static cmdParseRslt_t gnssLocCompleteParser(const char *response, char **endptr)
 {
     //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr
-    cmdParseRslt_t parseRslt = atcmd_stdResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, NULL, 0);
+    cmdParseRslt_t parseRslt = atcmd_stdResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, "", 0);
     PRINTF(0, "gnssParser(): result=%i\r", parseRslt);
     return parseRslt;
 }

@@ -3,7 +3,7 @@
  *  \author Greg Terrell
  *  \license MIT License
  *
- *  Copyright (c) 2020, 2021 LooUQ Incorporated.
+ *  Copyright (c) 2020-2022 LooUQ Incorporated.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -32,14 +32,8 @@
 #include "ltemc-types.h"
 #include "ltemc-nxp-sc16is.h"
 
-
-/**
- *   \brief Brief inline static function to support doWork() readability
-*/
-static inline uint16_t IOP_rxPageDataAvailable(rxDataBufferCtrl_t *buf, uint8_t page)
-{
-    return buf->pages[page].head - buf->pages[page].tail;
-}
+#define USR_PG() (!pRxBffr->iopPg)
+#define IOP_PG() (pRxBffr->iopPg)
 
 
 #ifdef __cplusplus

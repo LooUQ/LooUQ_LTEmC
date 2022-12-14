@@ -56,7 +56,7 @@ enum ltem__constants
 {
     ltem__streamCnt = 6,
     ltem__swVerSz = 12,
-    ltem__errorDetailSz = 6
+    ltem__errorDetailSz = 5
 };
 
 /** 
@@ -211,10 +211,7 @@ typedef struct providerInfo_tag
 
 
 
-
-
 /* IOP Module Type Definitions
- * I/O Processor
  * ------------------------------------------------------------------------------------------------------------------------------*/
 
 /**
@@ -231,7 +228,8 @@ enum IOP__Constants
     IOP__uartFIFOBufferSz = 64,
     IOP__uartFIFOFillPeriod = (int)(1 / (double)IOP__uartBaudRate * 10 * IOP__uartFIFOBufferSz * 1000) + 1,
 
-    IOP__rxDefaultTimeout = IOP__uartFIFOFillPeriod * 2
+    IOP__rxDefaultTimeout = IOP__uartFIFOFillPeriod * 2,
+    IOP__urcDetectBufferSz = 40
 };
 
 
@@ -320,19 +318,13 @@ typedef volatile struct rxCoreBufferCtrl_tag
     char *prevHead;             ///< if the last chunk is copied or consumed immediately used to restore head
 } rxCoreBufferCtrl_t;
 
-/* "Streams" Module Type Definitions
- * Data protocols
- * ------------------------------------------------------------------------------------------------------------------------------*/
-
-/** 
- *  @brief Typed numeric constants for stream peers subsystem (sockets, mqtt, http)
- */
-enum streams__constants
+/**
+ *   \brief Brief inline static function to support doWork() readability
+*/
+static inline uint16_t IOP_rxPageDataAvailable(rxDataBufferCtrl_t *buf, uint8_t page)
 {
-    streams__ctrlMagic = 0x186F,
-    host__urlSz = 120,
-    host__portSz = 6
-};
+    return buf->pages[page].head - buf->pages[page].tail;
+}
 
 
 /** 
@@ -347,19 +339,6 @@ typedef enum dataStreamType_tag
     dataStream_file = 5
 } dataStreamType_tag;
 
-
-typedef enum tls_tag
-{
-    noTLS,
-    useTLS
-} tls_t;
-
-
-// /** 
-//  *  @brief Abstract pointer type that is cast into the specific stream control.
-//  *  @details Example:  scktCtrl_t *sckt = (scktCtrl_t*)((iop_t*)g_ltem.iop)->streamPeers[((iop_t*)g_ltem.iop)->rxStreamPeer];
-//  */
-// typedef void * iopStreamCtrl_t;
 
 
 /** 
@@ -380,40 +359,6 @@ typedef enum streamPeer_tag
 
 
 /** 
- *  @brief Enum of the available dataCntxt indexes for BGx (only SSL/TLS capable contexts are supported).
- */
-typedef enum dataCntxt_tag
-{
-    dataCntxt_0 = 0,
-    dataCntxt_1 = 1,
-    dataCntxt_2 = 2,
-    dataCntxt_3 = 3,
-    dataCntxt_4 = 4,
-    dataCntxt_5 = 5,
-    dataCntxt__cnt = 6,
-    dataCntxt__none = 0xFF
-} dataCntxt_t;
-
-
-/** 
- *  @brief Enum of protocols available on the modem (bit-mask). 
- *  @details All of the protocols are CLIENTS, while the BGx line of modules support server mode the network carriers generally don't
- */
-typedef enum protocol_tag
-{
-    protocol_tcp = 0x00,                ///< TCP client
-    protocol_udp = 0x01,                ///< UDP client
-    protocol_ssl = 0x02,                ///< SSL client.
-    protocol_socket = 0x03,             ///< special test value, < compare includes any of the above IP socket protocols
-
-    protocol_mqtt = 0x10,               ///< MQTT messaging client
-    protocol_http = 0x11,               ///< HTTP client
-
-    protocol_void = 0xFF                ///< No protocol, used in code to generally signal a null condition.
-} protocol_t;
-
-
-/** 
  *  @brief Base struct containing common properties required of a stream control
  */
 typedef struct iopStreamCtrl_tag
@@ -423,7 +368,7 @@ typedef struct iopStreamCtrl_tag
     protocol_t protocol;                                    /// Socket's protocol : UDP/TCP/SSL.
     bool useTls;                                            /// flag indicating SSL/TLS applied to stream
     char hostUrl[host__urlSz];                              /// URL or IP address of host
-    char hostPort[host__portSz];                            /// IP port number host is listening on (allows for 65535/0)
+    uint16_t hostPort;                                      /// IP port number host is listening on (allows for 65535/0)
     rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
 } iopStreamCtrl_t;
 
@@ -437,21 +382,21 @@ typedef struct iopStreamCtrl_tag
  */
 typedef volatile struct iop_tag
 {
-    cbuf_t *txBuf;                                      ///< transmit buffer (there is just one)
-    uint16_t txPend;                                    ///< outstanding TX char pending
-    rxCoreBufferCtrl_t *rxCBuffer;                      ///< URC and command response receive buffer, this is the default RX buffer
-    iopStreamCtrl_t* streamPeers[streamPeer_cnt];       ///< array of iopStream ctrl pointers, cast to a specific stream type: protocol or file stream
-    iopStreamCtrl_t* rxStreamCtrl;                      ///< stream data source, if not null
-    uint32_t txSendStartTck;                            ///< tick count when TX send started, used for response timeout detection
-    uint32_t rxLastFillChgTck;                          ///< tick count when RX buffer fill level was known to have change
-    uint16_t rxLastFillLevel;                           ///< last known fill level (updated only during check)
+    cbuf_t *txBuffer;                                           /// transmit buffer (there is just one)
+    uint16_t txPend;                                            /// outstanding TX char pending
+    rxCoreBufferCtrl_t *rxCBuffer;                              /// URC and command response receive buffer, this is the default RX buffer
+    iopStreamCtrl_t* streamPeers[streamPeer_cnt];               /// array of iopStream ctrl pointers, cast to a specific stream type: protocol or file stream
+    iopStreamCtrl_t* rxStreamCtrl;                              /// stream data source, if not null
+    char urcDetectBuffer[SET_PROPLEN(IOP__urcDetectBufferSz)];
+
+    uint32_t txSendStartTck;                                    /// tick count when TX send started, used for response timeout detection
+    uint32_t rxLastFillChgTck;                                  /// tick count when RX buffer fill level was known to have change
 
     // protocol specific properties
-    uint8_t scktMap;                                    ///< bitmap indicating open sockets (TCP/UDP/SSL), bit position is the dataContext (IOP event detect shortcut)
-    uint8_t scktLstWrk;                                 ///< bit mask of last sckt do work IRD inquiry (fairness)
-    uint8_t mqttMap;                                    ///< bitmap indicating open mqtt(s) connections, bit position is the dataContext (IOP event detect shortcut)
+    uint8_t scktMap;                                            /// bitmap indicating open sockets (TCP/UDP/SSL), bit position is the dataContext (IOP event detect shortcut)
+    uint8_t scktLstWrk;                                         /// bit mask of last sckt do work IRD inquiry (fairness)
+    uint8_t mqttMap;                                            /// bitmap indicating open mqtt(s) connections, bit position is the dataContext (IOP event detect shortcut)
 } iop_t;
-
 
 
 /* ATCMD Module Type Definitions
@@ -463,9 +408,7 @@ typedef volatile struct iop_tag
 enum atcmd__constants
 {
     atcmd__noTimeoutChange = 0,
-    atcmd__useDefaultTimeout = UINT32_MAX,
-    atcmd__useDefaultOKCompletionParser = 0,
-    atcmd__defaultTimeoutMS = 800,
+    atcmd__defaultTimeout = 800,
 
     atcmd__setLockModeManual = 0,
     atcmd__setLockModeAuto = 1,
@@ -482,7 +425,6 @@ typedef enum cmdParseRslt_tag
     cmdParseRslt_preambleMissing = 0x01,
     cmdParseRslt_countShort = 0x02,
     cmdParseRslt_moduleError = 0x04,
-    cmdParseRslt_excessRecv = 0x20,
 
     cmdParseRslt_success = 0x40,
     cmdParseRslt_error = 0x80,
@@ -497,18 +439,19 @@ typedef cmdParseRslt_t (*cmdResponseParser_func)();                             
 */
 typedef struct atcmd_tag
 {
-    char cmdStr[bufferSz__cmdTx];               /// AT command string to be passed to the BGx module.
-    uint32_t timeoutMS;                         /// Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
-    bool isOpenLocked;                          /// True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
-    bool autoLock;                              /// last invoke was auto and should be closed automatically on complete
-    uint32_t invokedAt;                         /// Tick value at the command invocation, used for timeout detection.
-    char *response;                             /// PTR into IOP "core" buffer, the response to the command received from the BGx. Parser with NULL terminate.
-    uint32_t execDuration;                      /// duration of command's execution in milliseconds
-    resultCode_t resultCode;                    /// consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
-    cmdResponseParser_func responseParserFunc;  /// parser function to analyze AT cmd response and optionally extract value
-    cmdParseRslt_t parserResult;                /// last parser invoke result returned
-    char errorDetail[ltem__errorDetailSz];      /// BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
-    int32_t retValue;                           /// optional signed int value extracted from response
+    char cmdStr[bufferSz__cmdTx];                       /// AT command string to be passed to the BGx module.
+    uint32_t timeout;                                   /// Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
+    bool isOpenLocked;                                  /// True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
+    bool autoLock;                                      /// last invoke was auto and should be closed automatically on complete
+    uint32_t invokedAt;                                 /// Tick value at the command invocation, used for timeout detection.
+    char *response;                                     /// PTR into IOP "core" buffer, the response to the command received from the BGx. Parser with NULL terminate.
+    uint32_t execDuration;                              /// duration of command's execution in milliseconds
+    resultCode_t resultCode;                            /// consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
+    cmdResponseParser_func responseParserFunc;          /// parser function to analyze AT cmd response and optionally extract value
+    cmdParseRslt_t parserResult;                        /// last parser invoke result returned
+    bool preambleFound;                                 /// true if parser found preamble
+    char errorDetail[SET_PROPLEN(ltem__errorDetailSz)]; /// BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
+    int32_t retValue;                                   /// optional signed int value extracted from response
 } atcmd_t;
 
 
@@ -521,8 +464,6 @@ typedef struct atcmdResult_tag
     char *response;                             ///< The char c-string containing the full response from the BGx.
     uint16_t responseCode;                      ///< Numeric response value from many "status" action parsers (suffixed with _rc)
 } atcmdResult_t;
-
-
 
 
 /* SSL/TLS Module Type Definitions

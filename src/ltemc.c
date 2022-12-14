@@ -204,10 +204,18 @@ void ltem_start(resetAction_t resetAction)
     bool ltemReset = true;
     if (QBG_isPowerOn())
     {
-        if (resetAction == skipIfOn)
+        if (resetAction == resetAction_skipIfOn)
             ltemReset = false;
         else
-            QBG_reset(resetAction);                                        // do requested reset (sw, hw, pwrCycle)
+        {
+            if (resetAction == resetAction_swReset)
+            {
+                if (!SC16IS7xx_isAvailable())
+                    resetAction = resetAction_powerReset;
+                SC16IS7xx_start();                                          // NXP SPI-UART bridge may/may not be baseline operational, initialize base: baud, framing
+            }
+            QBG_reset(resetAction);                                         // do requested reset (sw, hw, pwrCycle)
+        }
     }
     else 
     {
@@ -223,7 +231,7 @@ void ltem_start(resetAction_t resetAction)
 void S__initLTEmDevice(bool ltemReset)
 {
     ASSERT(QBG_isPowerOn(), srcfile_ltemc_ltemc_c);
-    ASSERT(SC16IS7xx_isCommReady(), srcfile_ltemc_ltemc_c);
+    ASSERT(SC16IS7xx_isAvailable(), srcfile_ltemc_ltemc_c);
 
     SC16IS7xx_start();                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
 

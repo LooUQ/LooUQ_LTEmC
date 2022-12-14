@@ -94,7 +94,7 @@ void setup() {
     ltem_setProviderScanMode(ntwkScanMode_lteonly);
     ltem_setIotMode(ntwkIotMode_m1);
     ltem_setDefaultNetwork(PDP_DATA_CONTEXT, PDP_PROTOCOL_IPV4, PDP_APN_NAME);
-    ltem_start((resetAction_t)swReset);
+    ltem_start(resetAction_swReset);
 
     providerInfo_t *provider;
     while(true)
@@ -169,7 +169,7 @@ void loop()
                 PRINTF(dbgColor__info, "GET invoked successfully\r");
             }
             else
-                PRINTF(dbgColor__warn, "HTTP GET failed, status=%d\r", rslt);
+                PRINTF(dbgColor__warn, "HTTP GET failed, status=%d(%s)\r", rslt, atcmd_getValue());
         }
         else
         {

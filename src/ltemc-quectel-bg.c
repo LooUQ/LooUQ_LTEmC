@@ -73,6 +73,7 @@ bool QBG_isPowerOn()
         platform_closePin(g_lqLTEM.pinConfig.statusPin);
         platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_output);    // open status for write, set low
         platform_writePin(g_lqLTEM.pinConfig.statusPin, gpioValue_low);     // set low
+        //pDelay(1);
         platform_closePin(g_lqLTEM.pinConfig.statusPin);
         platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);     // reopen for normal usage (read)
 
@@ -160,8 +161,11 @@ void QBG_reset(resetAction_t resetAction)
     // if (resetAction == skipIfOn)
     // {fall through}
 
-    if (resetAction == swReset && QBG_isPowerOn())
+    if (resetAction == resetAction_swReset && QBG_isPowerOn())
     {
+        SC16IS7xx_sendBreak();                                          // test for do no harm
+        // atcmd_exitTextMode();                                           // clear possible text mode (hung MQTT publish, etc.)
+        // atcmd_sendCmdData("AT\r", 3, "");                               // clear cmd state
         atcmd_sendCmdData("AT+CFUN=1,1\r", 12, "");                     // soft-reset command: performs a module internal HW reset and cold-start
 
         uint32_t waitStart = pMillis();                                 // start timer to wait for status pin == OFF
@@ -171,7 +175,9 @@ void QBG_reset(resetAction_t resetAction)
             if (pMillis() - waitStart > PERIOD_FROM_SECONDS(3))
             {
                 PRINTF(dbgColor__warn, "LTEm swReset:OFF timeout\r");
-                QBG_reset(powerReset);                                  // recursive call with power-cycle reset specified
+                // SC16IS7xx_sendBreak();
+                // atcmd_exitTextMode();                                // clear possible text mode (hung MQTT publish, etc.)
+                QBG_reset(resetAction_powerReset);                      // recursive call with power-cycle reset specified
                 return;
             }
         }
@@ -188,7 +194,7 @@ void QBG_reset(resetAction_t resetAction)
         }
         PRINTF(dbgColor__white, "LTEm swReset\r");
     }
-    else if (resetAction == hwReset)
+    else if (resetAction == resetAction_hwReset)
     {
         platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_high);                 // hardware reset: reset pin (LTEm inverts)
         pDelay(4000);                                                                   // BG96: active for 150-460ms , BG95: 2-3.8s
@@ -210,30 +216,41 @@ void QBG_reset(resetAction_t resetAction)
  */
 void QBG_setOptions()
 {
-    atcmd_tryInvoke("AT");
-    if (atcmd_awaitResult() != resultCode__success)
-    {
-        /*  If above awaitResult gets a 408 (timeout), perform a HW check. The HW check 1st looks at status pin,the inspects
-         *  SPI for basic Wr/Rd. 
-         *  *** If either of the HW tests fail, flow will not get here. ***
-         *  The check below attempts to clear a confused BGx that is sitting in data state (awaiting an end-of-transmission).
-         */
-        if (!QBG_clrDataState())
-            ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");         // send notification, maybe app can recover
-    }
-
-    // init BGx state
     PRINTF(dbgColor__none, "BGx Init:\r");
-    for (size_t i = 0; i < qbg_initCmdsCnt; i++)                                    // sequence through list of start cmds
+    bool initError = false;
+    uint8_t tries = 0;
+    do
     {
-        if (!S__issueStartCommand(qbg_initCmds[i]))
+        tries++;
+        for (size_t i = 0; i < qbg_initCmdsCnt; i++)                                    // sequence through list of start cmds
         {
-            ltem_notifyApp(appEvent_fault_hardFault, "BGx init seq fault");         // send notification, maybe app can recover
-            while (true) {}                                                         // should not get here!
+            if (S__issueStartCommand(qbg_initCmds[i]))
+                PRINTF(dbgColor__none, " > %s\r", qbg_initCmds[i]);
+            else
+            {
+                PRINTF(dbgColor__error, "BGx Init CmdError: %s\r", qbg_initCmds[i]);
+                initError = true;
+                break;
+            }
         }
-        PRINTF(dbgColor__none, " > %s", qbg_initCmds[i]);
+        PRINTF(dbgColor__none, " > ------");
+        if (initError)
+        {
+            /* If above awaitResult gets a 408 (timeout), perform a HW check. The HW check 1st looks at status pin,the inspects
+             * SPI for basic Wr/Rd.     *** If either of the HW tests fail, flow will not get here. ***
+             * The function below attempts to clear a confused BGx that is sitting in data state (awaiting an end-of-transmission).
+             */
+            if (!QBG_clrDataState())
+                ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");         // send notification, maybe app can recover
+        }
+        PRINTF(dbgColor__none, "\r");
+    } while (initError && tries == 1);
+    
+    if (initError)
+    {
+        ltem_notifyApp(appEvent_fault_hardFault, "BGx init seq fault");                 // send notification, maybe app can recover
+        while (true) {}                                                                 // should not get here!
     }
-    PRINTF(dbgColor__none, "\r");
 }
 
 
@@ -264,9 +281,11 @@ const char *QBG_getModuleType()
 
 bool S__issueStartCommand(const char *cmdStr)
 {
-    atcmd_reset(true);
-    if (atcmd_tryInvoke(cmdStr) && atcmd_awaitResult() == resultCode__success)
-        return true;
+    if (atcmd_tryInvoke(cmdStr))
+    {
+        if (atcmd_awaitResult() == resultCode__success)
+            return true;
+    }
     return false;
 }
 

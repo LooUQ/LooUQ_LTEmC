@@ -24,7 +24,8 @@
         "ltemc-filecodes.h": "c",
         "ltemc-atcmd.h": "c",
         "lq-str.h": "c",
-        "ltemc-quectel-bg.h": "c"
+        "ltemc-quectel-bg.h": "c",
+        "lq-samdutil.h": "c"
     },
     "C_Cpp.loggingLevel": "Debug"
 }

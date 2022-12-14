@@ -45,8 +45,8 @@ enum http__constants
     http__defaultTimeoutBGxSec = 60,
     http__urlHostSz = 128,
     http__rqstTypeSz = 5,                               /// GET or POST
-    http__customHdrSmallWarning = 40,
-    http__reqdResponseSz = 22                           /// BGx HTTP(S) Application Note
+    http__customHdrSmallWarning = 40
+    // http__reqdResponseSz = 22                           /// BGx HTTP(S) Application Note
 };
 
 
@@ -86,7 +86,7 @@ typedef enum httpState_tag
 } httpState_t;
 
 
-typedef struct httpCtrl_tag
+typedef volatile struct httpCtrl_tag
 {
     /* Top section of xCtrl structure is the same for all LTEmC implemented protocol suites TCP/HTTP/MQTT etc. */
     uint16_t ctrlMagic;                                     /// magic flag to validate incoming requests 
@@ -94,7 +94,7 @@ typedef struct httpCtrl_tag
     protocol_t protocol;                                    /// Socket's protocol : UDP/TCP/SSL.
     bool useTls;                                            /// flag indicating SSL/TLS applied to stream
     char hostUrl[host__urlSz];                              /// URL or IP address of host
-    char hostPort[host__portSz];                            /// IP port number host is listening on (allows for 65535/0)
+    uint16_t hostPort;                                      /// IP port number host is listening on (allows for 65535/0)
     rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
     /* End of Common Structure Fields */
 
