@@ -33,7 +33,7 @@
 
 #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
 #include <lq-diagnostics.h>                     /// ASSERT and diagnostic data collection
-#include "ltemc-srcfiles.h"                     /// source file manifest for ASSERT use
+// #include "ltemc-srcfiles.h"                     /// source file manifest for ASSERT use
 
 #include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
 
@@ -75,7 +75,7 @@ extern "C"
  *	\param ltem_config [in] - The LTE modem gpio pin configuration.
  *  \param applicationCallback [in] - If supplied (not NULL), this function will be invoked for significant LTEm events.
  */
-void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEventCallback_func eventNotifCallback);
+void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCB, applEvntNotify_func eventNotifyCB);
 
 
 /**
@@ -163,14 +163,14 @@ void ltem_doWork();
  *	\brief Registers the address (void*) of your application yield callback handler.
  *  \param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
-void ltem_setYieldCallback(yield_func yieldCallback);
+void ltem_setYieldCallback(yield_func yieldCB);
 
 
 /**
  *	\brief Registers the address (void*) of your application event notification callback handler.
  *  \param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
-void ltem_setEventNotifCallback(appEventCallback_func eventNotifCallback);
+void ltem_setEventNotifCallback(applEvntNotify_func eventNotifyCB);
 
 
 /**

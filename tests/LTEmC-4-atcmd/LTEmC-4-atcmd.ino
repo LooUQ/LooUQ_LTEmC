@@ -49,6 +49,7 @@
 
 #include <ltemc.h>
 
+#define STRCMP(x,y)  (strcmp(x, y) == 0)
 
 void setup() 
 {
@@ -62,11 +63,10 @@ void setup()
     #endif
 
     PRINTF(dbgColor__red, "\r\rLTEmC - Test #4: AT Commands\r");
-    lqDiag_registerEventCallback(appNotifyCB);                      // enable ASSERTS to callback into application
+    lqDiag_setNotifyCallback(applEvntNotify);                           // enable ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem
-    ltem_start(swReset);                                            // ... and start it
-    //ltem_start((resetAction_t)skipResetIfRunning);
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);                  // create LTEmC modem
+    ltem_start(resetAction_swReset);                                    // ... and start it
 }
 
 
@@ -97,7 +97,7 @@ void loop()
         
         if (atResult == resultCode__success)                                                // statusCode == 200 (similar to HTTP codes)
         {
-            char *response = atcmd_getLastResponse();
+            char *response = atcmd_getResponse();
             PRINTF(dbgColor__info, "Got %d chars\r", strlen(response));
             PRINTF(dbgColor__white, "Resp:");
             PRINTF(dbgColor__cyan, "%s\r", response);
@@ -123,36 +123,18 @@ void loop()
 }
 
 
-/*
-========================================================================================================================= */
-
-
-// void recvResponse(char *response)
-// {
-//     iopXfrResult_t rxResult;
-//     uint8_t retries;
-//     do
-//     {
-//         rxResult = iop_rxGetCmdQueued(response, 65);
-//         timing_delay(100);
-//         retries++;
-//     } while (rxResult == iopXfrResult_incomplete && retries < 5);
-// }
-
-
-
 /* test helpers
 ========================================================================================================================= */
 
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void applEvntNotify(const char *eventTag, const char *eventMsg)
 {
-    if (notifType > 200)
+    if (STRCMP(eventTag, "ASSERT"))
     {
-        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", notifMsg);
+        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
         while (1) {}
     }
-    PRINTF(dbgColor__info, "LTEMc Info: %s\r", notifMsg);
+    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
     return;
 }
 

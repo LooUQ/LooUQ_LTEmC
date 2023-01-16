@@ -24,7 +24,22 @@
  ******************************************************************************
  *****************************************************************************/
 
-//#define _DEBUG
+#define _DEBUG 0                                // set to non-zero value for PRINTF debugging output, 
+// debugging output options                     // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
+#if _DEBUG > 0
+    asm(".global _printf_float");               // forces build to link in float support for printf
+    #if _DEBUG == 1
+    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
+    #elif _DEBUG == 2
+    #include <jlinkRtt.h>                       // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #endif
+#else
+#define PRINTF(c_, f_, ...) 
+#endif
+
+#define SRCFILE "PIO"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#include "ltemc-internal.h"
 #include "ltemc-gpio.h"
 
 
@@ -38,10 +53,8 @@ static resultCode_t S__ioValueParser(const char *response, char **endptr);
  */
 uint16_t adc_read(uint8_t portNumber)
 {
-    ASSERT(portNumber > 0 && portNumber <= adc__BG77__maxPin, srcfile_ltemc_gpio_c);
-    ASSERT_WARN(portNumber > 0 && portNumber <= adc__LTEM3F__maxPin, srcfile_ltemc_gpio_c);
-
-
+    ASSERT(portNumber > 0 && portNumber <= adc__BG77__maxPin);
+    ASSERT_WARN(portNumber > 0 && portNumber <= adc__LTEM3F__maxPin);
 }
 
 
@@ -55,8 +68,8 @@ uint16_t adc_read(uint8_t portNumber)
  */
 int8_t gpio_configPort(uint8_t portNumber, gpioDirection_t direction, gpioPull_t pullType, gpioPullDrive_t pullDriveCurrent)
 {
-    ASSERT(portNumber > 0 && portNumber <= gpio__BG77__maxPin, srcfile_ltemc_gpio_c);
-    ASSERT_W(portNumber > 0 && portNumber <= gpio__LTEM3F__maxPin, srcfile_ltemc_gpio_c, "Bad port num");
+    ASSERT(portNumber > 0 && portNumber <= gpio__BG77__maxPin);
+    ASSERT_W(portNumber > 0 && portNumber <= gpio__LTEM3F__maxPin, "Bad port num");
 
     if (direction == gpioDirection_input)
         atcmd_tryInvoke("AT+QCFG=\"gpio\",1,%d,0,%d,%d", portNumber, pullType, pullDriveCurrent);
@@ -70,8 +83,8 @@ int8_t gpio_configPort(uint8_t portNumber, gpioDirection_t direction, gpioPull_t
  */
 int8_t gpio_read(uint8_t portNumber)
 {
-    ASSERT(portNumber > 0 && portNumber <= gpio__BG77__maxPin, srcfile_ltemc_gpio_c);
-    ASSERT_W(portNumber > 0 && portNumber <= gpio__LTEM3F__maxPin, srcfile_ltemc_gpio_c, "Bad port num");
+    ASSERT(portNumber > 0 && portNumber <= gpio__BG77__maxPin);
+    ASSERT_W(portNumber > 0 && portNumber <= gpio__LTEM3F__maxPin, "Bad port num");
 
     atcmd_setOptions(atcmd__defaultTimeout, S__ioValueParser);
     atcmd_tryInvokeWithOptions("AT+QCFG=\"gpio\",2,%d/%d", portNumber);
@@ -86,8 +99,8 @@ int8_t gpio_read(uint8_t portNumber)
  */
 int8_t gpio_write(uint8_t portNumber, uint8_t value)
 {
-    ASSERT(portNumber > 0 && portNumber <= gpio__BG77__maxPin, srcfile_ltemc_gpio_c);
-    ASSERT_W(portNumber > 0 && portNumber <= gpio__LTEM3F__maxPin, srcfile_ltemc_gpio_c, "Bad port num");
+    ASSERT(portNumber > 0 && portNumber <= gpio__BG77__maxPin);
+    ASSERT_W(portNumber > 0 && portNumber <= gpio__LTEM3F__maxPin, "Bad port num");
 
     atcmd_tryInvoke("AT+QCFG=\"gpio\",3,%d/%d", portNumber, value);
 }

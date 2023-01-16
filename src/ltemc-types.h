@@ -444,7 +444,8 @@ typedef struct atcmd_tag
     bool isOpenLocked;                                  /// True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
     bool autoLock;                                      /// last invoke was auto and should be closed automatically on complete
     uint32_t invokedAt;                                 /// Tick value at the command invocation, used for timeout detection.
-    char *response;                                     /// PTR into IOP "core" buffer, the response to the command received from the BGx. Parser with NULL terminate.
+    char *response;                                     /// PTR into IOP "core" buffer, the response to the command received from the BGx (reset NULL fills buffer).
+    char *responseData;                                 /// PTR to response buffer adjusted to after found preamble pattern.
     uint32_t execDuration;                              /// duration of command's execution in milliseconds
     resultCode_t resultCode;                            /// consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
     cmdResponseParser_func responseParserFunc;          /// parser function to analyze AT cmd response and optionally extract value

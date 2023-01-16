@@ -72,22 +72,22 @@
 #endif
 
 
-#include "ltemc-iop.h"
+#define SRCFILE "IOP"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
+#include "ltemc-iop.h"
 #include "ltemc-sckt.h"                                 // protocols that are tightly coupled to I/O processing
 #include "ltemc-mqtt.h"
 
+extern ltemDevice_t g_lqLTEM;
 
-//#define NULL 0
 
-#define QBG_APPREADY_MILLISMAX 10000
+
+#define QBG_APPREADY_MILLISMAX 15000
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define IOP_RXCTRLBLK_ADVINDEX(INDX) INDX = (++INDX == IOP_RXCTRLBLK_COUNT) ? 0 : INDX
 
-
-extern ltemDevice_t g_lqLTEM;
 
 
 #pragma region Private Static Function Declarations
@@ -118,7 +118,7 @@ static inline uint8_t S_convertCharToContextId(const char cntxtChar);
 void IOP_create()
 {
     g_lqLTEM.iop = calloc(1, sizeof(iop_t));
-    ASSERT(g_lqLTEM.iop != NULL, srcfile_ltemc_iop_c);
+    ASSERT(g_lqLTEM.iop != NULL);
 
     g_lqLTEM.iop->txBuffer = S_createTxBuffer();
     g_lqLTEM.iop->rxCBuffer = S_createRxCoreBuffer(bufferSz__coreRx);       // create cmd/default RX buffer
@@ -165,7 +165,6 @@ bool IOP_awaitAppReady()
 
     while (pMillis() - waitStart < QBG_APPREADY_MILLISMAX)                  // typical wait: 700-1450 mS
     {
-        pYield();                                                           // give application time for non-comm startup activities or watchdog
         rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
         if (rxLevel > 0)
         {
@@ -173,8 +172,8 @@ bool IOP_awaitAppReady()
             {
                 SC16IS7xx_read(head, rxLevel);
                 head += rxLevel;
-                char *foundAt = strstr(buf, "APP RDY");
-                if (foundAt)
+                char *pFoundAt = strstr(buf, "APP RDY");
+                if (pFoundAt)
                 {
                     PRINTF(dbgColor__white, "AppRdy @ %lums\r", pMillis() - waitStart);
                     g_lqLTEM.deviceState = deviceState_appReady;
@@ -182,6 +181,7 @@ bool IOP_awaitAppReady()
                 }
             }
         }
+        pYield();                                                           // give application time for non-comm startup activities or watchdog
     }
     PRINTF(dbgColor__warn, "AppRdy Timeout");
     return false;
@@ -234,7 +234,7 @@ char *IOP_findInRxReverse(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const cha
     uint8_t needleLen = strlen(pNeedle);
     uint8_t termLen = strlen(pTerm);
 
-    ASSERT(needleLen + termLen < rewindCnt, srcfile_ltemc_iop_c);
+    ASSERT(needleLen + termLen < rewindCnt);
     uint16_t iopAvail = pBuf->pages[pBuf->iopPg].head - pBuf->pages[pBuf->iopPg].tail;
 
     if (needleLen + termLen > iopAvail + (pBuf->pages[!pBuf->iopPg].head - pBuf->pages[!pBuf->iopPg].tail))
@@ -330,7 +330,7 @@ char *IOP_findInRxReverse(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const cha
  */
 uint16_t IOP_fetchFromRx(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeCnt, char *pChars)
 {
-    ASSERT(pBuf->_buffer <= pStart && pStart <= pBuf->_bufferEnd, srcfile_ltemc_iop_c);
+    ASSERT(pBuf->_buffer <= pStart && pStart <= pBuf->_bufferEnd);
     memset(pChars, 0, takeCnt + 1);
 
 //    uint16_t iopAvail =  pBuf->pages[pBuf->iopPg].head -  pBuf->pages[pBuf->iopPg]._buffer;
@@ -611,7 +611,7 @@ void IOP_rxParseForUrcEvents()
         uint8_t cntxtId = (uint8_t)strtol(cntxtIdPtr, &endPtr, 10);
 
         // action
-        ASSERT(g_lqLTEM.iop->rxStreamCtrl == NULL, srcfile_ltemc_iop_c);                                // ASSERT: not inside another stream recv
+        ASSERT(g_lqLTEM.iop->rxStreamCtrl == NULL);                                // ASSERT: not inside another stream recv
 
         /* this chunk, contains both meta data for receive followed by actual data, need to copy the data chunk to start of rxDataBuffer for this context */
 
@@ -734,6 +734,14 @@ static void S_interruptCallbackISR()
                     SC16IS7xx_read(g_lqLTEM.iop->rxCBuffer->head, rxLevel);
                     g_lqLTEM.iop->rxCBuffer->head += rxLevel;
 
+                    // PRINTF(dbgColor__cyan, "\r\r");
+                    // size_t i;
+                    // for (i = 0; i < rxLevel; i++)
+                    // {
+                    //     PRINTF(dbgColor__cyan, "%02x ", *(g_lqLTEM.iop->rxCBuffer->prevHead + i));
+                    // }
+                    // PRINTF(dbgColor__red, "\rlvl=%d  %X (%X)\r\r", rxLevel, g_lqLTEM.iop->rxCBuffer->prevHead + i, g_lqLTEM.iop->rxCBuffer->head);
+                    
                     // look for potential URC event in last receive, URC start with '+' EX: "+QIURC: "pdpdeact",1"
                     char *pUrcPrefix;
                     if (g_lqLTEM.iop->urcDetectBuffer[0] == '\0')                       // urcDetectBuffer empty: look for new URC

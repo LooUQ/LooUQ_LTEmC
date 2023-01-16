@@ -39,17 +39,16 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-#include "ltemc-network.h"
+#define SRCFILE "NWK"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
+#include "ltemc-network.h"
+
+extern ltemDevice_t g_lqLTEM;
 
 
 #define PROTOCOLS_CMD_BUFFER_SZ 80
 #define MIN(x, y) (((x)<(y)) ? (x):(y))
 #define STREMPTY(charvar)  (charvar == NULL || charvar[0] == 0 )
-
-
-// Modem global (singleton)
-extern ltemDevice_t g_lqLTEM;
 
 
 // local static functions
@@ -68,7 +67,7 @@ static void S__clearProviderInfo();
 void ntwk_create()
 {
     providerInfo_t *providerInfoPtr = (providerInfo_t*)calloc(1, sizeof(providerInfo_t));
-    ASSERT(providerInfoPtr != NULL, srcfile_ltemc_network_c);
+    ASSERT(providerInfoPtr != NULL);
     g_lqLTEM.providerInfo = providerInfoPtr;
 }
 
@@ -78,8 +77,8 @@ void ntwk_create()
  */
 void ntwk_setDefaulNetworkConfig(uint8_t pdpContextId, const char *protoType, const char *apn)
 {
-    ASSERT(g_lqLTEM.providerInfo != NULL, srcfile_ltemc_network_c);                                             // ASSERT g_lqLTEM.providerInfo has been initialized
-    ASSERT_W(strcmp(protoType, PDP_PROTOCOL_IPV4) == 0, srcfile_ltemc_network_c, "OnlyIPV4SupportedCurrently"); // warn on not IPv4 and IPv4 override
+    ASSERT(g_lqLTEM.providerInfo != NULL);                                             // ASSERT g_lqLTEM.providerInfo has been initialized
+    ASSERT_W(strcmp(protoType, PDP_PROTOCOL_IPV4) == 0, "OnlyIPV4SupportedCurrently"); // warn on not IPv4 and IPv4 override
 
     snprintf(g_lqLTEM.modemSettings->defaultNtwkConfig, sizeof(g_lqLTEM.modemSettings->defaultNtwkConfig), "AT+CGDCONT=%d,\"%s\",\"%s\"\r", pdpContextId, PDP_PROTOCOL_IPV4, apn);
 }
@@ -115,8 +114,8 @@ void NTWK_applyDefaulNetwork()
 
 void ntwk_setNetworkConfig(uint8_t pdpContextId, const char *protoType, const char *apn)
 {
-    ASSERT(g_lqLTEM.providerInfo != NULL, srcfile_ltemc_network_c);                                             // ASSERT g_lqLTEM.providerInfo has been initialized
-    ASSERT_W(strcmp(protoType, PDP_PROTOCOL_IPV4) == 0, srcfile_ltemc_network_c, "OnlyIPV4SupportedCurrently"); // warn on not IPv4 and IPv4 override
+    ASSERT(g_lqLTEM.providerInfo != NULL);                                             // ASSERT g_lqLTEM.providerInfo has been initialized
+    ASSERT_W(strcmp(protoType, PDP_PROTOCOL_IPV4) == 0, "OnlyIPV4SupportedCurrently"); // warn on not IPv4 and IPv4 override
     // protoType = pdpProtocolType_IPV4;
 
     snprintf(g_lqLTEM.modemSettings->defaultNtwkConfig, sizeof(g_lqLTEM.modemSettings->defaultNtwkConfig), "AT+CGDCONT=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
@@ -153,7 +152,7 @@ void ntwk_setNetworkConfig(uint8_t pdpContextId, const char *protoType, const ch
 */
 providerInfo_t *ntwk_awaitProvider(uint16_t waitSec)
 {
-    ASSERT(g_lqLTEM.providerInfo != NULL, srcfile_ltemc_network_c);         // ASSERT g_lqLTEM.providerInfo has been initialized
+    ASSERT(g_lqLTEM.providerInfo != NULL);         // ASSERT g_lqLTEM.providerInfo has been initialized
 
     uint32_t startMillis, endMillis;
     startMillis = endMillis = pMillis();
@@ -312,7 +311,7 @@ networkInfo_t *ntwk_getNetworkInfo(uint8_t pdpContextId)
 void ntwk_getProviders(char *providersList, uint16_t listSz)
 {
     /* AT+COPS=? */
-    ASSERT_W(false, srcfile_ltemc_network_c, "ntwk_getProviders() blocks and is SLOW!");
+    ASSERT_W(false, "ntwk_getProviders() blocks and is SLOW!");
 
     if (ATCMD_awaitLock(atcmd__defaultTimeout))
     {

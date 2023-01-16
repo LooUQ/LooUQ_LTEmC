@@ -46,10 +46,11 @@
 #define HOST_FEATHER_UXPLOR                         // LooUQ UXplor development adapter for Feather
 // #define HOST_FEATHER_LTEM3F                      // LooUQ CR-LTEM3F device
 
-#include <ltemc.h>
-                                                    /* not usually referenced in user application */
+// #include <ltemc.h>
+#include <ltemc-internal.h>                         /* not usually referenced in user application */
 #include <ltemc-types.h>                            // - necessary to access internal buffers
 #include <ltemc-nxp-sc16is.h>                       // - necessary to perform direct component access via SPI
+
 ltemDevice_t g_lqLTEM;                              // - normally created in the ltemc.c file, this test is low-level and performs direct IO
 
 void setup() {
@@ -63,21 +64,25 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "LTEmC - Test #2: BGx communications\r\n");
-    lqDiag_registerEventCallback(appNotifyCB);                          // configure ASSERTS to callback into application
-    
-                                                                        /*  Manually create/initialize modem parts used here */
+    lqDiag_setNotifyCallback(applEvntNotify);                           // configure ASSERTS to callback into application
+
+    /*  Manually create/initialize modem parts used here */
 	g_lqLTEM.pinConfig = ltem_pinConfig;                                // initialize the I/O modem internal settings
     g_lqLTEM.spi = spi_create(g_lqLTEM.pinConfig.spiCsPin);
-    g_lqLTEM.appEventCB = appNotifyCB;                                  // set the callback address
+    g_lqLTEM.applEvntNotifyCB = applEvntNotify;                         // set the callback address
 
     initIO();                                                           // initialize GPIO, SPI
     spi_start(g_lqLTEM.spi);
     
-    if (qbg_isPowerOn())                                                // verify/apply BGx power
+    /* QBG_ (caps prefix) indicates a function for LTEmC internal use. This test is a low-level
+     * direct test of LTEmX I/O and BGx module functionality requiring more direct access to 
+     * modem functions.
+     */
+    if (QBG_isPowerOn())                                                // verify/apply BGx power (normally )
         PRINTF(dbgColor__dGreen, "LTEm found already powered on.\r\n");
     else
     {
-        qbg_powerOn();
+        QBG_powerOn();
         PRINTF(dbgColor__dGreen, "Powered LTEm on.\r\n");
         pDelay(5);
     }
@@ -231,20 +236,21 @@ bool validOkResponse(const char *response)
     return strncmp(EXPECTED_TERMINATOR_STR, end - EXPECTED_TERMINATOR_LEN, EXPECTED_TERMINATOR_LEN) == 0;
 }
 
+#define STRCMP(n, h)  (strcmp(n, h) == 0)
 
 /* test helpers
 ========================================================================================================================= */
 
 //typedef void (*eventNotifFunc_t)(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg);
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void applEvntNotify(const char *eventTag, const char *eventMsg)
 {
-    if (notifType > 200)
+    if (STRCMP(eventTag, "ASSERT"))
     {
-        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
+        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", eventMsg);
         while (1) {}
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
+    PRINTF(dbgColor__info, "LQCloud Info: %s\r", eventMsg);
     return;
 }
 

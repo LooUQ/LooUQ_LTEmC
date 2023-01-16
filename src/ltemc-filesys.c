@@ -25,9 +25,24 @@
  * Use BGx internal flash excess capacity as filesystem for device application 
  *****************************************************************************/
 
-//#define _DEBUG
-#include "ltemc-types.h"
+#define _DEBUG 0                                // set to non-zero value for PRINTF debugging output, 
+// debugging output options                     // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
+#if _DEBUG > 0
+    asm(".global _printf_float");               // forces build to link in float support for printf
+    #if _DEBUG == 1
+    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
+    #elif _DEBUG == 2
+    #include <jlinkRtt.h>                       // output debug PRINTF macros to J-Link RTT channel
+    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #endif
+#else
+#define PRINTF(c_, f_, ...) 
+#endif
+
+#define SRCFILE "FIL"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#include "ltemc-internal.h"
 #include "ltemc-filesys.h"
+
 
 #define FILE_CMD_SZ             81
 #define FILE_INFO_DATAOFFSET    10
@@ -115,7 +130,7 @@ resultCode_t filesys_delete(const char* fileName)
 
 fileOpenResult_t filesys_open(const char* fileName, fileOpenMode_t openMode, fileReceiver_func_t fileRecvr_func)
 {
-    ASSERT(strlen(fileName) > 0, srcfile_ltemc_filesys_c);
+    ASSERT(strlen(fileName) > 0);
 
     fileOpenResult_t fileResult = { 0, resultCode__conflict};
     resultCode_t atResult;
@@ -136,7 +151,7 @@ fileOpenResult_t filesys_open(const char* fileName, fileOpenMode_t openMode, fil
     }
     // parse response
     // +QFOPEN: <filehandle>
-    continuePtr = atcmd_getLastResponse() + FILE_INFO_DATAOFFSET;         // skip past +QFLDS: 
+    continuePtr = atcmd_getResponse() + FILE_INFO_DATAOFFSET;               // skip past +QFLDS: 
     fileResult.fileHandle = strtol(continuePtr, &continuePtr, 10);  
 
     finally:

@@ -49,11 +49,12 @@
 
 //#include <ltemc.h>
 #include <ltemc-internal.h>             // this appl performs tests on internal, non-public API components 
-
 #include <ltemc-iop.h>
 
-char *cmdBuf;
 
+#define STRCMP(x, y)  (strcmp(x, y) == 0)
+
+char *cmdBuf;
 
 void setup() {
     #ifdef SERIAL_OPT
@@ -67,9 +68,9 @@ void setup() {
 
     PRINTF(dbgColor__red, "LTEmC Test3: iop\r");
     randomSeed(analogRead(7));
-    lqDiag_registerEventCallback(appNotifyCB);                  // configure LTEMC ASSERTS to callback into application
+    lqDiag_setNotifyCallback(applEvntNotify);                   // configure LTEMC ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, appNotifyCB);             // create LTEmC modem (no yield CB for testing)
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);          // create LTEmC modem (no yield CB for testing)
     startLTEm();                                                // local initialize\start can't use ltem_start() yet
 
     cmdBuf = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->_buffer;        // readability var
@@ -122,13 +123,13 @@ void startLTEm()
 
     spi_start(g_lqLTEM.spi);
 
-    if (qbg_isPowerOn())                                        // power on BGx, returning prior power-state
+    if (QBG_isPowerOn())                                        // power on BGx, returning prior power-state
     {
 		PRINTF(dbgColor__info, "LTEm1 found powered on.\r\n");
         g_lqLTEM.deviceState = deviceState_appReady;        // if already "ON", assume running and check for IRQ latched
     }
     else
-        qbg_powerOn();
+        QBG_powerOn();
 
     SC16IS7xx_start();                                          // start (resets previously powered on) NXP SPI-UART bridge
     SC16IS7xx_enableIrqMode();
@@ -137,14 +138,14 @@ void startLTEm()
 }
 
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void applEvntNotify(const char *eventTag, const char *eventMsg)
 {
-    if (notifType > 200)
+    if (STRCMP(eventTag, "ASSERT"))
     {
-        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
+        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", eventMsg);
         while (1) {}
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
+    PRINTF(dbgColor__info, "LQCloud Info: %s\r", eventMsg);
     return;
 }
 

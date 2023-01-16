@@ -25,22 +25,25 @@
  * NXP SC16is__ (740,741,750,760) support used in LooUQ designs
  *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
+#define _DEBUG 2                                // set to non-zero value for PRINTF debugging output, 
+// debugging output options                     // LTEmC will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
-    asm(".global _printf_float");       // forces build to link in float support for printf
+    asm(".global _printf_float");               // forces build to link in float support for printf
     #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
+    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #include <jlinkRtt.h>                       // output debug PRINTF macros to J-Link RTT channel
     #endif
 #else
 #define PRINTF(c_, f_, ...) 
 #endif
 
+#define SRCFILE "NXP"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#include "ltemc-internal.h"
 #include "lq-platform.h"
 #include "ltemc-nxp-sc16is.h"
-#include "ltemc-internal.h"
+
+extern ltemDevice_t g_lqLTEM;
 
 
 #define REG_MODIFY(REG_NAME, MODIFY_ACTION)                 \
@@ -49,8 +52,6 @@ REG_NAME##_reg.reg = SC16IS7xx_readReg(REG_NAME##_regAddr); \
 MODIFY_ACTION                                               \
 SC16IS7xx_writeReg(REG_NAME##_regAddr, REG_NAME##_reg.reg);
 
-
-extern ltemDevice_t g_lqLTEM;
 
 
 #pragma region Public Functions

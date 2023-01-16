@@ -3,7 +3,7 @@
  *  \author Greg Terrell
  *  \license MIT License
  *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
+ *  Copyright (c) 2020-2022 LooUQ Incorporated.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -40,17 +40,16 @@
 #define PRINTF(c_, f_, ...)
 #endif
 
-
-#include "ltemc-sckt.h"
+#define SRCFILE "SKT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
-
-
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define MAX(x, y) (((x) < (y)) ? (y) : (x))
-
-#define ASCII_sSENDOK "SEND OK\r\n"
+#include "ltemc-sckt.h"
 
 extern ltemDevice_t g_lqLTEM;
+
+
+#define ASCII_sSENDOK "SEND OK\r\n"
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define MAX(x, y) (((x) < (y)) ? (y) : (x))
 
 
 // file scope local function declarations
@@ -71,10 +70,10 @@ void S__scktDoWork();
  */
 void sckt_initControl(scktCtrl_t *scktCtrl, uint8_t pdpContextId, dataCntxt_t dataCntxt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback)
 {
-    ASSERT(scktCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_ltemc_sckt_c);
-    ASSERT(dataCntxt < dataCntxt__cnt, srcfile_ltemc_sckt_c);
-    ASSERT(protocol < protocol_socket, srcfile_ltemc_sckt_c);
-    ASSERT(((void*)&(scktCtrl->recvBufCtrl) - (void*)scktCtrl) == (sizeof(iopStreamCtrl_t) - sizeof(rxDataBufferCtrl_t)), srcfile_ltemc_http_c);
+    ASSERT(scktCtrl != NULL && recvBuf != NULL && recvCallback != NULL);
+    ASSERT(dataCntxt < dataCntxt__cnt);
+    ASSERT(protocol < protocol_socket);
+    ASSERT(((void*)&(scktCtrl->recvBufCtrl) - (void*)scktCtrl) == (sizeof(iopStreamCtrl_t) - sizeof(rxDataBufferCtrl_t)));
 
     memset(scktCtrl, 0, sizeof(scktCtrl_t));
 
@@ -84,8 +83,8 @@ void sckt_initControl(scktCtrl_t *scktCtrl, uint8_t pdpContextId, dataCntxt_t da
     scktCtrl->useTls = protocol == protocol_ssl;
 
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(scktCtrl->recvBufCtrl), recvBuf, recvBufSz);
-    ASSERT_W(recvBufSz == bufferSz, srcfile_ltemc_sckt_c, "RxBufSz != multiple of 128bytes");
-    ASSERT(bufferSz >= 128, srcfile_ltemc_sckt_c);
+    ASSERT_W(recvBufSz == bufferSz, "RxBufSz != multiple of 128bytes");
+    ASSERT(bufferSz >= 128);
     
     //scktCtrl->doWorkTimeout = (uint32_t)(scktCtrl->recvBufCtrl._bufferSz / IOP__uartFIFOBufferSz * IOP__uartFIFO_fillMS * 0.8);
     scktCtrl->dataRecvCB = recvCallback;
@@ -112,9 +111,9 @@ void sckt_setConnection(scktCtrl_t *scktCtrl, const char *hostUrl, uint16_t host
  */
 resultCode_t sckt_open(scktCtrl_t *sckt, bool cleanSession)
 {
-    ASSERT(sckt->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_sckt_c);
-    ASSERT(sckt->dataCntxt < dataCntxt__cnt || g_lqLTEM.iop->streamPeers[sckt->dataCntxt] != NULL, srcfile_ltemc_sckt_c);
-    ASSERT(sckt->protocol < protocol_socket, srcfile_ltemc_sckt_c);
+    ASSERT(sckt->ctrlMagic == streams__ctrlMagic);
+    ASSERT(sckt->dataCntxt < dataCntxt__cnt || g_lqLTEM.iop->streamPeers[sckt->dataCntxt] != NULL);
+    ASSERT(sckt->protocol < protocol_socket);
 
     g_lqLTEM.iop->scktMap &= 0x01 << sckt->dataCntxt;
 
@@ -164,7 +163,7 @@ resultCode_t sckt_open(scktCtrl_t *sckt, bool cleanSession)
  */
 void sckt_close(scktCtrl_t *scktCtrl)
 {
-    ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic, 0xFE30);
+    ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic);
 
     char closeCmd[20] = {0};
     uint8_t socketBitMask = 0x01 << scktCtrl->dataCntxt;
@@ -198,7 +197,7 @@ void sckt_close(scktCtrl_t *scktCtrl)
  */
 bool sckt_flush(scktCtrl_t *scktCtrl)
 {
-    ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic, 0xFE30);
+    ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic);
 
     if ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[scktCtrl->dataCntxt] == NULL)              // not open
         return;
@@ -229,7 +228,7 @@ void sckt_closeAll()
  */
 bool sckt_getState(scktCtrl_t *sckt)
 {
-    ASSERT(sckt->ctrlMagic != streams__ctrlMagic, srcfile_ltemc_sckt_c);
+    ASSERT(sckt->ctrlMagic != streams__ctrlMagic);
 
     atcmd_setOptions(atcmd__defaultTimeout, S__socketStatusParser);
     if (!atcmd_tryInvokeWithOptions("AT+QISTATE=1,%d", sckt->dataCntxt))
@@ -245,8 +244,8 @@ bool sckt_getState(scktCtrl_t *sckt)
 resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
     resultCode_t atResult;
-    ASSERT(scktCtrl != 0 && (g_lqLTEM.iop->scktMap & 0x01 << scktCtrl->dataCntxt) != 0, srcfile_ltemc_sckt_c);
-    ASSERT(dataSz > 0, srcfile_ltemc_sckt_c);
+    ASSERT(scktCtrl != 0 && (g_lqLTEM.iop->scktMap & 0x01 << scktCtrl->dataCntxt) != 0);
+    ASSERT(dataSz > 0);
 
     // AT+QISEND command initiates send by signaling we plan to send dataSz bytes on a socket,
     // send has subcommand to actual transfer the bytes, so don't automatically close action cmd
@@ -290,7 +289,7 @@ void S__scktDoWork()
         // readability vars
         scktCtrl_t *scktPtr = ((scktCtrl_t *)g_lqLTEM.iop->rxStreamCtrl);
         uint8_t sckt = scktPtr->dataCntxt;
-        ASSERT(scktPtr == g_lqLTEM.iop->streamPeers[sckt], srcfile_ltemc_sckt_c);     // ASSERT sckt cross-links are still valid
+        ASSERT(scktPtr == g_lqLTEM.iop->streamPeers[sckt]);     // ASSERT sckt cross-links are still valid
         rxDataBufferCtrl_t *bufPtr = &(scktPtr->recvBufCtrl);                   // smart-buffer for this operation
 
         uint16_t dataAvailable = 0;
@@ -303,7 +302,7 @@ void S__scktDoWork()
                                                                                                     // -- 1st data chuck has data header with size of queued data in BGx
                 g_lqLTEM.iop->txSendStartTck = 0;                                                         // stop IRD request timeout timer
                 char *irdSzAt = bufPtr->pages[!bufPtr->iopPg]._buffer + 9;                          // data prefix from BGx:  len("\r\n+QIRD: ") == 9
-                ASSERT(bufPtr->pages[!bufPtr->iopPg]._buffer[7] == ':', srcfile_ltemc_sckt_c);      // check BGx response if not valid IRD, we are lost
+                ASSERT(bufPtr->pages[!bufPtr->iopPg]._buffer[7] == ':');      // check BGx response if not valid IRD, we are lost
                 scktPtr->irdRemaining = strtol(irdSzAt, &bufPtr->pages[!bufPtr->iopPg].tail, 10);   // parse IRD segment sz:  \r\n+QIRD: <dataSz>, tail points to data
                 bufPtr->pages[!bufPtr->iopPg].tail += 2;                                            // ignore /r/n between data size and data
             }
@@ -377,7 +376,7 @@ void S__scktDoWork()
 
             if (g_lqLTEM.iop->scktMap & 0x01 << nextIrd)                              // socket is OPEN
             {
-                ASSERT_W(!pElapsed(scktPtr->doWorkLastTck, IOP__rxDefaultTimeout), srcfile_ltemc_sckt_c, "doWork freq slow:bffr ovrflw risk");
+                ASSERT_W(!pElapsed(scktPtr->doWorkLastTck, IOP__rxDefaultTimeout), "doWork freq slow:bffr ovrflw risk");
                 scktPtr->doWorkLastTck = pMillis();                             // last check for URC\data pending check cycle
 
                 if (scktPtr->dataPending)                                       // socket has data reported (BGx URC)
@@ -411,8 +410,8 @@ void S__scktDoWork()
  */
 static bool S__requestIrdData(dataCntxt_t dataCntx, uint16_t reqstSz, bool applyLock)
 {
-    ASSERT(dataCntx < dataCntxt__cnt, srcfile_ltemc_sckt_c);                                    // ASSERT data context is valid context
-    ASSERT(g_lqLTEM.iop->scktMap & 0x01 << dataCntx, srcfile_ltemc_sckt_c);               // ASSERT socket is open 
+    ASSERT(dataCntx < dataCntxt__cnt);                                    // ASSERT data context is valid context
+    ASSERT(g_lqLTEM.iop->scktMap & 0x01 << dataCntx);               // ASSERT socket is open 
 
     char irdCmd[24] = {0};
     uint16_t requestedSz = (!reqstSz) ? sckt__irdRequestMaxSz : MAX(sckt__irdRequestMaxSz, reqstSz);

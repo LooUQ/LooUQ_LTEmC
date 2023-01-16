@@ -45,6 +45,8 @@
 
 // define options for how to assemble this build
 #define HOST_FEATHER_UXPLOR             // specify the pin configuration
+#define PDP_DATA_CONTEXT 1
+#define PDP_APN_NAME "iot.aer.net"
 
 #include <ltemc.h>
 #include <ltemc-sckt.h>
@@ -55,10 +57,6 @@
  * For testing TCP\UDP\SSL LooUQ utilizes PacketSender from NAGLECODE.
  * See https://packetsender.com/documentation for more information.
  * ------------------------------------------------------------------------- */
-
-// #if LTEM1_MQTT == 1
-// #define success
-// #endif
 
 // test setup
 #define CYCLE_INTERVAL 10000
@@ -71,10 +69,6 @@
 
 uint16_t loopCnt = 0;
 uint32_t lastCycle;
-
-
-// ltem1c 
-#define DEFAULT_NETWORK_CONTEXT 1
 
 static scktCtrl_t scktCtrl;                     // handle for socket operations
 static uint8_t receiveBuffer[SCKTTEST_RXBUFSZ]; // appl creates a rxBuffer for protocols, sized to your expected flows (will be incorporated into scktCtrl)
@@ -90,27 +84,22 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEmC Test:7 Sockets\r\n");
-    lqDiag_registerEventCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem, no yield req'd for testing
-    ltem_start((resetAction_t)skipResetIfRunning);                  // ... and start it
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);              // create LTEmC modem, no yield req'd for testing
+    ltem_start(resetAction_swReset);                                // ... and start it
     PRINTF(dbgColor__none, "BGx %s\r", mdminfo_ltem()->fwver);
 
     PRINTF(dbgColor__dflt, "Waiting on network...\r");
-    providerInfo_t *ntwkProvider = ntwk_awaitProvider(120);
-    if (strlen(ntwkProvider->name) == 0)
-        appNotifyCB(255, "Timeout (120s) waiting for cellular network.");
-
-    PRINTF(dbgColor__info, "Network type is %s on %s\r", ntwkProvider->iotMode, ntwkProvider->name);
-
-    uint8_t cntxtCnt = ntwk_getActiveNetworkCount();
-    if (cntxtCnt == 0)
+    providerInfo_t *provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
+    while (strlen(provider->name) == 0)
     {
-        ntwk_activateNetwork(DEFAULT_NETWORK_CONTEXT, pdpProtocolType_IPV4, "");
+        PRINTF(dbgColor__dYellow, ">");
     }
+    PRINTF(dbgColor__info, "Network type is %s on %s\r", provider->iotMode, provider->name);
 
     // create a socket control and open it
-    sckt_initControl(&scktCtrl, socket_0, (protocol_t)SCKTTEST_PROTOCOL, receiveBuffer, sizeof(receiveBuffer), scktRecvCB);
+    sckt_initControl(&scktCtrl, PDP_DATA_CONTEXT, dataCntxt_0, (protocol_t)SCKTTEST_PROTOCOL, receiveBuffer, sizeof(receiveBuffer), scktRecv);
     sckt_setConnection(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0);
     resultCode_t scktResult = sckt_open(&scktCtrl,  true);
 
@@ -121,7 +110,7 @@ void setup() {
     else if (scktResult != resultCode__success)
     {
         PRINTF(dbgColor__error, "Socket 0 open failed, resultCode=%d\r", scktResult);
-        appNotifyCB(255, "Failed to open socket.");
+        while(true){}
     }
 }
 
@@ -186,7 +175,7 @@ uint16_t scktRecover()
  *  \param [in] socketId  Numeric identifier for the socket receiving the data
  *  \param [in] data  Pointer to character received data ()
 */
-void scktRecvCB(streamPeer_t socketId, void *data, uint16_t dataSz)
+void scktRecv(streamPeer_t socketId, void *data, uint16_t dataSz)
 {
     // char recvBuf[XFRBUFFER_SZ] = {0};
     // uint16_t recvdSz;
@@ -231,20 +220,15 @@ void showStats()
 }
 
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void applEvntNotify(const char *eventTag, const char *eventMsg)
 {
-    if (notifType >= appEvent__FAULTS)
+    if (STRCMP(eventTag, "ASSERT"))
     {
-        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
-        volatile int halt = 1;
-        while (halt) {}
+        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
+        while (1) {}
     }
-
-    else if (notifType >= appEvent__WARNINGS)
-        PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
-
-    else
-        PRINTF(dbgColor__info, "\r\n%s \r\n", notifMsg);
+    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
+    return;
 }
 
 

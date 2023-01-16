@@ -69,10 +69,10 @@ void setup() {
 
     PRINTF(dbgColor__red, "\rLTEmC Test 6: GNSS\r");
     randomSeed(analogRead(0));
-    lqDiag_registerEventCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, appNotifyCB);                 // create LTEmC modem, no yield CB req'd for testing
-    ltem_start((resetAction_t)skipResetIfRunning);                  // ... and start it
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);              // create LTEmC modem, no yield CB req'd for testing
+    ltem_start(resetAction_swReset);                                // ... and start it
 
     // turn on GNSS
     resultCode_t cmdResult = gnss_on();
@@ -116,14 +116,14 @@ void loop() {
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void applEvntNotify(const char *eventTag, const char *eventMsg)
 {
-    if (notifType > 200)
+    if (STRCMP(eventTag, "ASSERT"))
     {
-        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
+        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
         while (1) {}
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
+    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
     return;
 }
 

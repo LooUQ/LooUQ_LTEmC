@@ -5,6 +5,7 @@
         "cstddef": "c",
         "limits": "c",
         "type_traits": "c",
-        "ltemc.h": "c"
+        "ltemc.h": "c",
+        "ltemc-internal.h": "c"
     }
 }

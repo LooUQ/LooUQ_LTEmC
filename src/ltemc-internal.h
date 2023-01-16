@@ -26,6 +26,7 @@
 #ifndef __LTEMC_INTERNAL_H__
 #define __LTEMC_INTERNAL_H__
 
+#define PRODUCT "LM" 
 
 // Internal static buffers you may need to change for your application. Contact LooUQ for details.
 // #define IOP_RX_COREBUF_SZ 256
@@ -67,7 +68,7 @@ typedef struct ltemDevice_tag
 	ltemPinConfig_t pinConfig;                  /// GPIO pin configuration for required GPIO and SPI interfacing
     bool cancellationRequest;                   /// For RTOS implementations, token to request cancellation of long running task/action
     deviceState_t deviceState;                  /// Device state of the BGx module
-    appEventCallback_func appEventCB;           /// Event notification callback to parent application
+    applEvntNotify_func applEvntNotifyCB;       /// Event notification callback to parent application
     char moduleType[8];                         /// c-str indicating module type. BG96, BG95-M3, BG77, etc. (so far)
     void *spi;                                  /// SPI device (methods signatures compatible with Arduino)
     iop_t *iop;                                 /// IOP subsystem controls

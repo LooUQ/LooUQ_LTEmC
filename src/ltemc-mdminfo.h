@@ -43,17 +43,17 @@ modemInfo_t *mdminfo_ltem();
 
 
 /**
- *  @brief Get the signal strength reported by the LTEm device as RSSI reported
- *  @return The radio signal strength in the range of -51dBm to -113dBm (-999 is no signal)
-*/
-int16_t mdminfo_signalRSSI();
-
-
-/**
  *  @brief Get the signal strength reported by the LTEm device at a percent
  *  @return The radio signal strength in the range of 0 to 100 (0 is no signal)
 */
 uint8_t mdmInfo_signalPercent();
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device as RSSI reported
+ *  @return The radio signal strength in the range of -51dBm to -113dBm (-999 is no signal)
+*/
+int16_t mdminfo_signalRSSI();
 
 
 /** 

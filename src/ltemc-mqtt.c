@@ -39,24 +39,28 @@
 #define PRINTF(c_, f_, ...) 
 #endif
 
-#include "ltemc-mqtt.h"
+#define SRCFILE "MQT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
+#include "ltemc-mqtt.h"
+
+extern ltemDevice_t g_lqLTEM;
 
 
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define ASCII_CtrlZ_STR "\x1A"
 #define ASCII_ESC_STR "\x1B"
 #define ASCII_DblQuote_CHAR '"'
 
-// #define MQTT_ACTION_CMD_SZ 81
-// #define MQTT_CONNECT_CMD_SZ 300
-
-extern ltemDevice_t g_lqLTEM;
 
 enum
 {
     resultCode__parserPending = 0xFFFF
 };
+
+// #define MQTT_ACTION_CMD_SZ 81
+// #define MQTT_CONNECT_CMD_SZ 300
+
 
 /* Local Function Declarations
  ----------------------------------------------------------------------------------------------- */
@@ -83,9 +87,9 @@ static cmdParseRslt_t S__mqttPublishCompleteParser();
 */
 void mqtt_initControl(mqttCtrl_t *mqttCtrl, uint8_t dataCntxt, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback)
 {
-    ASSERT(mqttCtrl != NULL && recvBuf != NULL, srcfile_ltemc_mqtt_c);
-    ASSERT(dataCntxt < dataCntxt__cnt, srcfile_ltemc_mqtt_c);
-    ASSERT(((void*)&(mqttCtrl->recvBufCtrl) - (void*)mqttCtrl) == (sizeof(iopStreamCtrl_t) - sizeof(rxDataBufferCtrl_t)), srcfile_ltemc_http_c);
+    ASSERT(mqttCtrl != NULL && recvBuf != NULL);
+    ASSERT(dataCntxt < dataCntxt__cnt);
+    ASSERT(((void*)&(mqttCtrl->recvBufCtrl) - (void*)mqttCtrl) == (sizeof(iopStreamCtrl_t) - sizeof(rxDataBufferCtrl_t)));
 
     memset(mqttCtrl, 0, sizeof(mqttCtrl_t));
 
@@ -95,8 +99,8 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, uint8_t dataCntxt, uint8_t *recvBuf,
 
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(mqttCtrl->recvBufCtrl), recvBuf, recvBufSz);
 
-    ASSERT_W(recvBufSz == bufferSz, srcfile_ltemc_mqtt_c, "MQTT-RxBufSz not*128B");
-    ASSERT(bufferSz > 64, srcfile_ltemc_mqtt_c);
+    ASSERT_W(recvBufSz == bufferSz, "MQTT-RxBufSz not*128B");
+    ASSERT(bufferSz > 64);
 
     mqttCtrl->dataRecvCB = recvCallback;
 }
@@ -106,7 +110,7 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, uint8_t dataCntxt, uint8_t *recvBuf,
 */
 void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t mqttVersion, const char *clientId, const char *username, const char *password)
 {
-    ASSERT(mqttCtrl != NULL, srcfile_ltemc_mqtt_c);
+    ASSERT(mqttCtrl != NULL);
 
     strcpy(mqttCtrl->hostUrl, hostUrl);
     mqttCtrl->hostPort = hostPort;
@@ -223,11 +227,10 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
                     return resultCode__methodNotAllowed;        // invalid protocol version 
                 case 2:               
                 case 4:
+                case 5:
                     return resultCode__unauthorized;            // bad user ID or password
                 case 3:
                     return resultCode__unavailable;             // server unavailable
-                case 5:
-                    return resultCode__forbidden;               // refused, not authorized
                 default:
                     return resultCode__internalError;
             }
@@ -255,7 +258,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
  */
 resultCode_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos)
 {
-    ASSERT(strlen(topic) < mqtt__topic_nameSz, srcfile_ltemc_mqtt_c);
+    ASSERT(strlen(topic) < mqtt__topic_nameSz);
 
     resultCode_t atResult = 400;
 
@@ -315,8 +318,8 @@ resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic)
 */
 resultCode_t mqtt_publishEncoded(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *encodedMsg, uint8_t timeoutSeconds)
 {
-    ASSERT(strlen(encodedMsg) <= 560, srcfile_ltemc_mqtt_c);                                               // max msg length PUBEX=560, PUB=4096
-    ASSERT(strchr(encodedMsg, '"') == NULL, srcfile_ltemc_mqtt_c);
+    ASSERT(strlen(encodedMsg) <= 560);                                               // max msg length PUBEX=560, PUB=4096
+    ASSERT(strchr(encodedMsg, '"') == NULL);
 
     uint32_t timeoutMS = (timeoutSeconds == 0) ? mqtt__publishTimeout : timeoutSeconds * 1000;
     char msgText[mqtt__messageSz];
@@ -350,7 +353,7 @@ resultCode_t mqtt_publishEncoded(mqttCtrl_t *mqttCtrl, const char *topic, mqttQo
 */
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSeconds)
 {
-    ASSERT(strlen(message) <= 4096, srcfile_ltemc_mqtt_c);                                               // max msg length PUBEX=560, PUB=4096
+    ASSERT(strlen(message) <= 4096);                                               // max msg length PUBEX=560, PUB=4096
     uint8_t pubstate = 0;
     uint32_t timeoutMS = (timeoutSeconds == 0) ? mqtt__publishTimeout : timeoutSeconds * 1000;
     char msgText[mqtt__messageSz];
@@ -435,8 +438,8 @@ mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl)
 {
     // See BG96_MQTT_Application_Note: AT+QMTOPEN? and AT+QMTCONN?
 
-    ASSERT(mqttCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_mqtt_c);        // assert good MQTT control
-    ASSERT(mqttCtrl->dataCntxt < dataCntxt__cnt, srcfile_ltemc_mqtt_c);
+    ASSERT(mqttCtrl->ctrlMagic == streams__ctrlMagic);        // assert good MQTT control
+    ASSERT(mqttCtrl->dataCntxt < dataCntxt__cnt);
 
     /* BGx modules will not respond over serial to AT+QMTOPEN? (command works fine over USB, Quectel denies this)
      * AT+QMTCONN? returns a state == 1 (MQTT is initializing) when MQTT in an open, not connected condition
@@ -522,7 +525,7 @@ static void S__updateSubscriptionsTable(mqttCtrl_t *mqttCtrl, bool addSubscripti
             }
         }
     }
-    ASSERT(false, srcfile_ltemc_mqtt_c);                                              // if got here subscription failed and appl is likely unstable
+    ASSERT(false);                                              // if got here subscription failed and appl is likely unstable
 }
 
 
@@ -571,7 +574,7 @@ static void S__mqttDoWork()
 
         // ASSERT test for buffer overflow, good buffer has recv header and trailer in same page
         char *continuePtr = lq_strnstr(rxBufPtr->pages[thisPage]._buffer, "+QMTRECV: ", 12);     // allow for leading /r/n
-        ASSERT(continuePtr != NULL, srcfile_ltemc_mqtt_c);
+        ASSERT(continuePtr != NULL);
 
         uint16_t msgId = atol(continuePtr + 12);
         topicPtr = memchr(rxBufPtr->pages[thisPage].tail, '"', mqtt__topic_offset);
@@ -670,7 +673,7 @@ static cmdParseRslt_t S__mqttOpenCompleteParser()
 static cmdParseRslt_t S__mqttConnectCompleteParser() 
 {
     // return ATCMD_testResponseTrace();
-    return atcmd_stdResponseParser("+QMTCONN: ", true, ",", 0, 3, "", 0);
+    return atcmd_stdResponseParser("+QMTCONN: ", true, ",", 0, 3, "\r\n", 0);
 }
 
 
@@ -692,7 +695,7 @@ static cmdParseRslt_t S__mqttConnectStatusParser()
  */
 static cmdParseRslt_t S__mqttSubscribeCompleteParser() 
 {
-    return atcmd_stdResponseParser("+QMTSUB: ", true, ",", 0, 2, "", 0);
+    return atcmd_stdResponseParser("+QMTSUB: ", true, ",", 0, 4, "\r\n", 0);
 }
 
 

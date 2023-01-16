@@ -39,12 +39,14 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-#define MIN(x, y) (((x)<(y)) ? (x):(y))
-#define MAX(x, y) (((x)>(y)) ? (x):(y))
-
+#define SRCFILE "MDM"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
 
 extern ltemDevice_t g_lqLTEM;
+
+
+#define MIN(x, y) (((x)<(y)) ? (x):(y))
+#define MAX(x, y) (((x)>(y)) ? (x):(y))
 
 
 // private local declarations

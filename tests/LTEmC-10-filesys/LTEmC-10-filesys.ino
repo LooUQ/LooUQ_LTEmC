@@ -62,9 +62,10 @@ void setup() {
 
     PRINTF(DBGCOLOR_dRed, "\rLTEmC Test10: File System\r\n");
     platform_openPin(LED_BUILTIN, gpioMode_output);
+    lqDiag_setNotifyCallback(applEvntNotify);
 
-    ltem_create(ltem_pinConfig, NULL, appNotifyCB);
-    ltem_start(resetAlways);                                                       // start LTEm, if found on reset it
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);
+    ltem_start(resetAction_swReset);                                            // start LTEm, if found on reset it
 }
 
 
@@ -105,19 +106,17 @@ void fileReadReceiver(uint16_t fileHandle, void *fileData, uint16_t dataSz)
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void applEvntNotify(const char *eventTag, const char *eventMsg)
 {
-    if (notifType >= appEvent__FAULTS)
+    if (STRCMP(eventTag, "ASSERT"))
     {
-        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
-        volatile int halt = 1;
-        while (halt) {}
+        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
+        while (1) {}
     }
-    else if (notifType >= appEvent__WARNINGS)
-        PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
-    else
-        PRINTF(dbgColor__info, "\r\n%s \r\n", notifMsg);
+    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
+    return;
 }
+
 
 void indicateFailure(char failureMsg[])
 {

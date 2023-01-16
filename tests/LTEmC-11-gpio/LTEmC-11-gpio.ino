@@ -1,9 +1,9 @@
 /******************************************************************************
- *  \file LTEmC-5-modemInfo.ino
+ *  \file LTEmC-11-gpio.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
- *  Copyright (c) 2020 LooUQ Incorporated.
+ *  Copyright (c) 2022 LooUQ Incorporated.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -22,9 +22,6 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  ******************************************************************************
- * Test 5: Query the BGx for basic identity information.
- * 
- * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
@@ -47,6 +44,7 @@
 #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
+#include <ltemc-gpio.h>
 
 
 void setup() {
@@ -60,13 +58,12 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "LTEm1c test115-gpio\r\n");
-    
-    lqDiag_registerEventCallback(appEventCB);                       // configure ASSERTS to callback into application
+    lqDiag_setNotifyCallback(applEvntNotify);                           // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, appEventCB);                  // create LTEmC modem, no yield req'd for testing
-    ltem_start(resetAlways);                                        // ... and start it
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);                  // create LTEmC modem, no yield req'd for testing
+    ltem_start(resetAction_swReset);                                    // ... and start it
 
-    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_ltemcVersion());
+    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_getSwVersion());
 
     modemInfo_t *modemInfo  = mdminfo_ltem();
 
@@ -109,14 +106,14 @@ void loop() {
 /* test helpers
 ========================================================================================================================= */
 
-void appEventCB(uint8_t eventType, const char *eventMsg)
+void applEvntNotify(const char *eventTag, const char *eventMsg)
 {
-    if (eventType > 200)
+    if (STRCMP(eventTag, "ASSERT"))
     {
-        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", eventMsg);
+        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
         while (1) {}
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", eventMsg);
+    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
     return;
 }
 

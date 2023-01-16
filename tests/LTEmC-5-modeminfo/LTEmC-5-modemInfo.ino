@@ -64,12 +64,12 @@ void setup() {
     PRINTF(dbgColor__red, "LTEmC test5-modemInfo\r\n");
     
     randomSeed(analogRead(0));
-    lqDiag_registerEventCallback(appEventCB);                       // configure ASSERTS to callback into application
+    lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, appEventCB);                  // create LTEmC modem, no yield req'd for testing
-    ltem_start((resetAction_t)swReset);                             // ... and start it
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);              // create LTEmC modem, no yield req'd for testing
+    ltem_start(resetAction_swReset);                                // ... and start it
 
-    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_ltemcVersion());
+    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_getSwVersion());
 
     // char opList[300];
     // ntwk_getOperators(opList, sizeof(opList));
@@ -101,14 +101,14 @@ void loop() {
 /* test helpers
 ========================================================================================================================= */
 
-void appEventCB(uint8_t eventType, const char *eventMsg)
+void applEvntNotify(const char *eventTag, const char *eventMsg)
 {
-    if (eventType > 200)
+    if (STRCMP(eventTag, "ASSERT"))
     {
-        PRINTF(dbgColor__error, "Test HardFault: %s\r", eventMsg);
+        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
         while (1) {}
     }
-    PRINTF(dbgColor__info, "Test Info: %s\r", eventMsg);
+    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
     return;
 }
 

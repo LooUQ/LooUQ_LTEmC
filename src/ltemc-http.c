@@ -39,15 +39,15 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-#include "ltemc-http.h"
+#define SRCFILE "HTT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
+#include "ltemc-http.h"
 
+extern ltemDevice_t g_lqLTEM;
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
-
-extern ltemDevice_t g_lqLTEM;
 
 /* Local Static Functions
 ------------------------------------------------------------------------------------------------------------------------- */
@@ -66,9 +66,9 @@ static cmdParseRslt_t S__httpPostStatusParser();
  */
 void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback)
 {
-    ASSERT(httpCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_ltemc_http_c);
-    ASSERT(dataCntxt < dataCntxt__cnt, srcfile_ltemc_sckt_c);
-    ASSERT(((void*)&(httpCtrl->recvBufCtrl) - (void*)httpCtrl) == (sizeof(iopStreamCtrl_t) - sizeof(rxDataBufferCtrl_t)), srcfile_ltemc_http_c);
+    ASSERT(httpCtrl != NULL && recvBuf != NULL && recvCallback != NULL);
+    ASSERT(dataCntxt < dataCntxt__cnt);
+    ASSERT(((void*)&(httpCtrl->recvBufCtrl) - (void*)httpCtrl) == (sizeof(iopStreamCtrl_t) - sizeof(rxDataBufferCtrl_t)));
 
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
     memset(recvBuf, 0, recvBufSz);
@@ -83,8 +83,8 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, char *recvBuf
 
     uint16_t bufferSz = IOP_initRxBufferCtrl(&(httpCtrl->recvBufCtrl), recvBuf, recvBufSz);
 
-    ASSERT_W(recvBufSz == bufferSz, srcfile_ltemc_http_c, "HTTP-RxBufSz not*128B");
-    ASSERT(bufferSz > 64, srcfile_ltemc_http_c);
+    ASSERT_W(recvBufSz == bufferSz, "HTTP-RxBufSz not*128B");
+    ASSERT(bufferSz > 64);
 
     httpCtrl->dataRecvCB = recvCallback;
     httpCtrl->cstmHdrs = NULL;
@@ -99,8 +99,8 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, char *recvBuf
  */
 void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t hostPort)
 {
-    ASSERT(strncmp(hostUrl, "HTTP", 4) == 0 || strncmp(hostUrl, "http", 4) == 0, srcfile_ltemc_http_c);
-    ASSERT(hostPort == 0 || hostPort >= 80, srcfile_ltemc_http_c);
+    ASSERT(strncmp(hostUrl, "HTTP", 4) == 0 || strncmp(hostUrl, "http", 4) == 0);
+    ASSERT(hostPort == 0 || hostPort >= 80);
 
     strncpy(httpCtrl->hostUrl, hostUrl, sizeof(httpCtrl->hostUrl));
 
@@ -117,11 +117,11 @@ void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t host
  */
 void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t headerBufSz)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);                                // valid httpCtrl pointer
-    ASSERT(strlen(httpCtrl->hostUrl), srcfile_ltemc_http_c);                                                // host connection initialized
-    ASSERT(headerBuf != NULL, srcfile_ltemc_http_c);                                                        // valid header buffer pointer 
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic);                                // valid httpCtrl pointer
+    ASSERT(strlen(httpCtrl->hostUrl));                                                // host connection initialized
+    ASSERT(headerBuf != NULL);                                                        // valid header buffer pointer 
     // Warn on small header buffer, less than likely use for 1 or 2 small headers
-    ASSERT_W(headerBufSz > (strlen(httpCtrl->hostUrl) + http__customHdrSmallWarning), srcfile_ltemc_http_c, "CustomHdr diminutive buffer sz");
+    ASSERT_W(headerBufSz > (strlen(httpCtrl->hostUrl) + http__customHdrSmallWarning), "CustomHdr diminutive buffer sz");
 
     memset(headerBuf, 0, headerBufSz);
     httpCtrl->cstmHdrs = headerBuf;
@@ -134,8 +134,8 @@ void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t heade
  */
 void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
-    ASSERT(httpCtrl->cstmHdrs != NULL, srcfile_ltemc_http_c);
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic);
+    ASSERT(httpCtrl->cstmHdrs != NULL);
 
     bool addedHdrsFit = true;
 
@@ -168,16 +168,16 @@ void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
             addedHdrsFit = false;
     }
 
-    ASSERT(addedHdrsFit, srcfile_ltemc_http_c);
+    ASSERT(addedHdrsFit);
 }
 
 
 
 void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
-    ASSERT(httpCtrl->cstmHdrs != NULL, srcfile_ltemc_http_c);
-    ASSERT(strlen(httpCtrl->cstmHdrs) + strlen(hdrText) + 2 < httpCtrl->cstmHdrsSz, srcfile_ltemc_http_c);
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic);
+    ASSERT(httpCtrl->cstmHdrs != NULL);
+    ASSERT(strlen(httpCtrl->cstmHdrs) + strlen(hdrText) + 2 < httpCtrl->cstmHdrsSz);
 
     strcat(httpCtrl->cstmHdrs, hdrText);
     strcat(httpCtrl->cstmHdrs, "\r\n");
@@ -189,8 +189,8 @@ void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText)
  */
 void http_addBasicAuthHdr(httpCtrl_t *http, const char *user, const char *pw)
 {
-    ASSERT(http->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
-    ASSERT(http->cstmHdrs != NULL, srcfile_ltemc_http_c);
+    ASSERT(http->ctrlMagic == streams__ctrlMagic);
+    ASSERT(http->cstmHdrs != NULL);
 
     char toEncode[80];
     char b64str[120];
@@ -201,7 +201,7 @@ void http_addBasicAuthHdr(httpCtrl_t *http, const char *user, const char *pw)
     // endcode to Base64 string
     binToB64(b64str, toEncode, strlen(toEncode));
 
-    ASSERT(strlen(http->cstmHdrs) + 19 + strlen(b64str) < http->cstmHdrsSz, srcfile_ltemc_http_c);
+    ASSERT(strlen(http->cstmHdrs) + 19 + strlen(b64str) < http->cstmHdrsSz);
 
     strcat(http->cstmHdrs, "Authentication: ");
     strcat(http->cstmHdrs, b64str);
@@ -219,7 +219,7 @@ void http_addBasicAuthHdr(httpCtrl_t *http, const char *user, const char *pw)
  */
 resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, uint8_t timeoutSec)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic);
 
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
@@ -353,7 +353,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
  */
 resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool returnResponseHdrs, const char *postData, uint16_t postDataSz, uint8_t timeoutSec)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_http_c);
+    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic);
 
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
@@ -560,7 +560,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
                         uint32_t start = pMillis();
                         httpCtrl->dataRecvCB(httpCtrl->dataCntxt, httpCtrl->httpStatus, pRxBffr->pages[USR_PG()].tail, appAvailable);
                         uint32_t duration = pMillis() - start;
-                        ASSERT_W(duration <= 5, srcfile_ltemc_http_c, "HTTP pageCB slow-ovrflw risk")   // BGx out 115200 baud, NXP buffer 60 chars = 5.2mS
+                        ASSERT_W(duration <= 5, "HTTP pageCB slow-ovrflw risk")   // BGx out 115200 baud, NXP buffer 60 chars = 5.2mS
                     }
                     IOP_resetRxDataBufferPage(pRxBffr, USR_PG());                                       // delivered, reset buffer and reset ready
                 }

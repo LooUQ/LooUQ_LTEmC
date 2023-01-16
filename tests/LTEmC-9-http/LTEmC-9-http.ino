@@ -89,8 +89,9 @@ void setup() {
 
     PRINTF(dbgColor__red, "\rLTEmC test9-HTTP\r");
     PRINTF(dbgColor__white, "RCause=%d\r\n", lqSAMD_getResetCause());
+    lqDiag_setNotifyCallback(applEvntNotify);
 
-    ltem_create(ltem_pinConfig, NULL, appNotifCB);              // no yield req'd for testing
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);              // no yield req'd for testing
     ltem_setProviderScanMode(ntwkScanMode_lteonly);
     ltem_setIotMode(ntwkIotMode_m1);
     ltem_setDefaultNetwork(PDP_DATA_CONTEXT, PDP_PROTOCOL_IPV4, PDP_APN_NAME);
@@ -169,7 +170,7 @@ void loop()
                 PRINTF(dbgColor__info, "GET invoked successfully\r");
             }
             else
-                PRINTF(dbgColor__warn, "HTTP GET failed, status=%d(%s)\r", rslt, atcmd_getValue());
+                PRINTF(dbgColor__warn, "HTTP GET failed, status=%d (%d)\r", rslt, atcmd_getValue());
         }
         else
         {
@@ -183,7 +184,7 @@ void loop()
                 PRINTF(dbgColor__info, "POST invoked successfully\r");
             }
             else
-                PRINTF(dbgColor__warn, "HTTP POST failed, status=%d\r", rslt);
+                PRINTF(dbgColor__warn, "HTTP POST failed, status=%d (%d)\r", rslt, atcmd_getValue());
         }
 
 
@@ -249,20 +250,15 @@ void httpRecvCB(dataCntxt_t dataCntxt, uint16_t httpStatus, char *recvData, uint
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifCB(uint8_t notifType, const char *notifMsg)
+void applEvntNotify(const char *eventTag, const char *eventMsg)
 {
-    if (notifType >= appEvent__FAULTS)
+    if (STRCMP(eventTag, "ASSERT"))
     {
-        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
-        volatile int halt = 1;
-        while (halt) {}
+        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
+        while (1) {}
     }
-
-    else if (notifType >= appEvent__WARNINGS)
-        PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
-
-    else
-        PRINTF(dbgColor__info, "\r\n%s \r\n", notifMsg);
+    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
+    return;
 }
 
 

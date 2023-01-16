@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  *************************************************************************** */
-const char *ltemcVersion = "3.0.1";
+const char *ltemcVersion = "3.1.0";
 /* ************************************************************************* */
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
@@ -39,17 +39,17 @@ const char *ltemcVersion = "3.0.1";
 #define PRINTF(c_, f_, ...) ;
 #endif
 
+#define SRCFILE "LTE"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
-
-
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-
 
 /* ------------------------------------------------------------------------------------------------
  * GLOBAL LTEm Device Objects, One LTEmX supported
  * --------------------------------------------------------------------------------------------- */
 ltemDevice_t g_lqLTEM;
+
+
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
 
 /* BGx module initialization commands (start script)
@@ -78,29 +78,29 @@ void S__initLTEmDevice(bool ltemReset);
 /**
  *	@brief Initialize the LTEm1 modem.
  */
-void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEventCallback_func eventNotifCallback)
+void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, applEvntNotify_func eventNotifCallback)
 {
-    ASSERT(g_lqLTEM.atcmd == NULL, srcfile_ltemc_ltemc_c);                    // prevent multiple calls, memory leak calloc()
+    ASSERT(g_lqLTEM.atcmd == NULL);                    // prevent multiple calls, memory leak calloc()
 
 	g_lqLTEM.pinConfig = ltem_config;
     g_lqLTEM.spi = spi_create(g_lqLTEM.pinConfig.spiCsPin);
 
     g_lqLTEM.modemSettings =  calloc(1, sizeof(modemSettings_t));
-    ASSERT(g_lqLTEM.modemSettings != NULL, srcfile_ltemc_ltemc_c);
+    ASSERT(g_lqLTEM.modemSettings != NULL);
 
     g_lqLTEM.modemInfo = calloc(1, sizeof(modemInfo_t));
-    ASSERT(g_lqLTEM.modemInfo != NULL, srcfile_ltemc_ltemc_c);
+    ASSERT(g_lqLTEM.modemInfo != NULL);
 
     IOP_create();
     
     g_lqLTEM.atcmd = calloc(1, sizeof(atcmd_t));
-    ASSERT(g_lqLTEM.atcmd != NULL, srcfile_ltemc_ltemc_c);
+    ASSERT(g_lqLTEM.atcmd != NULL);
     atcmd_reset(true);
 
     ntwk_create();
 
     g_lqLTEM.cancellationRequest = false;
-    g_lqLTEM.appEventCB = eventNotifCallback;
+    g_lqLTEM.applEvntNotifyCB = eventNotifCallback;
 }
 
 
@@ -230,8 +230,8 @@ void ltem_start(resetAction_t resetAction)
  */
 void S__initLTEmDevice(bool ltemReset)
 {
-    ASSERT(QBG_isPowerOn(), srcfile_ltemc_ltemc_c);
-    ASSERT(SC16IS7xx_isAvailable(), srcfile_ltemc_ltemc_c);
+    ASSERT(QBG_isPowerOn());
+    ASSERT(SC16IS7xx_isAvailable());
 
     SC16IS7xx_start();                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
 
@@ -332,8 +332,8 @@ void ltem_doWork()
  */
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
-    if (g_lqLTEM.appEventCB != NULL)                                       
-        (g_lqLTEM.appEventCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
+    if (g_lqLTEM.applEvntNotifyCB != NULL)                                       
+        (g_lqLTEM.applEvntNotifyCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
 }
 
 
@@ -342,9 +342,9 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
  * 
  *  @param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
-void ltem_setEventNotifCallback(appEventCallback_func eventNotifCallback)
+void ltem_setEventNotifCallback(applEvntNotify_func eventNotifCallback)
 {
-    g_lqLTEM.appEventCB = eventNotifCallback;
+    g_lqLTEM.applEvntNotifyCB = eventNotifCallback;
 }
 
 /**

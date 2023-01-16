@@ -3,7 +3,7 @@
  *  \author Greg Terrell
  *  \license MIT License
  *
- *  Copyright (c) 2020 LooUQ Incorporated.
+ *  Copyright (c) 2020-2022 LooUQ Incorporated.
  *  www.loouq.com
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -99,10 +99,10 @@
  * 
  * If you are a LQCloud user get your SAS token from the Devices..Device Details panel.
  */
-#define MQTT_IOTHUB_DEVICEID "864581067556419"
+#define MQTT_IOTHUB_DEVICEID "864581067550933"
 #define MQTT_IOTHUB_USERID MQTT_IOTHUB "/" MQTT_IOTHUB_DEVICEID "/?api-version=2021-04-12"
 
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-a-prod-loouq.azure-devices.net%2Fdevices%2F864581067556419&sig=3qiMFHcr%2Bx1ZNBZOksApZsZIuFUg8GgM%2BjEPTg%2B6rFc%3D&se=1670510775"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-a-prod-loouq.azure-devices.net%2Fdevices%2F864581067550933&sig=8u16QFE9SyPr4JAhgdNfRW3DpUsR4pMHKd3l6nIpv1g%3D&se=1671314178"
 //#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F863940053438001&sig=jOd0DSmbtHenUtuenv5x3ScKlTAMLaYR2R%2B%2Fz46oWqo%3D&se=1637909480"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
@@ -138,48 +138,26 @@ void setup() {
     uint8_t resetCause = lqSAMD_getResetCause();
     PRINTF(dbgColor__red, "\rLTEmC test8-MQTT\r\n");
     PRINTF(dbgColor__none,"RCause=%d \r", resetCause);
+    lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, appNotifyCB);
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);
     ltem_setDefaultNetwork(PDP_DATA_CONTEXT, PDP_PROTOCOL_IPV4, PDP_APN_NAME);
-    ltem_start((resetAction_t)swReset);
+    ltem_start(resetAction_swReset);
 
-    PRINTF(dbgColor__none, "Waiting on network...\r");
-    providerInfo_t *networkProvider = ntwk_awaitProvider(30);
-    if (strlen(networkProvider->name) == 0)
-        appNotifyCB(255, "Timout (30s) waiting for cellular network.");
-    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
-
-    // PRINTF(dbgColor__none, "Waiting on network...\r");
-    // providerInfo_t *networkProvider = ntwk_awaitProvider(30);
-    // if (strlen(networkProvider->name) == 0)
-    //     appNotifyCB(255, "Timout (30s) waiting for cellular network.");
-    // PRINTF(dbgColor__info, "Network type is %s on %s\r", networkProvider->iotMode, networkProvider->name);
-
-    providerInfo_t *provider;
-    while(true)
+    PRINTF(dbgColor__dflt, "Waiting on network...\r");
+    providerInfo_t *provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
+    while (strlen(provider->name) == 0)
     {
-        provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
-        if (STREMPTY(provider->name))
-        {
-            PRINTF(dbgColor__warn, "Searching for provider...");
-        }
-        else
-            break;
+        PRINTF(dbgColor__dYellow, ">");
     }
-    if (strlen(provider->name) > 0)
-    {
-        PRINTF(dbgColor__info, "Connected to %s using %s, %d networks available.\r", provider->name, provider->iotMode, provider->networkCnt);
-    }
+    PRINTF(dbgColor__info, "Network type is %s on %s\r", provider->iotMode, provider->name);
+
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
      * Azure requires TLS 1.2 and MQTT version 3.11 */
 
     tls_configure(dataCntxt_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
     mqtt_initControl(&mqttCtrl, MQTT_DATACONTEXT, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
     mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, true, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
-
-
-
-
 
     if (mqttInit() == resultCode__success)
         PRINTF(dbgColor__info, "MQTT initialized, starting publish loop\r\r");
@@ -236,21 +214,29 @@ void loop()
 
 resultCode_t mqttInit()
 {
-    resultCode_t rslt = mqtt_open(&mqttCtrl);
-    if (rslt != resultCode__success)
+    resultCode_t rslt;
+    do
     {
-        PRINTF(dbgColor__warn, "Open fail status=%d\r", rslt);
-    }
-    rslt = mqtt_connect(&mqttCtrl, true);
-    if (rslt != resultCode__success)
-    {
-        PRINTF(dbgColor__warn, "Connect fail status=%d\r", rslt);
-    }
-    rslt = mqtt_subscribe(&mqttCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1);
-    if (rslt != resultCode__success)
-    {
-        PRINTF(dbgColor__warn, "Subscribe fail status=%d\r", rslt);
-    }
+        rslt = mqtt_open(&mqttCtrl);
+        if (rslt != resultCode__success)
+        {
+            PRINTF(dbgColor__warn, "Open fail status=%d\r", rslt);
+            break;
+        }
+        rslt = mqtt_connect(&mqttCtrl, true);
+        if (rslt != resultCode__success)
+        {
+            PRINTF(dbgColor__warn, "Connect fail status=%d\r", rslt);
+            break;
+        }
+        rslt = mqtt_subscribe(&mqttCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1);
+        if (rslt != resultCode__success)
+        {
+            PRINTF(dbgColor__warn, "Subscribe fail status=%d\r", rslt);
+        }
+        break;
+    } while (true);
+
     return rslt;
 }
 
@@ -281,19 +267,15 @@ void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId, const char *topic, char *
 /* test helpers
 ========================================================================================================================= */
 
-// captures error callbacks from LTEmC (registered above)
-void appNotifyCB(uint8_t notifType, const char *notifMsg)
+void applEvntNotify(const char *eventTag, const char *eventMsg)
 {
-    if (notifType >= appEvent__FAULTS)
+    if (STRCMP(eventTag, "ASSERT"))
     {
-        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
-        volatile int halt = 1;
-        while (halt) {}
+        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
+        while (1) {}
     }
-    else if (notifType >= appEvent__WARNINGS)
-        PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
-    else
-        PRINTF(dbgColor__info, "\r\n%s \r\n", notifMsg);
+    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
+    return;
 }
 
 
