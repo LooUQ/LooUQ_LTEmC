@@ -32,6 +32,8 @@
 #include "ltemc-types.h"
 #include "ltemc-nxp-sc16is.h"
 
+
+
 #define USR_PG() (!pRxBffr->iopPg)
 #define IOP_PG() (pRxBffr->iopPg)
 
@@ -61,25 +63,17 @@ void IOP_detachIrq();
 
 
 /**
- *	@brief register a stream peer with IOP to control communications. Typically performed by protocol open.
- */
-void IOP_registerStream(streamPeer_t stream, iopStreamCtrl_t *streamCtrl);
-
-
-/**
  *	@brief Verify LTEm firmware has started and is ready for driver operations.
  */
 bool IOP_awaitAppReady();
 
 
 /**
- *	@brief Start a (raw) send operation.
+ *	@brief Perform a TX send operation. This is a blocking call and should be used for sends of 50-100 chars.
  *  @param sendData [in] - Pointer to char data to send out, input buffer can be discarded following call.
  *  @param sendSz [in] - The number of characters to send.
- *  @param sendImmediate [in] - If true: queue sendData then initiate the actual send process. If false: continue queueing and wait to send.
- *  @return Number of characters queued for sending.
  */
-uint16_t IOP_sendTx(const char *sendData, uint16_t sendSz, bool sendImmediate);
+void IOP_sendTx(const char *sendData, uint16_t sendSz);
 
 /**
  *	@brief Check for RX progress/idle.
@@ -117,29 +111,29 @@ uint32_t IOP_getRxIdleDuration();
 void IOP_resetCoreRxBuffer();
 
 
-/**
- *	@brief Initializes a RX data buffer control.
- *  @param bufCtrl [in] Pointer to RX data buffer control structure to initialize.
- *  @param rxBuf [in] Pointer to raw byte buffer to integrate into RxBufferCtrl.
- *  @param rxBufSz [in] The size of the rxBuf passed in.
- */
-uint16_t IOP_initRxBufferCtrl(rxDataBufferCtrl_t *bufCtrl, uint8_t *rxBuf, uint16_t rxBufSz);
+// /**
+//  *	@brief Initializes a RX data buffer control.
+//  *  @param bufCtrl [in] Pointer to RX data buffer control structure to initialize.
+//  *  @param rxBuf [in] Pointer to raw byte buffer to integrate into RxBufferCtrl.
+//  *  @param rxBufSz [in] The size of the rxBuf passed in.
+//  */
+// uint16_t IOP_initRxBufferCtrl(rxDataBufferCtrl_t *bufCtrl, uint8_t *rxBuf, uint16_t rxBufSz);
 
 
-/**
- *	@brief Syncs RX consumers with ISR for buffer swap.
- *  @param bufCtrl [in] RX data buffer to sync.
- *  @return True if overflow detected: buffer being assigned to IOP for filling is not empty
- */
-void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufPtr);
+// /**
+//  *	@brief Syncs RX consumers with ISR for buffer swap.
+//  *  @param bufCtrl [in] RX data buffer to sync.
+//  *  @return True if overflow detected: buffer being assigned to IOP for filling is not empty
+//  */
+// void IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufPtr);
 
 
-/**
- *	@brief Reset a receive buffer for reuse.
- *  @param bufPtr [in] Pointer to the buffer struct.
- *  @param page [in] Index to buffer page to be reset.
- */
-void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page);
+// /**
+//  *	@brief Reset a receive buffer for reuse.
+//  *  @param bufPtr [in] Pointer to the buffer struct.
+//  *  @param page [in] Index to buffer page to be reset.
+//  */
+// void IOP_resetRxDataBufferPage(rxDataBufferCtrl_t *bufPtr, uint8_t page);
 
 
 // IOP Internal 

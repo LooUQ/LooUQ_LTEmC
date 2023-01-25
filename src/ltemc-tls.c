@@ -44,7 +44,7 @@
 #include "ltemc-atcmd.h"
 
 
-bool tls_configure(dataCntxt_t dataCntxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
+bool tls_configure(uint8_t dataCntxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
 {
     if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, version))                   // set SSL/TLS version
     {
@@ -76,7 +76,7 @@ bool tls_configure(dataCntxt_t dataCntxt, tlsVersion_t version, tlsCipher_t ciph
 
 
 
-tlsOptions_t tlsGetOptions(dataCntxt_t dataCntxt)
+tlsOptions_t tlsGetOptions(uint8_t dataCntxt)
 {
     tlsOptions_t result = {0};
 

@@ -64,29 +64,27 @@ static cmdParseRslt_t S__httpPostStatusParser();
 /**
  *	@brief Create a HTTP(s) control structure to manage web communications. 
  */
-void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback)
+void http_init(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, char *recvBuf, uint16_t recvBufSz, httpRecv_func recvCallback)
 {
     ASSERT(httpCtrl != NULL && recvBuf != NULL && recvCallback != NULL);
     ASSERT(dataCntxt < dataCntxt__cnt);
-    ASSERT(((void*)&(httpCtrl->recvBufCtrl) - (void*)httpCtrl) == (sizeof(iopStreamCtrl_t) - sizeof(rxDataBufferCtrl_t)));
 
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
     memset(recvBuf, 0, recvBufSz);
 
-    httpCtrl->ctrlMagic = streams__ctrlMagic;
+    g_lqLTEM.streams[dataCntxt].recvDataCB = recvCallback;
+    memcpy(g_lqLTEM.streams[dataCntxt].streamType, STREAM_HTTP, sizeof(STREAM_HTTP));
+
     httpCtrl->dataCntxt = dataCntxt;
-    httpCtrl->protocol = protocol_http;
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
     httpCtrl->pageCancellation = false;
     httpCtrl->useTls = false;
 
-    uint16_t bufferSz = IOP_initRxBufferCtrl(&(httpCtrl->recvBufCtrl), recvBuf, recvBufSz);
+    // uint16_t bufferSz = IOP_initRxBufferCtrl(&(httpCtrl->recvBufCtrl), recvBuf, recvBufSz);
+    // ASSERT_W(recvBufSz == bufferSz, "HTTP-RxBufSz not*128B");
+    // ASSERT(bufferSz > 64);
 
-    ASSERT_W(recvBufSz == bufferSz, "HTTP-RxBufSz not*128B");
-    ASSERT(bufferSz > 64);
-
-    httpCtrl->dataRecvCB = recvCallback;
     httpCtrl->cstmHdrs = NULL;
     httpCtrl->cstmHdrsSz = 0;
     httpCtrl->httpStatus = 0xFFFF;
@@ -117,7 +115,6 @@ void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t host
  */
 void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t headerBufSz)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic);                                // valid httpCtrl pointer
     ASSERT(strlen(httpCtrl->hostUrl));                                                // host connection initialized
     ASSERT(headerBuf != NULL);                                                        // valid header buffer pointer 
     // Warn on small header buffer, less than likely use for 1 or 2 small headers
@@ -134,7 +131,6 @@ void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t heade
  */
 void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic);
     ASSERT(httpCtrl->cstmHdrs != NULL);
 
     bool addedHdrsFit = true;
@@ -175,7 +171,6 @@ void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
 
 void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic);
     ASSERT(httpCtrl->cstmHdrs != NULL);
     ASSERT(strlen(httpCtrl->cstmHdrs) + strlen(hdrText) + 2 < httpCtrl->cstmHdrsSz);
 
@@ -189,7 +184,6 @@ void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText)
  */
 void http_addBasicAuthHdr(httpCtrl_t *http, const char *user, const char *pw)
 {
-    ASSERT(http->ctrlMagic == streams__ctrlMagic);
     ASSERT(http->cstmHdrs != NULL);
 
     char toEncode[80];
@@ -219,8 +213,6 @@ void http_addBasicAuthHdr(httpCtrl_t *http, const char *user, const char *pw)
  */
 resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, uint8_t timeoutSec)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic);
-
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
     strcpy(httpCtrl->requestType, "GET");
@@ -353,8 +345,6 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
  */
 resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool returnResponseHdrs, const char *postData, uint16_t postDataSz, uint8_t timeoutSec)
 {
-    ASSERT(httpCtrl->ctrlMagic == streams__ctrlMagic);
-
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
     strcpy(httpCtrl->requestType, "POST");
@@ -479,11 +469,12 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
         return resultCode__preConditionFailed;                      // a completed GET\POST
 
     // readability var
-    rxDataBufferCtrl_t *pRxBffr = &(httpCtrl->recvBufCtrl);            // smart-buffer for this operation
+    cBuffer_t* rxBffr = g_lqLTEM.iop->rxBffr;
+    // rxDataBufferCtrl_t *pRxBffr = &(httpCtrl->recvBufCtrl);            // smart-buffer for this operation
 
-    IOP_resetRxDataBufferPage(pRxBffr, 0);                             // reset data buffers for flow
-    IOP_resetRxDataBufferPage(pRxBffr, 1);
-    IOP_PG() = 0;
+    // IOP_resetRxDataBufferPage(pRxBffr, 0);                             // reset data buffers for flow
+    // IOP_resetRxDataBufferPage(pRxBffr, 1);
+    // IOP_PG() = 0;
 
     // PRINTF(dbgColor__dMagenta, "httpDoWork-iopPg=%d, [0]=%d, [1]=%d\r", pBuf->iopPg, rxPageDataAvailable(pBuf, 0), rxPageDataAvailable(pBuf, 1));
 
@@ -496,19 +487,20 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
 
     if (ATCMD_awaitLock(timeoutMS))
     {
-        g_lqLTEM.iop->rxStreamCtrl = httpCtrl;                      // provide the stream control for data/control, puts IOP in data mode
+        // g_lqLTEM.iop->rxStreamCtrl = httpCtrl;                      // provide the stream control for data/control, puts IOP in data mode
 
         /* issue AT+QHTTPREAD to start data stream, change state to httpState_responseRecvd
         *-----------------------------------------------------------------------------------*/
         uint16_t atResult;
         char atCmdStr[30];
+        char grabBffr[20];
         snprintf(atCmdStr, sizeof(atCmdStr), "AT+QHTTPREAD=%d", timeoutSec);
         atcmd_sendCmdData(atCmdStr, strlen(atCmdStr), "\r");                // using raw send, response will be collected in data buffers not command buffer
         
         /* process page data 
         *-----------------------------------------------------------------------------------*/
-        char *trailerAt;
-        uint16_t appAvailable;
+        //char *trailerAt;
+        uint16_t trailerIndx;
 
         #define CONNECT_SZ 9
         #define CHECKFOR_CONNECT_SZ 15
@@ -517,55 +509,59 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
 
         while (true)
         {
-            /* wait for "pre-data" signal: CONNECT
-               skip "CONNECT"   (9 chars with \r\n) */
-            if (httpCtrl->requestState == httpState_requestComplete && IOP_rxPageDataAvailable(pRxBffr, USR_PG()) >= CHECKFOR_CONNECT_SZ + 4)
+            /*  wait for "pre-data" signal: CONNECT
+             *  skip "CONNECT"
+             *  9 chars with \r\n  */
+            if (httpCtrl->requestState == httpState_requestComplete && cbffr_getFilled(rxBffr) > CONNECT_SZ)
             {
-                char *continuePtr = lq_strnstr(pRxBffr->pages[USR_PG()]._buffer, "CONNECT\r\n", CHECKFOR_CONNECT_SZ);
-                if (continuePtr == NULL)
+                uint16_t continueIndx = cbffr_find(rxBffr, "CONNECT\r\n", 0, 0, true);
+                
+                if (continueIndx == UINT16_MAX)
                 {
                     httpCtrl->httpStatus = resultCode__internalError;
                     break;
                 }
                 httpCtrl->requestState = httpState_readingData;
                 PRINTF(dbgColor__dMagenta, "httpRead() >>reading\r");
-                pRxBffr->pages[USR_PG()].tail = continuePtr + CONNECT_SZ;                               // point past CONNECT + line ends
+                cbffr_skip(rxBffr, CONNECT_SZ);
             }
 
             if (httpCtrl->requestState == httpState_readingData)                                        // got the CONNECT signal that data is forthcoming
             {
+                char* appData;
+                uint16_t appDataLen;
+                bool dataRemains;
+
                 /* Check for end-of-page (EOP), stop sending app data at "+QHTTPREAD: <err>" 
                  * <err> == 0: no error
                 *-------------------------------------------------------------------------------*/
+                trailerIndx = cbffr_find(rxBffr, "+QHTTPREAD: ", 0, 0, true);
 
-                char *trailerSearchAt = MAX(pRxBffr->pages[USR_PG()].head - LOOKBACK_SZ, pRxBffr->pages[USR_PG()].tail);
-                trailerAt = strstr(trailerSearchAt, "+QHTTPREAD: ");
-
-                if (trailerAt == NULL)
-                    appAvailable = pRxBffr->pages[USR_PG()].head - pRxBffr->pages[USR_PG()].tail;
+                if (trailerIndx == UINT16_MAX)                                                      // have not found trailer yet, keep push data to application
+                    dataRemains = cbffr_getBlockRef(rxBffr, &appData, &appDataLen);                 // get pointer to non-wrapped data block
                 else
                 {
-                    appAvailable = trailerAt - pRxBffr->pages[USR_PG()].tail;
-                    httpCtrl->bgxError = strtol(trailerAt + TRAILER_SZ, NULL, 10);
+                    cbffr_grab(rxBffr, trailerIndx + TRAILER_SZ, grabBffr, sizeof(grabBffr));       // found trailer need to parse it for http result
+                    httpCtrl->bgxError = strtol(grabBffr, NULL, 10);
                     httpCtrl->requestState = httpState_closing;
                     httpCtrl->httpStatus = resultCode__success;
                 }
 
                 /* Forward data to app
                 *-------------------------------------------------------------------------------*/
-                if (appAvailable > 0)
+                if (appDataLen > 0)
                 {
                     if (!httpCtrl->pageCancellation)
                     {
                         uint32_t start = pMillis();
-                        httpCtrl->dataRecvCB(httpCtrl->dataCntxt, httpCtrl->httpStatus, pRxBffr->pages[USR_PG()].tail, appAvailable);
+                        ((httpRecv_func)g_lqLTEM.streams[httpCtrl->dataCntxt].recvDataCB)(httpCtrl->dataCntxt, httpCtrl->httpStatus, appData, appDataLen);
                         uint32_t duration = pMillis() - start;
                         ASSERT_W(duration <= 5, "HTTP pageCB slow-ovrflw risk")   // BGx out 115200 baud, NXP buffer 60 chars = 5.2mS
                     }
-                    IOP_resetRxDataBufferPage(pRxBffr, USR_PG());                                       // delivered, reset buffer and reset ready
+                    cbffr_discardBlock(rxBffr);                                                     // delivered, signal block consumed
                 }
                 
-                if (httpCtrl->requestState == httpState_closing)                                        // if page trailer detected
+                if (httpCtrl->requestState == httpState_closing)                                    // if page trailer detected
                 {
                     PRINTF(dbgColor__magenta, "ReadRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
                     httpCtrl->requestState = httpState_idle;
@@ -573,13 +569,13 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
                 }
             }   // if httpState_readingData
 
-            /* Check for buffer PAGE timeout (200ms) to pull last partial buffer in from IOP
-            *-------------------------------------------------------------------------------*/
-            if (IOP_rxPageDataAvailable(pRxBffr, IOP_PG()) && IOP_getRxIdleDuration() > 200)
-            {
-                PRINTF(dbgColor__dMagenta, "PageTO-GrabIoPPg:%d\r", IOP_PG());
-                IOP_swapRxBufferPage(pRxBffr);                                                          // pull page forward
-            }
+            // /* Check for buffer PAGE timeout (200ms) to pull last partial buffer in from IOP
+            // *-------------------------------------------------------------------------------*/
+            // if (IOP_rxPageDataAvailable(pRxBffr, IOP_PG()) && IOP_getRxIdleDuration() > 200)
+            // {
+            //     PRINTF(dbgColor__dMagenta, "PageTO-GrabIoPPg:%d\r", IOP_PG());
+            //     IOP_swapRxBufferPage(pRxBffr);                                                          // pull page forward
+            // }
 
             /* catch REQUEST timeout here, so we don't wait forever.
             *-----------------------------------------------------------------------------------------------------------*/
@@ -595,7 +591,7 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
             httpCtrl->httpStatus = resultCode__cancelled;
 
         atcmd_close();                                                                                  // close the GET\POST request and release atcmd lock
-        g_lqLTEM.iop->rxStreamCtrl = NULL;                                                              // done, take IOP out of stream data mode
+        // g_lqLTEM.iop->rxStreamCtrl = NULL;                                                              // done, take IOP out of stream data mode
         return httpCtrl->httpStatus;
     }
 }   /* http_readPage() */

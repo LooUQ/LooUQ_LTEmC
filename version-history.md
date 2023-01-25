@@ -1,6 +1,25 @@
 # LTEmC Version History
 #### Major or breaking changes will be called out with section explaining the change and the release header will be decorated with either *Major* or *Breaking*
 
+## v3.0.0
+### Major update with numerous breaking changes
+#### V3 is a top-to-bottom redesign of the LTEmC driver based on field/implementation experiences. User API has been minimally impacted (details below).
+### User API (breaking)
+* Updated start and reset logic to improve reliability
+* ATCMD API has changed to support consistent access to execution internals results, parser logic consolidate to reduce memory
+*   These changes only affect design with user created extended commands
+* Exposed file-system and GPIO APIs (.h) for support in v3.1. GPIO is for LTEm3F device available in Q1-2023
+* ASSERT source file specifier has been changed to a 5 char code from a 2-byte integer (srcFiles.h is now obsolete).### Internals for those with interest
+### Internal Changes 
+* Updates to start (APPRDY URC) and BGx initialization 
+* Redesign of ATCMD subsystem for consistent access to internal state
+* Consolidated ATCMD parser logic into unified base parser.
+* Redesign I/O buffering to reduce memory (RAM) requirements. Eliminated separate command/data buffers with a single ring-buffer for receive.
+* Remove dedicated transmit buffer.
+*   Short TX send are processed immediately (blocking) using parameter incoming const char pointer.
+*   Larger TX sends use a "buffered" background send processed from the originating caller's buffer and ISR despooling
+*       This requires the source buffer be a non-local function char array. This pattern blocks successive TX sends until the prior send completes.
+
 ## v2.3.0
 ### Moved radio access technology (RAT) functions to network 
 * Moved functions to ntwk_ module to set RAT allowed (LTE,GSM), RAT scan sequence (GSM,CAT-M1,NB-IOT), and IOP mode (CAT-M1,NB-IOT)

@@ -34,6 +34,7 @@
 
 #include "ltemc.h"
 #include <lq-str.h>                         /// most LTEmC modules use LooUQ string functions
+#include <lq-cBuffer.h>
 #include "ltemc-types.h"
 
 #include "ltemc-quectel-bg.h"
@@ -76,7 +77,10 @@ typedef struct ltemDevice_tag
     modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
 	modemInfo_t *modemInfo;                     /// Data structure holding persistent information about application modem state
     providerInfo_t *providerInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
-    doWork_func streamWorkers[ltem__streamCnt];/// Stream background doWork functions, registered by Open;
+    streamCtrl_t streams[ltem__streamCnt];      /// Data streams: protocols or file system
+
+    char urcPending;                                    /// flag set by IOP RX indicating an incoming '+' detected; possible URC received
+    urcHandler_func urcHandlers[ltem__urcHandlersCnt];  /// array of URC receipt handlers (parsers)
 
     ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
 } ltemDevice_t;
@@ -102,7 +106,7 @@ extern "C"
 // LTEM Internal
 void LTEM_initIo();
 void LTEM_registerDoWorker(doWork_func *doWorker);
-
+void LTEM_registerUrcHandler(urcHandler_func *urcHandler);
 
 #pragma region ATCMD LTEmC Internal Functions
 /* LTEmC internal, not intended for user application consumption.

@@ -261,7 +261,7 @@ void QBG_setOptions()
  */
 bool QBG_clrDataState()
 {
-    IOP_sendTx("\x1B", 1, true);            // send ASCII ESC
+    IOP_sendTx("\x1B", 1);                                                              // send ASCII ESC
     atcmd_close();
     atcmd_tryInvoke("AT");
     resultCode_t result = atcmd_awaitResult();

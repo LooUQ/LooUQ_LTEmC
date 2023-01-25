@@ -162,6 +162,14 @@ void atcmd_exitDataMode();
  */
 void atcmd_exitTextMode();
 
+
+
+// /**
+//  *	\brief Protocols register for URC callbacks
+//  */
+// void ATCMD_registerStream(streamPeer_t streamIndx, iopStreamCtrl_t *streamCtrl);
+
+
 /*-----------------------------------------------------------------------------------------------*/
 
 /**

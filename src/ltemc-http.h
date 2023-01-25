@@ -60,7 +60,7 @@ enum http__constants
  *  @param data [in] Pointer to received data buffer
  *  @param dataSz [in] The number of bytes available
 */
-typedef void (*httpRecvFunc_t)(dataCntxt_t sckt, uint16_t httpRslt, char *data, uint16_t dataSz);
+typedef void (*httpRecv_func)(dataCntxt_t sckt, uint16_t httpRslt, char *data, uint16_t dataSz);
 
 
 /** 
@@ -89,17 +89,10 @@ typedef enum httpState_tag
 typedef volatile struct httpCtrl_tag
 {
     /* Top section of xCtrl structure is the same for all LTEmC implemented protocol suites TCP/HTTP/MQTT etc. */
-    uint16_t ctrlMagic;                                     /// magic flag to validate incoming requests 
     dataCntxt_t dataCntxt;                                  /// Data context where this control operates (only SSL/TLS contexts 1-6)
-    protocol_t protocol;                                    /// Socket's protocol : UDP/TCP/SSL.
     bool useTls;                                            /// flag indicating SSL/TLS applied to stream
     char hostUrl[host__urlSz];                              /// URL or IP address of host
     uint16_t hostPort;                                      /// IP port number host is listening on (allows for 65535/0)
-    rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
-    /* End of Common Structure Fields */
-
-    /* HTTP(S) Specific Fields */
-    httpRecvFunc_t dataRecvCB;                              /// callback to application, signals data ready
     bool returnResponseHdrs;                                /// if set true, response headers are included in the returned response
     char *cstmHdrs;                                         /// custom header content, optional buffer provided by application
     uint16_t cstmHdrsSz;                                    /// size of custom header buffer
@@ -127,7 +120,7 @@ extern "C"
  *  @param recvBufSz [in] Size of the receive buffer.
  *  @param recvCallback [in] Callback function to receive incoming page data.
  */
-void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, char *recvBuf, uint16_t recvBufSz, httpRecvFunc_t recvCallback);
+void http_init(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, char *recvBuf, uint16_t recvBufSz, httpRecv_func recvCallback);
 
 
 /**

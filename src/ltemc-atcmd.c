@@ -54,10 +54,39 @@ extern ltemDevice_t g_lqLTEM;
 
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------- */
+static void S__rxParseForUrc();
 
 
 #pragma region Public Functions
 /*-----------------------------------------------------------------------------------------------*/
+
+/**
+ *	\brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
+ */
+void atcmd_reset(bool releaseLock)
+{
+    /* clearing req/resp buffers now for debug clarity, future likely just insert '\0' */
+    // request side of action
+    if (releaseLock)
+        g_lqLTEM.atcmd->isOpenLocked = false;                           // reset current lock
+
+    memset(g_lqLTEM.atcmd->cmdStr, 0, atcmd__cmdBufferSz);
+    memset(g_lqLTEM.atcmd->respBffr, 0, atcmd__respBufferSz);
+    memset(g_lqLTEM.atcmd->errorDetail, 0, ltem__errorDetailSz);
+    g_lqLTEM.atcmd->resultCode = 0;
+    g_lqLTEM.atcmd->invokedAt = 0;
+    g_lqLTEM.atcmd->retValue = 0;
+    g_lqLTEM.atcmd->execDuration = 0;
+
+    // response side
+    g_lqLTEM.atcmd->respLen = 0;
+    g_lqLTEM.atcmd->response = g_lqLTEM.atcmd->respBffr;
+    g_lqLTEM.atcmd->responseData = g_lqLTEM.atcmd->respBffr;            // reset "data" component of response to full-response to start
+    // restore defaults
+    g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
+    g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
+}
+
 
 /**
  *	\brief Reset AT command options to defaults.
@@ -74,8 +103,10 @@ inline void atcmd_restoreOptionDefaults()
  */
 bool atcmd_tryInvoke(const char *cmdTemplate, ...)
 {
-    if (g_lqLTEM.atcmd->isOpenLocked || g_lqLTEM.iop->rxStreamCtrl != NULL)
+    if (g_lqLTEM.atcmd->isOpenLocked)
         return false;
+    // if (g_lqLTEM.atcmd->isOpenLocked || g_lqLTEM.iop->rxStreamCtrl != NULL)
+    //     return false;
 
     atcmd_reset(true);                                                  // clear atCmd control
     g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto;                  // set automatic lock control mode
@@ -91,8 +122,8 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
         return false;
 
     g_lqLTEM.atcmd->invokedAt = pMillis();
-    IOP_sendTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr), false);
-    IOP_sendTx("\r", 1, true);
+    IOP_sendTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+    IOP_sendTx("\r", 1);
     return true;
 }
 
@@ -114,8 +145,8 @@ void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
     vsnprintf(cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
 
     g_lqLTEM.atcmd->invokedAt = pMillis();
-    IOP_sendTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr), false);
-    IOP_sendTx("\r", 1, true);
+    IOP_sendTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+    IOP_sendTx("\r", 1);
 }
 
 
@@ -137,12 +168,15 @@ void atcmd_sendCmdData(const char *data, uint16_t dataSz, const char* eotPhrase)
     if (g_lqLTEM.atcmd->invokedAt == 0)
         g_lqLTEM.atcmd->invokedAt = pMillis();
 
-    IOP_sendTx(data, dataSz, true);
+    IOP_sendTx(data, dataSz);
 
     if (strlen(eotPhrase) > 0 )
-        IOP_sendTx(eotPhrase, strlen(eotPhrase), true);
+        IOP_sendTx(eotPhrase, strlen(eotPhrase));
 }
 
+
+#define ATCMDRESP_DESTINATION   (g_lqLTEM.atcmd->response + g_lqLTEM.atcmd->respLen)
+#define ATCMDRESP_AVAILABLE     (atcmd__respBufferSz - g_lqLTEM.atcmd->respLen)
 
 /**
  *	\brief Checks receive buffer for command response and sets atcmd structure data with result.
@@ -151,20 +185,31 @@ resultCode_t ATCMD_readResult()
 {
     g_lqLTEM.atcmd->parserResult = cmdParseRslt_pending;
     g_lqLTEM.atcmd->resultCode = 0;
+    uint16_t peekedLen;
     
-    if (*(g_lqLTEM.iop->rxCBuffer->tail) != '\0')                                   // if cmd buffer not empty, test for command complete with registered parser
+    ltem_doWork();                                                                      // check for URC pending and service (potentionally in front of cmd response)
+    if (cbffr_getFillCnt(g_lqLTEM.iop->rxBffr) > 0)
     {
-        while (g_lqLTEM.iop->rxCBuffer->tail[0] == '\r' ||                          // remove prefixing line terminators
-               g_lqLTEM.iop->rxCBuffer->tail[0] == '\n')
-        {
-            g_lqLTEM.iop->rxCBuffer->tail++;
-        }
-        g_lqLTEM.atcmd->response = g_lqLTEM.iop->rxCBuffer->tail;                   // tracked in ATCMD struct for later accessibility
-        g_lqLTEM.atcmd->responseData = g_lqLTEM.iop->rxCBuffer->tail;
-        
-        g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();     // PARSE response
+        peekedLen = cbffr_peek(g_lqLTEM.iop->rxBffr, ATCMDRESP_DESTINATION,  ATCMDRESP_AVAILABLE);      // peek ahead (non-disruptive pop)
+        g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();                         // parse for cmd response
         PRINTF(dbgColor__gray, "prsr=%d \r", g_lqLTEM.atcmd->parserResult);
     }
+
+    cbffr_skip(g_lqLTEM.iop->rxBffr, peekedLen);
+
+    // if (*(g_lqLTEM.iop->rxCBuffer->tail) != '\0')                                   // if cmd buffer not empty, test for command complete with registered parser
+    // {
+    //     while (g_lqLTEM.iop->rxCBuffer->tail[0] == '\r' ||                          // remove prefixing line terminators
+    //            g_lqLTEM.iop->rxCBuffer->tail[0] == '\n')
+    //     {
+    //         g_lqLTEM.iop->rxCBuffer->tail++;
+    //     }
+    //     g_lqLTEM.atcmd->response = g_lqLTEM.iop->rxCBuffer->tail;                   // tracked in ATCMD struct for later accessibility
+    //     g_lqLTEM.atcmd->responseData = g_lqLTEM.iop->rxCBuffer->tail;
+        
+    //     g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();     // PARSE response
+    //     PRINTF(dbgColor__gray, "prsr=%d \r", g_lqLTEM.atcmd->parserResult);
+    // }
 
     if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_error)                          // check error bit
     {
@@ -318,40 +363,11 @@ char *atcmd_getErrorDetail()
 
 
 /**
- *	\brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
- */
-void atcmd_reset(bool releaseLock)
-{
-    /* clearing req/resp buffers now for debug clarity, future likely just insert '\0' */
-    // request side of action
-    if (releaseLock)
-        g_lqLTEM.atcmd->isOpenLocked = false;                         // reset current lock
-
-    memset(g_lqLTEM.atcmd->cmdStr, 0, bufferSz__cmdTx);
-    g_lqLTEM.atcmd->resultCode = 0;
-    g_lqLTEM.atcmd->invokedAt = 0;
-    g_lqLTEM.atcmd->response = NULL;
-    memset(g_lqLTEM.atcmd->errorDetail, 0, ltem__errorDetailSz);
-    g_lqLTEM.atcmd->retValue = 0;
-    g_lqLTEM.atcmd->execDuration = 0;
-
-    // response side
-    IOP_resetCoreRxBuffer();
-
-    // restore response defaults
-    g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
-    g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
-}
-
-
-
-
-/**
  *	\brief Sends ESC character to ensure BGx is not in text mode (">" prompt awaiting ^Z/ESC, MQTT publish etc.).
  */
 void atcmd_exitTextMode()
 {
-    IOP_sendTx(CTRL(z), 1, true);
+    IOP_sendTx(CTRL(z), 1);
 }
 
 
@@ -361,7 +377,7 @@ void atcmd_exitTextMode()
 void atcmd_exitDataMode()
 {
     lDelay(1000);
-    IOP_sendTx("+++", 3, true);             // send +++, gaurded by 1 second of quiet
+    IOP_sendTx("+++", 3);             // send +++, gaurded by 1 second of quiet
     lDelay(1000);
 }
 
@@ -383,15 +399,13 @@ bool ATCMD_awaitLock(uint16_t timeoutMS)
                                                                     
     while (pMillis() - waitStart < timeoutMS)           // cannot set lock while... 
     {                                                       // can set new lock if...
-        if (!g_lqLTEM.atcmd->isOpenLocked &&                // !not existing lock
-            g_lqLTEM.iop->rxStreamCtrl == NULL)             // IOP is not in data mode (handling a receive)
+        if (!g_lqLTEM.atcmd->isOpenLocked)                  // !not existing lock
         {
             g_lqLTEM.atcmd->isOpenLocked = true;            // acquired new lock
             return true;
         }
         pYield();                                           // call back to platform yield() in case there is work there that can be done
-        if (g_lqLTEM.iop->rxStreamCtrl != NULL)
-            ltem_doWork();                                  // if data receive is blocking, give doWork an opportunity to resolve
+        ltem_doWork();                                      // process any new receives prior to starting cmd invoke
     }
     return false;                                           // timed out waiting for lock
 }
@@ -637,10 +651,146 @@ cmdParseRslt_t ATCMD_readyPromptParser(const char *rdyPrompt)
 #pragma region Static Function Definitions
 /*-----------------------------------------------------------------------------------------------*/
 
+
+// /**
+//  *	@brief register a stream peer with IOP to control communications. Typically performed by protocol open.
+//  */
+// void ATCMD_registerStream(uint8_t streamIndx, iopStreamCtrl_t *streamCtrl)
+// {
+//     g_lqLTEM.atcmd->streamPeers[streamIndx] = streamCtrl;
+// }
+
+
+// /**
+//  *  @brief Parse recv'd data (in command RX buffer) for async event preambles that need to be handled immediately.
+//  *  @details AT cmd uses this to examine new buffer contents for +URC events that may arrive in command response
+//  *           Declared in ltemc-internal.h
+//  */
+// void S__rxParseForUrc(const char* urcTarget)
+// {
+//     char *foundAt;
+//     // /* SSL/TLS data received
+//     // */
+//     // if (g_lqLTEM.iop->scktMap > 0 && (foundAt = strstr(urcBffr, "+QSSLURC: \"recv\",")))         // shortcircuit if no sockets
+//     // {
+//     //     PRINTF(dbgColor__cyan, "-p=sslURC");
+//     //     uint8_t urcLen = strlen("+QSSLURC: \"recv\",");
+//     //     char *cntxtIdPtr = urcBffr + urcLen;
+//     //     char *endPtr = NULL;
+//     //     uint8_t cntxtId = (uint8_t)strtol(cntxtIdPtr, &endPtr, 10);
+//     //     // action
+//     //     ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[cntxtId])->dataPending = true;
+//     //     // clean up
+//     //     g_lqLTEM.iop->rxCBuffer->head - (endPtr - urcBffr);                                     // remove URC from rxBuffer
+//     //     memset(g_lqLTEM.iop->urcDetectBuffer, 0, IOP__urcDetectBufferSz);
+//     // }
+
+//     // // preserve temporarily Nov29-2022
+//     // // else if (g_lqLTEM.iop->scktMap && memcmp("+QIURC: \"recv", urcStartPtr, strlen("+QIURC: \"recv")) == 0)         // shortcircuit if no sockets
+//     // // {
+//     // //     PRINTF(dbgColor__cyan, "-p=ipURC");
+//     // //     char *cntxIdPtr = g_lqLTEM.iop->rxCBuffer->prevHead + strlen("+QIURC: \"recv");
+//     // //     char *endPtr = NULL;
+//     // //     uint8_t cntxId = (uint8_t)strtol(cntxIdPtr, &endPtr, 10);
+//     // //     ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[cntxId])->dataPending = true;
+//     // //     // discard this chunk, processed here
+//     // //     g_lqLTEM.iop->rxCBuffer->head = g_lqLTEM.iop->rxCBuffer->prevHead;
+//     // // }
+
+//     // /* TCP/UDP data received
+//     // */
+//     // else if (g_lqLTEM.iop->scktMap && (foundAt = strstr(urcBffr, "+QIURC: \"recv\",")))         // shortcircuit if no sockets
+//     // {
+//     //     PRINTF(dbgColor__cyan, "-p=ipURC");
+//     //     uint8_t urcLen = strlen("+QIURC: \"recv\",");
+//     //     char *cntxtIdPtr = urcBffr + urcLen;
+//     //     char *endPtr = NULL;
+//     //     uint8_t cntxtId = (uint8_t)strtol(cntxtIdPtr, &endPtr, 10);
+//     //     // action
+//     //     ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[cntxtId])->dataPending = true;
+//     //     // clean up
+//     //     g_lqLTEM.iop->rxCBuffer->head - (endPtr - urcBffr);                                     // remove URC from rxBuffer
+//     //     memset(g_lqLTEM.iop->urcDetectBuffer, 0, IOP__urcDetectBufferSz);
+//     // }
+
+//     // /* MQTT message receive
+//     // */
+//     // else if (g_lqLTEM.iop->mqttMap && (foundAt = strstr(urcBffr, "+QMTRECV: ")))
+//     // {
+//     //     PRINTF(dbgColor__cyan, "-p=mqttR");
+//     //     uint8_t urcLen = strlen("+QMTRECV: ");
+//     //     char *cntxtIdPtr = urcBffr + urcLen;
+//     //     char *endPtr = NULL;
+//     //     uint8_t cntxtId = (uint8_t)strtol(cntxtIdPtr, &endPtr, 10);
+
+//     //     // action
+//     //     ASSERT(g_lqLTEM.iop->rxStreamCtrl == NULL);                                // ASSERT: not inside another stream recv
+
+//     //     /* this chunk, contains both meta data for receive followed by actual data, need to copy the data chunk to start of rxDataBuffer for this context */
+
+//     //     g_lqLTEM.iop->rxStreamCtrl = g_lqLTEM.iop->streamPeers[cntxtId];                                // put IOP in datamode for context 
+//     //     rxDataBufferCtrl_t *dBufPtr = &g_lqLTEM.iop->rxStreamCtrl->recvBufCtrl;                         // get reference to context specific data RX buffer
+        
+//     //     /* need to fixup core/cmd and data buffers for mixed content in receive
+//     //      * moving post prefix received from core/cmd buffer to context data buffer
+//     //      * preserving prefix text for overflow detection (prefix & trailer text must be in same buffer)
+//     //      */
+//     //     char *urcStartPtr = memchr(g_lqLTEM.iop->rxCBuffer->prevHead, '+', g_lqLTEM.iop->rxCBuffer->head - g_lqLTEM.iop->rxCBuffer->prevHead);  
+//     //     memcpy(dBufPtr->pages[dBufPtr->iopPg]._buffer, urcStartPtr, g_lqLTEM.iop->rxCBuffer->head - urcStartPtr);
+//     //     dBufPtr->pages[dBufPtr->iopPg].head += g_lqLTEM.iop->rxCBuffer->head - urcStartPtr;
+
+//     //     // clean-up
+//     //     g_lqLTEM.iop->rxCBuffer->head = urcStartPtr;                                                    // drop recv'd from cmd\core buffer, processed here
+//     //     memset(g_lqLTEM.iop->urcDetectBuffer, 0, IOP__urcDetectBufferSz);
+//     // }
+
+//     // /* MQTT connection reset by server
+//     // */
+//     // else if (g_lqLTEM.iop->mqttMap &&
+//     //          (foundAt = MAX(strstr(urcBffr, "+QMTSTAT: "), strstr(urcBffr, "+QMTDISC: "))))
+//     // {
+//     //     PRINTF(dbgColor__cyan, "-p=mqttS");
+//     //     uint8_t urcLen = MAX(strlen("+QMTSTAT: "), strlen("+QMTDISC: "));
+//     //     char *cntxtIdPtr = urcBffr + urcLen;
+//     //     char *endPtr = NULL;
+//     //     uint8_t cntxId = (uint8_t)strtol(cntxtIdPtr, &endPtr, 10);
+//     //     // action
+//     //     g_lqLTEM.iop->mqttMap &= ~(0x01 << cntxId);
+//     //     ((mqttCtrl_t *)g_lqLTEM.iop->streamPeers[cntxId])->state = mqttState_closed;
+//     //     // clean up
+//     //     g_lqLTEM.iop->rxCBuffer->head - (endPtr - urcBffr);                                     // remove URC from rxBuffer
+//     //     memset(g_lqLTEM.iop->urcDetectBuffer, 0, IOP__urcDetectBufferSz);
+//     // }
+
+//     // /* PDP context closed by network
+//     // */
+//     // else if ((foundAt = strstr(urcBffr, "+QIURC: \"pdpdeact\",")))
+//     // {
+//     //     PRINTF(dbgColor__cyan, "-p=pdpD");
+//     //     uint8_t urcLen = strlen("+QIURC: \"pdpdeact\",");
+//     //     char *pdpCntxtIdPtr = urcBffr + urcLen;
+//     //     char *endPtr = NULL;
+//     //     uint8_t contextId = (uint8_t)strtol(pdpCntxtIdPtr, &endPtr, 10);
+//     //     // action
+//     //     for (size_t i = 0; i <  sizeof(g_lqLTEM.providerInfo->networks) / sizeof(providerInfo_t); i++)
+//     //     {
+//     //         if (g_lqLTEM.providerInfo->networks[i].pdpContextId == contextId)
+//     //         {
+//     //             g_lqLTEM.providerInfo->networks[i].pdpContextId = 0;
+//     //             g_lqLTEM.providerInfo->networks[i].ipAddress[0] = 0;
+//     //             break;
+//     //         }
+//     //     }
+//     //     // clean-up
+//     //     g_lqLTEM.iop->rxCBuffer->head - (endPtr - urcBffr);                                     // remove URC from rxBuffer
+//     // }
+// }
+
+
 // /**
 //  *	\brief Copies response\result information at action conclusion. Designed as a diagnostic aid for failed AT actions.
 //  */
-// static void S__copyToDiagnostics()
+// void S__copyToDiagnostics()
 // {
 //     memset(g_lqLTEM.atcmd->lastActionError->cmdStr, 0, atcmd__historyBufferSz);
 //     strncpy(g_lqLTEM.atcmd->lastActionError->cmdStr, g_lqLTEM.atcmd->cmdStr, atcmd__historyBufferSz-1);
@@ -651,3 +801,4 @@ cmdParseRslt_t ATCMD_readyPromptParser(const char *rdyPrompt)
 // }
 
 #pragma endregion
+

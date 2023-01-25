@@ -316,13 +316,21 @@ deviceState_t ltem_getDeviceState()
  */
 void ltem_doWork()
 {
-    if (ltem_getDeviceState() != deviceState_appReady)
-        ltem_notifyApp(appEvent_fault_hardFault, "LTEm I/O Error");
-
-    for (size_t i = 0; i < sizeof(g_lqLTEM.streamWorkers) / sizeof(doWork_func); i++)  // each stream with a doWork() register it at OPEN (removed if last CLOSE)
+    if (g_lqLTEM.urcPending != NO_URC)
     {
-        if (g_lqLTEM.streamWorkers[i] != NULL)
-            (g_lqLTEM.streamWorkers[i])();
+        for (size_t i = 0; i < ltem__urcHandlersCnt; i++)    
+        {
+            if (g_lqLTEM.urcHandlers[i] != NULL)
+            {
+                g_lqLTEM.urcHandlers[i]();
+                break;
+            }
+        }
+        if (g_lqLTEM.urcPending != NO_URC ||                                            // check for a arrival of a new URC (detected in IOP or during last handler)
+            cbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false) != CBFFR_NOFIND)
+        {
+            ltem_doWork();                                                              // new subsequent URC, call re-entrantly
+        }
     }
 }
 
@@ -364,30 +372,24 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 #pragma region LTEmC Internal Functions (ltemc-internal.h)
 /*-----------------------------------------------------------------------------------------------*/
 
-void LTEM_registerDoWorker(doWork_func *doWorker)
+void LTEM_registerUrcHandler(urcHandler_func *urcHandler)
 {
-    bool found = false;
-    for (size_t i = 0; i < sizeof(g_lqLTEM.streamWorkers) / sizeof(doWork_func); i++)     // wireup sckt_doWork into g_ltemc worker array
+    bool registered = false;
+    for (size_t i = 0; i < ltem__urcHandlersCnt; i++)
     {
-        if (g_lqLTEM.streamWorkers[i] == doWorker)
+        if (g_lqLTEM.urcHandlers[i] == NULL)
         {
-            found = true;
-            break;
+            registered = true;
+            g_lqLTEM.urcHandlers[i] = urcHandler;                               // add to "registered" handlers
         }
-    }
-    if (!found)
-    {
-        for (size_t i = 0; i < sizeof(g_lqLTEM.streamWorkers); i++)           // not there, find and empty slot
+        else
         {
-            if (g_lqLTEM.streamWorkers[i] == NULL)
-            {
-                g_lqLTEM.streamWorkers[i] = doWorker;
-                break;
-            }
+            if (g_lqLTEM.urcHandlers[i] == urcHandler)                          // previously registered
+                registered = true;
         }
+        ASSERT(registered);
     }
 }
-
 
 #pragma endregion
 

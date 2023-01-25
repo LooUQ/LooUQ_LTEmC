@@ -30,15 +30,31 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <lq-types.h>
+#include <lq-cBuffer.h>
 
 enum bufferSizes
 {
-                                /* can be reduced based on you protocol selections and your data segment sizes */
-    bufferSz__txData = 1800,    // size should be equal or greater than length of largest data transmission
-    bufferSz__cmdTx = 192,
-    bufferSz__coreRx = 192,
+    //                             /* can be reduced based on you protocol selections and your data segment sizes */
+    // bufferSz__txData = 1800,    // size should be equal or greater than length of largest data transmission
+    // bufferSz__cmdTx = 192,
+    // bufferSz__coreRx = 192,
 
+    bufferSz__rx = 2000,
+    // bufferSz__tx = 1800
 };
+
+/** 
+ *  @brief Typed numeric constants for stream peers subsystem (sockets, mqtt, http)
+ */
+enum streams__constants
+{
+    streams__ctrlMagic = 0x186F,
+    streams__maxContextProtocols = 5,
+    streams__typeCodeSz = 4,
+    streams__urcPrefixesSz = 60,
+    host__urlSz = 100
+};
+
 
 typedef struct ltemPinConfig_tag
 {
@@ -52,11 +68,14 @@ typedef struct ltemPinConfig_tag
     int wakePin;
 } ltemPinConfig_t;
 
+
 enum ltem__constants
 {
-    ltem__streamCnt = 6,
     ltem__swVerSz = 12,
-    ltem__errorDetailSz = 5
+    ltem__errorDetailSz = 5,
+
+    ltem__streamCnt = 7,            /// 6 for SSL/TLS capable data contexts + file system
+    ltem__urcHandlersCnt = 4        /// max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
 };
 
 /** 
@@ -64,10 +83,25 @@ enum ltem__constants
  */
 typedef enum deviceState_tag
 {
-    deviceState_powerOff = 0,        ///< BGx is powered off, in this state all components on the LTEm1 are powered down.
-    deviceState_powerOn = 1,         ///< BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
-    deviceState_appReady = 2         ///< BGx is powered ON and ready for application/services.
+    deviceState_powerOff = 0,        /// BGx is powered off, in this state all components on the LTEm1 are powered down.
+    deviceState_powerOn = 1,         /// BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
+    deviceState_appReady = 2         /// BGx is powered ON and ready for application/services.
 } deviceState_t;
+
+
+/** 
+ *  @brief Enum of the available dataCntxt indexes for BGx (only SSL/TLS capable contexts are supported).
+ */
+typedef enum dataCntxt_tag
+{
+    dataCntxt_0 = 0,
+    dataCntxt_1 = 1,
+    dataCntxt_2 = 2,
+    dataCntxt_3 = 3,
+    dataCntxt_4 = 4,
+    dataCntxt_5 = 5,
+    dataCntxt__cnt = 6
+} dataCntxt_t;
 
 
 /* ================================================================================================================================
@@ -233,144 +267,50 @@ enum IOP__Constants
 };
 
 
-/** 
- *  @brief Circular buffer for use in the transmit functions.
-*/
-typedef struct cbuf_tag
-{
-    uint8_t * buffer;       ///< The internal char buffer storing the text
-    int head;               ///< Integer offset to the position where the next char will be added (pushed).
-    int tail;               ///< Integer offset to the consumer position, where the next request will be sourced.
-    int maxlen;             ///< The total size of the buffer. 
-} cbuf_t;
+// /** 
+//  *  @brief Struct for a IOP transmit (TX) buffer control block. Tracks progress of chunk sends to LTEm1.
+//  *  @details LTEm SPI bridge works with chunks of ~64 bytes (actual transfers are usually 58 - 62 bytes). IOP abstracts SPI chunks from senders.
+//  */
+// typedef struct txBufferCtrl_tag
+// {
+//     char *txBuf;                        /// Pointer to the base address of the TX buffer. Fixed, doesn't change with operations.
+//     char *chunkPtr;                     /// Pointer to the next "chunk" of data to send to modem.
+//     uint16_t remainSz;                  /// Remaining number of bytes in buffer to send to modem.
+// } txBufferCtrl_t;
 
 
 /** 
  *  @brief Struct for a IOP transmit (TX) buffer control block. Tracks progress of chunk sends to LTEm1.
  *  @details LTEm SPI bridge works with chunks of ~64 bytes (actual transfers are usually 58 - 62 bytes). IOP abstracts SPI chunks from senders.
  */
-typedef struct txBufferCtrl_tag
+typedef struct txControl_tag
 {
-    char *txBuf;                        ///< Pointer to the base address of the TX buffer. Fixed, doesn't change with operations.
-    char *chunkPtr;                     ///< Pointer to the next "chunk" of data to send to modem.
-    uint16_t remainSz;                    ///< Remaining number of bytes in buffer to send to modem.
-} txBufferCtrl_t;
+    char *tx_chunkPtr;          /// Pointer to the next "chunk" of data to send to modem.
+    uint16_t tx_remainSz;       /// Remaining number of bytes in buffer to send to modem.
+} txControl_t;
 
 
-/** 
- *  @brief Receive buffer page. Component struct for the rxDataBufferCtrl_t.
- */
-typedef volatile struct rxBufferPage_tag
-{
-    char *_buffer;           ///< base address of page buffer (fixed, does not change)
-    char *head;              ///< filled data (in), available for next data in
-    char *tail;              ///< data pointer (consumer out)
-    char *prevHead;          ///< if the last chunk is copied or consumed immediately used to restore head
-} rxBufferPage_t;
+#define STREAM_UDP "UDP"
+#define STREAM_TCP "TCP"
+#define STREAM_SSL "SSL"
+#define STREAM_MQTT "MQTT"
+#define STREAM_HTTP "HTTP"
+#define STREAM__CNT 6
+#define STREAM_FILE "FILE"
 
+#define NO_URC '\0'
 
-/** 
- *  @brief Struct for a IOP smart buffer. Contains the char buffer and controls to marshall data between IOP and consumer (cmd,sockets,mqtt,etc.).
- * 
- *  @details 
- *  bufferSync is a semphore to signal buffer page role swap underway. ISR will sync with this upon entering the RX critical section 
- * 
- *  - Receive consumers (doWork functions) wanting to swap RX buffer pages will set bufferSync
- *  - This will force ISR to check iopPg and _nextIopPg and complete swap if necessary
- *  - Once buffer page swap is done, bufferSync will be reset
- *  - If interrupt fires ISR will check bufferSync prior to servicing a RX event
- * 
- *  _doWork() [consumer] uses IOP_swapRxBufferPage(rxDataBufferCtrl_t *bufPtr), ISR uses IOP_isrCheckBufferSync()
- * 
- *  NOTE: the completion test methods both consider the whole buffer for RX complete, but split buffers are returned to the application as 
- *  each is filled or the entire RX is completed.
- */
-typedef volatile struct rxDataBufferCtrl_tag
-{
-    // _ variables are set at initialization and don't change
-    char *_buffer;              ///< data buffer, does not change while used.
-    char *_bufferEnd;           ///< end of physical buffer
-    uint16_t _bufferSz;         ///< effective buffer size (after split)
-    uint16_t _pageSz;           ///< the size of split size
-    bool _overflow;             ///< set in ISR if overflow detected
-
-    bool bufferSync;            ///< set when page swap is underway
-    uint8_t _nextIopPg;         ///< intended resulting iopPg value
-
-    uint8_t iopPg;              ///< when in split mode, which buffer page is assigned to IOP for filling
-    rxBufferPage_t pages[2];    ///< buffer page to support interwoven fill/empty operations
-} rxDataBufferCtrl_t;
-
-
-/** 
- *  @brief Struct for a single page IOP smart buffer. Used by commands (AT cmd) and for capturing BGx async events.
- */
-typedef volatile struct rxCoreBufferCtrl_tag
-{
-    // _variables are set at initialization and don't change
-    char *_buffer;              ///< data buffer, does not change while used.
-    char *_bufferEnd;           ///< end of physical buffer
-    uint16_t _bufferSz;         ///< effective buffer size (after split)
-    bool _overflow;             ///< set in ISR if overflow detected; doWork() moves to _prevOverflow, notifies application, then clears
-
-    char *tail;                 ///< consumer out pointer
-    char *head;                 ///< data in pointer
-    char *prevHead;             ///< if the last chunk is copied or consumed immediately used to restore head
-} rxCoreBufferCtrl_t;
-
-/**
- *   \brief Brief inline static function to support doWork() readability
-*/
-static inline uint16_t IOP_rxPageDataAvailable(rxDataBufferCtrl_t *buf, uint8_t page)
-{
-    return buf->pages[page].head - buf->pages[page].tail;
-}
-
-
-/** 
- *  @brief Enum of data stream peer types
- */
-typedef enum dataStreamType_tag
-{
-    dataStream_none = 0,
-    dataStream_sckt = 2,
-    dataStream_mqtt = 3,
-    dataStream_http = 4,
-    dataStream_file = 5
-} dataStreamType_tag;
-
-
-
-/** 
- *  @brief Enum of data stream peers: network data contexts + the BGx file system
- *  @details Only data contexts that coincide with SSL contexts are supported.
- */
-typedef enum streamPeer_tag
-{
-    streamPeer_0 = 0,
-    streamPeer_1 = 1,
-    streamPeer_2 = 2,
-    streamPeer_3 = 3,
-    streamPeer_4 = 4,
-    streamPeer_5 = 5,
-    streamPeer_file = 6,
-    streamPeer_cnt = 7
-} streamPeer_t;
-
+typedef void (*urcHandler_func)();
 
 /** 
  *  @brief Base struct containing common properties required of a stream control
  */
-typedef struct iopStreamCtrl_tag
+typedef struct streamCtrl_tag
 {
-    uint16_t ctrlMagic;                                     /// magic flag to validate incoming requests 
-    dataCntxt_t dataCntxt;                                  /// Data context where this control operates (only SSL/TLS contexts 1-6)
-    protocol_t protocol;                                    /// Socket's protocol : UDP/TCP/SSL.
-    bool useTls;                                            /// flag indicating SSL/TLS applied to stream
-    char hostUrl[host__urlSz];                              /// URL or IP address of host
-    uint16_t hostPort;                                      /// IP port number host is listening on (allows for 65535/0)
-    rxDataBufferCtrl_t recvBufCtrl;                         /// RX smart buffer 
-} iopStreamCtrl_t;
+    char streamType[streams__typeCodeSz];
+    void *pCtrl;                                    /// protocol specific control variables (cast to a protocol specific struct)
+    void *recvDataCB;                               /// callback into host application with data (cast from void* to specific function signature)
+} streamCtrl_t;
 
 
 /** 
@@ -382,20 +322,20 @@ typedef struct iopStreamCtrl_tag
  */
 typedef volatile struct iop_tag
 {
-    cbuf_t *txBuffer;                                           /// transmit buffer (there is just one)
-    uint16_t txPend;                                            /// outstanding TX char pending
-    rxCoreBufferCtrl_t *rxCBuffer;                              /// URC and command response receive buffer, this is the default RX buffer
-    iopStreamCtrl_t* streamPeers[streamPeer_cnt];               /// array of iopStream ctrl pointers, cast to a specific stream type: protocol or file stream
-    iopStreamCtrl_t* rxStreamCtrl;                              /// stream data source, if not null
-    char urcDetectBuffer[SET_PROPLEN(IOP__urcDetectBufferSz)];
+    txControl_t* txCtrl;                            /// transmit state control: data pointer/remaining
+    cBuffer_t* rxBffr;                              /// receive buffer
 
-    uint32_t txSendStartTck;                                    /// tick count when TX send started, used for response timeout detection
-    uint32_t rxLastFillChgTck;                                  /// tick count when RX buffer fill level was known to have change
+    // iopStreamCtrl_t* streamPeers[streamPeer_cnt];               /// array of iopStream ctrl pointers, cast to a specific stream type: protocol or file stream
+    // iopStreamCtrl_t* rxStreamCtrl;                              /// stream data source, if not null
+    // char urcDetectBuffer[SET_PROPLEN(IOP__urcDetectBufferSz)];
+
+    uint32_t lastTxAt;                              /// tick count when TX send started, used for response timeout detection
+    uint32_t lastRxAt;                              /// tick count when RX buffer fill level was known to have change
 
     // protocol specific properties
-    uint8_t scktMap;                                            /// bitmap indicating open sockets (TCP/UDP/SSL), bit position is the dataContext (IOP event detect shortcut)
-    uint8_t scktLstWrk;                                         /// bit mask of last sckt do work IRD inquiry (fairness)
-    uint8_t mqttMap;                                            /// bitmap indicating open mqtt(s) connections, bit position is the dataContext (IOP event detect shortcut)
+    // uint8_t scktMap;                                            /// bitmap indicating open sockets (TCP/UDP/SSL), bit position is the dataContext (IOP event detect shortcut)
+    // uint8_t scktLstWrk;                                         /// bit mask of last sckt do work IRD inquiry (fairness)
+    // uint8_t mqttMap;                                            /// bitmap indicating open mqtt(s) connections, bit position is the dataContext (IOP event detect shortcut)
 } iop_t;
 
 
@@ -412,6 +352,9 @@ enum atcmd__constants
 
     atcmd__setLockModeManual = 0,
     atcmd__setLockModeAuto = 1,
+
+    atcmd__cmdBufferSz = 120,
+    atcmd__respBufferSz = 240
 };
 
 
@@ -439,13 +382,17 @@ typedef cmdParseRslt_t (*cmdResponseParser_func)();                             
 */
 typedef struct atcmd_tag
 {
-    char cmdStr[bufferSz__cmdTx];                       /// AT command string to be passed to the BGx module.
+    char cmdStr[atcmd__cmdBufferSz];                    /// AT command string to be passed to the BGx module.
     uint32_t timeout;                                   /// Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
     bool isOpenLocked;                                  /// True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
     bool autoLock;                                      /// last invoke was auto and should be closed automatically on complete
     uint32_t invokedAt;                                 /// Tick value at the command invocation, used for timeout detection.
+    
+    char respBffr[atcmd__respBufferSz];
     char *response;                                     /// PTR into IOP "core" buffer, the response to the command received from the BGx (reset NULL fills buffer).
     char *responseData;                                 /// PTR to response buffer adjusted to after found preamble pattern.
+    uint8_t respLen;
+
     uint32_t execDuration;                              /// duration of command's execution in milliseconds
     resultCode_t resultCode;                            /// consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
     cmdResponseParser_func responseParserFunc;          /// parser function to analyze AT cmd response and optionally extract value
@@ -453,6 +400,15 @@ typedef struct atcmd_tag
     bool preambleFound;                                 /// true if parser found preamble
     char errorDetail[SET_PROPLEN(ltem__errorDetailSz)]; /// BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
     int32_t retValue;                                   /// optional signed int value extracted from response
+
+    // // streams (moved from IOP)
+    // iopStreamCtrl_t* streamPeers[streamPeer_cnt];       /// array of iopStream ctrl pointers, cast to a specific stream type: protocol or file stream
+    // iopStreamCtrl_t* rxStreamCtrl;                      /// stream data source, if not null
+
+    // // protocol specific properties
+    // uint8_t scktMap;                                    /// bitmap indicating open sockets (TCP/UDP/SSL), bit position is the dataContext (IOP event detect shortcut)
+    // uint8_t scktLstWrk;                                 /// bit mask of last sckt do work IRD inquiry (fairness)
+    // uint8_t mqttMap;                                    /// bitmap indicating open mqtt(s) connections, bit position is the dataContext (IOP event detect shortcut)
 } atcmd_t;
 
 
@@ -461,9 +417,9 @@ typedef struct atcmd_tag
 */
 typedef struct atcmdResult_tag
 {
-    resultCode_t statusCode;                    ///< The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
-    char *response;                             ///< The char c-string containing the full response from the BGx.
-    uint16_t responseCode;                      ///< Numeric response value from many "status" action parsers (suffixed with _rc)
+    resultCode_t statusCode;                    /// The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
+    char *response;                             /// The char c-string containing the full response from the BGx.
+    uint16_t responseCode;                      /// Numeric response value from many "status" action parsers (suffixed with _rc)
 } atcmdResult_t;
 
 
@@ -548,36 +504,6 @@ typedef struct tlsOptions_tag
     tlsSecurityLevel_t securityLevel;
     char trCertPath[80];
 } tlsOptions_t;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 #endif  // !__LTEMC_TYPES_H__
