@@ -1,29 +1,33 @@
-/******************************************************************************
- *  \file ltemc-http.c
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * HTTP(S) Request Support (GET\POST)
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \brief Public API providing HTTP/HTTPS support
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
+
+#define SRCFILE "HTT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#include "ltemc-internal.h"
+#include "ltemc-http.h"
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
@@ -38,10 +42,6 @@
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
-
-#define SRCFILE "HTT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#include "ltemc-internal.h"
-#include "ltemc-http.h"
 
 extern ltemDevice_t g_lqLTEM;
 
@@ -64,13 +64,12 @@ static cmdParseRslt_t S__httpPostStatusParser();
 /**
  *	@brief Create a HTTP(s) control structure to manage web communications. 
  */
-void http_init(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, char *recvBuf, uint16_t recvBufSz, httpRecv_func recvCallback)
+void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func recvCallback)
 {
-    ASSERT(httpCtrl != NULL && recvBuf != NULL && recvCallback != NULL);
+    ASSERT(httpCtrl != NULL && recvCallback != NULL);
     ASSERT(dataCntxt < dataCntxt__cnt);
 
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
-    memset(recvBuf, 0, recvBufSz);
 
     g_lqLTEM.streams[dataCntxt].recvDataCB = recvCallback;
     memcpy(g_lqLTEM.streams[dataCntxt].streamType, STREAM_HTTP, sizeof(STREAM_HTTP));
@@ -454,128 +453,133 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
  *	@brief Retrieves page results from a previous GET or POST.
  *  ===============================================================================================
  */
-resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
+bool http_readPage(httpCtrl_t *httpCtrl, char *pageBffr, uint16_t pageBffrSz, uint16_t *httpResult)
 {
     resultCode_t rslt;
-    timeoutSec = (timeoutSec == 0) ? http__defaultTimeoutBGxSec : timeoutSec;
-    uint32_t timeoutMS = timeoutSec * 1000;
+    uint32_t timeoutMS = httpCtrl->defaultTimeoutS * 1000;
 
     int pages = 0;
     int bytes = 0;
 
     /* PROCESS ACTIVE DATA STREAM FLOW 
      *-------------------------------------------------------------------------------------------*/
-    if (httpCtrl->requestState != httpState_requestComplete)        // readPage() only valid after 
-        return resultCode__preConditionFailed;                      // a completed GET\POST
+    if (httpCtrl->requestState != httpState_requestComplete)
+        return resultCode__preConditionFailed;                                  // readPage() only valid after a completed GET\POST
 
     // readability var
     cBuffer_t* rxBffr = g_lqLTEM.iop->rxBffr;
-    // rxDataBufferCtrl_t *pRxBffr = &(httpCtrl->recvBufCtrl);            // smart-buffer for this operation
 
-    // IOP_resetRxDataBufferPage(pRxBffr, 0);                             // reset data buffers for flow
-    // IOP_resetRxDataBufferPage(pRxBffr, 1);
-    // IOP_PG() = 0;
+    //uint16_t atResult;
+    //char grabBffr[20];
+    //uint16_t trlrIndx;
 
-    // PRINTF(dbgColor__dMagenta, "httpDoWork-iopPg=%d, [0]=%d, [1]=%d\r", pBuf->iopPg, rxPageDataAvailable(pBuf, 0), rxPageDataAvailable(pBuf, 1));
+    #define CONNECT_SZ 9
+    #define CHECKFOR_CONNECT_SZ 15
+    #define LOOKBACK_SZ 30
+    #define TRAILER_SZ 20
 
-    /* once read is invoked page data buffered in BGx will stream VERY quickly. If the page is
-    * large, there may be a pause for BGx to retrieve more data. At this point the device
-    * needs to be dedicated to servicing the incoming data.
-    * 
-    * ISR will be firing and filling buffers, this block needs to efficiently send them to application
-    *-----------------------------------------------------------------------------------------------*/
 
-    if (ATCMD_awaitLock(timeoutMS))
+    /* 1st time: Issue HTTP Read command, wait for CONNECT data header, grab any data available and give to appl
+     * 2nd+ times: grab any data available and give to appl
+     *
+     * ISR will be firing and filling buffers, this block marshalls them to application
+     * Done when trailer recv'd, progress times out, or cancel is issued
+     *  ---------------------------------------------------------------------------------------- */
+    if (httpCtrl->requestState == httpState_requestComplete)
     {
-        // g_lqLTEM.iop->rxStreamCtrl = httpCtrl;                      // provide the stream control for data/control, puts IOP in data mode
-
-        /* issue AT+QHTTPREAD to start data stream, change state to httpState_responseRecvd
-        *-----------------------------------------------------------------------------------*/
-        uint16_t atResult;
-        char atCmdStr[30];
-        char grabBffr[20];
-        snprintf(atCmdStr, sizeof(atCmdStr), "AT+QHTTPREAD=%d", timeoutSec);
-        atcmd_sendCmdData(atCmdStr, strlen(atCmdStr), "\r");                // using raw send, response will be collected in data buffers not command buffer
-        
-        /* process page data 
-        *-----------------------------------------------------------------------------------*/
-        //char *trailerAt;
-        uint16_t trailerIndx;
-
-        #define CONNECT_SZ 9
-        #define CHECKFOR_CONNECT_SZ 15
-        #define LOOKBACK_SZ 30
-        #define TRAILER_SZ 20
-
-        while (true)
+        if (atcmd_tryInvoke("AT+QHTTPREAD=%d", httpCtrl->defaultTimeoutS))
         {
-            /*  wait for "pre-data" signal: CONNECT
-             *  skip "CONNECT"
-             *  9 chars with \r\n  */
-            if (httpCtrl->requestState == httpState_requestComplete && cbffr_getFilled(rxBffr) > CONNECT_SZ)
+
+            /* Waiting for CONNECT signal, data follows immediately
+                ----------------------------------------------------------------------------------- */
+            if (httpCtrl->requestState == httpState_requestComplete && 
+                cbffr_getFillCnt(rxBffr) > CONNECT_SZ)
             {
-                uint16_t continueIndx = cbffr_find(rxBffr, "CONNECT\r\n", 0, 0, true);
-                
-                if (continueIndx == UINT16_MAX)
+                if (cbffr_find(rxBffr, "CONNECT\r\n", 0, 0, true) == CBFFR_NOFIND)
                 {
                     httpCtrl->httpStatus = resultCode__internalError;
-                    break;
+                    return false;
                 }
                 httpCtrl->requestState = httpState_readingData;
                 PRINTF(dbgColor__dMagenta, "httpRead() >>reading\r");
-                cbffr_skip(rxBffr, CONNECT_SZ);
+                cbffr_skipTail(rxBffr, CONNECT_SZ);                                         // skip ahead to data past "CONNECT\r\n"
+            }
+        }
+    }
+
+    // HTTP Read trailer: "OK\r\n\r\n+QHTTPREAD: ###\r\n"        Error codes 0, 701-730;  length=21 or 23
+    #define READ_TRAILER_SZ 23
+
+    if (httpCtrl->requestState == httpState_readingData)
+    {
+        do
+        {
+            /* Check for end-of-page (EOP), stop sending app data at "+QHTTPREAD: <err>" 
+                * <err> == 0: no error
+            *-------------------------------------------------------------------------------*/
+            uint16_t trailerOffset = cbffr_find(rxBffr, "OK\r\n\r\n+QHTTPREAD: ", 0, 0, false);
+
+            if (trailerOffset == CBFFR_NOFIND)                                                      // in the data section of response
+            {
+                cbffr_popLeave(rxBffr, pageBffr, pageBffrSz, READ_TRAILER_SZ);                      // grab up to a possible trailer
+                httpResult = 0;
+                return true;                                                                        // more data available, host appl to make additional calls
+            }
+            if (trailerOffset > pageBffrSz)                                                         // more data in front of trailer than requested buffer size
+            {
+                cbffr_pop(rxBffr, pageBffr, pageBffrSz);                                            // return data and get trailer on subsequent call
+                httpResult = 0;
+                return true;
             }
 
-            if (httpCtrl->requestState == httpState_readingData)                                        // got the CONNECT signal that data is forthcoming
+            // trailer found, grab remaining data and parse trailer for http result
+            if (cbffr_getFillCnt(rxBffr) >= READ_TRAILER_SZ)                                        // complete trailer present, ready to parse
             {
-                char* appData;
-                uint16_t appDataLen;
-                bool dataRemains;
+                uint16_t popSz = MIN(pageBffrSz, trailerOffset);
+                cbffr_pop(rxBffr, pageBffr, pageBffrSz);
 
-                /* Check for end-of-page (EOP), stop sending app data at "+QHTTPREAD: <err>" 
-                 * <err> == 0: no error
-                *-------------------------------------------------------------------------------*/
-                trailerIndx = cbffr_find(rxBffr, "+QHTTPREAD: ", 0, 0, true);
 
-                if (trailerIndx == UINT16_MAX)                                                      // have not found trailer yet, keep push data to application
-                    dataRemains = cbffr_getBlockRef(rxBffr, &appData, &appDataLen);                 // get pointer to non-wrapped data block
-                else
-                {
-                    cbffr_grab(rxBffr, trailerIndx + TRAILER_SZ, grabBffr, sizeof(grabBffr));       // found trailer need to parse it for http result
-                    httpCtrl->bgxError = strtol(grabBffr, NULL, 10);
-                    httpCtrl->requestState = httpState_closing;
-                    httpCtrl->httpStatus = resultCode__success;
-                }
+                char parseBffr[READ_TRAILER_SZ - 2];
+                cbffr_pop(rxBffr, parseBffr, READ_TRAILER_SZ - 2);                                  // may end in "7xx" or "0\r\n"
+                uint32_t httpRslt = strtol(parseBffr + 18, NULL, 10);
+                *httpResult = httpRslt == 0 ? resultCode__success : (uint16_t)httpRslt;
 
-                /* Forward data to app
-                *-------------------------------------------------------------------------------*/
-                if (appDataLen > 0)
-                {
-                    if (!httpCtrl->pageCancellation)
-                    {
-                        uint32_t start = pMillis();
-                        ((httpRecv_func)g_lqLTEM.streams[httpCtrl->dataCntxt].recvDataCB)(httpCtrl->dataCntxt, httpCtrl->httpStatus, appData, appDataLen);
-                        uint32_t duration = pMillis() - start;
-                        ASSERT_W(duration <= 5, "HTTP pageCB slow-ovrflw risk")   // BGx out 115200 baud, NXP buffer 60 chars = 5.2mS
-                    }
-                    cbffr_discardBlock(rxBffr);                                                     // delivered, signal block consumed
-                }
-                
-                if (httpCtrl->requestState == httpState_closing)                                    // if page trailer detected
-                {
-                    PRINTF(dbgColor__magenta, "ReadRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
-                    httpCtrl->requestState = httpState_idle;
-                    break;
-                }
-            }   // if httpState_readingData
 
-            // /* Check for buffer PAGE timeout (200ms) to pull last partial buffer in from IOP
-            // *-------------------------------------------------------------------------------*/
-            // if (IOP_rxPageDataAvailable(pRxBffr, IOP_PG()) && IOP_getRxIdleDuration() > 200)
+                // NEED TO POP DATA TOO
+            }
+
+
+
+            // if (trlrIndx == CBFFR_NOFIND)                                                    // have not found trailer yet, keep push data to application
+            //     dataRemains = cbffr_getBlockRef(rxBffr, &appData, &appDataLen);                 // get pointer to non-wrapped data block
+            // else
             // {
-            //     PRINTF(dbgColor__dMagenta, "PageTO-GrabIoPPg:%d\r", IOP_PG());
-            //     IOP_swapRxBufferPage(pRxBffr);                                                          // pull page forward
+            //     cbffr_grab(rxBffr, trlrIndx + TRAILER_SZ, grabBffr, sizeof(grabBffr));       // found trailer need to parse it for http result
+            //     httpCtrl->bgxError = strtol(grabBffr, NULL, 10);
+            //     httpCtrl->requestState = httpState_closing;
+            //     httpCtrl->httpStatus = resultCode__success;
             // }
+
+            // /* Forward data to app
+            // *-------------------------------------------------------------------------------*/
+            // if (appDataLen > 0)
+            // {
+            //     if (!httpCtrl->pageCancellation)
+            //     {
+            //         uint32_t start = pMillis();
+            //         ((httpRecv_func)g_lqLTEM.streams[httpCtrl->dataCntxt].recvDataCB)(httpCtrl->dataCntxt, httpCtrl->httpStatus, appData, appDataLen);
+            //         uint32_t duration = pMillis() - start;
+            //         ASSERT_W(duration <= 5, "HTTP pageCB slow-ovrflw risk")   // BGx out 115200 baud, NXP buffer 60 chars = 5.2mS
+            //     }
+            //     cbffr_discardBlock(rxBffr);                                                     // delivered, signal block consumed
+            // }
+            
+            if (httpCtrl->requestState == httpState_closing)                                    // if page trailer detected
+            {
+                PRINTF(dbgColor__magenta, "ReadRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+                httpCtrl->requestState = httpState_idle;
+                break;
+            }
 
             /* catch REQUEST timeout here, so we don't wait forever.
             *-----------------------------------------------------------------------------------------------------------*/
@@ -586,15 +590,20 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec)
                 break;
             }
 
-        }   //while(true) 
-        if (httpCtrl->pageCancellation)
-            httpCtrl->httpStatus = resultCode__cancelled;
+        } while(true);
 
-        atcmd_close();                                                                                  // close the GET\POST request and release atcmd lock
-        // g_lqLTEM.iop->rxStreamCtrl = NULL;                                                              // done, take IOP out of stream data mode
-        return httpCtrl->httpStatus;
-    }
-}   /* http_readPage() */
+    }   // if httpState_readingData
+
+    if (httpCtrl->pageCancellation)
+        httpCtrl->httpStatus = resultCode__cancelled;
+
+    atcmd_close();                                                                                  // close the GET\POST request and release atcmd lock
+    // g_lqLTEM.iop->rxStreamCtrl = NULL;                                                              // done, take IOP out of stream data mode
+    return httpCtrl->httpStatus;
+}
+
+
+
 
 #pragma endregion
 
@@ -642,6 +651,10 @@ static uint16_t S__setUrl(const char *url, uint16_t timeoutSec)
     return (urlState == 2) ? resultCode__success : atResult;
 }
 
+void http_cancelPage(httpCtrl_t *httpCtrl)
+{}
+
+#pragma Static Response Parsers
 
 /* Note for parsers below:
  * httprspcode is only reported if err is 0, have to search for finale (\r\n) after a preamble (parser speak)
@@ -659,3 +672,4 @@ static cmdParseRslt_t S__httpPostStatusParser()
     return atcmd_stdResponseParser("+QHTTPPOST: ", true, ",", 0, 1, "\r\n", 0);
 }
 
+#pragma endregion

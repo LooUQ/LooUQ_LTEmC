@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEmC-2-bgx.ino
+ *  \file ltemc-2-bgx.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -42,9 +42,10 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-                                                    /* specify the pin configuration */
-#define HOST_FEATHER_UXPLOR                         // LooUQ UXplor development adapter for Feather
-// #define HOST_FEATHER_LTEM3F                      // LooUQ CR-LTEM3F device
+// specify host pinout
+#define HOST_FEATHER_UXPLOR_L                       // LooUQ UXplor development adapter for Feather
+//#define HOST_FEATHER_UXPLOR                         // LooUQ UXplor development adapter for Feather
+// #define HOST_FEATHER_LTEM3F                        // LooUQ CR-LTEM3F device
 
 // #include <ltemc.h>
 #include <ltemc-internal.h>                         /* not usually referenced in user application */

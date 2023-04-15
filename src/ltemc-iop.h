@@ -1,38 +1,35 @@
-/******************************************************************************
- *  \file ltemc-iop.h
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020-2022 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * IOP is the Input/Output processor for the LTEm line of LooUQ IoT modems. It
- * manages the IO via SPI-UART bridge and multiplexes cmd\data streams.
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #ifndef __LTEMC_IOP_H__
 #define __LTEMC_IOP_H__
 
-#include "ltemc-types.h"
-#include "ltemc-nxp-sc16is.h"
-
-
+// #include "ltemc-types.h"
+// #include "ltemc-nxp-sc16is.h"
+#include <stdint.h>
 
 #define USR_PG() (!pRxBffr->iopPg)
 #define IOP_PG() (pRxBffr->iopPg)
@@ -69,11 +66,21 @@ bool IOP_awaitAppReady();
 
 
 /**
- *	@brief Perform a TX send operation. This is a blocking call and should be used for sends of 50-100 chars.
+ *	@brief Perform a TX send operation. 
+    @details This call can block depending on TXis a blocking call and should be used for short sends.
  *  @param sendData [in] - Pointer to char data to send out, input buffer can be discarded following call.
  *  @param sendSz [in] - The number of characters to send.
  */
 void IOP_sendTx(const char *sendData, uint16_t sendSz);
+
+
+/**
+ *	@brief Perform a forced TX send immediate operation. Intended for sending break type events to device.
+ *  @param sendData [in] - Pointer to char data to send out, input buffer can be discarded following call.
+ *  @param sendSz [in] - The number of characters to send.
+ */
+void IOP_forceTx(const char *sendData, uint16_t sendSz);
+
 
 /**
  *	@brief Check for RX progress/idle.

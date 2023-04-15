@@ -1,47 +1,59 @@
-/******************************************************************************
- *  \file ltemc-types.h
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020-2022 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \brief Public API type definitions for consumption of LTEmC services.
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #ifndef __LTEMC_TYPES_H__
 #define __LTEMC_TYPES_H__
 
-
+#ifdef __cplusplus
+#include <cstdint>
+#include <cstdlib>
+#include <cstdbool>
+#else
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#endif // __cplusplus
+
 #include <lq-types.h>
 #include <lq-cBuffer.h>
 
-enum bufferSizes
+enum ltem__constants
 {
-    //                             /* can be reduced based on you protocol selections and your data segment sizes */
-    // bufferSz__txData = 1800,    // size should be equal or greater than length of largest data transmission
-    // bufferSz__cmdTx = 192,
-    // bufferSz__coreRx = 192,
+    ltem__bufferSz_rx = 2000,
+    ltem__bufferSz_tx = 1000,
 
-    bufferSz__rx = 2000,
-    // bufferSz__tx = 1800
+    ltem__swVerSz = 12,
+    ltem__errorDetailSz = 5,
+    ltem__moduleTypeSz = 8,
+
+    ltem__streamCnt = 7,            /// 6 for SSL/TLS capable data contexts + file system
+    ltem__urcHandlersCnt = 4        /// max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
 };
+
 
 /** 
  *  @brief Typed numeric constants for stream peers subsystem (sockets, mqtt, http)
@@ -69,15 +81,6 @@ typedef struct ltemPinConfig_tag
 } ltemPinConfig_t;
 
 
-enum ltem__constants
-{
-    ltem__swVerSz = 12,
-    ltem__errorDetailSz = 5,
-
-    ltem__streamCnt = 7,            /// 6 for SSL/TLS capable data contexts + file system
-    ltem__urcHandlersCnt = 4        /// max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
-};
-
 /** 
  *  \brief Enum describing the current device/module state
  */
@@ -100,7 +103,8 @@ typedef enum dataCntxt_tag
     dataCntxt_3 = 3,
     dataCntxt_4 = 4,
     dataCntxt_5 = 5,
-    dataCntxt__cnt = 6
+    dataCntxt__cnt = 6,
+    dataCntxt__none = 255
 } dataCntxt_t;
 
 
@@ -279,15 +283,15 @@ enum IOP__Constants
 // } txBufferCtrl_t;
 
 
-/** 
- *  @brief Struct for a IOP transmit (TX) buffer control block. Tracks progress of chunk sends to LTEm1.
- *  @details LTEm SPI bridge works with chunks of ~64 bytes (actual transfers are usually 58 - 62 bytes). IOP abstracts SPI chunks from senders.
- */
-typedef struct txControl_tag
-{
-    char *tx_chunkPtr;          /// Pointer to the next "chunk" of data to send to modem.
-    uint16_t tx_remainSz;       /// Remaining number of bytes in buffer to send to modem.
-} txControl_t;
+// /** 
+//  *  @brief Struct for a IOP transmit (TX) buffer control block. Tracks progress of chunk sends to LTEm1.
+//  *  @details LTEm SPI bridge works with chunks of ~64 bytes (actual transfers are usually 58 - 62 bytes). IOP abstracts SPI chunks from senders.
+//  */
+// typedef struct txControl_tag
+// {
+//     char *tx_chunkPtr;          /// Pointer to the next "chunk" of data to send to modem.
+//     uint16_t tx_remainSz;       /// Remaining number of bytes in buffer to send to modem.
+// } txControl_t;
 
 
 #define STREAM_UDP "UDP"
@@ -298,9 +302,9 @@ typedef struct txControl_tag
 #define STREAM__CNT 6
 #define STREAM_FILE "FILE"
 
-#define NO_URC '\0'
-
 typedef void (*urcHandler_func)();
+typedef void (*dataClose_func)(uint8_t cntxtNm);
+
 
 /** 
  *  @brief Base struct containing common properties required of a stream control
@@ -308,8 +312,9 @@ typedef void (*urcHandler_func)();
 typedef struct streamCtrl_tag
 {
     char streamType[streams__typeCodeSz];
-    void *pCtrl;                                    /// protocol specific control variables (cast to a protocol specific struct)
-    void *recvDataCB;                               /// callback into host application with data (cast from void* to specific function signature)
+    void *pCtrl;                                /// protocol specific control variables (cast to a protocol specific struct)
+    void *recvDataCB;                           /// callback into host application with data (cast from void* to specific function signature)
+    dataClose_func dataCloseCB;                 /// handler to perform orderly shutdown of data service
 } streamCtrl_t;
 
 
@@ -322,8 +327,9 @@ typedef struct streamCtrl_tag
  */
 typedef volatile struct iop_tag
 {
-    txControl_t* txCtrl;                            /// transmit state control: data pointer/remaining
-    cBuffer_t* rxBffr;                              /// receive buffer
+    cBuffer_t *txBffr;
+    // txControl_t* txCtrl;                            /// transmit state control: data pointer/remaining
+    cBuffer_t *rxBffr;                              /// receive buffer
 
     // iopStreamCtrl_t* streamPeers[streamPeer_cnt];               /// array of iopStream ctrl pointers, cast to a specific stream type: protocol or file stream
     // iopStreamCtrl_t* rxStreamCtrl;                              /// stream data source, if not null
@@ -354,7 +360,8 @@ enum atcmd__constants
     atcmd__setLockModeAuto = 1,
 
     atcmd__cmdBufferSz = 120,
-    atcmd__respBufferSz = 240
+    atcmd__respBufferSz = 240,
+    atcmd__respBffrShift = atcmd__respBufferSz / 4
 };
 
 
@@ -388,10 +395,8 @@ typedef struct atcmd_tag
     bool autoLock;                                      /// last invoke was auto and should be closed automatically on complete
     uint32_t invokedAt;                                 /// Tick value at the command invocation, used for timeout detection.
     
-    char respBffr[atcmd__respBufferSz];
-    char *response;                                     /// PTR into IOP "core" buffer, the response to the command received from the BGx (reset NULL fills buffer).
-    char *responseData;                                 /// PTR to response buffer adjusted to after found preamble pattern.
-    uint8_t respLen;
+    char response[atcmd__respBufferSz + 1];             /// response buffer, allows for post cmd execution review of received text (0-filled).
+    char *responseData;                                 /// PTR variable section of response.
 
     uint32_t execDuration;                              /// duration of command's execution in milliseconds
     resultCode_t resultCode;                            /// consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000

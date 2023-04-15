@@ -1,8 +1,0 @@
-{
-    "sketch": "ltem1-intro.ino",
-    "port": "COM12",
-    "board": "adafruit:samd:adafruit_feather_m0",
-    "output": ".//.build",
-    "configuration": "usbstack=arduino,debug=on",
-    "debugger": "jlink"
-}

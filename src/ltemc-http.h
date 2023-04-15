@@ -1,29 +1,28 @@
-/******************************************************************************
- *  \file ltemc-http.h
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * HTTP(s) protocol support
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #ifndef __LTEMC_HTTP_H__
 #define __LTEMC_HTTP_H__
@@ -102,6 +101,7 @@ typedef volatile struct httpCtrl_tag
     uint16_t httpStatus;                                    /// set to 0 during a request, initialized to 0xFFFF before any request
     uint32_t pageSize;                                      /// if provided in page response, the page size 
     uint32_t pageRemaining;                                 /// set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
+    uint8_t defaultTimeoutS;                                /// default timeout for page requests (BGx is 60 secs)
     bool pageCancellation;                                  /// set to abandon further page loading
 } httpCtrl_t;
 
@@ -120,7 +120,7 @@ extern "C"
  *  @param recvBufSz [in] Size of the receive buffer.
  *  @param recvCallback [in] Callback function to receive incoming page data.
  */
-void http_init(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, char *recvBuf, uint16_t recvBufSz, httpRecv_func recvCallback);
+void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func recvCallback);
 
 
 /**
@@ -192,12 +192,21 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
 
 /**
  *	@brief Retrieves page results from a previous GET or POST.
- *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	@param timeoutSec [in] - the number of seconds to wait (blocking) for a page response
- *  @return true if POST request completed
- */
-resultCode_t http_readPage(httpCtrl_t *httpCtrl, uint16_t timeoutSec);
 
+ *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ *	@param pageBffr [in] - Pointer to the host application buffer to receive page contents.
+ *  @param bffrSz [in] The number of chars to return.
+ *  
+ *  @return true if there are additional chars to read, false if page contents have been transfered and the request is complete.
+ */
+bool http_readPage(httpCtrl_t *httpCtrl, char *pageBffr, uint16_t pageBffrSz, uint16_t *httpResult);
+
+/**
+ *	@brief Cancels a http_readPage flow if the remaining contents are not needed.
+ *  @details This is a blocking call. The page read off the network will continue, but the contents will be discarded.
+
+ *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ */
 void http_cancelPage(httpCtrl_t *httpCtrl);
 
 

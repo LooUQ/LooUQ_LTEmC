@@ -7,6 +7,8 @@
         "network.h": "c",
         "gnss.h": "c",
         "ip.h": "c",
-        "mqtt.h": "c"
+        "mqtt.h": "c",
+        "ltemc-internal.h": "c",
+        "ltemc.h": "c"
     }
 }

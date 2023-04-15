@@ -1,30 +1,32 @@
-/******************************************************************************
- *  \file ltemc-iop.c
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020, 2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * IOP is the Input/Output processor for the LTEm line of LooUQ IoT modems. It
- * manages the IO via SPI-UART bridge and multiplexes cmd\data streams.
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \brief LTEmC INTERNAL low-level I/O processing functionality
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+  \warning The IOP processor is the low-level I/O processing code, including
+  interrupt servicing. Updates should only be performed as directed by LooUQ.
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 /*** Known BGx Header Patterns Supported by LTEmC IOP ***
 /**
@@ -54,10 +56,13 @@
  * 
  */
 
-
 #pragma region Header
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
+#define SRCFILE "IOP"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#include "ltemc-internal.h"
+#include "ltemc-iop.h"
+
+#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -72,9 +77,6 @@
 #endif
 
 
-#define SRCFILE "IOP"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#include "ltemc-internal.h"
-#include "ltemc-iop.h"
 // #include "ltemc-sckt.h"                                 // protocols that are tightly coupled to I/O processing
 // #include "ltemc-mqtt.h"
 
@@ -91,7 +93,7 @@ extern ltemDevice_t g_lqLTEM;
 #pragma region Private Static Function Declarations
 /* ------------------------------------------------------------------------------------------------ */
 
-
+static void S_txSendBlock(uint8_t txLevel);
 
 //change suspects
 // static cBffr_t *S_createRxBuffer();
@@ -122,24 +124,31 @@ void IOP_create()
     g_lqLTEM.iop = calloc(1, sizeof(iop_t));
     ASSERT(g_lqLTEM.iop != NULL);
 
-    cBuffer_t *txCtrl = calloc(1, sizeof(txControl_t));           // allocate space for control struct
-    if (txCtrl == NULL)
-        return NULL;
+    cBuffer_t *txBffrCtrl = calloc(1, sizeof(cBuffer_t));           // allocate space for TX buffer control struct
+    if (txBffrCtrl == NULL)
+        return;
+    char *txBffr = calloc(1, ltem__bufferSz_tx);                    // allocate space for raw buffer
+    if (txBffr == NULL)
+    {
+        free(txBffr);
+        return;
+    }
 
-    cBuffer_t *rxBffrCtrl = calloc(1, sizeof(cBuffer_t));           // allocate space for control struct
+    cBuffer_t *rxBffrCtrl = calloc(1, sizeof(cBuffer_t));           // allocate space for RX buffer control struct
     if (rxBffrCtrl == NULL)
-        return NULL;
-
-    char *rxBffr = calloc(1, bufferSz__rx);                     // allocate space for raw buffer
+        return;
+    char *rxBffr = calloc(1, ltem__bufferSz_rx);                    // allocate space for raw buffer
     if (rxBffr == NULL)
     {
         free(rxBffr);
-        return NULL;
+        return;
     }
 
-    cbffr_init(rxBffrCtrl, rxBffr, bufferSz__rx);               // initialize as a circ-buffer
-    g_lqLTEM.iop->txCtrl = txCtrl;                              // add into IOP struct
-    g_lqLTEM.iop->rxBffr = rxBffrCtrl;
+    cbffr_init(txBffrCtrl, txBffr, ltem__bufferSz_tx);               // initialize as a circ-buffer
+    g_lqLTEM.iop->txBffr = txBffrCtrl;                            // add into IOP struct
+
+    cbffr_init(rxBffrCtrl, rxBffr, ltem__bufferSz_rx);               // initialize as a circ-buffer
+    g_lqLTEM.iop->rxBffr = rxBffrCtrl;                            // add into IOP struct
 }
 
 
@@ -160,15 +169,6 @@ void IOP_detachIrq()
 {
     platform_detachIsr(g_lqLTEM.pinConfig.irqPin);
 }
-
-
-// /**
-//  *	@brief register a stream peer with IOP to control communications. Typically performed by protocol open.
-//  */
-// void IOP_registerStream(streamPeer_t streamIndx, iopStreamCtrl_t *streamCtrl)
-// {
-//     g_lqLTEM.iop->streamPeers[streamIndx] = streamCtrl;
-// }
 
 
 /**
@@ -206,30 +206,34 @@ bool IOP_awaitAppReady()
 }
 
 
-
 /**
- *	@brief Perform a TX send operation. This is a blocking call and should only be used for sends of 50-100 chars.
+ *	@brief Perform a TX send operation buffered in TX buffer. This is a blocking until send is buffered.
  */
 void IOP_sendTx(const char *sendData, uint16_t sendSz)
 {
-    PRINTF(dbgColor__dCyan, "txSend=%s\r", sendData);
     do
     {
-        uint16_t writeSz = MIN(sendSz, SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr));
-
-        g_lqLTEM.iop->lastTxAt = pMillis();                         // operational reporting to host 
-        SC16IS7xx_write(sendData, writeSz);
-        sendSz -= writeSz;
-
-    } while (sendSz == 0);
+        uint16_t pushed = cbffr_push(g_lqLTEM.iop->txBffr, sendData, sendSz);
+        sendSz -= pushed;
+    } while (sendSz > 0);
+    
+    // if TX flow is idle, need to start it
+    uint8_t txLevel = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
+    if (txLevel == SC16IS7xx__FIFO_bufferSz)                                // if UART buffer empty TX is idle. Initiate the TX flow, ISR will do the rest
+    {
+        PRINTF(dbgColor__gray, "IOP_sendTx^\r");
+        S_txSendBlock(txLevel);
+    }
 }
 
 
 /**
- *	@brief Start a (raw) send operation.
+ *	@brief Perform a forced TX send immediate operation. Intended for sending break type events to device.
  */
-uint16_t IOP_sendTxFromBuffer(const char *sendData, uint16_t sendSz)
+void IOP_forceTx(const char *sendData, uint16_t sendSz)
 {
+    // TODO: refactor to clr UART, decouple txBffr and send immediately.
+    IOP_sendTx(sendData, sendSz);
 }
 
 
@@ -716,7 +720,18 @@ static inline uint8_t S_convertCharToContextId(const char cntxtChar)
 //     }
 // }
 
-
+static void S_txSendBlock(uint8_t txLevel)
+{
+    if (cbffr_getFillCnt(g_lqLTEM.iop->txBffr) > 0)                         // something to send
+    {
+        //PRINTF(dbgColor__dCyan, "txChunk=%s", buf);
+        char *blockPtr;
+        uint16_t blockSz;
+        cbffr_getTailBlock(g_lqLTEM.iop->txBffr, &blockPtr, &blockSz);      // get contiguous block from cbffr
+        SC16IS7xx_write(blockPtr, MIN(txLevel, blockSz));                   // send what bridge buffer allows
+        cbffr_skipTail(g_lqLTEM.iop->txBffr, blockSz);                      // update cbffr controls
+    }
+}
 
 /**
  *	@brief ISR for NXP UART interrupt events, the NXP UART performs all serial I/O with BGx.
@@ -736,7 +751,7 @@ static void S_interruptCallbackISR()
 
     SC16IS7xx_IIR iirVal;
     uint8_t rxLevel;
-    uint8_t txAvailable;
+    uint8_t txLevel;
 
     iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
     retryIsr:
@@ -752,52 +767,39 @@ static void S_interruptCallbackISR()
             regReads++;
         }
 
-
+        // RX Error
         if (iirVal.IRQ_SOURCE == 3)                                                     // priority 1 -- receiver line status error : clear fifo of bad char
         {
             PRINTF(dbgColor__error, "RXErr ");
             SC16IS7xx_flushRxFifo();
         }
 
-        
-        if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)                           // priority 2 -- receiver RHR full (src=2), receiver time-out (src=6)
-        {                                                                               // Service Action: read RXLVL, read FIFO to empty
+        // RX
+        if (iirVal.IRQ_SOURCE == 2 || iirVal.IRQ_SOURCE == 6)                       // priority 2 -- receiver RHR full (src=2), receiver time-out (src=6)
+        {                                                                           // Service Action: read RXLVL, read FIFO to empty
             rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-            PRINTF(dbgColor__gray, "RX-sz=%d ", rxLevel);
-
+            PRINTF(dbgColor__gray, "rxLvl=%d ", rxLevel);
             if (rxLevel > 0)
             {
                 g_lqLTEM.iop->lastRxAt = pMillis();
 
-                // bool potentialUrc = false;                
-                while (rxLevel)
-                {
-                    cBffrOffer_t offer = cbffr_getOffer(g_lqLTEM.iop->rxBffr, rxLevel);     // request a non-wrapping space in buffer
-                    SC16IS7xx_read(offer.address, offer.length);
-                    PRINTF(dbgColor__cyan, "-rx(%p:%d) ", offer.address, offer.length);
-                    rxLevel =- offer.length;
+                char *bAddr;
+                uint16_t bSz;
+                cbffr_getHeadBlock(g_lqLTEM.iop->rxBffr, &bAddr, &bSz);             // get contiguous block from cbffr
 
-                    // Run mode URCs start with +C or +Q chars (excludes module rdy/power); set URC pending flag with '+' == detect possible
-                    if (g_lqLTEM.urcPending == NO_URC)
-                        g_lqLTEM.urcPending = memchr(offer.address, '+', offer.length) ? '+' : NO_URC;
-
-                    cbffr_takeOffer(g_lqLTEM.iop->rxBffr);                                  // signal to cBffr to update internal ctrls from offer
-                }
+                rxLevel = MIN(rxLevel, bSz);                                        // calc effective receive count
+                PRINTF(dbgColor__cyan, "-rx(%p:%d) ", bAddr, rxLevel);
+                SC16IS7xx_read(bAddr, rxLevel);                                     // min of NXP buffer chars or contiguous space in cBffr
+                cbffr_skipHead(g_lqLTEM.iop->rxBffr, rxLevel);                      // adjust cBffr-head to external copy in
             }
         }
 
-        
-        if (iirVal.IRQ_SOURCE == 1)                                                     // priority 3 -- transmit THR (threshold) : TX ready for more data
+        // TX
+        if (iirVal.IRQ_SOURCE == 1)                                                 // priority 3 -- transmit THR (threshold) : TX ready for more data
         {
-            txAvailable = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
-            PRINTF(dbgColor__gray, "TX-sz=%d ", txAvailable);
-
-            if (g_lqLTEM.iop->txCtrl->tx_remainSz)                                     // something to send
-            {
-                PRINTF(dbgColor__dCyan, "txChunk=%s", buf);
-                uint8_t txSz = MIN(txAvailable, g_lqLTEM.iop->txCtrl->tx_remainSz);    // send what bridge buffer allows
-                SC16IS7xx_write(g_lqLTEM.iop->txCtrl->tx_chunkPtr, txSz);
-            }
+            txLevel = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
+            PRINTF(dbgColor__gray, "txLvl=%d ", txLevel);
+            S_txSendBlock(txLevel);                                                 // despool from TX buffer
         }
 
         /* -- NOT USED --
@@ -816,10 +818,10 @@ static void S_interruptCallbackISR()
     if (irqPin == gpioValue_low)
     {
         iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
-        txAvailable = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
+        txLevel = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
         rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
 
-        PRINTF(dbgColor__warn, "IRQ failed to reset!!! nIRQ=%d, iir=%d, txLvl=%d, rxLvl=%d \r", iirVal.IRQ_nPENDING, iirVal.reg, txAvailable, rxLevel);
+        PRINTF(dbgColor__white, "NestedIRQ: nIRQ=%d, iir=%d, txLvl=%d, rxLvl=%d \r", iirVal.IRQ_nPENDING, iirVal.reg, txLevel, rxLevel);
         goto retryIsr;
     }
 }

@@ -1,29 +1,33 @@
-/******************************************************************************
- *  \file ltemc-atcmd.c
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020-2022 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * BGx AT command processor 
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \brief LTEmC INTERNAL BGx AT command processor 
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
+
+#define SRCFILE "ATC"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#include <stdarg.h>
+#include "ltemc-internal.h"
 
 #define _DEBUG 0                                // set to non-zero value for PRINTF debugging output, 
 // debugging output options                     // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
@@ -38,10 +42,6 @@
 #else
 #define PRINTF(c_, f_, ...) 
 #endif
-
-#define SRCFILE "ATC"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#include <stdarg.h>
-#include "ltemc-internal.h"
 
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -71,7 +71,7 @@ void atcmd_reset(bool releaseLock)
         g_lqLTEM.atcmd->isOpenLocked = false;                           // reset current lock
 
     memset(g_lqLTEM.atcmd->cmdStr, 0, atcmd__cmdBufferSz);
-    memset(g_lqLTEM.atcmd->respBffr, 0, atcmd__respBufferSz);
+    memset(g_lqLTEM.atcmd->response, 0, atcmd__respBufferSz);
     memset(g_lqLTEM.atcmd->errorDetail, 0, ltem__errorDetailSz);
     g_lqLTEM.atcmd->resultCode = 0;
     g_lqLTEM.atcmd->invokedAt = 0;
@@ -79,9 +79,7 @@ void atcmd_reset(bool releaseLock)
     g_lqLTEM.atcmd->execDuration = 0;
 
     // response side
-    g_lqLTEM.atcmd->respLen = 0;
-    g_lqLTEM.atcmd->response = g_lqLTEM.atcmd->respBffr;
-    g_lqLTEM.atcmd->responseData = g_lqLTEM.atcmd->respBffr;            // reset "data" component of response to full-response to start
+    g_lqLTEM.atcmd->responseData = g_lqLTEM.atcmd->response;            // reset "data" component of response to full-response
     // restore defaults
     g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
     g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
@@ -175,9 +173,6 @@ void atcmd_sendCmdData(const char *data, uint16_t dataSz, const char* eotPhrase)
 }
 
 
-#define ATCMDRESP_DESTINATION   (g_lqLTEM.atcmd->response + g_lqLTEM.atcmd->respLen)
-#define ATCMDRESP_AVAILABLE     (atcmd__respBufferSz - g_lqLTEM.atcmd->respLen)
-
 /**
  *	\brief Checks receive buffer for command response and sets atcmd structure data with result.
  */
@@ -190,26 +185,25 @@ resultCode_t ATCMD_readResult()
     ltem_doWork();                                                                      // check for URC pending and service (potentionally in front of cmd response)
     if (cbffr_getFillCnt(g_lqLTEM.iop->rxBffr) > 0)
     {
-        peekedLen = cbffr_peek(g_lqLTEM.iop->rxBffr, ATCMDRESP_DESTINATION,  ATCMDRESP_AVAILABLE);      // peek ahead (non-disruptive pop)
-        g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();                         // parse for cmd response
+        // ASSERT(cbffr_getFillCnt(g_lqLTEM.iop->rxBffr) <= atcmd__respBufferSz);          // ATCMD response parsing handles short/general purpose command responses
+        //                                                                                 // streams (HTTP, MQTT, etc. have custom parsers)
+        // shift response buffer by fillCnt
+        // pop into response buffer
+
+        uint8_t respLen = strlen(g_lqLTEM.atcmd->response);
+        uint8_t popSz = MIN(atcmd__respBufferSz - respLen, cbffr_getFillCnt(g_lqLTEM.iop->rxBffr));
+        if (respLen == atcmd__respBufferSz)                   // need to make room
+        {
+            memmove(g_lqLTEM.atcmd->response, g_lqLTEM.atcmd->response + cbffr_getFillCnt(g_lqLTEM.atcmd->response), atcmd__respBffrShift);     // shift response bffr
+            popSz = MIN(popSz, atcmd__respBffrShift);                                                                                           // adj pop to fill vacated
+            respLen = atcmd__respBufferSz - atcmd__respBffrShift;
+        }
+        char *dest = g_lqLTEM.atcmd->response + respLen;
+        cbffr_pop(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->response + respLen,  popSz);    // pop response for parsing in response buffer
+
+        g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();         // parse for cmd response
         PRINTF(dbgColor__gray, "prsr=%d \r", g_lqLTEM.atcmd->parserResult);
     }
-
-    cbffr_skip(g_lqLTEM.iop->rxBffr, peekedLen);
-
-    // if (*(g_lqLTEM.iop->rxCBuffer->tail) != '\0')                                   // if cmd buffer not empty, test for command complete with registered parser
-    // {
-    //     while (g_lqLTEM.iop->rxCBuffer->tail[0] == '\r' ||                          // remove prefixing line terminators
-    //            g_lqLTEM.iop->rxCBuffer->tail[0] == '\n')
-    //     {
-    //         g_lqLTEM.iop->rxCBuffer->tail++;
-    //     }
-    //     g_lqLTEM.atcmd->response = g_lqLTEM.iop->rxCBuffer->tail;                   // tracked in ATCMD struct for later accessibility
-    //     g_lqLTEM.atcmd->responseData = g_lqLTEM.iop->rxCBuffer->tail;
-        
-    //     g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();     // PARSE response
-    //     PRINTF(dbgColor__gray, "prsr=%d \r", g_lqLTEM.atcmd->parserResult);
-    // }
 
     if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_error)                          // check error bit
     {

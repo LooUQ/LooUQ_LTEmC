@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEmC-3-iop.ino
+ *  \file ltemc-3-iop.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -43,8 +43,9 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-                                        // define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// specify the host pin configuration
+#define HOST_FEATHER_UXPLOR_L
+// #define HOST_FEATHER_UXPLOR             
 // #define HOST_FEATHER_LTEM3F
 
 //#include <ltemc.h>
@@ -54,7 +55,8 @@
 
 #define STRCMP(x, y)  (strcmp(x, y) == 0)
 
-char *cmdBuf;
+cBuffer_t rxBffr;
+char rBuffer[200] = {0};
 
 void setup() {
     #ifdef SERIAL_OPT
@@ -71,34 +73,39 @@ void setup() {
     lqDiag_setNotifyCallback(applEvntNotify);                   // configure LTEMC ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, applEvntNotify);          // create LTEmC modem (no yield CB for testing)
-    startLTEm();                                                // local initialize\start can't use ltem_start() yet
+    startLTEm();                                                // test defined initialize\start, can't use ltem_start() for this test scenario
 
-    cmdBuf = ((iop_t*)g_lqLTEM.iop)->rxCBuffer->_buffer;        // readability var
+    cbffr_init(&rxBffr, rBuffer, sizeof(rBuffer));
+    g_lqLTEM.iop->rxBffr = &rxBffr;                             // override LTEm created buffer with test instance
 }
 
 
 int loopCnt = 0;
+char hostRxBffr[255];
 
 void loop() 
 {
-    // const char *cmd = "AT+GSN\r\0";                          // short response (contained in 1 rxCtrlBlock)
-    const char *cmd = "AT+GSN;+QCCID;+GSN;+QCCID\r\0";          // long response (requires multiple rxCtrlBlocks)
-    // const char *cmd = "AT+QPOWD\r\0";                        // something is wrong! Is is rx or tx (tx works if BG powers down)
+    /* Optional command strings for testing, must be from RAM (can't use const char* to create)
+     */
+    char cmd[] = "AT+GSN;+QCCID\r";                             // short response (contained in 1 rxCtrlBlock)
+    // char cmd[] = "AT+GSN;+QCCID;+GSN;+QCCID\r";                 // long response (requires multiple rxCtrlBlocks)
+    // char cmd[] = "AT+QPOWD\r";                                  // Is something wrong? Is is rx or tx (tx works if BG powers down)
 
-    PRINTF(0, "Invoking cmd: %s \r\n", cmd);
+    PRINTF(0, "Invoking cmd: %s       ", cmd);
+    IOP_sendTx(cmd, strlen(cmd));                               // send, wait for complete
+    PRINTF(0, "Sent\r\n");
 
-    IOP_resetCoreRxBuffer();                                    // clear out receive buffer
-    IOP_sendTx(cmd, strlen(cmd), true);                         // send command
-    PRINTF(0, "Command sent\r\n");
+    pDelay(500);                                                // give BGx a second to respond, interrupt should fire and fill cmd rx buffer
+    PRINTF(dbgColor__green, "Got %d chars (so far)\r", cbffr_getFillCnt(&rxBffr));
+    
+    memset(hostRxBffr, 0, sizeof(hostRxBffr));
+    cbffr_pop(&rxBffr, hostRxBffr, sizeof(hostRxBffr));
 
-    pDelay(1000);                                               // give BGx a second to respond, interrupt should fire and fill cmd rx buffer
-
-    PRINTF(dbgColor__green, "Got %d chars (so far)\r", strlen(cmdBuf));
-    PRINTF(dbgColor__cyan, "Resp: %s\r", cmdBuf);  
+    PRINTF(dbgColor__cyan, "Resp: %s\r", hostRxBffr);
+    PRINTF(dbgColor__green, "rxBffr has %d chars now.\r", cbffr_getFillCnt(&rxBffr));
 
     loopCnt ++;
     indicateLoop(loopCnt, 1000);                                // BGx reference says 300mS cmd response time, we will wait 1000
-    PRINTF(dbgColor__magenta, "FreeMem=%u\r", getFreeMemory());
 }
 
 
@@ -122,19 +129,21 @@ void startLTEm()
 	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
 
     spi_start(g_lqLTEM.spi);
-
     if (QBG_isPowerOn())                                        // power on BGx, returning prior power-state
     {
 		PRINTF(dbgColor__info, "LTEm1 found powered on.\r\n");
         g_lqLTEM.deviceState = deviceState_appReady;        // if already "ON", assume running and check for IRQ latched
     }
     else
+    {
+        g_lqLTEM.deviceState = deviceState_powerOff;
         QBG_powerOn();
-
+    }
     SC16IS7xx_start();                                          // start (resets previously powered on) NXP SPI-UART bridge
     SC16IS7xx_enableIrqMode();
     IOP_attachIrq();
-    IOP_awaitAppReady();                                        // wait for BGx to signal out firmware ready
+    if (g_lqLTEM.deviceState != deviceState_appReady)
+        IOP_awaitAppReady();                                    // wait for BGx to signal out firmware ready
 }
 
 
@@ -152,7 +161,7 @@ void applEvntNotify(const char *eventTag, const char *eventMsg)
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(dbgColor__info, "\r\nLoop=%i \r\n", loopCnt);
+    PRINTF(dbgColor__none, "\r\nLoop=%i \r\n", loopCnt);
     PRINTF(dbgColor__none, "FreeMem=%u\r\n", getFreeMemory());
     PRINTF(dbgColor__none, "NextTest (millis)=%i\r\r", waitNext);
     pDelay(waitNext);

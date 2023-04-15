@@ -1,1 +1,1 @@
-"C:\Program Files\doxygen\bin\doxygen.exe" doxyfile
+"C:\Program Files\doxygen\bin\doxygen.exe" ltemc-doxyfile

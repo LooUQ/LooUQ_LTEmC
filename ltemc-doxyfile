@@ -44,7 +44,7 @@ PROJECT_NUMBER         = v2.3.0
 # for a project that appears at the top of each page and should give viewer a
 # quick idea about the purpose of the project. Keep the description short.
 
-PROJECT_BRIEF          = "C device driver for LooUQ LTE cellular modems"
+PROJECT_BRIEF          = "C device driver for LooUQ LTEm cellular modems"
 
 # With the PROJECT_LOGO tag one can specify a logo or an icon that is included
 # in the documentation. The maximum height of the logo should not exceed 55
@@ -482,7 +482,7 @@ NUM_PROC_THREADS       = 1
 # normally produced when WARNINGS is set to YES.
 # The default value is: NO.
 
-EXTRACT_ALL            = YES
+EXTRACT_ALL            = NO
 
 # If the EXTRACT_PRIVATE tag is set to YES, all private members of a class will
 # be included in the documentation.
@@ -2610,3 +2610,7 @@ GENERATE_LEGEND        = YES
 # This tag requires that the tag HAVE_DOT is set to YES.
 
 DOT_CLEANUP            = YES
+
+
+ALIASES += "license=@par License:^^"
+ALIASES += "loouq=<B>LooUQ Incorporated</B><BR>answers@loouq.com<BR>807 Airport Access Road, Suite 201, Traverse City, MI 49686 USA<BR><BR>Copyright (c) 2020-2023 LooUQ Incorporated.<BR>This project is released under the GPL-3.0 License." 

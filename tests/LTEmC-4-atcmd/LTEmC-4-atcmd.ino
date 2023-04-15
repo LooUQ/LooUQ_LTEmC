@@ -95,8 +95,6 @@ void loop()
     {
         resultCode_t atResult = atcmd_awaitResult();
         
-        if (atResult == resultCode__success)                                                // statusCode == 200 (similar to HTTP codes)
-        {
             char *response = atcmd_getResponse();
             PRINTF(dbgColor__info, "Got %d chars\r", strlen(response));
             PRINTF(dbgColor__white, "Resp:");
@@ -105,8 +103,8 @@ void loop()
             char *validResponse = "\r\nQuectel\r\nBG";                                      // near beginning (depends on BGx echo)
             if (!strstr(response, validResponse))
                 indicateFailure("Expected cmd response missing... failed."); 
-        }
-        else
+
+        if (atResult != resultCode__success)                                                // statusCode == 200 (similar to HTTP codes)
         {
             PRINTF(dbgColor__error, "atResult=%d \r", atResult);
             // indicateFailure("Unexpected command response... failed."); 

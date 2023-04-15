@@ -1,27 +1,31 @@
-/******************************************************************************
- *  \file ltemc.h
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020-2022 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \brief LTEmC INTERNAL type/enum/struct definitions
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+  \warning Updates should be only be done as directed by LooUQ staff.
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #ifndef __LTEMC_INTERNAL_H__
 #define __LTEMC_INTERNAL_H__
@@ -49,6 +53,8 @@
  * LTEmC device is created as a global singleton variable
  * ==============================================================================================================================*/
 
+
+
 /* Metric Type Definitions
  * ------------------------------------------------------------------------------------------------------------------------------*/
 typedef struct ltemMetrics_tag
@@ -57,6 +63,16 @@ typedef struct ltemMetrics_tag
     uint32_t cmdInvokes;
 
 } ltemMetrics_t;
+
+/**
+ * @brief enum describing the last receive event serviced by the ISR
+ */
+typedef enum recvEvent_tag
+{
+    recvEvent_none = 0,
+    recvEvent_data,
+    recvEvent_timeout
+} recvEvent_t;
 
 
  /** 
@@ -70,7 +86,7 @@ typedef struct ltemDevice_tag
     bool cancellationRequest;                   /// For RTOS implementations, token to request cancellation of long running task/action
     deviceState_t deviceState;                  /// Device state of the BGx module
     applEvntNotify_func applEvntNotifyCB;       /// Event notification callback to parent application
-    char moduleType[8];                         /// c-str indicating module type. BG96, BG95-M3, BG77, etc. (so far)
+    char moduleType[ltem__moduleTypeSz];        /// c-str indicating module type. BG96, BG95-M3, BG77, etc. (so far)
     void *spi;                                  /// SPI device (methods signatures compatible with Arduino)
     iop_t *iop;                                 /// IOP subsystem controls
     atcmd_t *atcmd;                             /// Action subsystem controls
@@ -79,8 +95,11 @@ typedef struct ltemDevice_tag
     providerInfo_t *providerInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
     streamCtrl_t streams[ltem__streamCnt];      /// Data streams: protocols or file system
 
-    char urcPending;                                    /// flag set by IOP RX indicating an incoming '+' detected; possible URC received
+    char urcActive;                                     /// URC being serviced (partially complete)
     urcHandler_func urcHandlers[ltem__urcHandlersCnt];  /// array of URC receipt handlers (parsers)
+
+    dataCntxt_t recvCntxt;                      /// Data context with ACTIVE data-in flow underway (between URC and IRD/SSLRECV chars retrieved)
+    recvEvent_t recvEvent;                      /// Signal from ISR indicating a receive event has just completed, needs servicing (doWork())
 
     ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
 } ltemDevice_t;

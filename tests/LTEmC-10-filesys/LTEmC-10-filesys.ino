@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEmC-10-filesys.ino
+ *  \file ltemc-10-filesys.ino
  *  \author Greg Terrell
  *  \license MIT License
  *

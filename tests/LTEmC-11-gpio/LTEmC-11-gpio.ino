@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEmC-11-gpio.ino
+ *  \file ltemc-11-gpio.ino
  *  \author Greg Terrell
  *  \license MIT License
  *

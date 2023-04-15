@@ -1,29 +1,28 @@
-/******************************************************************************
- *  \file ltemc-mqtt.h
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * MQTT protocol support 
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #ifndef __MQTT_H__
 #define __MQTT_H__
@@ -177,7 +176,7 @@ typedef struct mqttCtrl_tag
  *  @param msgId [in] MQTT ID of the message received.
 */
 //typedef void (*mqttRecv_func)(uint8_t dataCntxt, uint16_t msgId, const char *topic, char *topicProps, char *message, uint16_t messageSz);
-typedef void (*mqttRecv_func)(uint8_t dataCntxt, uint16_t msgId);
+typedef void (*mqttRecv_func)(dataCntxt_t dataCntxt, uint16_t msgId);
 
 
 #ifdef __cplusplus
@@ -190,12 +189,9 @@ extern "C"
  *  @brief Initialize a MQTT protocol control structure.
  *  @param mqttCtrl [in] Pointer to MQTT control structure governing communications.
  *  @param dataCntxt [in] Socket/data context to host this protocol stream.
- *  @param recvBuf [in] Pointer to application provided receive data buffer.
- *  @param recvBufSz [in] Size of provided data buffer.
  *  @param recvCallback [in] Callback function to be invoked when received data is ready.
- *  @return A mqtt object to govern operations for this protocol stream value indicating the state of the MQTT connection.
 */
-void mqtt_initControl(mqttCtrl_t *mqttCtrl, uint8_t dataCntxt, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecv_func recvCallback);
+void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt, mqttRecv_func recvCallback);
 
 
 /**
@@ -282,12 +278,18 @@ void mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem);
 
 
 /**
- *  @brief Disconnect and close a connection to a MQTT server
+ *  @brief Get current MQTT connection state
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  @param resetModem [in] True if modem should be reset prior to reestablishing MQTT connection.
 */
 mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl);
 
+
+/**
+ *  @brief Query device for current MQTT connection state.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @return A mqttState_t value indicating the state of the MQTT connection.
+*/
+mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl);
 
 
 /**
@@ -323,12 +325,12 @@ bool mqtt_readMessage(mqttCtrl_t *mqttCtrl, char *messageBffr, uint16_t bffrSz);
 
 
 /**
- *  @brief Close out and discard a message receive underway. This clears message state. 
+ *  @brief Cancel/close and discard a message receive underway. This clears message state. 
  *  @note This is not required if mqtt_readMessage() has been invoked and it returns false (no remaining message to deliver).
  * 
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
 */
-void mqtt_recvServiced(mqttCtrl_t *mqttCtrl);
+void mqtt_cancelMessage(mqttCtrl_t *mqttCtrl);
 
 
 #ifdef __cplusplus

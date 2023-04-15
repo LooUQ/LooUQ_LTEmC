@@ -1,29 +1,29 @@
-/******************************************************************************
- *  \file ltemc-mqtt.c
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * MQTT protocol support 
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \brief Public API providing MQTT/MQTTS support
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
@@ -81,9 +81,9 @@ static cmdParseRslt_t S__mqttPublishCompleteParser();
 
 
 /**
- *  \brief Initialize a MQTT protocol control structure.
+ *  @brief Initialize a MQTT protocol control structure.
 */
-void mqtt_init(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecv_func recvCallback)
+void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt, mqttRecv_func recvCallback)
 {
     ASSERT(dataCntxt < dataCntxt__cnt);                                 // valid streams index
     ASSERT(strlen(g_lqLTEM.streams[dataCntxt].streamType) == 0);        // context not already in use
@@ -98,7 +98,7 @@ void mqtt_init(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt, uint8_t *recvBuf, ui
 
 
 /**
- *  \brief Set the remote server connection values.
+ *  @brief Set the remote server connection values.
 */
 void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t mqttVersion, const char *clientId, const char *username, const char *password)
 {
@@ -116,7 +116,7 @@ void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t host
 
 
 /**
- *  \brief Open a remote MQTT server for use.
+ *  @brief Open a remote MQTT server for use.
 */
 resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
 {
@@ -180,13 +180,13 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
 
 
 /**
- *  \brief Connect (authenticate) to a MQTT server.
- *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  \param clientId [in] - The client or device identifier for the connection.
- *  \param username [in] - The user identifier or name for the connection to authenticate.
- *  \param password [in] - The secret string or phrase to authenticate the connection.
- *  \param cleanSession [in] - Directs MQTT to preserve or flush messages received prior to the session start.
- *  \return A resultCode_t value indicating the success or type of failure, OK = 200.
+ *  @brief Connect (authenticate) to a MQTT server.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param clientId [in] - The client or device identifier for the connection.
+ *  @param username [in] - The user identifier or name for the connection to authenticate.
+ *  @param password [in] - The secret string or phrase to authenticate the connection.
+ *  @param cleanSession [in] - Directs MQTT to preserve or flush messages received prior to the session start.
+ *  @return A resultCode_t value indicating the success or type of failure, OK = 200.
 */
 resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
 {
@@ -242,11 +242,11 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
 
 
 /**
- *  \brief Subscribe to a topic on the MQTT server.
- *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  \param topic [in] - The messaging topic to subscribe to.
- *  \param qos [in] - The MQTT QOS level for messages subscribed to.
- *  \return The topic index handle. 0xFF indicates the topic subscription was unsuccessful
+ *  @brief Subscribe to a topic on the MQTT server.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param topic [in] - The messaging topic to subscribe to.
+ *  @param qos [in] - The MQTT QOS level for messages subscribed to.
+ *  @return The topic index handle. 0xFF indicates the topic subscription was unsuccessful
  */
 resultCode_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos)
 {
@@ -261,20 +261,16 @@ resultCode_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t q
     if (atcmd_tryInvoke("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->dataContext, ++mqttCtrl->lastMsgId, topic, qos))
     {
         atResult = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(30), S__mqttSubscribeCompleteParser);
-        if (atResult == resultCode__success)
-        {
-            S__updateSubscriptionsTable(mqttCtrl, true, topic);
-        }
     }
     return atResult;
 }
 
 
 /**
- *  \brief Unsubscribe to a topic on the MQTT server.
- *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  \param topic [in] - The messaging topic to unsubscribe from.
- *  \return A resultCode_t (http status type) value indicating the success or type of failure, OK = 200.
+ *  @brief Unsubscribe to a topic on the MQTT server.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param topic [in] - The messaging topic to unsubscribe from.
+ *  @return A resultCode_t (http status type) value indicating the success or type of failure, OK = 200.
 */
 resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic)
 {
@@ -292,13 +288,13 @@ resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic)
 
 
 /**
- *  \brief Publish an encoded message to server.
- *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  \param topic [in] - Pointer to the message topic (see your server for topic formatting details).
- *  \param qos [in] - The MQTT QOS to be assigned to sent message.
- *  \param encodedMsg [in] - Pointer to message to be sent.
- *  \param timeoutSeconds [in] - Seconds to wait for publish to complete, highly dependent on network and remote server.
- *  \return A resultCode_t value indicating the success or type of failure (http status type code).
+ *  @brief Publish an encoded message to server.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param topic [in] - Pointer to the message topic (see your server for topic formatting details).
+ *  @param qos [in] - The MQTT QOS to be assigned to sent message.
+ *  @param encodedMsg [in] - Pointer to message to be sent.
+ *  @param timeoutSeconds [in] - Seconds to wait for publish to complete, highly dependent on network and remote server.
+ *  @return A resultCode_t value indicating the success or type of failure (http status type code).
 */
 resultCode_t mqtt_publishEncoded(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *encodedMsg, uint8_t timeoutSeconds)
 {
@@ -327,13 +323,13 @@ resultCode_t mqtt_publishEncoded(mqttCtrl_t *mqttCtrl, const char *topic, mqttQo
 
 
 /** mqtt_publish()
- *  \brief Publish a message to server.
- *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  \param topic [in] - Pointer to the message topic (see your server for topic formatting details).
- *  \param qos [in] - The MQTT QOS to be assigned to sent message.
- *  \param message [in] - Pointer to message to be sent.
- *  \param timeoutSeconds [in] - Seconds to wait for publish to complete, highly dependent on network and remote server.
- *  \return A resultCode_t value indicating the success or type of failure (http status type code).
+ *  @brief Publish a message to server.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param topic [in] - Pointer to the message topic (see your server for topic formatting details).
+ *  @param qos [in] - The MQTT QOS to be assigned to sent message.
+ *  @param message [in] - Pointer to message to be sent.
+ *  @param timeoutSeconds [in] - Seconds to wait for publish to complete, highly dependent on network and remote server.
+ *  @return A resultCode_t value indicating the success or type of failure (http status type code).
 */
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSeconds)
 {
@@ -370,7 +366,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
 
 
 /**
- *  \brief Disconnect and close a connection to a MQTT server
+ *  @brief Disconnect and close a connection to a MQTT server
 */
 void mqtt_close(mqttCtrl_t *mqttCtrl)
 {
@@ -400,19 +396,32 @@ void mqtt_close(mqttCtrl_t *mqttCtrl)
 
 
 /**
- *  \brief Disconnect and close a connection to a MQTT server
- *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  \param resetModem [in] True if modem should be reset prior to reestablishing MQTT connection.
+ *  @brief Disconnect and close a connection to a MQTT server
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param resetModem [in] True if modem should be reset prior to reestablishing MQTT connection.
 */
 void mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem)
-{}
+{
+
+}
 
 
 /**
- *  \brief Query the status of the MQTT server state.
- *  \param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  \param host [in] A char string to match with the currently connected server. Host is not checked if empty string passed.
- *  \return A mqttState_t value indicating the state of the MQTT connection.
+ *  @brief Return current MQTT connection state.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @return A mqttState_t value indicating the state of the MQTT connection.
+*/
+mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl)
+{
+    return mqttCtrl->state;
+}
+
+
+/**
+ *  @brief Query the status of the MQTT connection state.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param host [in] A char string to match with the currently connected server. Host is not checked if empty string passed.
+ *  @return A mqttState_t value indicating the state of the MQTT connection.
 */
 mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl)
 {
@@ -483,7 +492,7 @@ resultCode_t mqtt_readTopic(mqttCtrl_t *mqttCtrl, char *topicBffr, uint16_t bffr
 
     if (bffrSz == 0)                                                        // flush/discard requested
     {
-        cbffr_skip(rxBffr, topicEnd - topicBeg);                            // cbffr->tail pointing at message now
+        cbffr_skipTail(rxBffr, topicEnd - topicBeg);                        // cbffr->tail pointing at message now
         mqttCtrl->recvState = mqttRecvState_topicDelivered;
         return resultCode__success;
     }
@@ -529,7 +538,6 @@ bool mqtt_readMessage(mqttCtrl_t *mqttCtrl, char *messageBffr, uint16_t bffrSz)
 
     if (popSz <= bffrSz)
     {
-        g_lqLTEM.urcPending = NO_URC;
         mqttCtrl->recvState < mqttRecvState_none;
         return true;
     }
@@ -539,9 +547,9 @@ bool mqtt_readMessage(mqttCtrl_t *mqttCtrl, char *messageBffr, uint16_t bffrSz)
 /**
  *  @brief Close out and discard a message receive underway. This clears message state. 
 */
-void mqtt_recvServiced(mqttCtrl_t *mqttCtrl)
+void mqtt_cancelMessage(mqttCtrl_t *mqttCtrl)
 {
-    S__mqttFlushPendingRecv(mqttCtrl);
+    S__mqttCancelRecv(mqttCtrl);
 }
 
 
@@ -624,7 +632,6 @@ static void S__mqttUrcHandler()
         * ------------------------------------------------------------------------------------- */
     if (cbffr_find(rxBffr, "+QMTRECV:", 0, 0, true) >= 0)       // if recv, move tail to start of header
     {
-        g_lqLTEM.urcPending = 'M';                              // let global URC process know: working through a MQTT URC
         nextPtr++;                                              // past , delim
         uint16_t msgId = strtol(nextPtr, NULL, 10);
 
@@ -644,12 +651,12 @@ static void S__mqttUrcHandler()
 void S__mqttResetContext(dataCntxt_t dataCntxt)
 {
     mqttCtrl_t *mqtt = (mqttCtrl_t*)g_lqLTEM.streams[dataCntxt].pCtrl;
-    S__mqttFlushPendingRecv(dataCntxt);
+    S__mqttCancelRecv(dataCntxt);
     mqtt->state = mqttState_closed;
 }
 
 
-void S__mqttFlushPendingRecv(dataCntxt_t dataCntxt)
+void S__mqttCancelRecv(dataCntxt_t dataCntxt)
 {
     mqttCtrl_t *mqtt = (mqttCtrl_t*)g_lqLTEM.streams[dataCntxt].pCtrl;
 
@@ -676,12 +683,12 @@ void S__mqttFlushPendingRecv(dataCntxt_t dataCntxt)
  * --------------------------------------------------------------------------------------------- */
 #pragma region MQTT ATCMD Parsers
 // /**
-//  *	\brief [private] MQTT open status response parser.
+//  *	@brief [private] MQTT open status response parser.
 //  *
-//  *  \param response [in] Character data recv'd from BGx to parse for task complete
-//  *  \param endptr [out] Char pointer to the char following parsed text
+//  *  @param response [in] Character data recv'd from BGx to parse for task complete
+//  *  @param endptr [out] Char pointer to the char following parsed text
 //  * 
-//  *  \return HTTP style result code, 0 = not complete
+//  *  @return HTTP style result code, 0 = not complete
 //  */
 // static cmdParseRslt_t S__mqttOpenStatusParser() 
 // {
@@ -698,8 +705,8 @@ void S__mqttFlushPendingRecv(dataCntxt_t dataCntxt)
 
 
 /**
- *	\brief [private] MQTT open connection response parser.
- *  \return LTEmC parse result
+ *	@brief [private] MQTT open connection response parser.
+ *  @return LTEmC parse result
  */
 static cmdParseRslt_t S__mqttOpenCompleteParser() 
 {
@@ -709,8 +716,8 @@ static cmdParseRslt_t S__mqttOpenCompleteParser()
 
 
 /**
- *	\brief [private] MQTT connect to server response parser.
- *  \return LTEmC parse result
+ *	@brief [private] MQTT connect to server response parser.
+ *  @return LTEmC parse result
  */
 static cmdParseRslt_t S__mqttConnectCompleteParser() 
 {
@@ -720,8 +727,8 @@ static cmdParseRslt_t S__mqttConnectCompleteParser()
 
 
 /**
- *	\brief [private] MQTT connect to server response parser.
- *  \return LTEmC parse result
+ *	@brief [private] MQTT connect to server response parser.
+ *  @return LTEmC parse result
  */
 static cmdParseRslt_t S__mqttConnectStatusParser() 
 {
@@ -732,8 +739,8 @@ static cmdParseRslt_t S__mqttConnectStatusParser()
 
 
 /**
- *	\brief [private] MQTT subscribe to topic response parser.
- *  \return LTEmC parse result
+ *	@brief [private] MQTT subscribe to topic response parser.
+ *  @return LTEmC parse result
  */
 static cmdParseRslt_t S__mqttSubscribeCompleteParser() 
 {
@@ -742,8 +749,8 @@ static cmdParseRslt_t S__mqttSubscribeCompleteParser()
 
 
 /**
- *	\brief [private] MQTT publish message to topic response parser.
- *  \return LTEmC parse result
+ *	@brief [private] MQTT publish message to topic response parser.
+ *  @return LTEmC parse result
  */
 static cmdParseRslt_t S__mqttPublishCompleteParser() 
 {
@@ -751,8 +758,8 @@ static cmdParseRslt_t S__mqttPublishCompleteParser()
 }
 
 /**
- *	\brief [private] MQTT publish message to topic response parser.
- *  \return LTEmC parse result
+ *	@brief [private] MQTT publish message to topic response parser.
+ *  @return LTEmC parse result
  */
 static cmdParseRslt_t S__mqttCloseCompleteParser() 
 {

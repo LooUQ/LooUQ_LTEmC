@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEmC-7-sockets.ino
+ *  \file ltemc-7-sockets.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -61,7 +61,7 @@
 // test setup
 #define CYCLE_INTERVAL 10000
 #define SEND_BUFFER_SZ 201
-#define SCKTTEST_PROTOCOL 1             // Define test protocol: TCP = 0, UDP = 1, SSL = 2
+#define SCKTTEST_PROTOCOL STREAM_UDP
 #define SCKTTEST_HOST "24.247.65.244"   // put your server information here 
 #define SCKTTEST_PORT 9011              // and here
 
@@ -99,7 +99,7 @@ void setup() {
     PRINTF(dbgColor__info, "Network type is %s on %s\r", provider->iotMode, provider->name);
 
     // create a socket control and open it
-    sckt_initControl(&scktCtrl, PDP_DATA_CONTEXT, dataCntxt_0, (protocol_t)SCKTTEST_PROTOCOL, receiveBuffer, sizeof(receiveBuffer), scktRecv);
+    sckt_initControl(&scktCtrl, dataCntxt_0, SCKTTEST_PROTOCOL, scktRecv);
     sckt_setConnection(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0);
     resultCode_t scktResult = sckt_open(&scktCtrl,  true);
 
@@ -175,17 +175,11 @@ uint16_t scktRecover()
  *  \param [in] socketId  Numeric identifier for the socket receiving the data
  *  \param [in] data  Pointer to character received data ()
 */
-void scktRecv(streamPeer_t socketId, void *data, uint16_t dataSz)
+void scktRecv(dataCntxt_t dataCntxt, uint16_t dataSz)
 {
-    // char recvBuf[XFRBUFFER_SZ] = {0};
-    // uint16_t recvdSz;
-
-    // recvdSz = ip_recv(socketId, recvBuf, XFRBUFFER_SZ);
-    // recvBuf[recvdSz + 1] = '\0';
-    
     char temp[dataSz + 1];
-    
-    memcpy(temp, data, dataSz);
+
+    sckt_fetchRecv(&scktCtrl, temp, sizeof(temp));
     temp[dataSz] = '\0';
 
     PRINTF(dbgColor__info, "appRcvd %d chars: %s\r", dataSz, temp);

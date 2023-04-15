@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEmC-8-mqtt.ino
+ *  \file ltemc-8-mqtt.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -118,9 +118,9 @@ uint32_t lastCycle;
 
 // LTEm variables
 mqttCtrl_t mqttCtrl;                // MQTT control, data to manage MQTT connection to server
-uint8_t receiveBuffer[640];         // Data buffer where received information is returned (can be local, global, or dynamic... your call)
 
 char mqttTopic[200];                // application buffer to craft TX MQTT topic
+char mqttTopicProp[200];
 char mqttMessage[200];              // application buffer to craft TX MQTT publish content (body)
 resultCode_t result;
 
@@ -156,7 +156,7 @@ void setup() {
      * Azure requires TLS 1.2 and MQTT version 3.11 */
 
     tls_configure(dataCntxt_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
-    mqtt_initControl(&mqttCtrl, MQTT_DATACONTEXT, receiveBuffer, sizeof(receiveBuffer), mqttRecvCB);
+    mqtt_initControl(&mqttCtrl, MQTT_DATACONTEXT, mqttRecvCB);
     mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, true, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
 
     if (mqttInit() == resultCode__success)
@@ -240,26 +240,36 @@ resultCode_t mqttInit()
     return rslt;
 }
 
-
-void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId, const char *topic, char *topicVar, char *message, uint16_t messageSz)
+// void (*)(dataCntxt_t dataCntxt, uint16_t msgId, const char *topic, char *topicVar, char *message, uint16_t messageSz)" is incompatible with parameter of type "mqttRecv_func"
+/*
+typedef void (*mqttRecv_func)(uint8_t dataCntxt, uint16_t msgId);
+*/
+void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId)
 {
-    uint16_t newLen = lq_strUriDecode(topicVar, message - topicVar);        // Azure IoTHub URI encodes properties sent as topic suffix 
+    // compile placeholders
+    // char *topic;
+    // char *topicVar; 
+    // char *message;
+    // uint16_t messageSz;
 
-    PRINTF(dbgColor__info, "\r**MQTT--MSG** @tick=%d BufferSz=%d\r", pMillis(), mqtt_getLastBufferReqd(&mqttCtrl));
-    PRINTF(dbgColor__cyan, "   msgId:=%d   topicSz=%d, propsSz=%d, messageSz=%d\r", msgId, strlen(topic), strlen(topicVar), strlen(message));
-    PRINTF(dbgColor__cyan, "   topic: %s\r", topic);
-    PRINTF(dbgColor__cyan, "   props: %s\r", topicVar);
-    PRINTF(dbgColor__cyan, " message: %s\r", message);
+    //uint16_t newLen = lq_strUriDecode(topicVar, message - topicVar);        // Azure IoTHub URI encodes properties sent as topic suffix 
+
+    PRINTF(dbgColor__info, "\r**MQTT--MSG** @tick=%d \r", pMillis());
+    PRINTF(dbgColor__cyan, "   msgId:=%d \r", msgId);
+    // PRINTF(dbgColor__cyan, "   msgId:=%d   topicSz=%d, propsSz=%d, messageSz=%d\r", msgId, strlen(topic), strlen(topicVar), strlen(message));
+    // PRINTF(dbgColor__cyan, "   topic: %s\r", topic);
+    // PRINTF(dbgColor__cyan, "   props: %s\r", topicVar);
+    // PRINTF(dbgColor__cyan, " message: %s\r", message);
 
     // Azure IoTHub appends properties collection to the topic 
     // That is why Azure requires wildcard topic
-    keyValueDict_t mqttProps = lq_createQryStrDictionary(topicVar, strlen(topicVar));
-    PRINTF(dbgColor__info, "Props(%d)\r", mqttProps.count);
-    for (size_t i = 0; i < mqttProps.count; i++)
-    {
-        PRINTF(dbgColor__cyan, "%s=%s\r", mqttProps.keys[i], mqttProps.values[i]);
-    }
-    PRINTF(0, "\r");
+    // keyValueDict_t mqttProps = lq_createQryStrDictionary(topicVar, strlen(topicVar));
+    // PRINTF(dbgColor__info, "Props(%d)\r", mqttProps.count);
+    // for (size_t i = 0; i < mqttProps.count; i++)
+    // {
+    //     PRINTF(dbgColor__cyan, "%s=%s\r", mqttProps.keys[i], mqttProps.values[i]);
+    // }
+    // PRINTF(0, "\r");
 }
 
 

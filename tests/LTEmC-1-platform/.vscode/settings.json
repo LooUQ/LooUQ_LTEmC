@@ -6,6 +6,7 @@
         "limits": "c",
         "type_traits": "c",
         "ltemc.h": "c",
-        "ltemc-internal.h": "c"
+        "ltemc-internal.h": "c",
+        "lq-platform.h": "c"
     }
 }

@@ -7,13 +7,13 @@
         {
             "name": "Cortex Debug",
             "type": "cortex-debug",
-            "cwd": "${workspaceRoot}",
-            "executable": ".//.build/ltem1c-10-files.ino.elf",
+            "cwd": "${workspaceFolder}",
+            "executable": ".//.build/ltemc-10-filesys/ltemc-10-filesys.ino.elf",
             "request": "launch",
             "servertype": "jlink",
-            "interface": "swd",
-            "device": "ATSAMD21G18",
-            "runToEntryPoint": "main"
+            "runToEntryPoint": "main",
+            "serverArgs": ["-gui"],
+            "device": "ATSAMD21G18"
         }
     ]
 }

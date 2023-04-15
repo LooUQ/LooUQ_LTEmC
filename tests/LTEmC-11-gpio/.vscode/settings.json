@@ -5,9 +5,8 @@
         "cstddef": "c",
         "limits": "c",
         "type_traits": "c",
-        "bitset": "cpp",
-        "cfloat": "cpp",
-        "ltem1c.h": "c",
-        "lq-diagnostics.h": "c"
+        "ltemc.h": "c",
+        "ltemc-internal.h": "c",
+        "lq-platform.h": "c"
     }
 }

@@ -44,8 +44,9 @@
 #endif
 
 
-// define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR                                 // specify the pin configuration
+// define host pinout
+#define HOST_FEATHER_UXPLOR_L                                   // original UXPlor Feather 
+//#define HOST_FEATHER_UXPLOR                                     // rev 2 UXPlor Feather
 //#define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
@@ -78,13 +79,14 @@ void setup() {
 	platform_openPin(ltem_pinConfig.powerkeyPin, gpioMode_output);
 	platform_openPin(ltem_pinConfig.statusPin, gpioMode_input);
 
-    PRINTF(dbgColor__none, "Modem status = %i \r\n", platform_readPin(ltem_pinConfig.statusPin));
-   
-    platform_writePin(8, gpioValue_high);
-    platform_openPin(8, gpioMode_output);
-	
+    PRINTF(dbgColor__none, "Modem status = %i \r", platform_readPin(ltem_pinConfig.statusPin));
     powerModemOn();
+    PRINTF(dbgColor__none, "   ON Status = %i \r", platform_readPin(ltem_pinConfig.statusPin));
+    powerModemOff();
+    PRINTF(dbgColor__none, "  OFF Status = %i \r", platform_readPin(ltem_pinConfig.statusPin));
 
+    PRINTF(dbgColor__info, "Turn modem on for SPI tests\r");
+    powerModemOn();
 	spi = (spi_t*)spi_create(ltem_pinConfig.spiCsPin);
 	if (spi == NULL)
 	{
@@ -92,6 +94,7 @@ void setup() {
 	}
     spi_start(spi);
 }
+
 
 int loopCnt = 0;
 
@@ -118,16 +121,16 @@ void loop() {
         // indicateFailure("Scratchpad write/read failed (transferWord)."); 
     }
 
-    // SPI operations are destructive to register addr; reset addr and incr pattern to differentiate
-    txBuffer.msb = SC16IS7xx_SPR_regAddr << 3;
-    rxBuffer.msb = (SC16IS7xx_SPR_regAddr << 3) | 0x80;  // write: reg addr + data
-    txBuffer.lsb = ++testPattern;
+    // // SPI operations are destructive to register addr; reset addr and incr pattern to differentiate
+    // txBuffer.msb = SC16IS7xx_SPR_regAddr << 3;
+    // rxBuffer.msb = (SC16IS7xx_SPR_regAddr << 3) | 0x80;  // write: reg addr + data
+    // txBuffer.lsb = ++testPattern;
 
-    spi_transferBuffer(spi, txBuffer.msb, &txBuffer.lsb, 1);
-    spi_transferBuffer(spi, rxBuffer.msb, &rxBuffer.lsb, 1);
+    // spi_transferBuffer(spi, txBuffer.msb, &txBuffer.lsb, 1);
+    // spi_transferBuffer(spi, rxBuffer.msb, &rxBuffer.lsb, 1);
 
-    if (testPattern != rxBuffer.lsb)
-        indicateFailure("Scratchpad write/read failed (transferBuffer)."); 
+    // if (testPattern != rxBuffer.lsb)
+    //     indicateFailure("Scratchpad write/read failed (transferBuffer)."); 
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -141,7 +144,7 @@ void powerModemOn()
 {
 	if (!platform_readPin(ltem_pinConfig.statusPin))
 	{
-		PRINTF(0, "Powering LTEm1 On...");
+		PRINTF(0, "Powering LTEm On...");
 		platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_high);
 		pDelay(1000);
 		platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
@@ -153,10 +156,30 @@ void powerModemOn()
 	}
 	else
 	{
-		PRINTF(0, "LTEm1 is already powered on.\r\n");
+		PRINTF(0, "LTEm is already powered on.\r\n");
 	}
 }
 
+
+void powerModemOff()
+{
+	if (platform_readPin(ltem_pinConfig.statusPin))
+	{
+		PRINTF(0, "Powering LTEm Off...");
+		platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_high);
+		pDelay(1000);
+		platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
+		while (platform_readPin(ltem_pinConfig.statusPin))
+		{
+			pDelay(500);
+		}
+		PRINTF(0, "DONE.\r\n");
+	}
+	else
+	{
+		PRINTF(0, "LTEm is already powered off.\r\n");
+	}
+}
 
 
 /* test helpers

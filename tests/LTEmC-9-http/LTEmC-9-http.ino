@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEmC-9-http.ino
+ *  \file ltemc-9-http.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -72,7 +72,7 @@ uint32_t lastCycle;
  * variable with: "httpCtrl_t *httpCtrl1 = &httpCtrl;"   */
 httpCtrl_t httpCtrlG;
 httpCtrl_t httpCtrlP;
-httpCtrl_t *httpPtr;                            // used for common READ 
+httpCtrl_t *httpCtrl;                            // used for common READ 
 
 static char webPageBuf[1024];
 //char cstmHdrs[256];                           // if you use custom HTTP headers then create a buffer to hold them
@@ -133,20 +133,20 @@ void setup() {
      */
 
     // // create a control for talking to the website
-    http_initControl(&httpCtrlG, dataCntxt_0, webPageBuf, sizeof(webPageBuf), httpRecvCB);                  // initialize local (internal) structures
+    http_initControl(&httpCtrlG, dataCntxt_0, httpRecvCB);                  // initialize local (internal) structures
     http_setConnection(&httpCtrlG, "https://api.weather.gov", 443);                                         // set remote web host
     PRINTF(dbgColor__dGreen, "URL Host1=%s\r", httpCtrlG.hostUrl);
 
-    // you can optionally setup a httpPtr, EXAMPLE: httpCtrl *httpPtr = &httpCtrl2
+    // you can optionally setup a httpCtrl, EXAMPLE: httpCtrl *httpCtrl = &httpCtrl2
     // Below the &httpCtrl2 style is required since there is no "ptr" variable created (around line 65) to use here
 
-    http_initControl(&httpCtrlP, dataCntxt_1, webPageBuf, sizeof(webPageBuf), httpRecvCB);
+    http_initControl(&httpCtrlP, dataCntxt_1, httpRecvCB);
     http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
     PRINTF(dbgColor__dGreen, "URL Host2=%s\r", httpCtrlP.hostUrl);
 }
 
 resultCode_t rslt;
-char pageBuffer[4096] = {0};
+char pageBffr[101] = {0};
 uint16_t pageChars = 0;
 
 
@@ -166,7 +166,7 @@ void loop()
             rslt = http_get(&httpCtrlG, "/points/44.7582,-85.6022", http__noResponseHeaders, http__useDefaultTimeout);
             if (rslt == resultCode__success)
             {
-                httpPtr = &httpCtrlG;
+                httpCtrl = &httpCtrlG;
                 PRINTF(dbgColor__info, "GET invoked successfully\r");
             }
             else
@@ -180,7 +180,7 @@ void loop()
             rslt = http_post(&httpCtrlP, "/anything", http__noResponseHeaders, postData, strlen(postData), http__useDefaultTimeout);
             if (rslt == resultCode__success)
             {
-                httpPtr = &httpCtrlP;
+                httpCtrl = &httpCtrlP;
                 PRINTF(dbgColor__info, "POST invoked successfully\r");
             }
             else
@@ -203,28 +203,39 @@ void loop()
 
         if (rslt == resultCode__success)
         {
-            PRINTF(dbgColor__white, "Request complete, expecting %d chars.\r", httpPtr->pageSize);
-            if (rslt = http_readPage(httpPtr, 20))
+            bool morePage = false;
+            uint16_t httpResult;
+
+            PRINTF(dbgColor__white, "Request complete, expecting %d chars.\rHTTP Page\r", httpCtrl->pageSize);
+            do
             {
-                switch (rslt)
-                {
-                case resultCode__success:
-                    PRINTF(dbgColor__white, "Read page complete, %d chars received.\r", pageChars);
-                    break;
+                morePage = http_readPage(httpCtrl, pageBffr, sizeof(pageBffr)-1, &httpResult);
+                PRINTF(dbgColor__dCyan, ">>%s", pageBffr);
+            } while (morePage);
+            PRINTF(dbgColor__white, "HTTP Result=%d\r", httpResult);
+            
 
-                case resultCode__cancelled:
-                    PRINTF(dbgColor__warn, "Read page cancelled after %d chars.\r", pageChars);
-                    break;
+            // if (rslt = http_readPage(httpCtrl, 20))
+            // {
+            //     switch (rslt)
+            //     {
+            //     case resultCode__success:
+            //         PRINTF(dbgColor__white, "Read page complete, %d chars received.\r", pageChars);
+            //         break;
+
+            //     case resultCode__cancelled:
+            //         PRINTF(dbgColor__warn, "Read page cancelled after %d chars.\r", pageChars);
+            //         break;
                 
-                default:
-                    PRINTF(dbgColor__warn, "Problem reading page contents, result=%d.\r", rslt);
-                    break;
-                }
-            }
+            //     default:
+            //         PRINTF(dbgColor__warn, "Problem reading page contents, result=%d.\r", rslt);
+            //         break;
+            //     }
+            // }
 
-            char printBuf[121];
-            strncpy(printBuf, pageBuffer, 120);
-            PRINTF(dbgColor__white, "Got (1st 120 chars):\r%s\r", printBuf);
+            // char printBuf[121];
+            // strncpy(printBuf, pageBffr, 120);
+            // PRINTF(dbgColor__white, "Got (1st 120 chars):\r%s\r", printBuf);
         }
         loopCnt++;
     }
@@ -239,7 +250,7 @@ void loop()
 
 void httpRecvCB(dataCntxt_t dataCntxt, uint16_t httpStatus, char *recvData, uint16_t dataSz)
 {
-    strncpy(pageBuffer + pageChars, recvData, dataSz);
+    strncpy(pageBffr + pageChars, recvData, dataSz);
     pageChars += dataSz;
 
     PRINTF(dbgColor__green, "\rAppRecv'd %d new chars, total page sz=%d\r", dataSz, pageChars);

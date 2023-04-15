@@ -1,29 +1,34 @@
-/******************************************************************************
- *  \file ltemc.c
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- *************************************************************************** */
-const char *ltemcVersion = "3.1.0";
-/* ************************************************************************* */
+/** ****************************************************************************
+  \file 
+  \brief LTEmC LTEm Device Driver for LooUQ LTEm Series Modems
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
+
+const char *ltemcVersion = "3.0.1";
+
+#define SRCFILE "LTE"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#include "ltemc-internal.h"
 
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
@@ -38,9 +43,6 @@ const char *ltemcVersion = "3.1.0";
 #else
 #define PRINTF(c_, f_, ...) ;
 #endif
-
-#define SRCFILE "LTE"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#include "ltemc-internal.h"
 
 /* ------------------------------------------------------------------------------------------------
  * GLOBAL LTEm Device Objects, One LTEmX supported
@@ -316,27 +318,31 @@ deviceState_t ltem_getDeviceState()
  */
 void ltem_doWork()
 {
-    if (g_lqLTEM.urcPending != NO_URC)
+    // TODO: review for deprication
+    if (g_lqLTEM.urcActive)                                                         // continue servicing active URC receive
     {
-        for (size_t i = 0; i < ltem__urcHandlersCnt; i++)    
+    }
+
+    /* look for a new incoming URC 
+     */
+    int16_t urcFeasIndx = cbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);        // look for prefix char in URC
+    if (urcFeasIndx == CBFFR_NOFIND)
+        return;
+
+    for (size_t i = 0; i < ltem__urcHandlersCnt; i++)    
+    {
+        if (g_lqLTEM.urcHandlers[i] != NULL)
         {
-            if (g_lqLTEM.urcHandlers[i] != NULL)
-            {
-                g_lqLTEM.urcHandlers[i]();
-                break;
-            }
-        }
-        if (g_lqLTEM.urcPending != NO_URC ||                                            // check for a arrival of a new URC (detected in IOP or during last handler)
-            cbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false) != CBFFR_NOFIND)
-        {
-            ltem_doWork();                                                              // new subsequent URC, call re-entrantly
+            g_lqLTEM.urcHandlers[i]();
+            break;
         }
     }
+    S__ltemUrcHandler();
 }
 
 
 /**
- *	@brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
+ *	@brief Notify host application of significant events. Application may ignore, display, save status, whatever. 
  */
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
@@ -347,8 +353,6 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 
 /**
  *	@brief Registers the address (void*) of your application event nofication callback handler.
- * 
- *  @param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
 void ltem_setEventNotifCallback(applEvntNotify_func eventNotifCallback)
 {
@@ -357,8 +361,6 @@ void ltem_setEventNotifCallback(applEvntNotify_func eventNotifCallback)
 
 /**
  *	@brief Registers the address (void*) of your application yield callback handler.
- * 
- *  @param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
 void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 {
@@ -394,4 +396,34 @@ void LTEM_registerUrcHandler(urcHandler_func *urcHandler)
 #pragma endregion
 
 #pragma region Static Function Definitions
+
+S__ltemUrcHandler()
+{
+    cBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
+    char parseBffr[30];
+
+    // bool isQuectel = cbffr_find(rxBffr, "+Q", 0, 0, false) != CBFFR_NOFIND;
+    // bool isCCITT = cbffr_find(rxBffr, "+C", 0, 0, false) != CBFFR_NOFIND;
+
+    /* LTEm System URCs Handled Here
+     *
+     * +QIURC: "pdpdeact",<contextID>   // not handled here, falls through to global URC handler
+    */
+
+    /* PDP (packet network) deactivation/close
+     ------------------------------------------------------------------------------------------- */
+    if (cbffr_find(rxBffr, "+QIURC: \"pdpdeact\"", 0, 0, true) >= 0)
+    {
+        for (size_t i = 0; i < dataCntxt__cnt; i++)
+        {
+            if (g_lqLTEM.streams[i].dataCloseCB != NULL)
+            {
+                g_lqLTEM.streams[i].dataCloseCB(i);
+            }
+        }
+        
+    }
+ 
+}
+
 #pragma endregion
