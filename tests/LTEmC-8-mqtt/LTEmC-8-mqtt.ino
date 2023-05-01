@@ -50,17 +50,16 @@
 #define HOST_FEATHER_UXPLOR_L
 
 #define PDP_DATA_CONTEXT 1
-#define PDP_APN_NAME "iot.aer.net"
+#define PDP_APN_NAME ""
 
+#include <lq-diagnostics.h>
+#include <lq-SAMDutil.h>                // allows read of reset cause
 
 #include <ltemc.h>
-#include <lq-diagnostics.h>
 #include <lq-collections.h>             // using LooUQ collections with mqtt
 #include <lq-str.h>
 #include <ltemc-tls.h>
 #include <ltemc-mqtt.h>
-
-#include <lq-SAMDutil.h>                // allows read of reset cause
 
 
 #define PERIOD_FROM_SECONDS(period)  (period * 1000)
@@ -135,9 +134,8 @@ void setup() {
         #endif
     #endif
 
-    uint8_t resetCause = lqSAMD_getResetCause();
     PRINTF(dbgColor__red, "\rLTEmC test8-MQTT\r\n");
-    PRINTF(dbgColor__none,"RCause=%d \r", resetCause);
+    PRINTF(dbgColor__none,"RCause=%d \r", lqSAMD_getResetCause());
     lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, applEvntNotify);
@@ -200,15 +198,13 @@ void loop()
                 while (true) {}
         }
 
-        /* if the publish is being blocked by a recv, critical that doWork() given opportunity to finish IO */
-        ltem_doWork();                                                              
-
         PRINTF(dbgColor__magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
     }
 
-    /* NOTE: ltem1_doWork() pipeline requires up to 3 invokes for each data receive. DoWork has no side effects 
-     * other than taking time and should be invoked liberally. */
-    ltem_doWork();
+    /* NOTE: ltem1_eventMgr() background pipeline processor is required for async receive operations; like MQTT topic subscriptions.
+     *       Event manager is light weight and has no side effects other than taking time. It should be invoked liberally. 
+     */
+    ltem_eventMgr();
 }
 
 
@@ -277,14 +273,12 @@ void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId)
 /* test helpers
 ========================================================================================================================= */
 
-void applEvntNotify(const char *eventTag, const char *eventMsg)
+void applEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (STRCMP(eventTag, "ASSERT"))
-    {
-        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
-        while (1) {}
-    }
-    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
+    if (eventType == appEvent_fault_assertFailed)
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
+    else 
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
     return;
 }
 

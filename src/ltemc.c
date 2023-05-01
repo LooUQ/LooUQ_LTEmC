@@ -62,7 +62,7 @@ ltemDevice_t g_lqLTEM;
  * ------------------------------------------------------------------------------------------------ */
 const char* const qbg_initCmds[] = 
 { 
-    "ATE0",                 // don't echo AT commands on serial
+    "ATE0"                 // don't echo AT commands on serial
 };
 
 // makes for compile time automatic sz determination
@@ -80,7 +80,7 @@ void S__initLTEmDevice(bool ltemReset);
 /**
  *	@brief Initialize the LTEm1 modem.
  */
-void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, applEvntNotify_func eventNotifCallback)
+void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEvntNotify_func eventNotifCallback)
 {
     ASSERT(g_lqLTEM.atcmd == NULL);                    // prevent multiple calls, memory leak calloc()
 
@@ -102,7 +102,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     ntwk_create();
 
     g_lqLTEM.cancellationRequest = false;
-    g_lqLTEM.applEvntNotifyCB = eventNotifCallback;
+    g_lqLTEM.appEvntNotifyCB = eventNotifCallback;
 }
 
 
@@ -134,11 +134,14 @@ void ltem_setProviderScanSeq(const char* scanSequence)
 {
     /*AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
     */
-    strcpy(g_lqLTEM.modemSettings->scanSequence, scanSequence);
-    if (ltem_getDeviceState() == deviceState_appReady)
+    if (strlen(scanSequence) > 0)
     {
-        atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence);
-        atcmd_awaitResult();
+        strcpy(g_lqLTEM.modemSettings->scanSequence, scanSequence);
+        if (ltem_getDeviceState() == deviceState_appReady)
+        {
+            atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence);
+            atcmd_awaitResult();
+        }
     }
 }
 
@@ -256,7 +259,7 @@ void S__initLTEmDevice(bool ltemReset)
     else
     {
         g_lqLTEM.deviceState = deviceState_appReady;        // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
-        PRINTF(dbgColor__info, "AppRdy LTEm ON\r");
+        PRINTF(dbgColor__info, "LTEm ON (AppRdy)\r");
     }
 
     IOP_attachIrq();                                        // attach I/O processor ISR to IRQ
@@ -316,28 +319,31 @@ deviceState_t ltem_getDeviceState()
 /**
  *	@brief Background work task runner. To be called in application Loop() periodically.
  */
-void ltem_doWork()
+void ltem_eventMgr()
 {
-    // TODO: review for deprication
-    if (g_lqLTEM.urcActive)                                                         // continue servicing active URC receive
-    {
-    }
-
     /* look for a new incoming URC 
      */
-    int16_t urcFeasIndx = cbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);        // look for prefix char in URC
-    if (urcFeasIndx == CBFFR_NOFIND)
-        return;
-
-    for (size_t i = 0; i < ltem__urcHandlersCnt; i++)    
+    int16_t urcPossible = cbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);       // look for prefix char in URC
+    if (urcPossible == CBFFR_NOFIND)
     {
-        if (g_lqLTEM.urcHandlers[i] != NULL)
-        {
-            g_lqLTEM.urcHandlers[i]();
-            break;
-        }
+        return;
     }
-    S__ltemUrcHandler();
+
+    for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
+    {
+        resultCode_t serviceRslt;
+        if (g_lqLTEM.streams[i].streamUrcHndlr)                                     // URC type data receiver in this stream, offer the data to the handler
+        {
+            serviceRslt = g_lqLTEM.streams[i].streamUrcHndlr();
+        }
+        if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
+        {
+            continue;
+        }
+        break;                                                                      // service attempted (might have errored), so this event is over
+    }
+
+    S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
 }
 
 
@@ -346,17 +352,17 @@ void ltem_doWork()
  */
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
-    if (g_lqLTEM.applEvntNotifyCB != NULL)                                       
-        (g_lqLTEM.applEvntNotifyCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
+    if (g_lqLTEM.appEvntNotifyCB != NULL)                                       
+        (g_lqLTEM.appEvntNotifyCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
 }
 
 
 /**
  *	@brief Registers the address (void*) of your application event nofication callback handler.
  */
-void ltem_setEventNotifCallback(applEvntNotify_func eventNotifCallback)
+void ltem_setEventNotifCallback(appEvntNotify_func eventNotifCallback)
 {
-    g_lqLTEM.applEvntNotifyCB = eventNotifCallback;
+    g_lqLTEM.appEvntNotifyCB = eventNotifCallback;
 }
 
 /**
@@ -374,24 +380,24 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 #pragma region LTEmC Internal Functions (ltemc-internal.h)
 /*-----------------------------------------------------------------------------------------------*/
 
-void LTEM_registerUrcHandler(urcHandler_func *urcHandler)
-{
-    bool registered = false;
-    for (size_t i = 0; i < ltem__urcHandlersCnt; i++)
-    {
-        if (g_lqLTEM.urcHandlers[i] == NULL)
-        {
-            registered = true;
-            g_lqLTEM.urcHandlers[i] = urcHandler;                               // add to "registered" handlers
-        }
-        else
-        {
-            if (g_lqLTEM.urcHandlers[i] == urcHandler)                          // previously registered
-                registered = true;
-        }
-        ASSERT(registered);
-    }
-}
+// void LTEM_registerUrcHandler(urcHandler_func *urcHandler)
+// {
+//     bool registered = false;
+//     for (size_t i = 0; i < ltem__urcHandlersCnt; i++)
+//     {
+//         if (g_lqLTEM.urcHandlers[i] == NULL)
+//         {
+//             registered = true;
+//             g_lqLTEM.urcHandlers[i] = urcHandler;                               // add to "registered" handlers
+//         }
+//         else
+//         {
+//             if (g_lqLTEM.urcHandlers[i] == urcHandler)                          // previously registered
+//                 registered = true;
+//         }
+//         ASSERT(registered);
+//     }
+// }
 
 #pragma endregion
 
@@ -407,22 +413,21 @@ S__ltemUrcHandler()
 
     /* LTEm System URCs Handled Here
      *
-     * +QIURC: "pdpdeact",<contextID>   // not handled here, falls through to global URC handler
+     * +QIURC: "pdpdeact",<contextID>
     */
 
     /* PDP (packet network) deactivation/close
      ------------------------------------------------------------------------------------------- */
-    if (cbffr_find(rxBffr, "+QIURC: \"pdpdeact\"", 0, 0, true) >= 0)
-    {
-        for (size_t i = 0; i < dataCntxt__cnt; i++)
-        {
-            if (g_lqLTEM.streams[i].dataCloseCB != NULL)
-            {
-                g_lqLTEM.streams[i].dataCloseCB(i);
-            }
-        }
-        
-    }
+    // if (cbffr_find(rxBffr, "+QIURC: \"pdpdeact\"", 0, 0, true) >= 0)
+    // {
+    //     for (size_t i = 0; i < dataCntxt__cnt; i++)
+    //     {
+    //         if (g_lqLTEM.streams[i].dataCloseCB)
+    //         {
+    //             g_lqLTEM.streams[i].dataCloseCB(i);
+    //         }
+    //     }
+    // }
  
 }
 

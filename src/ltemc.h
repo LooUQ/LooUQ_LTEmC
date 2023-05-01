@@ -76,7 +76,7 @@ extern "C"
  *	\param ltem_config [in] - The LTE modem gpio pin configuration.
  *  \param applicationCallback [in] - If supplied (not NULL), this function will be invoked for significant LTEm events.
  */
-void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCB, applEvntNotify_func eventNotifyCB);
+void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCB, appEvntNotify_func eventNotifyCB);
 
 
 /**
@@ -157,7 +157,7 @@ deviceState_t ltem_getDeviceState();
 /**
  *	\brief Background work task runner. To be called in application Loop() periodically.
  */
-void ltem_doWork();
+void ltem_eventMgr();
 
 
 /**
@@ -171,7 +171,7 @@ void ltem_setYieldCallback(yield_func yieldCB);
  *	\brief Registers the address (void*) of your application event notification callback handler.
  *  \param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */
-void ltem_setEventNotifCallback(applEvntNotify_func eventNotifyCB);
+void ltem_setEventNotifCallback(appEvntNotify_func eventNotifyCB);
 
 
 /**

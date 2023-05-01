@@ -27,6 +27,7 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
+
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG)
@@ -41,7 +42,6 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-
 // define options, specify the pin configuration
 #define HOST_FEATHER_UXPLOR_L
 // #define HOST_FEATHER_UXPLOR
@@ -50,6 +50,7 @@
 #include <ltemc.h>
 
 #define STRCMP(x,y)  (strcmp(x, y) == 0)
+
 
 void setup() 
 {
@@ -95,7 +96,7 @@ void loop()
     {
         resultCode_t atResult = atcmd_awaitResult();
         
-            char *response = atcmd_getResponse();
+            char *response = atcmd_getRawResponse();
             PRINTF(dbgColor__info, "Got %d chars\r", strlen(response));
             PRINTF(dbgColor__white, "Resp:");
             PRINTF(dbgColor__cyan, "%s\r", response);
@@ -108,6 +109,7 @@ void loop()
         {
             PRINTF(dbgColor__error, "atResult=%d \r", atResult);
             // indicateFailure("Unexpected command response... failed."); 
+            indicateFailure("Invalid BGx response");
         }
 
         /* atcmd_close();       Not needed here since tryInvokeDefaults(). 
@@ -125,14 +127,12 @@ void loop()
 ========================================================================================================================= */
 
 
-void applEvntNotify(const char *eventTag, const char *eventMsg)
+void applEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (STRCMP(eventTag, "ASSERT"))
-    {
-        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
-        while (1) {}
-    }
-    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
+    if (eventType == appEvent_fault_assertFailed)
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
+    else 
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
     return;
 }
 

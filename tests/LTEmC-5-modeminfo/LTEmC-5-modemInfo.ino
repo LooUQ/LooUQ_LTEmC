@@ -101,14 +101,18 @@ void loop() {
 /* test helpers
 ========================================================================================================================= */
 
-void applEvntNotify(const char *eventTag, const char *eventMsg)
+
+void applEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (STRCMP(eventTag, "ASSERT"))
+    if (eventType == appEvent_fault_assertFailed)
+    if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
-        while (1) {}
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
     }
-    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
+    else 
+    {
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+    }
     return;
 }
 

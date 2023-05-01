@@ -71,7 +71,7 @@ void S_displayFifoStatus(const char *dispMsg);
 #pragma region Bridge Initialization
 
 /**
-*	@brief Configure base NXP bridge settings: reset (opt), FIFO, trigger levels (no trig IRQ yet), baud and framing
+*	@brief Configure base NXP bridge settings: reset, FIFO (polled mode), baud and framing
 */
 void SC16IS7xx_start()
 {
@@ -79,24 +79,21 @@ void SC16IS7xx_start()
     SC16IS7xx_writeReg(SC16IS7xx_UARTRST_regAddr, SC16IS7xx__SW_resetMask);
 
     // Need EFR[4]=1 to enable bridge enhanced functions: TX trigger and TLR settings for IRQ 
-    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__REGSET_enhanced);
-    REG_MODIFY(SC16IS7xx_EFR, SC16IS7xx_EFR_reg.ENHANCED_FNS_EN = 1;)
-    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__REGSET_general);
+    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_enhanced);
+    REG_MODIFY(SC16IS7xx_EFR, SC16IS7xx_EFR_reg.ENHANCED_FNS_EN = 1;)                           // enable enhanced functions (TX trigger for now)
+    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_general);
 
-    /* Using FCR for trigger\interrupt generation 
-     * (NXP SC16IS741A manual section 8.13) When the trigger level setting in TLR is zero, the SC16IS741A uses the trigger level setting defined in FCR. 
-     */
 	SC16IS7xx_FCR fcrRegister = {0};
 	fcrRegister.FIFO_EN = 1;
     fcrRegister.RX_TRIGGER_LVL = (int)RX_LVL_56CHARS;
     fcrRegister.TX_TRIGGER_LVL = (int)TX_LVL_56SPACES;
 	SC16IS7xx_writeReg(SC16IS7xx_FCR_regAddr, fcrRegister.reg);
 
-	// set baudrate, starts clock and UART
-	SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__REGSET_special);
+	// set baudrate => starts clock and UART
+	SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_special);
 	SC16IS7xx_writeReg(SC16IS7xx_DLL_regAddr, SC16IS7xx__DLL_baudClockDivisorLOW);
 	SC16IS7xx_writeReg(SC16IS7xx_DLH_regAddr, SC16IS7xx__DLH_baudClockDivisorHIGH);
-	SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__REGSET_general);
+	SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_general);
 
 	// set byte framing on the wire:  8 data, no parity, 1 stop required by BGx
 	SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_UARTframing);
@@ -104,10 +101,31 @@ void SC16IS7xx_start()
 
 
 /**
- *	@brief Enable IRQ servicing for communications between SC16IS741 and BG96.
+ *	@brief Enable IRQ servicing for communications between SC16IS741 and BG9x.
  */
 void SC16IS7xx_enableIrqMode()
 {
+    // // Need EFR[4]=1 and MCR[2]=1 TLR settings for IRQ 
+    // SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_enhanced);
+	// SC16IS7xx_EFR efrRegister = {0};
+	// efrRegister.ENHANCED_FNS_EN = 1;
+    // SC16IS7xx_writeReg(SC16IS7xx_EFR_regAddr, efrRegister.reg);
+    // // REG_MODIFY(SC16IS7xx_EFR, SC16IS7xx_EFR_reg.ENHANCED_FNS_EN = 1;)
+    // SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_general);
+    // REG_MODIFY(SC16IS7xx_MCR, SC16IS7xx_MCR_reg.TCR_TLR_EN = 1;)
+
+
+    // // /* reg field * 4 = trigger level, RX[7:4] / TX[3:0]
+    // //  * 0x0=disabled, 0x1=4, 0x2=8, 0x3=12, 0x4=16, 0x5=20, 0x6=24, 0x7=28, 0x8=32, 0x9=36, 0xA=40, 0xB=44, 0xC=48, 0xD=52, 0xE=56, 0xF=60
+    // // */
+
+    // // // turn off flow-control
+    // SC16IS7xx_writeReg(SC16IS7xx_TCR_regAddr, 0xF0);
+
+    // // Set TLR (trigger levels)
+    // SC16IS7xx_writeReg(SC16IS7xx_TLR_regAddr, 0xDF);                // RX=0xD (52 chars), TX=0xF (60 spaces)
+    // // EFR[4]=1 (enhanced functions) and MCR[2]=1 (TCR/TLR enable) remain set
+
    	// IRQ to enable: RX chars available, TX spaces available, UART framing error : reg = 0x07
 	SC16IS7xx_IER ierSetting = {0};
 	ierSetting.RHR_DATA_AVAIL_INT_EN = 1;
@@ -226,6 +244,7 @@ void SC16IS7xx_flushRxFifo()
     rxFifoLvl = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
     lsrValue = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
 }
+
 
 #pragma endregion
 /* ----------------------------------------------------------------------------------------------------------------- */

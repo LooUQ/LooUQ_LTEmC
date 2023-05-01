@@ -85,7 +85,7 @@ typedef struct ltemDevice_tag
 	ltemPinConfig_t pinConfig;                  /// GPIO pin configuration for required GPIO and SPI interfacing
     bool cancellationRequest;                   /// For RTOS implementations, token to request cancellation of long running task/action
     deviceState_t deviceState;                  /// Device state of the BGx module
-    applEvntNotify_func applEvntNotifyCB;       /// Event notification callback to parent application
+    appEvntNotify_func appEvntNotifyCB;         /// Event notification callback to parent application
     char moduleType[ltem__moduleTypeSz];        /// c-str indicating module type. BG96, BG95-M3, BG77, etc. (so far)
     void *spi;                                  /// SPI device (methods signatures compatible with Arduino)
     iop_t *iop;                                 /// IOP subsystem controls
@@ -95,11 +95,10 @@ typedef struct ltemDevice_tag
     providerInfo_t *providerInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
     streamCtrl_t streams[ltem__streamCnt];      /// Data streams: protocols or file system
 
-    char urcActive;                                     /// URC being serviced (partially complete)
-    urcHandler_func urcHandlers[ltem__urcHandlersCnt];  /// array of URC receipt handlers (parsers)
-
-    dataCntxt_t recvCntxt;                      /// Data context with ACTIVE data-in flow underway (between URC and IRD/SSLRECV chars retrieved)
-    recvEvent_t recvEvent;                      /// Signal from ISR indicating a receive event has just completed, needs servicing (doWork())
+    // char urcActive;                                     /// URC being serviced (partially complete)
+    // urcHandler_func urcHandlers[ltem__urcHandlersCnt];  /// array of URC receipt handlers (parsers)
+    // dataCntxt_t recvCntxt;                      /// Data context with ACTIVE data-in flow underway (between URC and IRD/SSLRECV chars retrieved)
+    // recvEvent_t recvEvent;                      /// Signal from ISR indicating a receive event has just completed, needs servicing (doWork())
 
     ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
 } ltemDevice_t;
@@ -125,7 +124,7 @@ extern "C"
 // LTEM Internal
 void LTEM_initIo();
 void LTEM_registerDoWorker(doWork_func *doWorker);
-void LTEM_registerUrcHandler(urcHandler_func *urcHandler);
+// void LTEM_registerUrcHandler(urcHandler_func *urcHandler);
 
 #pragma region ATCMD LTEmC Internal Functions
 /* LTEmC internal, not intended for user application consumption.

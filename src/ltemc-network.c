@@ -102,7 +102,8 @@ void NTWK_initRatOptions()
 void NTWK_applyDefaulNetwork()
 {
     resultCode_t atResult;
-    if(atcmd_tryInvoke(g_lqLTEM.modemSettings->defaultNtwkConfig))
+    if(strlen(g_lqLTEM.modemSettings->defaultNtwkConfig) > 0 &&
+        atcmd_tryInvoke(g_lqLTEM.modemSettings->defaultNtwkConfig))
     {
         atResult = atcmd_awaitResult();
         if (atResult != resultCode__success)

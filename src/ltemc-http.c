@@ -35,7 +35,7 @@
     asm(".global _printf_float");       // forces build to link in float support for printf
     #if _DEBUG == 1
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #elif _DEBUG >= 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
     #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
@@ -306,12 +306,13 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
             if (atResult == resultCode__success)                                                            // "CONNECT" prompt result
             {
                 atcmd_reset(false);                                                                         // clear CONNECT event from atcmd results
-                atcmd_sendCmdData(cstmRequest, strlen(cstmRequest), "");
+                atcmd_sendCmdData(cstmRequest, strlen(cstmRequest));
             }
         }
         else
         {
             atcmd_invokeReuseLock("AT+QHTTPGET=%d",  timeoutSec);
+            atcmd_sendCmdData("AT+QHTTPGET=30\r", 15);
         }
 
         atResult = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(timeoutSec), S__httpGetStatusParser);                                                                     // wait for "+QHTTPGET trailer (request completed)
@@ -327,8 +328,8 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         else
         {
             httpCtrl->requestState = httpState_idle;
-            httpCtrl->httpStatus = atResult;
-            PRINTF(dbgColor__warn, "Closed failed GET request, status=%d(%s)\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
+            httpCtrl->httpStatus = atcmd_getValue();
+            PRINTF(dbgColor__warn, "Closed failed GET request, status=%d %s\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
         }
         atcmd_close();
         return httpCtrl->httpStatus;
@@ -420,7 +421,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
         if (atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(timeoutSec), ATCMD_connectPromptParser) == resultCode__success)    // wait for "CONNECT", the status result can be 5,10 seconds or longer
         {
             atcmd_reset(false);                                                                         // clear CONNECT event from atcmd results
-            atcmd_sendCmdData(postData, postDataSz, "");
+            atcmd_sendCmdData(postData, postDataSz);
             atResult = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(timeoutSec), S__httpPostStatusParser);
             if (atResult == resultCode__success && atcmd_getValue() == 0)                               // wait for "+QHTTPPOST trailer
             {
@@ -493,7 +494,7 @@ bool http_readPage(httpCtrl_t *httpCtrl, char *pageBffr, uint16_t pageBffrSz, ui
             /* Waiting for CONNECT signal, data follows immediately
                 ----------------------------------------------------------------------------------- */
             if (httpCtrl->requestState == httpState_requestComplete && 
-                cbffr_getFillCnt(rxBffr) > CONNECT_SZ)
+                cbffr_getOccupied(rxBffr) > CONNECT_SZ)
             {
                 if (cbffr_find(rxBffr, "CONNECT\r\n", 0, 0, true) == CBFFR_NOFIND)
                 {
@@ -533,7 +534,7 @@ bool http_readPage(httpCtrl_t *httpCtrl, char *pageBffr, uint16_t pageBffrSz, ui
             }
 
             // trailer found, grab remaining data and parse trailer for http result
-            if (cbffr_getFillCnt(rxBffr) >= READ_TRAILER_SZ)                                        // complete trailer present, ready to parse
+            if (cbffr_getOccupied(rxBffr) >= READ_TRAILER_SZ)                                       // complete trailer present, ready to parse
             {
                 uint16_t popSz = MIN(pageBffrSz, trailerOffset);
                 cbffr_pop(rxBffr, pageBffr, pageBffrSz);
@@ -640,7 +641,7 @@ static uint16_t S__setUrl(const char *url, uint16_t timeoutSec)
     {
         urlState++;
         atcmd_reset(false);
-        atcmd_sendCmdData(url, strlen(url), "");                                    // wait for BGx OK (send complete) 
+        atcmd_sendCmdData(url, strlen(url));                                        // wait for BGx OK (send complete) 
         atResult = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(5), NULL);
         if (atResult == resultCode__success)
             urlState++;

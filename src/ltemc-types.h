@@ -47,11 +47,11 @@ enum ltem__constants
     ltem__bufferSz_tx = 1000,
 
     ltem__swVerSz = 12,
-    ltem__errorDetailSz = 5,
+    ltem__errorDetailSz = 18,
     ltem__moduleTypeSz = 8,
 
-    ltem__streamCnt = 7,            /// 6 for SSL/TLS capable data contexts + file system
-    ltem__urcHandlersCnt = 4        /// max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
+    ltem__streamCnt = 4,            /// 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
+    //ltem__urcHandlersCnt = 4        /// max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
 };
 
 
@@ -303,7 +303,11 @@ enum IOP__Constants
 #define STREAM_FILE "FILE"
 
 typedef void (*urcHandler_func)();
-typedef void (*dataClose_func)(uint8_t cntxtNm);
+
+// streams
+typedef void (*cbProto_func)();                     // prototype func() for stream recvData callback
+typedef resultCode_t (*streamDataRcvr_func)();      // data comes from rxBuffer, this function parses and forwards to application via recvDataCB
+typedef void (*streamClose_func)(uint8_t cntxtNm);
 
 
 /** 
@@ -311,10 +315,12 @@ typedef void (*dataClose_func)(uint8_t cntxtNm);
  */
 typedef struct streamCtrl_tag
 {
-    char streamType[streams__typeCodeSz];
+    char streamType[streams__typeCodeSz];       /// stream type
     void *pCtrl;                                /// protocol specific control variables (cast to a protocol specific struct)
-    void *recvDataCB;                           /// callback into host application with data (cast from void* to specific function signature)
-    dataClose_func dataCloseCB;                 /// handler to perform orderly shutdown of data service
+    uint8_t contextHandle;                      /// integer representing the source of the stream; fixed for protocols, file handle for FS
+    streamDataRcvr_func streamUrcHndlr;         /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    streamClose_func streamClose;               /// handler to perform orderly shutdown of data service
+    cbProto_func recvDataCB;                    /// callback into host application with data (cast from generic func* to stream specific function)
 } streamCtrl_t;
 
 
@@ -325,23 +331,16 @@ typedef struct streamCtrl_tag
  *  receive process is fully synchronous, HTTP is synchronous on receive tied to page read, MQTT is fully asynchronous 
  *  with msg event receive signaling and data transfer taking place async behind the scenes initiated on interrupt. 
  */
-typedef volatile struct iop_tag
+typedef struct iop_tag
 {
-    cBuffer_t *txBffr;
-    // txControl_t* txCtrl;                            /// transmit state control: data pointer/remaining
-    cBuffer_t *rxBffr;                              /// receive buffer
+    volatile char* txBffr;
+    volatile uint16_t txPending;
 
-    // iopStreamCtrl_t* streamPeers[streamPeer_cnt];               /// array of iopStream ctrl pointers, cast to a specific stream type: protocol or file stream
-    // iopStreamCtrl_t* rxStreamCtrl;                              /// stream data source, if not null
-    // char urcDetectBuffer[SET_PROPLEN(IOP__urcDetectBufferSz)];
-
-    uint32_t lastTxAt;                              /// tick count when TX send started, used for response timeout detection
-    uint32_t lastRxAt;                              /// tick count when RX buffer fill level was known to have change
-
-    // protocol specific properties
-    // uint8_t scktMap;                                            /// bitmap indicating open sockets (TCP/UDP/SSL), bit position is the dataContext (IOP event detect shortcut)
-    // uint8_t scktLstWrk;                                         /// bit mask of last sckt do work IRD inquiry (fairness)
-    // uint8_t mqttMap;                                            /// bitmap indicating open mqtt(s) connections, bit position is the dataContext (IOP event detect shortcut)
+    // cBuffer_t *txBffr;                      /// transmit buffer 3.0.1 to be relaced with consumer buffer switching below 
+    cBuffer_t *rxBffr;                      /// receive buffer
+ 
+    volatile uint32_t lastTxAt;             /// tick count when TX send started, used for response timeout detection
+    volatile uint32_t lastRxAt;             /// tick count when RX buffer fill level was known to have change
 } iop_t;
 
 
@@ -359,7 +358,7 @@ enum atcmd__constants
     atcmd__setLockModeManual = 0,
     atcmd__setLockModeAuto = 1,
 
-    atcmd__cmdBufferSz = 120,
+    atcmd__cmdBufferSz = 512,                       // prev=120, mqtt(Azure) connect=384, new=512 for universal cmd coverage, data mode to us dynamic TX bffr switching
     atcmd__respBufferSz = 240,
     atcmd__respBffrShift = atcmd__respBufferSz / 4
 };
@@ -390,13 +389,17 @@ typedef cmdParseRslt_t (*cmdResponseParser_func)();                             
 typedef struct atcmd_tag
 {
     char cmdStr[atcmd__cmdBufferSz];                    /// AT command string to be passed to the BGx module.
+
+    // temporary                                        /// waiting on fix to SPI TX overright
+    char CMDMIRROR[atcmd__cmdBufferSz];
+
     uint32_t timeout;                                   /// Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
     bool isOpenLocked;                                  /// True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
     bool autoLock;                                      /// last invoke was auto and should be closed automatically on complete
     uint32_t invokedAt;                                 /// Tick value at the command invocation, used for timeout detection.
     
-    char response[atcmd__respBufferSz + 1];             /// response buffer, allows for post cmd execution review of received text (0-filled).
-    char *responseData;                                 /// PTR variable section of response.
+    char rawResponse[atcmd__respBufferSz + 1];          /// response buffer, allows for post cmd execution review of received text (0-filled).
+    char *response;                                     /// PTR variable section of response.
 
     uint32_t execDuration;                              /// duration of command's execution in milliseconds
     resultCode_t resultCode;                            /// consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
@@ -406,14 +409,8 @@ typedef struct atcmd_tag
     char errorDetail[SET_PROPLEN(ltem__errorDetailSz)]; /// BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
     int32_t retValue;                                   /// optional signed int value extracted from response
 
-    // // streams (moved from IOP)
-    // iopStreamCtrl_t* streamPeers[streamPeer_cnt];       /// array of iopStream ctrl pointers, cast to a specific stream type: protocol or file stream
-    // iopStreamCtrl_t* rxStreamCtrl;                      /// stream data source, if not null
-
-    // // protocol specific properties
-    // uint8_t scktMap;                                    /// bitmap indicating open sockets (TCP/UDP/SSL), bit position is the dataContext (IOP event detect shortcut)
-    // uint8_t scktLstWrk;                                 /// bit mask of last sckt do work IRD inquiry (fairness)
-    // uint8_t mqttMap;                                    /// bitmap indicating open mqtt(s) connections, bit position is the dataContext (IOP event detect shortcut)
+    streamDataRcvr_func streamDataRcvr;                 /// if the current command can initiate a data stream (HTTP,file,etc.) handler func is registered here
+    cbProto_func applDataCB;
 } atcmd_t;
 
 

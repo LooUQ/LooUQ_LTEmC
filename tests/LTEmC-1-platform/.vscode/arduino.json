@@ -2,5 +2,5 @@
     "sketch": "ltemc-1-platform.ino",
     "configuration": "opt=small,usbstack=arduino,debug=on",
     "board": "adafruit:samd:adafruit_feather_m0",
-    "output": "../.build/ltemc-1-platform"
+    "output": "./build"
 }

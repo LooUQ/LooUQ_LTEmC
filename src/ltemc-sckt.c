@@ -86,7 +86,7 @@ void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, const char *p
 
     g_lqLTEM.streams[dataCntxt].pCtrl = scktCtrl;
     g_lqLTEM.streams[dataCntxt].recvDataCB = recvCallback;
-    LTEM_registerUrcHandler(S__scktUrcHandler);
+    // LTEM_registerUrcHandler(S__scktUrcHandler);
 }
 
 
@@ -203,7 +203,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
         // await data prompt atResult successful, now send data sub-command to actually transfer data, now automatically close action after data sent
         if (atResult == resultCode__success)
         {
-            atcmd_sendCmdData(data, dataSz, "");    // parse for BGx send complete
+            atcmd_sendCmdData(data, dataSz);
             atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__socketSendCompleteParser);
             scktCtrl->statsTxCnt++;
         }
@@ -255,7 +255,7 @@ static void S__scktUrcHandler()
     /* UDP/TCP/SSL/TLS URC
      * ----------------------------------------------------------------------------------------- */
 
-    g_lqLTEM.urcActive = 'S';
+//    g_lqLTEM.urcActive = 'S';
 
     int16_t nextIndx = cbffr_find(rxBffr, "+Q", 0, 0, true);                    // advance bffr-tail ptr to starting point
     if (isUdpTcp) {
@@ -282,13 +282,15 @@ static void S__scktUrcHandler()
     ASSERT(dataCntxt < dataCntxt__cnt);
     scktCtrl = ((scktCtrl_t*)g_lqLTEM.streams[dataCntxt].pCtrl);
 
+/*/
     scktCtrl->irdPending = S__requestIrdData(dataCntxt, isSslTls, cbffr_getOpenCnt(rxBffr));
     if (scktCtrl->irdPending)
         g_lqLTEM.recvCntxt = dataCntxt;                                         // IRD/SSLRECV kicks off flow incoming data, ISR buffers it
     else
         g_lqLTEM.recvCntxt = dataCntxt__none;
 
-    // DoWork() will monitor g_lqLTEM.recvEvent and g_lqLTEM.recvPending to service incoming stream and send to host application.
+    // EventMgr() will monitor g_lqLTEM.recvEvent and g_lqLTEM.recvPending to service incoming stream and send to host application.
+*/
 }    
 
 
@@ -335,7 +337,7 @@ void sckt_cancelRecv(scktCtrl_t *scktCtrl)
 
 static uint16_t S__requestIrdData(dataCntxt_t dataCntxt, bool isSslTls, uint16_t requestSz)
 {
-    uint16_t dataRequest = cbffr_getOpenCnt(g_lqLTEM.iop->rxBffr);              // request up to current space available
+    uint16_t dataRequest = cbffr_getVacant(g_lqLTEM.iop->rxBffr);              // request up to current space available
     if (isSslTls)
     {
         atcmd_tryInvoke("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, dataRequest);

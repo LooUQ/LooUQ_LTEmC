@@ -24,26 +24,39 @@
 ***************************************************************************** */
 
 
-#ifndef __LTEMC_FILESYS_H__
-#define __LTEMC_FILESYS_H__
+#ifndef __LTEMC_FILE_H__
+#define __LTEMC_FILE_H__
 
 #include "ltemc.h"
-
-
-
-
 
 
 /*
 ------------------------------------------------------------------------------------------------ */
 
-enum filesys
+enum file
 {
-    filesys__cmdSz = 81,
-    filesys__dataOffsetInfo = 10,
-    filesys__dataOffsetPosition = 12,   ///< +QFPOSITION: 
-    filesys__dataOffsetOpen = 9,        ///< +QFOPEN: {filehandle}
-    filesys__timeoutMS = 800            ///< file system command default timeout (milliseconds)
+    file__filenameSz = 81,
+    file__timeoutMS = 800,              /// file system command default timeout (milliseconds)
+    file__fileListMaxCnt = 32,
+    file__openFileItemSz = 28,
+    file__openFileMaxCnt = 10,
+    
+    file__dataOffset_info = 7,          /// +QFLDS and +QFLST
+    file__dataOffset_open = 9,          /// +QFOPEN: "filename",<handle>,<mode>
+    file__handleSearchMax = 20,
+    file__dataOffset_pos = 13,          /// +QFPOSITION: 
+    file__readTrailerSz = 6,
+    file__readTimeoutMs = 100
+};
+
+
+enum fileErrMap
+{
+    fileErr__detail_fileAlreadyOpen = 426,
+    fileErr__result_fileAlreadyOpen = 409,
+
+    fileErr__detail_fileNotFound = 405,
+    fileErr__result_fileNotFound = 404
 };
 
 
@@ -54,29 +67,29 @@ typedef enum fileInfoType_tag
 } fileInfoType_t;
 
 
-typedef struct fileInfoResult_tag
+typedef struct filesysInfo_tag
 {
     uint32_t freeSz;
     uint32_t totalSz;
     uint32_t filesSz;
     uint16_t filesCnt;
-    resultCode_t resultCode;
-} fileInfoResult_t;
+} filesysInfo_t;
 
 
 typedef struct fileListItem_tag
 {
-    const char* filename;
-    uint32_t fileSize;
+    char filename[file__filenameSz];
+    uint32_t fileSz;
 } fileListItem_t;
 
 
 typedef struct fileListResult_tag
 {
-    const char* namePattern;
-    fileListItem_t fileList[10];
-    resultCode_t resultCode;
+    char namePattern[file__filenameSz];
+    uint8_t fileCnt;
+    fileListItem_t files[file__fileListMaxCnt];
 } fileListResult_t;
+
 
 typedef struct fileUploadResult_tag
 {
@@ -94,47 +107,31 @@ typedef struct fileDownloadResult_tag
 
 typedef enum fileOpenMode_tag
 {
-    fileOpenMode_normalRdWr = 0,
-    fileOpenMode_clearRdWr = 1,
-    fileOpenMode_normalRdOnly = 2
+    fileOpenMode_rdWr = 0,
+    fileOpenMode_ovrRdWr = 1,
+    fileOpenMode_rdOnly = 2
 } fileOpenMode_t;
 
 
 typedef enum fileSeekMode_tag
 {
-    fileSeekMode_seekFromBegin = 0,
-    fileSeekMode_seekFromCurrent = 1,
-    fileSeekMode_seekFromEnd = 2
+    fileSeekMode_fromBegin = 0,
+    fileSeekMode_fromCurrent = 1,
+    fileSeekMode_fromEnd = 2
 } fileSeekMode_t;
-
-
-typedef struct fileOpenResult_tag
-{
-    uint16_t fileHandle;
-    resultCode_t resultCode;
-} fileOpenResult_t;
 
 
 typedef struct fileWriteResult_tag
 {
     uint16_t writtenSz;
     uint32_t fileSz;
-    resultCode_t resultCode;
 } fileWriteResult_t;
 
 
-typedef struct filePositionResult_tag
-{
-    uint16_t fileOffset;
-    resultCode_t resultCode;
-} filePositionResult_t;
-
-
-
 /** 
- *  @brief typedef for the socket services data receiver function. Connects filesystem processing to the application (receive).
+ *  @brief typedef for the filesystem services data receiver function. Connects filesystem processing to the application (receive).
 */
-typedef void (*fileReceiver_func_t)(uint16_t fileHandle, void *fileData, uint16_t dataSz);
+typedef void (*fileReceiver_func_t)(uint16_t fileHandle, const char *fileData, uint16_t dataSz);
 
 
 #ifdef __cplusplus
@@ -143,32 +140,71 @@ extern "C" {
 
 
 /**
- *	@brief set file read data receiver function (here or with filesys_open). Not required if file is write only access.
+ *	@brief get filesystem information.
  */
-void filesys_setRecvrFunc(fileReceiver_func_t fileRecvr_func);
-
-
-fileInfoResult_t filesys_info();
-
-
-fileListResult_t filesys_list(const char* fileName);
+resultCode_t file_getFSInfo(filesysInfo_t * fsInfo);
 
 
 /**
- *	@brief Delete a file from the file system.
- *	@param fileName [in] - "*" or filename to delete. Wildcard with filename is not allowed.
+ *	@brief get list of files from filesystem.
+ */
+resultCode_t file_getFilelist(fileListResult_t *filelist, const char* fileName);
+
+
+/**
+ *	@brief set file read data receiver function (here or with filesys_open). Not required if file is write only access.
+ */
+void file_setRecvrFunc(fileReceiver_func_t fileRecvr_func);
+
+
+/**
+ *	@brief Open file for read/write.
+ *	@param [in] fileName - Char array with the name of the file to open (recommended DOS 8.3 format).
+ *	@param [in] openMode - Enum with file behavior after file is successfully opened.
+ *	@param [out] fileHandle - Pointer to the numeric handle for the file to close.
  *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
  */
-resultCode_t filesys_delete(const char* fileName);
+resultCode_t file_open(const char* fileName, fileOpenMode_t openMode, uint16_t* fileHandle);
 
 
-fileOpenResult_t filesys_open(const char* fileName, fileOpenMode_t mode, fileReceiver_func_t fileRecvr_func);
+/**
+ *	@brief Get a list of open files, including their mode and file handles.
+ *	@param [out] fileinfo - Char buffer to fill with information about open files.
+ *	@param [in] fileinfoSz - Buffer size (max chars to return).
+ *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ */
+resultCode_t file_getOpenFiles(char *fileinfo, uint16_t fileinfoSz);
 
 
-resultCode_t filesys_read(uint16_t fileHandle, uint16_t readSz);
+/**
+ *	@brief Closes the file. 
+ *	@param [in] fileHandle - Numeric handle for the file to close.
+ *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ */
+resultCode_t file_close(uint16_t fileHandle);
 
 
-fileWriteResult_t filesys_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz);
+/**
+ *	@brief Closes all open files.
+ *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ */
+resultCode_t file_closeAll();
+
+
+/**
+ *	@brief Closes the file. 
+ *	@param [in] fileHandle - Numeric handle for the file to close.
+ *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ */
+resultCode_t file_read(uint16_t fileHandle, uint16_t readSz);
+
+
+/**
+ *	@brief Closes the file. 
+ *	@param [in] fileHandle - Numeric handle for the file to close.
+ *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ */
+resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz, fileWriteResult_t *writeResult);
 
 
 /**
@@ -180,10 +216,16 @@ fileWriteResult_t filesys_write(uint16_t fileHandle, const char* writeData, uint
  * 
  *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
  */
-resultCode_t filesys_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t seekFrom);
+resultCode_t file_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t seekFrom);
 
 
-filePositionResult_t filesys_getPosition(uint16_t fileHandle);
+/**
+ *	@brief Closes the file. 
+ *	@param [in] fileHandle - Numeric handle for the file to close.
+ *	@param [out] filePtr - Pointer to location (integer file pointer) within file: "current".
+ *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ */
+resultCode_t file_getPosition(uint16_t fileHandle, uint32_t* filePtr);
 
 
 /**
@@ -191,23 +233,25 @@ filePositionResult_t filesys_getPosition(uint16_t fileHandle);
  *	@param [in] fileHandle - Numeric handle for the file to truncate.
  *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
  */
-resultCode_t filesys_truncate(uint16_t fileHandle);
+resultCode_t file_truncate(uint16_t fileHandle);
 
 
 /**
- *	@brief Closes the file. 
- *	@param [in] fileHandle - Numeric handle for the file to close.
+ *	@brief Delete a file from the file system.
+ *	@param fileName [in] - "*" or filename to delete. Wildcard with filename is not allowed.
  *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
  */
-resultCode_t filesys_close(uint16_t fileHandle);
+resultCode_t file_delete(const char* fileName);
+
+
 
 /* future */
-// fileUploadResult_t filesys_upload(const char* fileName);
-// fileDownloadResult_t filesys_download(const char* fileName);
+// fileUploadResult_t file_upload(const char* fileName);
+// fileDownloadResult_t file_download(const char* fileName);
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // !__LTEMC_FILESYS_H__
+#endif  // !__LTEMC_FILE_H__

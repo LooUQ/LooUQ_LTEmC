@@ -8,7 +8,7 @@
             "name": "Cortex Debug",
             "type": "cortex-debug",
             "cwd": "${workspaceFolder}",
-            "executable": ".//.build/ltemc-11-gpio/ltemc-11-gpio.ino.elf",
+            "executable": "./build/ltemc-11-gpio.ino.elf",
             "request": "launch",
             "servertype": "jlink",
             "runToEntryPoint": "main",

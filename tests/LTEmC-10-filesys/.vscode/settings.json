@@ -7,6 +7,8 @@
         "type_traits": "c",
         "ltemc.h": "c",
         "ltemc-internal.h": "c",
-        "lq-platform.h": "c"
-    }
+        "lq-platform.h": "c",
+        "ltemc-filesys.h": "c"
+    },
+    "cmake.configureOnOpen": false
 }

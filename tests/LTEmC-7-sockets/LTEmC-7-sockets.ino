@@ -84,9 +84,9 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEmC Test:7 Sockets\r\n");
-    lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
+    lqDiag_setNotifyCallback(appEvntNotify);                        // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, applEvntNotify);              // create LTEmC modem, no yield req'd for testing
+    ltem_create(ltem_pinConfig, NULL, appEvntNotify);               // create LTEmC modem, no yield req'd for testing
     ltem_start(resetAction_swReset);                                // ... and start it
     PRINTF(dbgColor__none, "BGx %s\r", mdminfo_ltem()->fwver);
 
@@ -153,11 +153,10 @@ void loop()
 
         loopCnt++;
     }
-    /*
-     * NOTE: ltem_doWork() pipeline is required to complete data receives. doWork() has no side effects other
-     * than taking a brief amount of time to check and advance socket pipeline and SHOULD BE INVOKED LIBERALLY.
+    /* NOTE: ltem1_eventMgr() background pipeline processor is required for async receive operations; like UDP/TCP receive.
+     *       Event manager has light weight and has no side effects other than taking time. It should be invoked liberally. 
      */
-    ltem_doWork();
+    ltem_eventMgr();
 }
 
 
@@ -187,9 +186,17 @@ void scktRecv(dataCntxt_t dataCntxt, uint16_t dataSz)
 
 
 
-
 /* test helpers
 ========================================================================================================================= */
+
+void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
+{
+    if (eventType == appEvent_fault_assertFailed)
+        PRINTF(dbgColor__error, "LTEmC Fault: %s\r", notifyMsg);
+    else 
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+    return;
+}
 
 
 void showStats() 
@@ -211,18 +218,6 @@ void showStats()
     // lastTx = txCnt;
     // lastRx = rxCnt;
     // lastDrops = drops;
-}
-
-
-void applEvntNotify(const char *eventTag, const char *eventMsg)
-{
-    if (STRCMP(eventTag, "ASSERT"))
-    {
-        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
-        while (1) {}
-    }
-    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
-    return;
 }
 
 

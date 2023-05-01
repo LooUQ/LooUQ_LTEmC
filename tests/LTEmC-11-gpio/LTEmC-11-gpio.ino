@@ -24,27 +24,25 @@
  ******************************************************************************
  *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG)
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #else
-    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
-    #endif
-#else
-#define PRINTF(c_, f_, ...) ;
-#endif
+/* specify the pin configuration
+ * --------------------------------------------------------------------------------------------- */
+// #define HOST_FEATHER_UXPLOR             
+// #define HOST_FEATHER_LTEM3F
+#define HOST_FEATHER_UXPLOR_L
 
-
-// define options for how to assemble this build
-// #define HOST_FEATHER_UXPLOR             // specify the pin configuration
-#define HOST_FEATHER_LTEM3F
+#include <lq-diagnostics.h>
+#include <lq-SAMDutil.h>                // allows read of reset cause
 
 #include <ltemc.h>
 #include <ltemc-gpio.h>
+
+#define ASSERT(expected_true, failMsg)  if(!(expected_true))  indicateFailure(failMsg)
+#define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') indicateFailure(failMsg)
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+
+const uint8_t testGpio = 1;
+const uint8_t testAdc = 0;
 
 
 void setup() {
@@ -57,46 +55,49 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "LTEm1c test115-gpio\r\n");
-    lqDiag_setNotifyCallback(applEvntNotify);                           // configure ASSERTS to callback into application
+    PRINTF(DBGCOLOR_red, "\rLTEmC test-11-gpio\r");
+    PRINTF(dbgColor__white, "RCause=%d\r\n", lqSAMD_getResetCause());
+    platform_openPin(LED_BUILTIN, gpioMode_output);
+    lqDiag_setNotifyCallback(applEvntNotify);
 
-    ltem_create(ltem_pinConfig, NULL, applEvntNotify);                  // create LTEmC modem, no yield req'd for testing
-    ltem_start(resetAction_swReset);                                    // ... and start it
-
-    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_getSwVersion());
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);
+    ltem_start(resetAction_skipIfOn);                                            // start LTEm, if found on reset it
 
     modemInfo_t *modemInfo  = mdminfo_ltem();
-
     if (strcmp(modemInfo->mfgmodel,"BG77") == 0)
-        PRINTF(dbgColor__info, "Modem Module: BG77\r");
+    {
+        PRINTF(dbgColor__info, "Modem: LTEM3F\r");
+    }
     else
     {
-        PRINTF(dbgColor__error, "Modem does not support GPIO\r", mdminfo_ltem()->mfgmodel);
+        PRINTF(dbgColor__error, "Modem does not support GPIO\r");
         while (1);
     }
 
     // init GPIO ports controlled by test
-    gpio_configPort(1, gpioDirection_output, gpioPull_NA, gpioPullDrive_NA);
-    gpio_configPort(2, gpioDirection_input, gpioPull_none, gpioPullDrive_NA);
+    gpio_configPort(testGpio, gpioDirection_output, gpioPull_NA, gpioPullDrive_NA);
+    gpio_configPort(testGpio + 1, gpioDirection_input, gpioPull_none, gpioPullDrive_NA);
 }
 
 int loopCnt = 0;
 
+void loop() 
+{
+    gpio_write(testGpio, loopCnt % 2);
+    bool pinValue;
+    gpio_read(testGpio + 1, &pinValue);
 
-void loop() {
+    if (pinValue != loopCnt % 2)
+    {
+        PRINTF(dbgColor__error, "GPIO compare failed.\r");
+        while (1) {}
+    }
 
-    // set output ports
+    uint16_t adcValue;
+    gpio_adcRead(testAdc, &adcValue);
+    PRINTF(dbgColor__cyan, "ADC value=%dmV\r");
 
-    // read input ports (GPIO and ADC)
-
-    // PRINTF(dbgColor__cyan, "\rModem Information\r");
-    // PRINTF(dbgColor__cyan, "IMEI = %s \r", modemInfo->imei);
-    // PRINTF(dbgColor__cyan, "ICCID = %s \r", modemInfo->iccid);
-    // PRINTF(dbgColor__cyan, "Firmware = %s \r", modemInfo->fwver);
-    // PRINTF(dbgColor__cyan, "Mfg/Model = %s \r", modemInfo->mfgmodel);
-
-    // PRINTF(dbgColor__info, "\rRSSI = %d dBm \r",mdminfo_signalRSSI());
-
+    pDelay(2000);
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
 }
@@ -106,14 +107,16 @@ void loop() {
 /* test helpers
 ========================================================================================================================= */
 
-void applEvntNotify(const char *eventTag, const char *eventMsg)
+void applEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (STRCMP(eventTag, "ASSERT"))
+    if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
-        while (1) {}
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
     }
-    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
+    else 
+    {
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+    }
     return;
 }
 

@@ -65,12 +65,13 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "LTEmC - Test #2: BGx communications\r\n");
-    lqDiag_setNotifyCallback(applEvntNotify);                           // configure ASSERTS to callback into application
+    lqDiag_setNotifyCallback(appEvntNotify);                            // configure ASSERTS to callback into application
 
-    /*  Manually create/initialize modem parts used here */
+    /*  Manually create/initialize modem parts used, this is a low-level test
+     */
 	g_lqLTEM.pinConfig = ltem_pinConfig;                                // initialize the I/O modem internal settings
     g_lqLTEM.spi = spi_create(g_lqLTEM.pinConfig.spiCsPin);
-    g_lqLTEM.applEvntNotifyCB = applEvntNotify;                         // set the callback address
+    g_lqLTEM.appEvntNotifyCB = appEvntNotify;                           // set the callback address
 
     initIO();                                                           // initialize GPIO, SPI
     spi_start(g_lqLTEM.spi);
@@ -182,11 +183,11 @@ void sendCommand(const char* cmd)
 {
     size_t sendSz = strlen(cmd);
 
-    //SC16IS7xx_write(cmd, strlen(cmd));                      // normally you are going to use buffered writes like here
+    //SC16IS7xx_write(cmd, strlen(cmd));                        // normally you are going to use buffered writes like here
 
     for (size_t i = 0; i < sendSz; i++)
     {
-        SC16IS7xx_writeReg(SC16IS7xx_FIFO_regAddr, cmd[i]);      // without a small delay the register is not moved to FIFO before next byte\char
+        SC16IS7xx_writeReg(SC16IS7xx_FIFO_regAddr, cmd[i]);     // without a small delay the register is not moved to FIFO before next byte\char
         pDelay(1);                                              // this is NOT the typical write cycle
     }
     pDelay(300);                                                // max response time per-Quectel specs, for this test we will wait
@@ -244,14 +245,17 @@ bool validOkResponse(const char *response)
 
 //typedef void (*eventNotifFunc_t)(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg);
 
-void applEvntNotify(const char *eventTag, const char *eventMsg)
+void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (STRCMP(eventTag, "ASSERT"))
+    if (eventType == appEvent_fault_assertFailed)
+    if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", eventMsg);
-        while (1) {}
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", eventMsg);
+    else 
+    {
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+    }
     return;
 }
 

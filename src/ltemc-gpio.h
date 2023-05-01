@@ -85,8 +85,9 @@ extern "C" {
 
 /**
  *	\brief Read valule of ADC interface.
+ *  \return Value read 0=low, 1=high. Result of -1 indicates invalid port number.
  */
-uint16_t adc_read(uint8_t portNumber);
+resultCode_t gpio_adcRead(uint8_t portNumber, uint16_t* analogValue);
 
 
 /**
@@ -95,9 +96,9 @@ uint16_t adc_read(uint8_t portNumber);
  *	\param [in] direction - Set the GPIO port to be for input or output.
  *	\param [in] pullType - If the port is input, specifies the optional pull up/down behavior for the GPIO port. Ignored if "direction" is output.
  *	\param [in] pullDriveCurrent - If the port is input AND pull is specified, sets the current limit for the pull circuit. Ignored if "direction" is output.
- *  \return Error status: 0=no error, -1 indicates invalid port number.
+ *  \return Value read 0=low, 1=high. Result of -1 indicates invalid port number.
  */
-int8_t gpio_configPort(uint8_t portNumber, gpioDirection_t direction, gpioPull_t pullType, gpioPullDrive_t pullDriveCurrent);
+resultCode_t gpio_configPort(uint8_t portNumber, gpioDirection_t direction, gpioPull_t pullType, gpioPullDrive_t pullDriveCurrent);
 
 
 /**
@@ -105,7 +106,7 @@ int8_t gpio_configPort(uint8_t portNumber, gpioDirection_t direction, gpioPull_t
  *	\param [in] portNumber - The GPIO port to read, dependent on modem module and modem board.
  *  \return Value read 0=low, 1=high. Result of -1 indicates invalid port number.
  */
-int8_t gpio_read(uint8_t portNumber);
+resultCode_t gpio_read(uint8_t portNumber, bool* pinValue);
 
 
 /**
@@ -114,9 +115,7 @@ int8_t gpio_read(uint8_t portNumber);
  *	\param [in] value - The 0 or 1 digital value to assign to the GPIO port output.
  *  \return Error status: 0=no error, -1 indicates invalid port number.
  */
-int8_t gpio_write(uint8_t portNumber, uint8_t value);
-
-
+resultCode_t gpio_write(uint8_t portNumber, bool pinValue);
 
 
 #ifdef __cplusplus

@@ -17,6 +17,7 @@ _deps
 
 ## VSCode build
 .build/
+build/
 
 tests/LTEmC-5-modeminfo/.vscode/c_cpp_properties.json
 tests/LTEmC-6-gnss/.vscode/c_cpp_properties.json

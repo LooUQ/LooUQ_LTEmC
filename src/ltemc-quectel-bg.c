@@ -167,29 +167,31 @@ void QBG_reset(resetAction_t resetAction)
 
     if (resetAction == resetAction_swReset && QBG_isPowerOn())
     {
-        SC16IS7xx_sendBreak();                                          // test for do no harm
-        // atcmd_exitTextMode();                                           // clear possible text mode (hung MQTT publish, etc.)
-        // atcmd_sendCmdData("AT\r", 3, "");                               // clear cmd state
-        atcmd_sendCmdData("AT+CFUN=1,1\r", 12, "");                     // soft-reset command: performs a module internal HW reset and cold-start
+        SC16IS7xx_sendBreak();                                              // test for do no harm
+        // atcmd_exitTextMode();                                            // clear possible text mode (hung MQTT publish, etc.)
+        // atcmd_sendCmdData("AT\r", 3, "");                                // clear cmd state
 
-        uint32_t waitStart = pMillis();                                 // start timer to wait for status pin == OFF
+        char cmdData[] = "AT+CFUN=1,1\r";                                   // DMA SPI DMA may not tolerate Flash source
+        IOP_startTx(cmdData, sizeof(cmdData));                              // soft-reset command: performs a module internal HW reset and cold-start
+
+        uint32_t waitStart = pMillis();                                     // start timer to wait for status pin == OFF
         while (QBG_isPowerOn())
         {
-            yield();                                                    // give application some time back for processing
+            yield();                                                        // give application some time back for processing
             if (pMillis() - waitStart > PERIOD_FROM_SECONDS(3))
             {
                 PRINTF(dbgColor__warn, "LTEm swReset:OFF timeout\r");
                 // SC16IS7xx_sendBreak();
-                // atcmd_exitTextMode();                                // clear possible text mode (hung MQTT publish, etc.)
-                QBG_reset(resetAction_powerReset);                      // recursive call with power-cycle reset specified
+                // atcmd_exitTextMode();                                    // clear possible text mode (hung MQTT publish, etc.)
+                QBG_reset(resetAction_powerReset);                          // recursive call with power-cycle reset specified
                 return;
             }
         }
 
-        waitStart = pMillis();                                          // start timer to wait for status pin == ON
+        waitStart = pMillis();                                              // start timer to wait for status pin == ON
         while (!QBG_isPowerOn())
         {
-            yield();                                                    // give application some time back for processing
+            yield();                                                        // give application some time back for processing
             if (pMillis() - waitStart > PERIOD_FROM_SECONDS(3))
             {
                 PRINTF(dbgColor__warn, "LTEm swReset:ON timeout\r");
@@ -200,8 +202,8 @@ void QBG_reset(resetAction_t resetAction)
     }
     else if (resetAction == resetAction_hwReset)
     {
-        platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_high);                 // hardware reset: reset pin (LTEm inverts)
-        pDelay(4000);                                                                   // BG96: active for 150-460ms , BG95: 2-3.8s
+        platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_high);     // hardware reset: reset pin (LTEm inverts)
+        pDelay(4000);                                                       // BG96: active for 150-460ms , BG95: 2-3.8s
         platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
         PRINTF(dbgColor__white, "LTEm hwReset\r");
     }
@@ -228,16 +230,15 @@ void QBG_setOptions()
         tries++;
         for (size_t i = 0; i < qbg_initCmdsCnt; i++)                                    // sequence through list of start cmds
         {
-            if (S__issueStartCommand(qbg_initCmds[i]))
-                PRINTF(dbgColor__none, " > %s\r", qbg_initCmds[i]);
-            else
+            PRINTF(dbgColor__none, " > %s\r", qbg_initCmds[i]);
+            if (!S__issueStartCommand(qbg_initCmds[i]))
             {
                 PRINTF(dbgColor__error, "BGx Init CmdError: %s\r", qbg_initCmds[i]);
                 initError = true;
                 break;
             }
         }
-        PRINTF(dbgColor__none, " > ------");
+        PRINTF(dbgColor__none, " -End BGx Init-\r");
         if (initError)
         {
             /* If above awaitResult gets a 408 (timeout), perform a HW check. The HW check 1st looks at status pin,the inspects
@@ -245,7 +246,9 @@ void QBG_setOptions()
              * The function below attempts to clear a confused BGx that is sitting in data state (awaiting an end-of-transmission).
              */
             if (!QBG_clearDataState())
+            {
                 ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");         // send notification, maybe app can recover
+            }
         }
         PRINTF(dbgColor__none, "\r");
     } while (initError && tries == 1);
@@ -288,7 +291,8 @@ bool S__issueStartCommand(const char *cmdStr)
 {
     if (atcmd_tryInvoke(cmdStr))
     {
-        if (atcmd_awaitResult() == resultCode__success)
+        // somewhat unknown cmd list for modem initialization, relax timeout
+        if (atcmd_awaitResultWithOptions(2000, NULL) == resultCode__success)    
             return true;
     }
     return false;

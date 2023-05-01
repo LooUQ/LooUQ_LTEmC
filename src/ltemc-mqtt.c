@@ -92,8 +92,8 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt, mqttRecv_func
     memcpy(g_lqLTEM.streams[dataCntxt].streamType, STREAM_MQTT, streams__typeCodeSz);
 
     g_lqLTEM.streams[dataCntxt].pCtrl = mqttCtrl;
-    LTEM_registerUrcHandler(S__mqttUrcHandler);
     g_lqLTEM.streams[dataCntxt].recvDataCB = recvCallback;
+    g_lqLTEM.streams[dataCntxt].streamUrcHndlr = S__mqttUrcHandler;
 }
 
 
@@ -207,7 +207,8 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
     if (ATCMD_awaitLock(atcmd__defaultTimeout))                             // to use oversized MQTT buffer, we need to use sendCmdData()
     {      
         atcmd_reset(false);
-        atcmd_sendCmdData(connectCmd, strlen(connectCmd), "\r");
+        strcat(connectCmd, "\r");
+        atcmd_sendCmdData(connectCmd, strlen(connectCmd));
         atResult = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), S__mqttConnectCompleteParser);     // in autolock mode, so this will release lock
         if (atResult == resultCode__success)
         {
@@ -333,11 +334,12 @@ resultCode_t mqtt_publishEncoded(mqttCtrl_t *mqttCtrl, const char *topic, mqttQo
 */
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSeconds)
 {
-    ASSERT(strlen(message) <= 4096);                                               // max msg length PUBEX=560, PUB=4096
+    ASSERT(strlen(message) <= 4096);                                                                                // max msg length PUBEX=560, PUB=4096
+    
     uint8_t pubstate = 0;
     uint32_t timeoutMS = (timeoutSeconds == 0) ? mqtt__publishTimeout : timeoutSeconds * 1000;
     char msgText[mqtt__messageSz];
-    resultCode_t atResult = resultCode__conflict;               // assume lock not obtainable, conflict
+    resultCode_t atResult = resultCode__conflict;                                                                   // assume lock not obtainable, conflict
     if (ATCMD_awaitLock(timeoutMS))
     {
         mqttCtrl->lastMsgId++;                                                                                      // keep sequence going regardless of MQTT QOS
@@ -349,7 +351,8 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
         if (atResult == resultCode__success)                                        
         {
             pubstate++;
-            atcmd_sendCmdData(message, strlen(message), ASCII_CtrlZ_STR);                                           // now send data
+            strcat(message, ASCII_CtrlZ_STR);
+            atcmd_sendCmdData(message, strlen(message));                                                            // now send data
             atResult = atcmd_awaitResultWithOptions(timeoutMS, S__mqttPublishCompleteParser);
             if (atResult == resultCode__success)
             {
@@ -619,7 +622,7 @@ static void S__mqttUrcHandler()
     char *nextPtr;
     uint8_t dataCntxt;
 
-    cbffr_startTransaction(rxBffr);                             // start bffr transaction in case only part of the URC has arrived
+    //cbffr_startTransaction(rxBffr);                             // start bffr transaction in case only part of the URC has arrived
 
     dataCntxt = strtol(topicBffr + 9, nextPtr, 10);
     ASSERT(memcmp(g_lqLTEM.streams[dataCntxt].streamType, STREAM_MQTT, 4) == 0);

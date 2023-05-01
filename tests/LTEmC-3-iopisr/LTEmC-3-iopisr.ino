@@ -33,7 +33,7 @@
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 2
+    #if _DEBUG >= 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
     #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #else
@@ -48,64 +48,114 @@
 // #define HOST_FEATHER_UXPLOR             
 // #define HOST_FEATHER_LTEM3F
 
-//#include <ltemc.h>
-#include <ltemc-internal.h>             // this appl performs tests on internal, non-public API components 
+//#include <ltemc.h>                                    // normally found in your appcode, not here for low-level access in unit test
+#include <ltemc-internal.h>                             // this appl performs tests on internal, non-public API components 
 #include <ltemc-iop.h>
-
+#define SRCFILE "T03"
 
 #define STRCMP(x, y)  (strcmp(x, y) == 0)
 
-cBuffer_t rxBffr;
-char rBuffer[200] = {0};
+cBuffer_t rxBffr;                                           // cBuffer control structure
+cBuffer_t* rxBffrPtr = &rxBffr;                             // convenience pointer var
+char rawBuffer[220] = {0};                                  // raw buffer managed by rxBffr control
+
+char hostBffr1[255];                                        // display buffer to receive received info from LTEmC
+char hostBffr2[255];                                        // display buffer to receive received info from LTEmC
 
 void setup() {
     #ifdef SERIAL_OPT
         Serial.begin(115200);
         #if (SERIAL_OPT > 0)
-        while (!Serial) {}      // force wait for serial ready
+        while (!Serial) {}                                  // force wait for serial ready
         #else
-        delay(5000);            // just give it some time
+        delay(5000);                                        // just give it some time
         #endif
     #endif
 
     PRINTF(dbgColor__red, "LTEmC Test3: iop\r");
     randomSeed(analogRead(7));
-    lqDiag_setNotifyCallback(applEvntNotify);                   // configure LTEMC ASSERTS to callback into application
+    lqDiag_setNotifyCallback(appEvntNotify);                // configure LTEMC ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, applEvntNotify);          // create LTEmC modem (no yield CB for testing)
-    startLTEm();                                                // test defined initialize\start, can't use ltem_start() for this test scenario
+    ltem_create(ltem_pinConfig, NULL, appEvntNotify);       // create LTEmC modem (no yield CB for testing)
+    startLTEm();                                            // test defined initialize\start, can't use ltem_start() for this test scenario
 
-    cbffr_init(&rxBffr, rBuffer, sizeof(rBuffer));
-    g_lqLTEM.iop->rxBffr = &rxBffr;                             // override LTEm created buffer with test instance
+    cbffr_init(rxBffrPtr, rawBuffer, sizeof(rawBuffer));
+    g_lqLTEM.iop->rxBffr = rxBffrPtr;                       // override LTEm created buffer with test instance
+
+    // pDelay(1000);
+    // cbffr_reset(rxBffrPtr);
+    char cmd[] = "ATE0\r";
+    IOP_startTx(cmd, strlen(cmd));
+    pDelay(100);
+    cbffr_reset(rxBffrPtr);
 }
 
 
 int loopCnt = 0;
-char hostRxBffr[255];
 
 void loop() 
 {
     /* Optional command strings for testing, must be from RAM (can't use const char* to create)
      */
-    char cmd[] = "AT+GSN;+QCCID\r";                             // short response (contained in 1 rxCtrlBlock)
-    // char cmd[] = "AT+GSN;+QCCID;+GSN;+QCCID\r";                 // long response (requires multiple rxCtrlBlocks)
-    // char cmd[] = "AT+QPOWD\r";                                  // Is something wrong? Is is rx or tx (tx works if BG powers down)
+    uint8_t expectedCnt = 79;
+    // char cmd[] = "AT+GSN;+QCCID\r";                                  // short response (expect 57 char response)
+    char cmd[] = "AT+GSN;+QCCID;+GMI;+GMM\r";                           // long response (expect 79 char response)
+    // char cmd[] = "AT+QPOWD\r";                                       // Is something wrong? Is is rx or tx (tx works if BG powers down)
+    PRINTF(0, "Invoking...\r", cmd);
 
-    PRINTF(0, "Invoking cmd: %s       ", cmd);
-    IOP_sendTx(cmd, strlen(cmd));                               // send, wait for complete
-    PRINTF(0, "Sent\r\n");
+    IOP_startTx(cmd, strlen(cmd));                                      // send, wait for complete
+    PRINTF(0, "Sent %s\r", cmd);
+    pDelay(500);                                                        // give BGx some time to respond, interrupt will fire and fill rx buffer
 
-    pDelay(500);                                                // give BGx a second to respond, interrupt should fire and fill cmd rx buffer
-    PRINTF(dbgColor__green, "Got %d chars (so far)\r", cbffr_getFillCnt(&rxBffr));
-    
-    memset(hostRxBffr, 0, sizeof(hostRxBffr));
-    cbffr_pop(&rxBffr, hostRxBffr, sizeof(hostRxBffr));
+    uint16_t occupiedCnt = cbffr_getOccupied(rxBffrPtr);                // move to variable for break conditional
+    ASSERT(occupiedCnt == expectedCnt);
+    PRINTF(dbgColor__green, "Got %d chars (so far)\r", occupiedCnt);
 
-    PRINTF(dbgColor__cyan, "Resp: %s\r", hostRxBffr);
-    PRINTF(dbgColor__green, "rxBffr has %d chars now.\r", cbffr_getFillCnt(&rxBffr));
+    char* copyFrom;
+    uint16_t firstCnt = (int)(expectedCnt / 2);
+    uint16_t blockSz1;
+    uint16_t blockSz2;
+
+    if (loopCnt % 2 == 1)
+    {
+        PRINTF(dbgColor__green, "\r\rUsing POP\r");
+        memset(hostBffr1, 0, sizeof(hostBffr1));                            // make it easy for str functions, PRINTF, and human eyes
+
+        cbffr_pop(rxBffrPtr, hostBffr1, sizeof(hostBffr1));                 // move everything in rxBffr to hostBffr
+        PRINTF(dbgColor__cyan, "Resp(%d chars): %s\r", strlen(hostBffr1), hostBffr1);
+    }
+    else
+    {
+        PRINTF(dbgColor__green, "\r\rUsing POP BLOCK\r");                   // I know this is testing two things at once... sorry
+        memset(hostBffr2, 0, sizeof(hostBffr2));                            // make it easy for str functions, PRINTF, and human eyes
+
+        blockSz1 = cbffr_popBlock(rxBffrPtr, &copyFrom, expectedCnt);       // move everything in rxBffr to hostBffr
+        memcpy(hostBffr2, copyFrom, blockSz1);
+        cbffr_popBlockFinalize(rxBffrPtr, true);
+
+        blockSz2 = cbffr_popBlock(rxBffrPtr, &copyFrom, expectedCnt);
+        ASSERT(blockSz1 + blockSz2 == expectedCnt);
+        if (blockSz2 > 0)
+        {
+            memcpy(hostBffr2 + blockSz1, copyFrom, blockSz2);
+            cbffr_popBlockFinalize(rxBffrPtr, true);
+        }
+        PRINTF(dbgColor__green, "Blocks: 1=%d, 2=%d\r", blockSz1, blockSz2);
+
+        PRINTF(dbgColor__cyan, "Resp(%d chars): %s\r", strlen(hostBffr2), hostBffr2);
+    }
+    occupiedCnt = cbffr_getOccupied(rxBffrPtr);                             // move to variable for break conditional
+    PRINTF(dbgColor__green, "rxBffr has %d chars now.\r", occupiedCnt);
+
+    if (loopCnt > 1)
+    {
+        uint16_t cmpFault = strcmp(hostBffr1, hostBffr2);
+        ASSERT(cmpFault == 0);
+    }
+    ASSERT(occupiedCnt == 0);
 
     loopCnt ++;
-    indicateLoop(loopCnt, 1000);                                // BGx reference says 300mS cmd response time, we will wait 1000
+    indicateLoop(loopCnt, 1000);                            // BGx reference says 300mS cmd response time, we will wait 1000
 }
 
 
@@ -129,39 +179,37 @@ void startLTEm()
 	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
 
     spi_start(g_lqLTEM.spi);
-    if (QBG_isPowerOn())                                        // power on BGx, returning prior power-state
+
+    QBG_reset(resetAction_powerReset);                                      // force power cycle here, limited initial state conditioning
+    SC16IS7xx_start();                                                      // start (resets previously powered on) NXP SPI-UART bridge
+
+    if (g_lqLTEM.deviceState != deviceState_appReady)
     {
-		PRINTF(dbgColor__info, "LTEm1 found powered on.\r\n");
-        g_lqLTEM.deviceState = deviceState_appReady;        // if already "ON", assume running and check for IRQ latched
+        IOP_awaitAppReady();                                                // wait for BGx to signal out firmware ready
     }
-    else
-    {
-        g_lqLTEM.deviceState = deviceState_powerOff;
-        QBG_powerOn();
-    }
-    SC16IS7xx_start();                                          // start (resets previously powered on) NXP SPI-UART bridge
     SC16IS7xx_enableIrqMode();
     IOP_attachIrq();
-    if (g_lqLTEM.deviceState != deviceState_appReady)
-        IOP_awaitAppReady();                                    // wait for BGx to signal out firmware ready
 }
 
 
-void applEvntNotify(const char *eventTag, const char *eventMsg)
+void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (STRCMP(eventTag, "ASSERT"))
+    if (eventType == appEvent_fault_assertFailed)
+    if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", eventMsg);
-        while (1) {}
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", eventMsg);
+    else 
+    {
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+    }
     return;
 }
 
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(dbgColor__none, "\r\nLoop=%i \r\n", loopCnt);
+    PRINTF(dbgColor__magenta, "\r\nLoop=%i \r\n", loopCnt);
     PRINTF(dbgColor__none, "FreeMem=%u\r\n", getFreeMemory());
     PRINTF(dbgColor__none, "NextTest (millis)=%i\r\r", waitNext);
     pDelay(waitNext);

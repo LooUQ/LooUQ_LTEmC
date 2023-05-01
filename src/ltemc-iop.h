@@ -67,17 +67,18 @@ bool IOP_awaitAppReady();
 
 /**
  *	@brief Perform a TX send operation. 
-    @details This call can block depending on TXis a blocking call and should be used for short sends.
- *  @param sendData [in] - Pointer to char data to send out, input buffer can be discarded following call.
- *  @param sendSz [in] - The number of characters to send.
+    @details This call will block until TX is fully sent out to UART. The BGx module is synchronous, so no buffering is implemented (may change).
+ *  @param sendData [in] Pointer to char data to send out, input buffer can be discarded following call.
+ *  @param sendSz [in] The number of characters to send.
  */
-void IOP_sendTx(const char *sendData, uint16_t sendSz);
+void IOP_startTx(const char *sendData, uint16_t sendSz);
 
 
 /**
  *	@brief Perform a forced TX send immediate operation. Intended for sending break type events to device.
- *  @param sendData [in] - Pointer to char data to send out, input buffer can be discarded following call.
- *  @param sendSz [in] - The number of characters to send.
+ *  @details sendData must be less than 64 chars. This function aborts any TX and immediately posts data to UART.
+ *  @param sendData [in] Pointer to char data to send out, input buffer can be discarded following call.
+ *  @param sendSz [in] The number of characters to send.
  */
 void IOP_forceTx(const char *sendData, uint16_t sendSz);
 
@@ -92,10 +93,10 @@ uint32_t IOP_getRxIdleDuration();
 
 // /**
 //  *	@brief Finds a string in the last X characters of the IOP RX stream.
-//  *  @param pBuf [in] - Pointer data receive buffer.
-//  *  @param rewindCnt [in] - The number of chars to search backward.
-//  *	@param pNeedle [in] - The string to find.
-//  *  @param pTerm [in] - Optional phrase that must be found after needle phrase.
+//  *  @param pBuf [in] Pointer data receive buffer.
+//  *  @param rewindCnt [in] The number of chars to search backward.
+//  *	@param pNeedle [in] The string to find.
+//  *  @param pTerm [in] Optional phrase that must be found after needle phrase.
 //  *  @return Pointer to the character after the needle match (if found), otherwise return NULL.
 //  */
 // char *IOP_findInRxReverse(rxDataBufferCtrl_t *pBuf, uint8_t rewindCnt, const char *pNeedle, const char *pTerm);
@@ -103,10 +104,10 @@ uint32_t IOP_getRxIdleDuration();
 
 // /**
 //  *	@brief Get a contiguous block of characters from the RX data buffer pages.
-//  *  @param pBuf [in] - Pointer data receive buffer.
-//  *	@param pStart [in] - Address within the RX buffer to start retrieving chars.
-//  *  @param takeCnt [in] - The number of chars to return.
-//  *  @param pChars [out] - Buffer to hold retrieved characters, must be takeCnt + 1. Buffer will be null terminated.
+//  *  @param pBuf [in] Pointer data receive buffer.
+//  *	@param pStart [in] Address within the RX buffer to start retrieving chars.
+//  *  @param takeCnt [in] The number of chars to return.
+//  *  @param pChars [out] Buffer to hold retrieved characters, must be takeCnt + 1. Buffer will be null terminated.
 //  *  @return Pointer to the character after the needle match (if found), otherwise return NULL.
 //  */
 // uint16_t IOP_fetchFromRx(rxDataBufferCtrl_t *pBuf, char *pStart, uint16_t takeCnt, char *pChars);
@@ -144,7 +145,7 @@ void IOP_resetCoreRxBuffer();
 
 
 // IOP Internal 
-void IOP_rxParseForEvents();            // atcmd dependency
+//void IOP_rxParseForEvents();            // atcmd dependency
 
 
 #ifdef __cplusplus

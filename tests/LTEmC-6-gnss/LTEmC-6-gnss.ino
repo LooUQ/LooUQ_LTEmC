@@ -43,8 +43,9 @@
 
 /* specify the pin configuration
  * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
-#define HOST_FEATHER_LTEM3F
+//#define HOST_FEATHER_UXPLOR   
+#define HOST_FEATHER_UXPLOR_L          
+// #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
 #include <lq-diagnostics.h>
@@ -69,10 +70,12 @@ void setup() {
 
     PRINTF(dbgColor__red, "\rLTEmC Test 6: GNSS\r");
     randomSeed(analogRead(0));
-    lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
+    lqDiag_setNotifyCallback(appEvntNotify);                        // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, NULL, applEvntNotify);              // create LTEmC modem, no yield CB req'd for testing
+    ltem_create(ltem_pinConfig, NULL, appEvntNotify);               // create LTEmC modem, no yield CB req'd for testing
     ltem_start(resetAction_swReset);                                // ... and start it
+
+    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_getSwVersion());
 
     // turn on GNSS
     resultCode_t cmdResult = gnss_on();
@@ -116,17 +119,19 @@ void loop() {
 /* test helpers
 ========================================================================================================================= */
 
-void applEvntNotify(const char *eventTag, const char *eventMsg)
+void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (STRCMP(eventTag, "ASSERT"))
+    if (eventType == appEvent_fault_assertFailed)
+    if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
-        while (1) {}
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
     }
-    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
+    else 
+    {
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+    }
     return;
 }
-
 
 void indicateFailure(char failureMsg[])
 {

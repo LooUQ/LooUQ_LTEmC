@@ -2,5 +2,5 @@
     "sketch": "ltemc-5-modeminfo.ino",
     "configuration": "opt=small,usbstack=arduino,debug=on",
     "board": "adafruit:samd:adafruit_feather_m0",
-    "output": "../.build/ltemc-5-modeminfo"
+    "output": "./build"
 }

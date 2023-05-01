@@ -81,12 +81,12 @@ modemInfo_t *mdminfo_ltem()
             atcmd_invokeReuseLock("AT+QGMR");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                char *term;
-                term = strstr(atcmd_getResponse(), "\r\n");
-                *term = '\0';
-                strcpy(g_lqLTEM.modemInfo->fwver, atcmd_getResponse());
-                term = strchr(g_lqLTEM.modemInfo->fwver, '_');
-                *term = ' ';
+                char * eol;
+                if ((eol = strstr(atcmd_getResponse(), "\r\n")) != NULL)
+                {
+                    uint8_t sz = eol - atcmd_getResponse();
+                    memcpy(g_lqLTEM.modemInfo->fwver, atcmd_getResponse(), MIN(sz, ntwk__dvcFwVerSz));
+                }
             }
         }
 
@@ -95,14 +95,14 @@ modemInfo_t *mdminfo_ltem()
             atcmd_invokeReuseLock("ATI");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                char *term;
-                term = strstr(atcmd_getResponse(), "\r\nRev");
-                *term = '\0';
-                strcpy(g_lqLTEM.modemInfo->mfgmodel, atcmd_getResponse());
-                term = strchr(g_lqLTEM.modemInfo->mfgmodel, '\r');
-                *term = ':';
-                term = strchr(g_lqLTEM.modemInfo->mfgmodel, '\n');
-                *term = ' ';
+                char * eol;
+                if ((eol = strstr(atcmd_getResponse(), "\r\nRevision")) != NULL)
+                {
+                    uint8_t sz = eol - atcmd_getResponse();
+                    memcpy(g_lqLTEM.modemInfo->mfgmodel, atcmd_getResponse(), MIN(sz, ntwk__dvcMfgSz));
+                    *(strchr(g_lqLTEM.modemInfo->mfgmodel, '\r')) = ':';
+                    *(strchr(g_lqLTEM.modemInfo->mfgmodel, '\n')) = ' ';
+                }
             }
         }
 

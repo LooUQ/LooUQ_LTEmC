@@ -8,7 +8,7 @@
             "name": "Cortex Debug",
             "type": "cortex-debug",
             "cwd": "${workspaceFolder}",
-            "executable": ".//.build/ltemc-5-modeminfo/ltemc-5-modeminfo.ino.elf",
+            "executable": ".//build/ltemc-5-modeminfo.ino.elf",
             "request": "launch",
             "servertype": "jlink",
             "runToEntryPoint": "main",

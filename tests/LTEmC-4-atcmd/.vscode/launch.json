@@ -8,7 +8,7 @@
             "name": "Cortex Debug",
             "type": "cortex-debug",
             "cwd": "${workspaceFolder}",
-            "executable": "..//.build/ltemc-4-atcmd/ltemc-4-atcmd.ino.elf",
+            "executable": ".//build/ltemc-4-atcmd.ino.elf",
             "request": "launch",
             "servertype": "jlink",
             "runToEntryPoint": "main",

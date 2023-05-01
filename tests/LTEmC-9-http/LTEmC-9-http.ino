@@ -34,7 +34,7 @@
     asm(".global _printf_float");       // forces build to link in float support for printf
     #if _DEBUG == 1
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #elif _DEBUG >= 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
     #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
@@ -50,14 +50,14 @@
 #define HOST_FEATHER_UXPLOR_L
 
 #define PDP_DATA_CONTEXT 1
-#define PDP_APN_NAME "iot.aer.net"
+#define PDP_APN_NAME "hologram"
 
+#include <lq-diagnostics.h>
+#include <lq-SAMDutil.h>                // allows read of reset cause
 
 #include <ltemc.h>
 #include <ltemc-tls.h>
 #include <ltemc-http.h>
-#include <string.h>
-#include <lq-SAMDutil.h>
 
 // #define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
 // #define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') appNotifyCB(255, failMsg)
@@ -88,14 +88,13 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEmC test9-HTTP\r");
-    PRINTF(dbgColor__white, "RCause=%d\r\n", lqSAMD_getResetCause());
-    lqDiag_setNotifyCallback(applEvntNotify);
+    lqDiag_setNotifyCallback(appEvntNotify);
 
-    ltem_create(ltem_pinConfig, NULL, applEvntNotify);              // no yield req'd for testing
+    ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
     ltem_setProviderScanMode(ntwkScanMode_lteonly);
     ltem_setIotMode(ntwkIotMode_m1);
     ltem_setDefaultNetwork(PDP_DATA_CONTEXT, PDP_PROTOCOL_IPV4, PDP_APN_NAME);
-    ltem_start(resetAction_swReset);
+    ltem_start(resetAction_skipIfOn);
 
     providerInfo_t *provider;
     while(true)
@@ -170,7 +169,7 @@ void loop()
                 PRINTF(dbgColor__info, "GET invoked successfully\r");
             }
             else
-                PRINTF(dbgColor__warn, "HTTP GET failed, status=%d (%d)\r", rslt, atcmd_getValue());
+                PRINTF(dbgColor__warn, "HTTP GET failed, status=%d\r", rslt);
         }
         else
         {
@@ -184,7 +183,7 @@ void loop()
                 PRINTF(dbgColor__info, "POST invoked successfully\r");
             }
             else
-                PRINTF(dbgColor__warn, "HTTP POST failed, status=%d (%d)\r", rslt, atcmd_getValue());
+                PRINTF(dbgColor__warn, "HTTP POST failed, status=%d\r", rslt);
         }
 
 
@@ -239,10 +238,6 @@ void loop()
         }
         loopCnt++;
     }
-
-    /* NOTE: Advance data pipeline, ltem_doWork(). DoWork has no side effects other than taking a small amount of
-     * time to check and forward receive buffers. The ltem_doWork() function SHOULD BE invoked frequently. */
-    ltem_doWork();
 }
 
 
@@ -261,14 +256,12 @@ void httpRecvCB(dataCntxt_t dataCntxt, uint16_t httpStatus, char *recvData, uint
 /* test helpers
 ========================================================================================================================= */
 
-void applEvntNotify(const char *eventTag, const char *eventMsg)
+void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (STRCMP(eventTag, "ASSERT"))
-    {
-        PRINTF( dbgColor__error, "LTEMc-HardFault: %s\r", eventMsg);
-        while (1) {}
-    }
-    PRINTF(dbgColor__info, "LTEMc Info: %s\r", eventMsg);
+    if (eventType == appEvent_fault_assertFailed)
+        PRINTF(dbgColor__error, "LTEmC Fault: %s\r", notifyMsg);
+    else 
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
     return;
 }
 
