@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "cstdbool": "cpp"
+        "cstdbool": "cpp",
+        "ltemc-filesys.h": "c"
     }
 }

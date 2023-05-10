@@ -101,8 +101,7 @@
 #define MQTT_IOTHUB_DEVICEID "864581067550933"
 #define MQTT_IOTHUB_USERID MQTT_IOTHUB "/" MQTT_IOTHUB_DEVICEID "/?api-version=2021-04-12"
 
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-a-prod-loouq.azure-devices.net%2Fdevices%2F864581067550933&sig=8u16QFE9SyPr4JAhgdNfRW3DpUsR4pMHKd3l6nIpv1g%3D&se=1671314178"
-//#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-dev-pelogical.azure-devices.net%2Fdevices%2F863940053438001&sig=jOd0DSmbtHenUtuenv5x3ScKlTAMLaYR2R%2B%2Fz46oWqo%3D&se=1637909480"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-a-prod-loouq.azure-devices.net%2Fdevices%2F864581067550933&sig=79LZvDhbdkPodyqllXRNXuizxrbntFOW%2BuU5yRy1eJg%3D&se=1683476081"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
@@ -117,6 +116,7 @@ uint32_t lastCycle;
 
 // LTEm variables
 mqttCtrl_t mqttCtrl;                // MQTT control, data to manage MQTT connection to server
+mqttTopicCtrl_t topicCtrl;
 
 char mqttTopic[200];                // application buffer to craft TX MQTT topic
 char mqttTopicProp[200];
@@ -134,7 +134,7 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "\rLTEmC test8-MQTT\r\n");
+    PRINTF(dbgColor__red, "\rLTEmC Test-8 MQTT\r\n");
     PRINTF(dbgColor__none,"RCause=%d \r", lqSAMD_getResetCause());
     lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
@@ -150,20 +150,20 @@ void setup() {
     }
     PRINTF(dbgColor__info, "Network type is %s on %s\r", provider->iotMode, provider->name);
 
-    /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
-     * Azure requires TLS 1.2 and MQTT version 3.11 */
 
+    /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
+     * Azure requires TLS 1.2 and MQTT version 3.11 
+     * --------------------------------------------------------------------------------------------
+     */
     tls_configure(dataCntxt_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
-    mqtt_initControl(&mqttCtrl, MQTT_DATACONTEXT, mqttRecvCB);
+
+    mqtt_initControl(&mqttCtrl, MQTT_DATACONTEXT);
+    mqtt_initTopicControl(&topicCtrl, MQTT_IOTHUB_C2D_TOPIC, true, mqttQos_1, mqttRecvCB);
+
+    mqtt_subscribeTopic(&mqttCtrl, &topicCtrl);
     mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, true, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
 
-    if (mqttInit() == resultCode__success)
-        PRINTF(dbgColor__info, "MQTT initialized, starting publish loop\r\r");
-    else
-    {
-        PRINTF(dbgColor__warn, "Failed to initialize MQTT\r");
-        while (true) {}
-    }
+    mqtt_start(&mqttCtrl, true);
 }
 
 bool kickIt = true;
@@ -189,13 +189,13 @@ void loop()
         if (rslt != resultCode__success)
         {
             PRINTF(dbgColor__warn, "Publish Failed! >> %d\r", rslt);
+            rslt = mqtt_reset(&mqttCtrl, true);
 
-            mqtt_close(&mqttCtrl);
-
-            PRINTF(dbgColor__cyan, "\rPostClose MQTT state: %d\r", mqtt_getStatus(&mqttCtrl));
-
-            if (mqttInit() != resultCode__success)
+            if (rslt != resultCode__success)
+            {
+                PRINTF(dbgColor__error, "Reset Failed (%d)\r", rslt);
                 while (true) {}
+            }
         }
 
         PRINTF(dbgColor__magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
@@ -208,50 +208,12 @@ void loop()
 }
 
 
-resultCode_t mqttInit()
+void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId, mqttMsgSegment_t segment, char* dataPtr, uint16_t dataSz, bool isFinal)
 {
-    resultCode_t rslt;
-    do
-    {
-        rslt = mqtt_open(&mqttCtrl);
-        if (rslt != resultCode__success)
-        {
-            PRINTF(dbgColor__warn, "Open fail status=%d\r", rslt);
-            break;
-        }
-        rslt = mqtt_connect(&mqttCtrl, true);
-        if (rslt != resultCode__success)
-        {
-            PRINTF(dbgColor__warn, "Connect fail status=%d\r", rslt);
-            break;
-        }
-        rslt = mqtt_subscribe(&mqttCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1);
-        if (rslt != resultCode__success)
-        {
-            PRINTF(dbgColor__warn, "Subscribe fail status=%d\r", rslt);
-        }
-        break;
-    } while (true);
 
-    return rslt;
-}
+    PRINTF(dbgColor__cyan, "AppRcv: segment=%d, msgId=%d, streamPtr=%p, blockSz=%d, isFinal=%d\r", segment, msgId, dataPtr, dataSz, isFinal);
 
-// void (*)(dataCntxt_t dataCntxt, uint16_t msgId, const char *topic, char *topicVar, char *message, uint16_t messageSz)" is incompatible with parameter of type "mqttRecv_func"
-/*
-typedef void (*mqttRecv_func)(uint8_t dataCntxt, uint16_t msgId);
-*/
-void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId)
-{
-    // compile placeholders
-    // char *topic;
-    // char *topicVar; 
-    // char *message;
-    // uint16_t messageSz;
 
-    //uint16_t newLen = lq_strUriDecode(topicVar, message - topicVar);        // Azure IoTHub URI encodes properties sent as topic suffix 
-
-    PRINTF(dbgColor__info, "\r**MQTT--MSG** @tick=%d \r", pMillis());
-    PRINTF(dbgColor__cyan, "   msgId:=%d \r", msgId);
     // PRINTF(dbgColor__cyan, "   msgId:=%d   topicSz=%d, propsSz=%d, messageSz=%d\r", msgId, strlen(topic), strlen(topicVar), strlen(message));
     // PRINTF(dbgColor__cyan, "   topic: %s\r", topic);
     // PRINTF(dbgColor__cyan, "   props: %s\r", topicVar);

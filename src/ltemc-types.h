@@ -271,57 +271,55 @@ enum IOP__Constants
 };
 
 
-// /** 
-//  *  @brief Struct for a IOP transmit (TX) buffer control block. Tracks progress of chunk sends to LTEm1.
-//  *  @details LTEm SPI bridge works with chunks of ~64 bytes (actual transfers are usually 58 - 62 bytes). IOP abstracts SPI chunks from senders.
-//  */
-// typedef struct txBufferCtrl_tag
-// {
-//     char *txBuf;                        /// Pointer to the base address of the TX buffer. Fixed, doesn't change with operations.
-//     char *chunkPtr;                     /// Pointer to the next "chunk" of data to send to modem.
-//     uint16_t remainSz;                  /// Remaining number of bytes in buffer to send to modem.
-// } txBufferCtrl_t;
-
-
-// /** 
-//  *  @brief Struct for a IOP transmit (TX) buffer control block. Tracks progress of chunk sends to LTEm1.
-//  *  @details LTEm SPI bridge works with chunks of ~64 bytes (actual transfers are usually 58 - 62 bytes). IOP abstracts SPI chunks from senders.
-//  */
-// typedef struct txControl_tag
-// {
-//     char *tx_chunkPtr;          /// Pointer to the next "chunk" of data to send to modem.
-//     uint16_t tx_remainSz;       /// Remaining number of bytes in buffer to send to modem.
-// } txControl_t;
-
-
-#define STREAM_UDP "UDP"
-#define STREAM_TCP "TCP"
-#define STREAM_SSL "SSL"
-#define STREAM_MQTT "MQTT"
-#define STREAM_HTTP "HTTP"
-#define STREAM__CNT 6
-#define STREAM_FILE "FILE"
-
-typedef void (*urcHandler_func)();
-
-// streams
-typedef void (*cbProto_func)();                     // prototype func() for stream recvData callback
-typedef resultCode_t (*streamDataRcvr_func)();      // data comes from rxBuffer, this function parses and forwards to application via recvDataCB
-typedef void (*streamClose_func)(uint8_t cntxtNm);
-
-
 /** 
- *  @brief Base struct containing common properties required of a stream control
+ *  @brief Streams 
+ *  @details Structures for stream control/processing
+ * ================================================================================================
  */
+
+// #define STREAM_UDP "U"                              /// UDP
+// #define STREAM_TCP "T"                              /// TCP
+// #define STREAM_SSL "S"                              /// SSL/TLS
+// #define STREAM_MQTT "M"                             /// MQTT
+// #define STREAM_HTTP "H"                             /// HTTP
+// #define STREAM_FILE "F"                             /// Filesys
+
+
+typedef enum streamTypes_tag
+{
+    streamType_UDP = 'U',
+    streamType_TCP = 'T',
+    streamType_SSL = 'S',
+    streamType_MQTT = 'M',
+    streamType_HTTP = 'H',
+    streamType_file = 'f'
+} streamTypes_t;
+
+
+// function prototypes
+typedef void (*urcHndlr_func)();                    // URC detection and action
+typedef resultCode_t (*streamRxHndlr_func)();       // data comes from rxBuffer, this function parses and forwards to application via recvDataCB
+typedef void (*appRcvProto_func)();                 // prototype func() for stream recvData callback
+
+
 typedef struct streamCtrl_tag
 {
-    char streamType[streams__typeCodeSz];       /// stream type
-    void *pCtrl;                                /// protocol specific control variables (cast to a protocol specific struct)
-    uint8_t contextHandle;                      /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    streamDataRcvr_func streamUrcHndlr;         /// function to handle data streaming, initiated by eventMgr() or atcmd module
-    streamClose_func streamClose;               /// handler to perform orderly shutdown of data service
-    cbProto_func recvDataCB;                    /// callback into host application with data (cast from generic func* to stream specific function)
+    char streamType;                                /// stream type
+    dataCntxt_t dataContext;                        /// integer representing the source of the stream; fixed for protocols, file handle for FS
+    streamRxHndlr_func streamRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
 } streamCtrl_t;
+
+// typedef struct streamCtrl_tag
+// {
+//     char streamType[streams__typeCodeSz];       /// stream type
+//     dataCntxt_t dataContext;                    /// integer representing the source of the stream; fixed for protocols, file handle for FS
+//     streamRxHndlr_func streamRxHndlr;           /// function to handle data streaming, initiated by eventMgr() or atcmd module
+//     streamClose_func streamClose;               /// handler to perform orderly shutdown of data service
+// } streamCtrl_t;
+
+
+/*
+ * ============================================================================================= */
 
 
 /** 
@@ -358,9 +356,9 @@ enum atcmd__constants
     atcmd__setLockModeManual = 0,
     atcmd__setLockModeAuto = 1,
 
-    atcmd__cmdBufferSz = 512,                       // prev=120, mqtt(Azure) connect=384, new=512 for universal cmd coverage, data mode to us dynamic TX bffr switching
-    atcmd__respBufferSz = 240,
-    atcmd__respBffrShift = atcmd__respBufferSz / 4
+    atcmd__cmdBufferSz = 448,                       // prev=120, mqtt(Azure) connect=384, new=512 for universal cmd coverage, data mode to us dynamic TX bffr switching
+    atcmd__respBufferSz = 120,
+    atcmd__streamPrefixSz = 10
 };
 
 
@@ -409,8 +407,9 @@ typedef struct atcmd_tag
     char errorDetail[SET_PROPLEN(ltem__errorDetailSz)]; /// BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
     int32_t retValue;                                   /// optional signed int value extracted from response
 
-    streamDataRcvr_func streamDataRcvr;                 /// if the current command can initiate a data stream (HTTP,file,etc.) handler func is registered here
-    cbProto_func applDataCB;
+    streamCtrl_t* streamCtrl;
+    char streamPrefix[PROPLEN(atcmd__streamPrefixSz)];  /// char sequence prefixing steam data, triggers switch to registered data handler streamRxHndlr()
+    appRcvProto_func applDataCB;
 } atcmd_t;
 
 

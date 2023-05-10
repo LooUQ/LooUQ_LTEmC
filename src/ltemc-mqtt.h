@@ -27,7 +27,6 @@
 #ifndef __MQTT_H__
 #define __MQTT_H__
 
-
 #include "ltemc-types.h"
 
 /** 
@@ -40,10 +39,10 @@ enum mqtt__constants
     mqtt__publishTimeout = 15000,
 
     mqtt__messageSz = 1548,                                             /// Maximum message size for BGx family (BG96, BG95, BG77)
+    mqtt__topicsCnt = 4,
     mqtt__topic_offset = 24,
     mqtt__topic_nameSz = 90,                                            /// Azure IoTHub typically 50-70 chars
     mqtt__topic_propsSz = 320,                                          /// typically 250-300 bytes
-    mqtt__topic_subscriptionCnt = 2,                                    /// number of slots for MQTT service subscriptions (reduce for mem conservation)
     mqtt__topicSz = (mqtt__topic_nameSz + mqtt__topic_propsSz),         /// Total topic size (name+props) for buffer sizing
     mqtt__topic_publishCmdOvrhdSz = 27,                                 /// when publishing, number of extra chars in outgoing buffer added to AT cmd
 
@@ -57,6 +56,7 @@ enum mqtt__constants
     mqtt__userNameSz = 100,
     mqtt__userPasswordSz = 200
 };
+
 
 #define MQTT_URC_PREFIXES "QMTRECV,QMTSTAT"
 
@@ -127,23 +127,40 @@ typedef enum mqttState_tag
 } mqttState_t;
 
 
+// /** 
+//  *  @brief Struct describing a MQTT topic subscription.
+// */
+// typedef struct mqttTopicSub_tag
+// {
+//     char topicName[mqtt__topic_nameSz];     /// Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
+//     char wildcard;                          /// Set to '#' if multilevel wildcard specified when subscribing to topic.
+// } mqttTopicSub_t;
+// typedef enum mqttRecvState_tag
+// {
+//     mqttRecvState_none = 0,
+//     mqttRecvState_signalled,
+//     mqttRecvState_topicDelivered,
+//     mqttRecvState_msgUnderway
+// } mqttRecvState_t;
+
+
+typedef enum mqttMsgSegment_tag
+{
+    mqttMsgSegment_topic = 0,
+    mqttMsgSegment_topicExt = 1,
+    mqttMsgSegment_msgBody = 2
+} mqttMsgSegment_t;
+
 /** 
  *  @brief Struct describing a MQTT topic subscription.
 */
-typedef struct mqttTopicSub_tag
+typedef struct mqttTopicCtrl_tag
 {
-    char topicName[mqtt__topic_nameSz];     /// Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
-    char wildcard;                          /// Set to '#' if multilevel wildcard specified when subscribing to topic.
-} mqttTopicSub_t;
-
-
-typedef enum mqttRecvState_tag
-{
-    mqttRecvState_none = 0,
-    mqttRecvState_signalled,
-    mqttRecvState_topicDelivered,
-    mqttRecvState_msgUnderway
-} mqttRecvState_t;
+    char topicName[PROPLEN(mqtt__topic_nameSz)];    /// Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
+    char wildcard;                                  /// Set to '#' if multilevel wildcard specified when subscribing to topic.
+    uint8_t Qos;
+    appRcvProto_func appRecvDataCB;                 /// callback into host application with data (cast from generic func* to stream specific function)
+} mqttTopicCtrl_t;
 
 
 /** 
@@ -151,32 +168,45 @@ typedef enum mqttRecvState_tag
 */
 typedef struct mqttCtrl_tag
 {
-    uint8_t dataContext;
-    mqttState_t state;                                      /// Current state of the MQTT protocol services on device.
-    mqttRecvState_t recvState;
-    bool useTls;                                            /// flag indicating SSL/TLS applied to stream
-    char hostUrl[host__urlSz];                              /// URL or IP address of host
-    uint16_t hostPort;                                      /// IP port number host is listening on (allows for 65535/0)
-    char clientId[SET_PROPLEN(mqtt__clientIdSz)];
-    char username[SET_PROPLEN(mqtt__userNameSz)];
-    char password[SET_PROPLEN(mqtt__userPasswordSz)];
+    char streamType;                                /// stream type
+    dataCntxt_t dataContext;                        /// integer representing the source of the stream; fixed for protocols, file handle for FS
+    streamRxHndlr_func streamRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
+
+    /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
+    */
+    urcHndlr_func streamUrcHndlr;                   /// function to determine if "potential" URC event is for an open stream and perform reqd actions
+    mqttState_t state;                              /// Current state of the MQTT protocol services on device.
+    bool useTls;                                    /// flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];                      /// URL or IP address of host
+    uint16_t hostPort;                              /// IP port number host is listening on (allows for 65535/0)
+    mqttTopicCtrl_t* topics[mqtt__topicsCnt];       /// array of topic controls, provides for independent app receive functions per topic
+    char clientId[PROPLEN(mqtt__clientIdSz)];       /// for auto-restart
+    char username[PROPLEN(mqtt__userNameSz)];
+    char password[PROPLEN(mqtt__userPasswordSz)];
     mqttVersion_t mqttVersion;
-    uint16_t lastMsgId;                                     /// MQTT message ID for QOS, automatically incremented, rolls at max value.
+    uint16_t sentMsgId;                             /// MQTT TX message ID for QOS, automatically incremented, rolls at max value.
+    uint16_t recvMsgId;                             /// last received message identifier
+    uint8_t errCode;
 } mqttCtrl_t;
 
 
 
+
 /** 
- *  @brief Callback function to signal the availability of a received MQTT message.
+ *  @brief Callback function to transfer incoming message data to app
  * 
- *  @details The host application will need to use mqtt_readTopic(), mqtt_readMessage() to capture the received information, or
- *   use the mqtt_signalComplete() to tell driver to complete the receive and discard any un-read information (release resources).
+ *  @details This func will be invoked multiple times (at least twice) to deliver received MQTT message data to the host
+ *  application (app). The topic and msgBody will always be sent, the topicExtension (sometimes used for property pairs) may  
+ *  be sent. IsFinal only applies to the msgBody part of the flow.
  *  =============================================================================================================================
- *  @param dataCntxt [in] The data context receiving data.
- *  @param msgId [in] MQTT ID of the message received.
-*/
-//typedef void (*mqttRecv_func)(uint8_t dataCntxt, uint16_t msgId, const char *topic, char *topicProps, char *message, uint16_t messageSz);
-typedef void (*mqttRecv_func)(dataCntxt_t dataCntxt, uint16_t msgId);
+ *  @param dataCntxt The data context receiving data.
+ *  @param msgId MQTT ID of the message received.
+ *  @param segment Enum specifying the part of the message being transfered to the app: topic, topicExtension, messageBody
+ *  @param dataPtr Pointer to received data, now available to the application (see msgPart above)
+ *  @param DataSz The size of the current block of data available at the streamPtr address for app consumption
+ *  @param isFinal Will be true if the current block of data is the end of the received MQTT msg
+ */
+typedef void (*mqttAppRecv_func)(dataCntxt_t dataCntxt, uint16_t msgId, mqttMsgSegment_t segment, char* dataPtr, uint16_t dataSz, bool isFinal);
 
 
 #ifdef __cplusplus
@@ -191,8 +221,16 @@ extern "C"
  *  @param dataCntxt [in] Socket/data context to host this protocol stream.
  *  @param recvCallback [in] Callback function to be invoked when received data is ready.
 */
-void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt, mqttRecv_func recvCallback);
+void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt);
 
+
+/**
+ *  @brief Initialize a MQTT protocol control structure.
+ *  @param mqttCtrl [in] Pointer to MQTT control structure governing communications.
+ *  @param dataCntxt [in] Socket/data context to host this protocol stream.
+ *  @param recvCallback [in] Callback function to be invoked when received data is ready.
+*/
+void mqtt_initTopicControl(mqttTopicCtrl_t* topicCtrl, const char* topic, bool wildcard, uint8_t qos, mqttAppRecv_func appTopicRecvCB);
 
 /**
  *  @brief Set the remote server connection values.
@@ -200,14 +238,25 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt, mqttRecv_func
 void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t useMqttVersion, const char *deviceId, const char *userId, const char *secret);
 
 
+
 /**
  *  @brief Open a remote MQTT server for use.
- *  @param mqttCtrl [in] MQTT type stream control to operate on.
- *  @param host [in] The host IP address or name of the remote server.
- *  @param port [in] The IP port number to use for the communications.
+ *
+ *  @param [in] mqttCtrl MQTT stream control to operate with.
+ *  @param [in] cleanSession 
  *  @return A resultCode_t value indicating the success or type of failure.
 */
-resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl);
+resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession);
+
+
+/**
+ *  @brief Open a remote MQTT server for use.
+ *  @details The recommended approach is to use mqtt_start() and mqtt_reset() for server connections. The 
+ * 
+ *  @param [in] mqttCtrl MQTT type stream control to operate on.
+ *  @return A resultCode_t value indicating the success or type of failure.
+*/
+resultCode_t MQTT__open(mqttCtrl_t *mqttCtrl);
 
 
 /**
@@ -216,17 +265,18 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl);
  *  @param cleanSession [in] True if connection should be flushed of prior msgs to start
  *  @return A resultCode_t value indicating the success or type of failure.
 */
-resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession);
+resultCode_t MQTT__connect(mqttCtrl_t *mqttCtrl, bool cleanSession);
+
 
 
 /**
  *  @brief Subscribe to a MQTT topic on the server.
- *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  @param topic [in] C-string containing the topic you are subcribing to.
+ *  @param [in] mqttCtrl Pointer to MQTT type stream control to operate on.
+ *  @param [in] topic C-string containing the topic you are subcribing to.
  *  @param qos [in] (enum) Received message qos options for subscribed messages 
  *  @return A resultCode_t value indicating the success or type of failure.
 */
-resultCode_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos);
+resultCode_t mqtt_subscribeTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtrl);
 
 
 /**
@@ -235,11 +285,12 @@ resultCode_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t q
  *  @param topic [in] C-string containing the topic you are no longer interested in.
  *  @return A resultCode_t value indicating the success or type of failure.
 */
-resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic);
+resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtrl);
 
 
 /**
  *  @brief Publish (send) a message to the MQTT server.
+ * 
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
  *  @param topic The topic for the message being sent, the server will resend the msg to other clients subscribed to the topic.
  *  @param qos The quality-of-service for this message (delivery assurance consideration)
@@ -250,16 +301,17 @@ resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic);
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSec);
 
 
-/**
- *  @brief Publish (send) a message to the MQTT server.
- *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  @param topic The topic for the message being sent, the server will resend the msg to other clients subscribed to the topic.
- *  @param qos The quality-of-service for this message (delivery assurance consideration)
- *  @param message The message to send (< 560 chars, cannot include " char, should be UUEncoded or Base64 Encoded).
- *  @param timeoutSec The number of seconds to wait for completion of the send operation.
- *  @return A resultCode_t value indicating the success or type of failure.
-*/
-resultCode_t mqtt_publishEncoded(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSec);
+// /**
+//  *  @brief Publish (send) a message to the MQTT server.
+//  * 
+//  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+//  *  @param topic The topic for the message being sent, the server will resend the msg to other clients subscribed to the topic.
+//  *  @param qos The quality-of-service for this message (delivery assurance consideration)
+//  *  @param message The message to send (< 560 chars, cannot include " char, should be UUEncoded or Base64 Encoded).
+//  *  @param timeoutSec The number of seconds to wait for completion of the send operation.
+//  *  @return A resultCode_t value indicating the success or type of failure.
+// */
+// resultCode_t mqtt_publishDirect(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSec);
 
 
 /**
@@ -274,7 +326,7 @@ void mqtt_close(mqttCtrl_t *mqttCtrl);
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
  *  @param resetModem [in] True if modem should be reset prior to reestablishing MQTT connection.
 */
-void mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem);
+resultCode_t mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem);
 
 
 /**
@@ -293,44 +345,27 @@ mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl);
 
 
 /**
- *  @brief Disconnect and close a connection to a MQTT server
+ *  @brief Get the last outgoing message ID.
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  @param resetModem [in] True if modem should be reset prior to reestablishing MQTT connection.
+ *  @returns Integer value of the message identifier.
 */
-uint16_t mqtt_getLastSentMsgId(mqttCtrl_t *mqttCtrl);
+uint16_t mqtt_getSentMsgId(mqttCtrl_t *mqttCtrl);
 
 
 /**
- *  @brief Read the topic of a received MQTT message.
- *  @details This must be invoked prior to mqtt_readMessage(). 
- * 
+ *  @brief Get the last incoming message ID.
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  @param topicBffr [in] pointer to application location where topic of the received message should be copied.
- *  @param bffrSz [in] The size of the buffer. IMPORTANT: MUST BE SUFFICIENT TO RECEIVE FULL TOPIC.
- *  @return True if topic could be copied, false if there is insufficient room (bffr) to copy the full topic.
+ *  @returns Integer value of the message identifier.
 */
-resultCode_t mqtt_readTopic(mqttCtrl_t *mqttCtrl, char *topicBffr, uint16_t bffrSz);
+uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl);
 
 
 /**
- *  @brief Disconnect and close a connection to a MQTT server
- *  @note Message recv state is cleared automatically when mqtt_fetchRecvMessage() returns false (no remaining message to deliver).
- * 
+ *  @brief Get the MQTT status error code.
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  @param messageBffr [in] pointer to application location where message should be copied.
- *  @param bffrSz [in] The size of the buffer.
- *  @return False if message transfer is complete, true if there is additional message content to transfer.
+ *  @returns Integer value of the MQTT status error code.
 */
-bool mqtt_readMessage(mqttCtrl_t *mqttCtrl, char *messageBffr, uint16_t bffrSz);
-
-
-/**
- *  @brief Cancel/close and discard a message receive underway. This clears message state. 
- *  @note This is not required if mqtt_readMessage() has been invoked and it returns false (no remaining message to deliver).
- * 
- *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
-*/
-void mqtt_cancelMessage(mqttCtrl_t *mqttCtrl);
+uint16_t mqtt_getErrCode(mqttCtrl_t *mqttCtrl);
 
 
 #ifdef __cplusplus

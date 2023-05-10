@@ -42,7 +42,7 @@
 
 #define SRCFILE "FIL"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
-#include "ltemc-filesys.h"
+#include "ltemc-files.h"
 
 extern ltemDevice_t g_lqLTEM;
 
@@ -53,8 +53,19 @@ extern ltemDevice_t g_lqLTEM;
 /* Local Static Functions
 ------------------------------------------------------------------------------------------------------------------------- */
 static cmdParseRslt_t S__writeStatusParser();
-streamCtrl_t *S__getFsStream();
-static resultCode_t S__filesDataRcvr();
+static resultCode_t S__filesRxHndlr();
+
+
+
+/**
+ *	@brief Set the data callback function for filedata.
+ */
+void file_setAppReceiver(fileReceiver_func fileReceiver)
+{
+    ASSERT(fileReceiver != NULL);
+    g_lqLTEM.fileCtrl->appRecvDataCB = fileReceiver;
+}
+
 
 /**
  *	@brief get filesystem information.
@@ -150,36 +161,6 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
 
     atcmd_close();
     return rslt;
-}
-
-
-void file_setRecvrFunc(fileReceiver_func_t fileRecvr_func)
-{
-    if (fileRecvr_func != NULL)
-    {
-        uint8_t streamSlot = 255;
-        for (size_t i = 0; i < ltem__streamCnt; i++)
-        {
-            if (g_lqLTEM.streams[i].streamType)                                     // save empty for possible stream add
-                streamSlot = MIN(streamSlot, i);
-
-            else if (strcmp(g_lqLTEM.streams[i].streamType, STREAM_FILE) == 0)      // previously added
-            {
-                streamSlot = i;
-                break;
-            }
-        }
-        
-        if (streamSlot <= ltem__streamCnt)                                          // got here and empty slot available: add it
-        {
-            strcpy(g_lqLTEM.streams[streamSlot].streamType, STREAM_FILE);
-            g_lqLTEM.streams[streamSlot].recvDataCB = fileRecvr_func;
-
-            // possible future need
-            // void *pCtrl;                                /// protocol specific control variables (cast to a protocol specific struct)
-            // dataClose_func dataCloseCB;                 /// handler to perform orderly shutdown of data service
-        }
-    }
 }
 
 
@@ -297,8 +278,7 @@ resultCode_t file_closeAll()
 resultCode_t file_read(uint16_t fileHandle, uint16_t readSz)
 {
     resultCode_t rslt = resultCode__success;
-    streamCtrl_t* fsStream = S__getFsStream();
-    ASSERT(fsStream);
+    ASSERT(g_lqLTEM.fileCtrl->appRecvDataCB);
 
     if (readSz > 0)
         rslt = atcmd_tryInvoke("AT+QFREAD=%d,%d", fileHandle, readSz);
@@ -307,8 +287,8 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t readSz)
 
     if (rslt)
     {
-        atcmd_setDataHandler(S__filesDataRcvr);
-        fsStream->contextHandle = fileHandle;
+        atcmd_setStreamControl("CONNECT", g_lqLTEM.fileCtrl);
+        g_lqLTEM.fileCtrl->handle = fileHandle;
         return atcmd_awaitResult() == resultCode__success;                     // dataHandler will be invoked by atcmd module and return a resultCode
     }
     return resultCode__conflict;
@@ -414,17 +394,6 @@ resultCode_t file_delete(const char* filename)
 /*
  * --------------------------------------------------------------------------------------------- */
 
-streamCtrl_t *S__getFsStream()
-{
-    for (size_t i = 0; i < ltem__streamCnt; i++)
-    {
-        if (strcmp(g_lqLTEM.streams[i].streamType, STREAM_FILE) == 0)
-        {
-            return &(g_lqLTEM.streams[i]);
-        }
-    }
-}
-
 
 static cmdParseRslt_t S__writeStatusParser() 
 {
@@ -433,12 +402,16 @@ static cmdParseRslt_t S__writeStatusParser()
 }
 
 
-// FILES streamDataRcvr_func 
-static resultCode_t S__filesDataRcvr()
+/**
+ * @brief File stream RX data handler, marshalls incoming data from RX buffer to app (application).
+ * 
+ * @return resultCode_t 
+ */
+static resultCode_t S__filesRxHndlr()
 {
     char wrkBffr[32];
-    streamCtrl_t* fsStream = S__getFsStream();
-    ASSERT(fsStream);
+    fileCtrl_t* fileCtrl = S__getFileCtrl();
+    ASSERT(fileCtrl);
     
     uint8_t popCnt = cbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
     if (popCnt == CBFFR_NOFIND)
@@ -450,7 +423,7 @@ static resultCode_t S__filesDataRcvr()
     uint16_t readSz = strtol(wrkBffr + 8, NULL, 10);
     uint16_t streamSz = readSz + file__readTrailerSz;
 
-    PRINTF(dbgColor__cyan, "filesDataRcvr() fHandle=%d sz=%d\r", fsStream->contextHandle, streamSz);
+    PRINTF(dbgColor__cyan, "filesDataRcvr() fHandle=%d sz=%d\r", fileCtrl->handle, streamSz);
     while (streamSz > 0)
     {
         uint32_t readTimeout = pMillis();
@@ -468,8 +441,8 @@ static resultCode_t S__filesDataRcvr()
         {
             char* streamPtr;
             uint16_t blockSz = cbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readSz);                        // get address from rxBffr
-            PRINTF(dbgColor__cyan, "filesDataRcvr() ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
-            ((fileReceiver_func_t)(*fsStream->recvDataCB))(fsStream->contextHandle, streamPtr, blockSz);        // forward to application
+            PRINTF(dbgColor__cyan, "filesRxHndlr() ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
+            ((fileReceiver_func)(*fileCtrl->appRecvDataCB))(fileCtrl->handle, streamPtr, blockSz);                  // forward to application
             cbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                 // commit POP
             readSz -= blockSz;
             streamSz -= blockSz;
@@ -477,7 +450,7 @@ static resultCode_t S__filesDataRcvr()
 
         if (cbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= file__readTrailerSz)                                     // cleanup, remove trailer
         {
-            cbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, file__readTrailerSz);
+            cbffr_skipTail(g_lqLTEM.iop->rxBffr, file__readTrailerSz);
         }
     }
     return resultCode__success;

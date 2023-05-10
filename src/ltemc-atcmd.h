@@ -55,16 +55,19 @@ void atcmd_restoreOptionDefaults();
 
 
 /**
- *	@brief Set/clear stream data receiver function.
+ *	@brief Set/clear data stream for the current command operation.
  *  @details Individual commands (ex: file_read() could initiate a data stream, this function allows the command to register the required handler.
+ * 
+ *	@param [in] prefix Pointer to the stream control.
+ *	@param [in] streamCtrl [in] Pointer to the stream control.
  */
-void atcmd_setDataHandler(streamDataRcvr_func dataReceiver);
+void atcmd_setStreamControl(const char *prefix, streamCtrl_t *streamCtrl);
 
 
 /**
  *	@brief Invokes a BGx AT command using default option values (automatic locking).
- *	@param cmdStrTemplate [in] The command string to send to the BG96 module.
- *  @param ... [in] Variadic parameter list to integrate into the cmdStrTemplate.
+ *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
+ *  @param [in] variadic "..."  parameter list to integrate into the cmdStrTemplate.
  *  @return True if action was invoked, false if not
  */
 bool atcmd_tryInvoke(const char *cmdTemplate, ...);

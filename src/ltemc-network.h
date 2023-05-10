@@ -44,16 +44,16 @@ extern "C"
 //const char *ltem_ltemcVersion();
 
 /**
- *	\brief Initialize the IP network contexts structure.
+ *	@brief Initialize the IP network contexts structure.
  */
 void ntwk_create();
 
 
 /**
- *	\brief Configure PDP Context.
- *  \param [in] cntxtId The context ID to operate on. Typically 0 or 1
- *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
- *  \param [in] apn The APN name if required by network carrier.
+ *	@brief Configure PDP Context.
+ *  @param [in] cntxtId The context ID to operate on. Typically 0 or 1
+ *  @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
+ *  @param [in] apn The APN name if required by network carrier.
  *  
  */
 void *ntwk_configureNetwork(uint8_t pdpContextId, const char *protoType, const char *apn);
@@ -62,35 +62,35 @@ void *ntwk_configureNetwork(uint8_t pdpContextId, const char *protoType, const c
 /* Deferred Implementation: Cannot find a network provider requiring authentication and Quectel doesn't support beyond IPV4
 */
 // /**
-//  *	\brief Configure PDP Context requiring authentication.
-//  *  \param [in] pdpContextId The PDP context to work with, typically 0 or 1.
-//  *  \param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
-//  *  \param [in] apn The APN name if required by network carrier.
-//  *  \param [in] userName String with user name
-//  *  \param [in] pw String with password
-//  *  \param [in] authMethod Enum specifying the type of authentication expected by network
+//  *	@brief Configure PDP Context requiring authentication.
+//  *  @param [in] pdpContextId The PDP context to work with, typically 0 or 1.
+//  *  @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
+//  *  @param [in] apn The APN name if required by network carrier.
+//  *  @param [in] userName String with user name
+//  *  @param [in] pw String with password
+//  *  @param [in] authMethod Enum specifying the type of authentication expected by network
 //  */
 // networkInfo_t *ntwk_configureNetworkWithAuth(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
 
 
 /**
- *   \brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
- *   \param [in] waitSec Number of seconds to wait for a network. Supply 0 for no wait.
- *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
+ *   @brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_ltem->cancellationRequest.
+ *   @param [in] waitSec Number of seconds to wait for a network. Supply 0 for no wait.
+ *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
 providerInfo_t *ntwk_awaitProvider(uint16_t waitSec);
 
 
 // /**
-//  *	\brief Set the default/data context number for provider. Default is 1 if not overridden here.
-//  *  \param [in] defaultContext The data context to operate on. Typically 0 or 1, up to 15
+//  *	@brief Set the default/data context number for provider. Default is 1 if not overridden here.
+//  *  @param [in] defaultContext The data context to operate on. Typically 0 or 1, up to 15
 //  */
 // void ntwk_setProviderDefaultContext(uint8_t defaultContext);
 
 
 /**
- *	\brief Deactivate PDP Context/APN.
- *  \param [in] contextId The APN number to operate on.
+ *	@brief Deactivate PDP Context/APN.
+ *  @param [in] contextId The APN number to operate on.
  */
 void ntwk_deactivateNetwork(uint8_t contextId);
 
@@ -98,34 +98,54 @@ void ntwk_deactivateNetwork(uint8_t contextId);
 
 
 /**
- *   \brief Get current provider information. If not connected to a provider will be an empty providerInfo struct
- *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
+ *   @brief Get current provider information. If not connected to a provider will be an empty providerInfo struct
+ *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
 providerInfo_t *ntwk_getProviderInfo();
 
 
 /**
- *	\brief Get count of APN active data contexts from BGx.
- *  \return Count of active data contexts (BGx max is 3).
+ *	@brief Get count of APN active data contexts from BGx.
+ *  @return Count of active data contexts (BGx max is 3).
  */
 uint8_t ntwk_getActiveNetworkCount();
 
 
 /**
- *	\brief Get PDP network information
- *  \param [in] cntxtId The PDP context ID/index to retreive.
- *  \return Pointer to network (PDP) info in active network table, NULL if context ID not active
+ *	@brief Get PDP network information
+ *  @param [in] cntxtId The PDP context ID/index to retreive.
+ *  @return Pointer to network (PDP) info in active network table, NULL if context ID not active
  */
 networkInfo_t *ntwk_getNetworkInfo(uint8_t contxtId);
 
 
-/** 
- *  \brief Development/diagnostic function to retrieve visible providers from radio.
- *  \details This command can take MINUTES to respond! It is generally considered a command used solely for diagnostics.
- *  \param [in,out] operatorList - Pointer to char buffer to return operator list information retrieved from BGx.
- *  \param [in] listSz - Length of provided buffer.
+/**
+ *	@brief Get current network registration status.
+ *  @return The current network operator registration status.
  */
-void ntwk_getProviders(char *operatorList, uint16_t listSz);
+uint8_t ntwk_getRegistrationStatus();
+
+
+/**
+ *	@brief Set network operator.
+ *  @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
+
+ *  @param [in] mode Action to be performed, set/clear/set default.
+ *  @param [in] format The form for the ntwkOperator parameter value: long, short, numeric.
+ *  @param [in] ntwkOperator Operator to select, presented in the "format". Not all modes require/act on this parameter.
+ *  @return Current operator selection mode. Note:
+ */
+uint8_t ntwk_setOperator(uint8_t mode, uint8_t format, const char* ntwkOperator);
+
+
+/** 
+ *  @brief Development/diagnostic function to retrieve visible providers from radio.
+ *  @warning This command can take MINUTES to respond! It is generally considered a command used solely for diagnostics.
+ * 
+ *  @param [out] operatorList  Pointer to char buffer to return operator list information retrieved from BGx.
+ *  @param [in] listSz Length of provided buffer.
+ */
+void ntwkDIAG_getProviders(char *operatorList, uint16_t listSz);
 
 
 #ifdef __cplusplus

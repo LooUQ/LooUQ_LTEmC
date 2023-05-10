@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file ltemc-10-filesys.ino
+ *  \file ltemc-10-files.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -51,7 +51,7 @@
 #include <lq-SAMDutil.h>                // allows read of reset cause
 
 #include <ltemc.h>
-#include <ltemc-filesys.h>
+#include <ltemc-files.h>
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
@@ -98,7 +98,7 @@ void setup() {
     // createFileImage(file1, FILE1_SZ);
     // createFileImage(file2, FILE2_SZ);
 
-    file_setRecvrFunc(fileReadReceiver);
+    file_setAppReceiver(fileReadReceiver);
 
     rslt = file_getFSInfo(&fsInfo);
     PRINTF(dbgColor__green, "FileSystem: avail=%d, free=%d, fileCnt=%d, taken=%d\r", fsInfo.totalSz, fsInfo.freeSz, fsInfo.filesCnt, fsInfo.filesSz);

@@ -182,12 +182,20 @@ void ltem_setEventNotifCallback(appEvntNotify_func eventNotifyCB);
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
 
 
+#pragma region LTEM internal functions
+/*
+ ----------------------------------------------------------------------------------------------- */
+
+uint8_t LTEM__getStreamIndx(dataCntxt_t dataCntxt);
+
+
 // /**
 //  *	\brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
 //  *  \param faultCode [in] - HTTP style error code.
 //  */
 // void ltem_notifyAssert(uint16_t faultCode)   __attribute__ ((noreturn));
 
+#pragma endregion
 
 #ifdef __cplusplus
 }

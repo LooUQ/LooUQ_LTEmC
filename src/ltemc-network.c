@@ -101,13 +101,13 @@ void NTWK_initRatOptions()
  */
 void NTWK_applyDefaulNetwork()
 {
-    resultCode_t atResult;
+    resultCode_t rslt;
     if(strlen(g_lqLTEM.modemSettings->defaultNtwkConfig) > 0 &&
         atcmd_tryInvoke(g_lqLTEM.modemSettings->defaultNtwkConfig))
     {
-        atResult = atcmd_awaitResult();
-        if (atResult != resultCode__success)
-            PRINTF(dbgColor__cyan, "DefaultNtwk Config Failed=%d\r", atResult);
+        rslt = atcmd_awaitResult();
+        if (rslt != resultCode__success)
+            PRINTF(dbgColor__cyan, "DefaultNtwk Config Failed=%d\r", rslt);
     }
     atcmd_close();
 }
@@ -121,13 +121,13 @@ void ntwk_setNetworkConfig(uint8_t pdpContextId, const char *protoType, const ch
 
     snprintf(g_lqLTEM.modemSettings->defaultNtwkConfig, sizeof(g_lqLTEM.modemSettings->defaultNtwkConfig), "AT+CGDCONT=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
 
-    resultCode_t atResult;
+    resultCode_t rslt;
     if(atcmd_tryInvoke("AT+CGDCONT=%d,%d,\"%s\"\r", pdpContextId, protoType, apn))
     {
-        atResult = atcmd_awaitResult();
+        rslt = atcmd_awaitResult();
     }
     atcmd_close();
-    return atResult;
+    return rslt;
 }
 
 
@@ -138,13 +138,13 @@ void ntwk_setNetworkConfig(uint8_t pdpContextId, const char *protoType, const ch
 //  */
 // networkInfo_t * ntwk_configureNetworkWithAuth(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn, const char *userName, const char *pw, pdpCntxtAuthMethods_t authMethod)
 // {
-//     resultCode_t atResult;
+//     resultCode_t rslt;
 //     if(atcmd_tryInvoke("AT+QICSGP=%d,1,\"%s\",\"%s\",\"%s\",%d", pdpContextId, apn, userName, pw, authMethod))
 //     {
-//         atResult = atcmd_awaitResult();
+//         rslt = atcmd_awaitResult();
 //     }
 //     atcmd_close();
-//     return atResult;
+//     return rslt;
 // }
 
 
@@ -248,8 +248,8 @@ void ntwk_activateNetwork(uint8_t cntxtId)
 {
     if (atcmd_tryInvoke("AT+CGACT=1,%d", cntxtId))
     {
-        resultCode_t atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
-        if ( atResult == resultCode__success)
+        resultCode_t rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
+        if ( rslt == resultCode__success)
             ntwk_awaitProvider(5);
     }
 }
@@ -262,8 +262,8 @@ void ntwk_deactivateNetwork(uint8_t cntxtId)
 {
     if (atcmd_tryInvoke("AT+CGACT=0,%d", cntxtId))
     {
-        resultCode_t atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
-        if ( atResult == resultCode__success)
+        resultCode_t rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
+        if ( rslt == resultCode__success)
             ntwk_awaitProvider(5);
     }
 }
@@ -306,10 +306,43 @@ networkInfo_t *ntwk_getNetworkInfo(uint8_t pdpContextId)
 }
 
 
+/**
+ *	@brief Get current network registration status.
+ *  @return The current network operator registration status.
+ */
+uint8_t ntwk_getRegistrationStatus()
+{
+    if (atcmd_tryInvoke("AT+CREG?"))
+    {
+        // TODO need a parser wrapper to grab <stat> (pos 2)
+        resultCode_t rslt = atcmd_awaitResult();
+        return 0;
+    }
+    else
+    {
+        return 255;
+    }
+}
+
+
+/**
+ *	@brief Set network operator.
+ *  @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
+
+ *  @param [in] mode Action to be performed, set/clear/set default.
+ *  @param [in] format The form for the ntwkOperator parameter value: long, short, numeric.
+ *  @param [in] ntwkOperator Operator to select, presented in the "format". Not all modes require/act on this parameter.
+ *  @return Current operator selection mode. Note:
+ */
+uint8_t ntwk_setOperator(uint8_t mode, uint8_t format, const char* ntwkOperator)
+{
+}
+
+
 /** 
  *  \brief Development/diagnostic function to retrieve visible providers from cell radio.
  */
-void ntwk_getProviders(char *providersList, uint16_t listSz)
+void ntwkDIAG_getProviders(char *providersList, uint16_t listSz)
 {
     /* AT+COPS=? */
     ASSERT_W(false, "ntwk_getProviders() blocks and is SLOW!");

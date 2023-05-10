@@ -31,6 +31,21 @@
 #include "ltemc-types.h"
 
 
+
+
+/** 
+ *  @brief Callback function for data received event. Marshalls received data to application.
+
+ *  @param dataCntxt [in] Data context (socket) with new received data available.
+ *  @param [in] dataPtr Pointer to the received data available to the application.
+ *  @param [in] dataSz Size of the data block present at the dataPtr location.
+ *  @param [in] isFinal True if this block of data is the last block in the current receive flow.
+*/
+
+typedef void (*scktAppRecv_func)(dataCntxt_t dataCntxt, char* dataPtr, uint16_t dataSz, bool isFinal);
+
+
+
 /** 
  *  @brief Typed numeric constants for the sockets subsystem
  */
@@ -39,9 +54,11 @@ enum sckt__constants
     sckt__urlHostSz = 128,
     sckt__resultCode_alreadyOpen = 563,
     sckt__defaultOpenTimeoutMS = 60000,
-    sckt__irdRequestMaxSz = 1500
-};
+    sckt__irdRequestMaxSz = 1500,
 
+    sckt__readTrailerSz = 6,                /// /r/nOK/r/n
+    sckt__readTimeoutMs = 100
+};
 
 
 typedef enum scktState_tag
@@ -57,34 +74,25 @@ typedef enum scktState_tag
 */
 typedef struct scktCtrl_tag
 {
-    dataCntxt_t dataCntxt;
-    char hostUrl[SET_PROPLEN(sckt__urlHostSz)];
+    char streamType;                                /// stream type
+    dataCntxt_t dataContext;                        /// integer representing the source of the stream; fixed for protocols, file handle for FS
+    streamRxHndlr_func streamRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
+
+    /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
+    */
+    appRcvProto_func appRecvDataCB;                 /// callback into host application with data (cast from generic func* to stream specific function)
+    char hostUrl[SET_PROPLEN(sckt__urlHostSz)];     /// remote host URL/IP address
     uint16_t hostPort;
     uint16_t lclPort;
     bool useTls;
     scktState_t state;
 
-    bool flushing;                                          /// True if the socket was opened with cleanSession and the socket was found already open.
-    uint16_t irdPending;                                    /// Char count of remaining for current IRD/SSLRECV flow. Starts at reported IRD value and counts down
-    //uint16_t dataNotified;                                  /// Number of chars signaled as received to host application in the current recv flow
-    //uint16_t hostBffrHint;                                  /// Guestimate on optimal transfer size, based on last host GetRecvData() request
-
-    //uint32_t doWorkLastTck;            REPLACED recvEvent                     /// last check for URC/dataPending
-    //int16_t irdRemaining;             CONSOLIDATE INTO dataPending                      /// SIGNED number of outstanding IRD bytes to receive, -1 is unset value
-
-    uint32_t statsTxCnt;                                    /// Number of atomic TX sends
-    uint32_t statsRxCnt;                                    /// Number of atomic RX segments (URC/IRD)
+    bool flushing;                                  /// True if the socket was opened with cleanSession and the socket was found already open.
+    uint16_t irdPending;                            /// Char count of remaining for current IRD/SSLRECV flow. Starts at reported IRD value and counts down
+    uint32_t statsTxCnt;                            /// Number of atomic TX sends
+    uint32_t statsRxCnt;                            /// Number of atomic RX segments (URC/IRD)
 } scktCtrl_t;
 
-
-
-/** 
- *  @brief Callback function for data received event. Notifies application that new data is available and needs serviced.
- *  @details Use the sckt_fetchRecv() to get the data.
- *  @param dataCntxt [in] Data context (socket) with new received data available.
- *  @param dataSz [in] The number of bytes available.
-*/
-typedef void (*scktRecv_func)(dataCntxt_t dataCntxt, uint16_t dataSz);
 
 
 #ifdef __cplusplus
@@ -105,7 +113,7 @@ extern "C"
  *  @return socket result code similar to http status code, OK = 200
  */
 // void sckt_initControl(scktCtrl_t *scktCtrl, uint8_t pdpContextId, dataCntxt_t dataCntxt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback);
-void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, const char *protocol, scktRecv_func recvCallback);
+void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamTypes_t protocol, scktAppRecv_func recvCallback);
 
 
 /**

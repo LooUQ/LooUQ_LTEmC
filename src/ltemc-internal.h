@@ -75,6 +75,16 @@ typedef enum recvEvent_tag
 } recvEvent_t;
 
 
+typedef struct fileCtrl_tag
+{
+    char streamType;                            /// stream type
+    streamRxHndlr_func streamRxHndlr;           /// function to handle data streaming, initiated by eventMgr() or atcmd module
+
+    uint8_t handle;
+    appRcvProto_func appRecvDataCB;
+} fileCtrl_t;
+
+
  /** 
  *  \brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
  * 
@@ -93,12 +103,8 @@ typedef struct ltemDevice_tag
     modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
 	modemInfo_t *modemInfo;                     /// Data structure holding persistent information about application modem state
     providerInfo_t *providerInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
-    streamCtrl_t streams[ltem__streamCnt];      /// Data streams: protocols or file system
-
-    // char urcActive;                                     /// URC being serviced (partially complete)
-    // urcHandler_func urcHandlers[ltem__urcHandlersCnt];  /// array of URC receipt handlers (parsers)
-    // dataCntxt_t recvCntxt;                      /// Data context with ACTIVE data-in flow underway (between URC and IRD/SSLRECV chars retrieved)
-    // recvEvent_t recvEvent;                      /// Signal from ISR indicating a receive event has just completed, needs servicing (doWork())
+    streamCtrl_t* streams[ltem__streamCnt];     /// Data streams: protocols or file system
+    fileCtrl_t* fileCtrl;
 
     ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
 } ltemDevice_t;
@@ -122,18 +128,18 @@ extern "C"
 
 
 // LTEM Internal
-void LTEM_initIo();
-void LTEM_registerDoWorker(doWork_func *doWorker);
+// void LTEM_initIo();
+// void LTEM_registerDoWorker(doWork_func *doWorker);
 // void LTEM_registerUrcHandler(urcHandler_func *urcHandler);
 
 #pragma region ATCMD LTEmC Internal Functions
 /* LTEmC internal, not intended for user application consumption.
  * --------------------------------------------------------------------------------------------- */
 
-/**
- *	\brief Checks recv buffer for command response and sets atcmd structure data with result.
- */
-resultCode_t ATCMD_readResult();
+// /**
+//  *	\brief Checks recv buffer for command response and sets atcmd structure data with result.
+//  */
+// resultCode_t ATCMD_readResult();
 
 /**
  *  \brief Default AT command result parser.

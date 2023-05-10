@@ -99,6 +99,9 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     ASSERT(g_lqLTEM.atcmd != NULL);
     atcmd_reset(true);
 
+    g_lqLTEM.fileCtrl = calloc(1, sizeof(fileCtrl_t));
+    ASSERT(g_lqLTEM.fileCtrl != NULL);
+
     ntwk_create();
 
     g_lqLTEM.cancellationRequest = false;
@@ -321,29 +324,29 @@ deviceState_t ltem_getDeviceState()
  */
 void ltem_eventMgr()
 {
-    /* look for a new incoming URC 
-     */
-    int16_t urcPossible = cbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);       // look for prefix char in URC
-    if (urcPossible == CBFFR_NOFIND)
-    {
-        return;
-    }
+    // /* look for a new incoming URC 
+    //  */
+    // int16_t urcPossible = cbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);       // look for prefix char in URC
+    // if (urcPossible == CBFFR_NOFIND)
+    // {
+    //     return;
+    // }
 
-    for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
-    {
-        resultCode_t serviceRslt;
-        if (g_lqLTEM.streams[i].streamUrcHndlr)                                     // URC type data receiver in this stream, offer the data to the handler
-        {
-            serviceRslt = g_lqLTEM.streams[i].streamUrcHndlr();
-        }
-        if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
-        {
-            continue;
-        }
-        break;                                                                      // service attempted (might have errored), so this event is over
-    }
+    // for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
+    // {
+    //     resultCode_t serviceRslt;
+    //     if (g_lqLTEM.streams[i]->streamRxHndlr)                                     // URC type data receiver in this stream, offer the data to the handler
+    //     {
+    //         serviceRslt = g_lqLTEM.streams[i]->streamRxHndlr();
+    //     }
+    //     if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
+    //     {
+    //         continue;
+    //     }
+    //     break;                                                                      // service attempted (might have errored), so this event is over
+    // }
 
-    S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
+    // S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
 }
 
 
@@ -399,9 +402,22 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 //     }
 // }
 
+uint8_t LTEM__getStreamIndx(dataCntxt_t dataCntxt)
+{
+    for (size_t indx = 0; indx < ltem__streamCnt; indx++)
+    {
+        if (g_lqLTEM.streams[indx]->dataContext == dataCntxt)
+        {
+            return indx;
+        }
+    }
+}
+
+
 #pragma endregion
 
 #pragma region Static Function Definitions
+
 
 S__ltemUrcHandler()
 {

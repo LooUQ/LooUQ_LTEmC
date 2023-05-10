@@ -24,8 +24,8 @@
 ***************************************************************************** */
 
 
-#ifndef __LTEMC_FILE_H__
-#define __LTEMC_FILE_H__
+#ifndef __LTEMC_FILES_H__
+#define __LTEMC_FILES_H__
 
 #include "ltemc.h"
 
@@ -128,15 +128,31 @@ typedef struct fileWriteResult_tag
 } fileWriteResult_t;
 
 
+
+
+// typedef struct fileCtrl_tag
+// {
+//     char streamType[streams__typeCodeSz];       /// stream type
+//     dataCntxt_t dataContext;                    /// integer representing the source of the stream; fixed for protocols, file handle for FS
+//     streamRxHndlr_func streamRxHndlr;           /// function to handle data streaming, initiated by eventMgr() or atcmd module
+//     streamClose_func streamClose;               /// handler to perform orderly shutdown of data service
+
+//     uint8_t handle;
+//     cbProto_func appRecvDataCB;
+// } fileCtrl_t;
+
+
 /** 
  *  @brief typedef for the filesystem services data receiver function. Connects filesystem processing to the application (receive).
 */
-typedef void (*fileReceiver_func_t)(uint16_t fileHandle, const char *fileData, uint16_t dataSz);
+typedef void (*fileReceiver_func)(uint16_t fileHandle, const char *fileData, uint16_t dataSz);
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void file_setAppReceiver(fileReceiver_func fileReceiver);
 
 
 /**
@@ -151,10 +167,10 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo);
 resultCode_t file_getFilelist(fileListResult_t *filelist, const char* fileName);
 
 
-/**
- *	@brief set file read data receiver function (here or with filesys_open). Not required if file is write only access.
- */
-void file_setRecvrFunc(fileReceiver_func_t fileRecvr_func);
+// /**
+//  *	@brief set file read data receiver function (here or with filesys_open). Not required if file is write only access.
+//  */
+// void file_setRecvrFunc(fileReceiver_func fileReceiver);
 
 
 /**
@@ -254,4 +270,4 @@ resultCode_t file_delete(const char* fileName);
 }
 #endif
 
-#endif  // !__LTEMC_FILE_H__
+#endif  // !__LTEMC_FILES_H__

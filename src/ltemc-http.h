@@ -43,23 +43,21 @@ enum http__constants
     http__useDefaultTimeout = 0,
     http__defaultTimeoutBGxSec = 60,
     http__urlHostSz = 128,
-    http__rqstTypeSz = 5,                               /// GET or POST
+    http__rqstTypeSz = 5,                           /// GET or POST
     http__customHdrSmallWarning = 40
-    // http__reqdResponseSz = 22                           /// BGx HTTP(S) Application Note
+    // http__reqdResponseSz = 22                    /// BGx HTTP(S) Application Note
 };
 
 
 /** 
  *  @brief Callback function for data received event. Notifies application that new data is available and needs serviced.
- * 
- *  @details The *data and dataSz values are for convenience, since the application supplied the buffer to LTEmC.
- * 
- *  @param dataCntxt [in] Data peer (data context or filesys) 
- *  @param httpRslt [in] HTTP status code found in the page result headers
- *  @param data [in] Pointer to received data buffer
- *  @param dataSz [in] The number of bytes available
-*/
-typedef void (*httpRecv_func)(dataCntxt_t sckt, uint16_t httpRslt, char *data, uint16_t dataSz);
+ *
+ *  @param [in] dataCntxt [in] Originating data context
+ *  @param [in] data [in] Pointer to received data buffer
+ *  @param [in] dataSz [in] The number of bytes available
+ *  @param [in] isFinal Last invoke of the callback will indicate with isFinal = true.
+ */
+typedef void (*httpRecv_func)(dataCntxt_t dataCntxt, char *data, uint16_t dataSz, bool isFinal);
 
 
 /** 
@@ -85,24 +83,30 @@ typedef enum httpState_tag
 } httpState_t;
 
 
-typedef volatile struct httpCtrl_tag
+typedef struct httpCtrl_tag
 {
-    /* Top section of xCtrl structure is the same for all LTEmC implemented protocol suites TCP/HTTP/MQTT etc. */
-    dataCntxt_t dataCntxt;                                  /// Data context where this control operates (only SSL/TLS contexts 1-6)
-    bool useTls;                                            /// flag indicating SSL/TLS applied to stream
-    char hostUrl[host__urlSz];                              /// URL or IP address of host
-    uint16_t hostPort;                                      /// IP port number host is listening on (allows for 65535/0)
-    bool returnResponseHdrs;                                /// if set true, response headers are included in the returned response
-    char *cstmHdrs;                                         /// custom header content, optional buffer provided by application
-    uint16_t cstmHdrsSz;                                    /// size of custom header buffer
-    char requestType[http__rqstTypeSz];                     /// type of current/last request: 'G'=GET, 'P'=POST
-    httpState_t requestState;                               /// current state machine variable for HTTP request
-    uint16_t bgxError;                                      /// BGx sprecific error code returned from GET/POST
-    uint16_t httpStatus;                                    /// set to 0 during a request, initialized to 0xFFFF before any request
-    uint32_t pageSize;                                      /// if provided in page response, the page size 
-    uint32_t pageRemaining;                                 /// set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
-    uint8_t defaultTimeoutS;                                /// default timeout for page requests (BGx is 60 secs)
-    bool pageCancellation;                                  /// set to abandon further page loading
+    char streamType;                            /// stream type
+    dataCntxt_t dataContext;                    /// integer representing the source of the stream; fixed for protocols, file handle for FS
+    streamRxHndlr_func streamRxHndlr;           /// function to handle data streaming, initiated by eventMgr() or atcmd module
+
+    /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
+    */
+    appRcvProto_func appRecvDataCB;             /// callback into host application with data (cast from generic func* to stream specific function)
+    bool useTls;                                /// flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];                  /// URL or IP address of host
+    uint16_t hostPort;                          /// IP port number host is listening on (allows for 65535/0)
+    bool returnResponseHdrs;                    /// if set true, response headers are included in the returned response
+    char *cstmHdrs;                             /// custom header content, optional buffer provided by application
+    uint16_t cstmHdrsSz;                        /// size of custom header buffer
+    char requestType[http__rqstTypeSz];         /// type of current/last request: 'G'=GET, 'P'=POST
+    httpState_t requestState;                   /// current state machine variable for HTTP request
+    uint16_t bgxError;                          /// BGx sprecific error code returned from GET/POST
+    uint16_t httpStatus;                        /// set to 0 during a request, initialized to 0xFFFF before any request
+    uint32_t pageSize;                          /// if provided in page response, the page size 
+    uint32_t pageRemaining;                     /// set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
+    uint8_t defaultTimeoutS;                    /// default timeout for page requests (BGx is 60 secs)
+    uint16_t defaultBlockSz;                    /// default size of block (in of bytes) to transfer to app from page read (page read spans blocks)
+    bool pageCancellation;                      /// set to abandon further page loading
 } httpCtrl_t;
 
 
@@ -114,37 +118,35 @@ extern "C"
 
 /**
  *	@brief Create a HTTP(s) control structure to manage web communications. 
- *  @param httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
- *	@param dataCntxt [in] The data context (0-5) to use for this communications.
- *  @param recvBuf [in] Pointer to application provided char buffer.
- *  @param recvBufSz [in] Size of the receive buffer.
- *  @param recvCallback [in] Callback function to receive incoming page data.
+ *  @param [in] httpCtrl HTTP control structure pointer, struct defines parameters of communications with web server.
+ *	@param [in] dataCntxt [in] The data context (0-5) to use for this communications.
+ *  @param [in] recvCallback [in] Callback function to receive incoming page data.
  */
 void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func recvCallback);
 
 
 /**
  *	@brief Set host connection characteristics. 
- *  @param httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
- *  @param hostURL [in] The HOST address of the web server URL.
- *  @param hostPort [in] The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
+ *  @param [in] httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
+ *  @param [in] hostURL [in] The HOST address of the web server URL.
+ *  @param [in] hostPort [in] The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
  */
 void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t hostPort);
 
 
 /**
  *	@brief Registers custom headers (char) buffer with HTTP control.
- *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	@param headerBuf [in] - pointer to header buffer  created by application
- *  @param headerBufSz [in] - size of the header buffer
+ *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ *	@param [in] headerBuf pointer to header buffer  created by application
+ *  @param [in] headerBufSz size of the header buffer
  */
 void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *hdrBuffer, uint16_t hdrBufferSz);
 
 
 /**
  *	@brief Adds common http headers to the custom headers buffer. REQUIRES previous enable of custom headers and buffer registration.
- *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	@param headerMap [in] - Bitmap for which standard headers to use.
+ *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ *	@param [in] headerMap Bitmap for which standard headers to use.
  */
 void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap);
 
@@ -152,9 +154,9 @@ void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap);
 /**
  *	@brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
  *
- *  @param http [in] - Pointer to the control block for HTTP communications.
- *	@param user [in] - User name.
- *  @param pw [in] - Password/secret for header.
+ *  @param [in] http Pointer to the control block for HTTP communications.
+ *	@param [in] user User name.
+ *  @param [in] pw Password/secret for header.
  */
 void http_addBasicAuthHdr(httpCtrl_t *httpCtrl, const char *user, const char *pw);
 
@@ -168,44 +170,39 @@ void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText);
 
 /**
  *	@brief Perform HTTP GET operation. Results are internally buffered on the LTEm, see http_read().
- *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	@param relativeUrl [in] - The URL to GET (starts with \ and doesn't include the host part)
- *  @param returnResponseHdrs [in] - Set to true for page result to include response headers at the start of the page
- *  @param timeoutSec [in] - Timeout for entire GET request cycle
+ *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ *	@param [in] relativeUrl The URL to GET (starts with \ and doesn't include the host part)
+ *  @param [in] returnResponseHdrs Set to true for page result to include response headers at the start of the page
  *  @return true if GET request sent successfully
  */
-resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, uint8_t timeoutSec);
+resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs);
 
 
 /**
  *	@brief Performs a HTTP POST page web request.
- *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	@param relativeUrl [in] - URL, relative to the host. If none, can be provided as "" or "/" ()
- *  @param returnResponseHdrs [in] - if requested (true) the page response stream will prefix the page data
- *  @param postData [in] - Pointer to char buffer with POST content
- *  @param postDataSz [in] - Size of the POST content reference by *postData
- *	@param timeoutSec [in] - the number of seconds to wait (blocking) for a page response
+ *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ *	@param [in] relativeUrl URL, relative to the host. If none, can be provided as "" or "/" ()
+ *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data
+ *  @param [in] postData Pointer to char buffer with POST content
+ *  @param [in] postDataSz Size of the POST content reference by *postData
  *  @return true if POST request completed
  */
-resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, const char* postData, uint16_t dataSz, uint8_t timeoutSec);
+resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, const char* postData, uint16_t dataSz);
 
 
 /**
  *	@brief Retrieves page results from a previous GET or POST.
 
- *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
- *	@param pageBffr [in] - Pointer to the host application buffer to receive page contents.
- *  @param bffrSz [in] The number of chars to return.
- *  
- *  @return true if there are additional chars to read, false if page contents have been transfered and the request is complete.
+ *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ *  @return HTTP status of read.
  */
-bool http_readPage(httpCtrl_t *httpCtrl, char *pageBffr, uint16_t pageBffrSz, uint16_t *httpResult);
+uint16_t http_readPage(httpCtrl_t *httpCtrl);
 
 /**
  *	@brief Cancels a http_readPage flow if the remaining contents are not needed.
  *  @details This is a blocking call. The page read off the network will continue, but the contents will be discarded.
 
- *  @param httpCtrl [in] - Pointer to the control block for HTTP communications.
+ *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
  */
 void http_cancelPage(httpCtrl_t *httpCtrl);
 

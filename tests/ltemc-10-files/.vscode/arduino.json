@@ -1,5 +1,5 @@
 {
-    "sketch": "ltemc-10-filesys.ino",
+    "sketch": "ltemc-10-files.ino",
     "configuration": "opt=small,usbstack=arduino,debug=on",
     "board": "adafruit:samd:adafruit_feather_m0",
     "output": "./build"

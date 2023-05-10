@@ -61,7 +61,7 @@
 // test setup
 #define CYCLE_INTERVAL 10000
 #define SEND_BUFFER_SZ 201
-#define SCKTTEST_PROTOCOL STREAM_UDP
+#define SCKTTEST_PROTOCOL streamType_UDP
 #define SCKTTEST_HOST "24.247.65.244"   // put your server information here 
 #define SCKTTEST_PORT 9011              // and here
 
@@ -99,7 +99,7 @@ void setup() {
     PRINTF(dbgColor__info, "Network type is %s on %s\r", provider->iotMode, provider->name);
 
     // create a socket control and open it
-    sckt_initControl(&scktCtrl, dataCntxt_0, SCKTTEST_PROTOCOL, scktRecv);
+    sckt_initControl(&scktCtrl, dataCntxt_0, SCKTTEST_PROTOCOL, scktRecvCB);
     sckt_setConnection(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0);
     resultCode_t scktResult = sckt_open(&scktCtrl,  true);
 
@@ -171,17 +171,17 @@ uint16_t scktRecover()
 /**
  *  \brief Application provides a receiver function for incoming (recv'd) data, template given here
  * 
- *  \param [in] socketId  Numeric identifier for the socket receiving the data
+ *  \param [in] dataCntxt  Numeric identifier for the socket receiving the data
  *  \param [in] data  Pointer to character received data ()
 */
-void scktRecv(dataCntxt_t dataCntxt, uint16_t dataSz)
+void scktRecvCB(dataCntxt_t dataCntxt, char* dataPtr, uint16_t dataSz, bool isFinal)
 {
-    char temp[dataSz + 1];
+    // char temp[dataSz + 1];
 
-    sckt_fetchRecv(&scktCtrl, temp, sizeof(temp));
-    temp[dataSz] = '\0';
+    // sckt_fetchRecv(&scktCtrl, temp, sizeof(temp));
+    // temp[dataSz] = '\0';
 
-    PRINTF(dbgColor__info, "appRcvd %d chars: %s\r", dataSz, temp);
+    // PRINTF(dbgColor__info, "appRcvd %d chars: %s\r", dataSz, temp);
 }
 
 

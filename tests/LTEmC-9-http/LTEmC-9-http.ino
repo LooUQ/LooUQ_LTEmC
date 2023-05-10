@@ -158,11 +158,11 @@ void loop()
         pageChars = 0;
         PRINTF(dbgColor__none, "\r\r");
 
-        if (loopCnt % 2 == 1)
+        if (loopCnt % 2 == 0)
         {
-            // resultCode_t http_get(httpCtrl_t *httpCtrl, const char* url, uint8_t timeoutSeconds);
+            // resultCode_t http_get(httpCtrl_t *httpCtrl, const char* url)   
             // default HTTP timeout is 60 seconds
-            rslt = http_get(&httpCtrlG, "/points/44.7582,-85.6022", http__noResponseHeaders, http__useDefaultTimeout);
+            rslt = http_get(&httpCtrlG, "/points/44.7582,-85.6022", http__noResponseHeaders);
             if (rslt == resultCode__success)
             {
                 httpCtrl = &httpCtrlG;
@@ -175,8 +175,8 @@ void loop()
         {
             char postData[] = "{ \"field1\": 1, \"field2\": \"field2\" }";
 
-            // resultCode_t http_post(httpCtrl_t *httpCtrl, const char* url, const char* postData, uint16_t dataSz, uint8_t timeoutSeconds);
-            rslt = http_post(&httpCtrlP, "/anything", http__noResponseHeaders, postData, strlen(postData), http__useDefaultTimeout);
+            // resultCode_t http_post(httpCtrl_t *httpCtrl, const char* url, const char* postData, uint16_t dataSz);
+            rslt = http_post(&httpCtrlP, "/anything", http__noResponseHeaders, postData, strlen(postData));
             if (rslt == resultCode__success)
             {
                 httpCtrl = &httpCtrlP;
@@ -206,49 +206,27 @@ void loop()
             uint16_t httpResult;
 
             PRINTF(dbgColor__white, "Request complete, expecting %d chars.\rHTTP Page\r", httpCtrl->pageSize);
-            do
-            {
-                morePage = http_readPage(httpCtrl, pageBffr, sizeof(pageBffr)-1, &httpResult);
-                PRINTF(dbgColor__dCyan, ">>%s", pageBffr);
-            } while (morePage);
-            PRINTF(dbgColor__white, "HTTP Result=%d\r", httpResult);
-            
 
-            // if (rslt = http_readPage(httpCtrl, 20))
-            // {
-            //     switch (rslt)
-            //     {
-            //     case resultCode__success:
-            //         PRINTF(dbgColor__white, "Read page complete, %d chars received.\r", pageChars);
-            //         break;
-
-            //     case resultCode__cancelled:
-            //         PRINTF(dbgColor__warn, "Read page cancelled after %d chars.\r", pageChars);
-            //         break;
-                
-            //     default:
-            //         PRINTF(dbgColor__warn, "Problem reading page contents, result=%d.\r", rslt);
-            //         break;
-            //     }
-            // }
-
-            // char printBuf[121];
-            // strncpy(printBuf, pageBffr, 120);
-            // PRINTF(dbgColor__white, "Got (1st 120 chars):\r%s\r", printBuf);
+            httpResult = http_readPage(httpCtrl);               // content is delivered via the registered page receive callback
+            PRINTF(dbgColor__magenta, "Read status=%d\r", httpResult);
         }
         loopCnt++;
     }
 }
 
 
-// typedef void (*httpRecvFunc_t)(socket_t sckt, char *data, uint16_t dataSz);
+// typedef void (*httpRecvFunc_t)(dataCntxt_t dataCntxt, char *recvData, uint16_t dataSz, bool isFinal);
 
-void httpRecvCB(dataCntxt_t dataCntxt, uint16_t httpStatus, char *recvData, uint16_t dataSz)
+void httpRecvCB(dataCntxt_t dataCntxt, char *recvData, uint16_t dataSz, bool isFinal)
 {
-    strncpy(pageBffr + pageChars, recvData, dataSz);
+    //strncpy(pageBffr + pageChars, recvData, dataSz);
     pageChars += dataSz;
 
-    PRINTF(dbgColor__green, "\rAppRecv'd %d new chars, total page sz=%d\r", dataSz, pageChars);
+    PRINTF(dbgColor__magenta, "AppRecv'd %d new chars, total page sz=%d\r", dataSz, pageChars);
+    if (isFinal)
+    {
+        PRINTF(dbgColor__magenta, "Read Complete!\r");
+    }
 }
 
 
