@@ -277,15 +277,8 @@ enum IOP__Constants
  * ================================================================================================
  */
 
-// #define STREAM_UDP "U"                              /// UDP
-// #define STREAM_TCP "T"                              /// TCP
-// #define STREAM_SSL "S"                              /// SSL/TLS
-// #define STREAM_MQTT "M"                             /// MQTT
-// #define STREAM_HTTP "H"                             /// HTTP
-// #define STREAM_FILE "F"                             /// Filesys
 
-
-typedef enum streamTypes_tag
+typedef enum streamType_tag
 {
     streamType_UDP = 'U',
     streamType_TCP = 'T',
@@ -293,12 +286,12 @@ typedef enum streamTypes_tag
     streamType_MQTT = 'M',
     streamType_HTTP = 'H',
     streamType_file = 'f'
-} streamTypes_t;
+} streamType_t;
 
 
 // function prototypes
 typedef void (*urcHndlr_func)();                    // URC detection and action
-typedef resultCode_t (*streamRxHndlr_func)();       // data comes from rxBuffer, this function parses and forwards to application via recvDataCB
+typedef resultCode_t (*dataRxHndlr_func)();         // data comes from rxBuffer, this function parses and forwards to application via recvDataCB
 typedef void (*appRcvProto_func)();                 // prototype func() for stream recvData callback
 
 
@@ -306,21 +299,12 @@ typedef struct streamCtrl_tag
 {
     char streamType;                                /// stream type
     dataCntxt_t dataContext;                        /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    streamRxHndlr_func streamRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    dataRxHndlr_func dataRxHndlr;                   /// function to handle data streaming, initiated by eventMgr() or atcmd module
 } streamCtrl_t;
-
-// typedef struct streamCtrl_tag
-// {
-//     char streamType[streams__typeCodeSz];       /// stream type
-//     dataCntxt_t dataContext;                    /// integer representing the source of the stream; fixed for protocols, file handle for FS
-//     streamRxHndlr_func streamRxHndlr;           /// function to handle data streaming, initiated by eventMgr() or atcmd module
-//     streamClose_func streamClose;               /// handler to perform orderly shutdown of data service
-// } streamCtrl_t;
 
 
 /*
  * ============================================================================================= */
-
 
 /** 
  *  \brief Struct for the IOP subsystem state. During initialization a pointer to this structure is reference in g_ltem1.
@@ -358,7 +342,8 @@ enum atcmd__constants
 
     atcmd__cmdBufferSz = 448,                       // prev=120, mqtt(Azure) connect=384, new=512 for universal cmd coverage, data mode to us dynamic TX bffr switching
     atcmd__respBufferSz = 120,
-    atcmd__streamPrefixSz = 10
+    atcmd__streamPrefixSz = 12,                     // obsolete with universal data mode switch
+    atcmd__dataModeTriggerSz = 13
 };
 
 
@@ -376,6 +361,17 @@ typedef enum cmdParseRslt_tag
     cmdParseRslt_success = 0x40,
     cmdParseRslt_error = 0x80,
 } cmdParseRslt_t;
+
+typedef struct dataMode_tag
+{
+    uint16_t contextKey;                                /// unique identifier for data flow, could be dataContext(proto), handle(files), etc.
+    char trigger[atcmd__dataModeTriggerSz];             /// char sequence that signals the transition to data mode, data mode starts at the following character
+    dataRxHndlr_func dataHndlr;                         /// data handler function (TX/RX)
+    char* dataLoc;                                      /// location of data buffer (TX only)
+    uint16_t dataSz;                                    /// size of TX data or RX request
+    bool skipParser;                                    /// true = no invoke of response parser after successul datamode, error always skips parser
+    appRcvProto_func applRecvDataCB;                    /// callback into app for received data delivery
+} dataMode_t;
 
 
 typedef cmdParseRslt_t (*cmdResponseParser_func)();                             // AT response parser template
@@ -397,7 +393,7 @@ typedef struct atcmd_tag
     uint32_t invokedAt;                                 /// Tick value at the command invocation, used for timeout detection.
     
     char rawResponse[atcmd__respBufferSz + 1];          /// response buffer, allows for post cmd execution review of received text (0-filled).
-    char *response;                                     /// PTR variable section of response.
+    char* response;                                     /// PTR variable section of response.
 
     uint32_t execDuration;                              /// duration of command's execution in milliseconds
     resultCode_t resultCode;                            /// consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
@@ -407,9 +403,11 @@ typedef struct atcmd_tag
     char errorDetail[SET_PROPLEN(ltem__errorDetailSz)]; /// BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
     int32_t retValue;                                   /// optional signed int value extracted from response
 
-    streamCtrl_t* streamCtrl;
-    char streamPrefix[PROPLEN(atcmd__streamPrefixSz)];  /// char sequence prefixing steam data, triggers switch to registered data handler streamRxHndlr()
-    appRcvProto_func applDataCB;
+    // streamCtrl_t* streamCtrl;
+    // char streamPrefix[PROPLEN(atcmd__streamPrefixSz)];  /// char sequence prefixing steam data, triggers switch to registered data handler streamRxHndlr()
+    // appRcvProto_func applDataCB;
+
+    dataMode_t dataMode;                                /// controls for automatic data mode servicing - both TX (out) and RX (in). Std functions or extensions supported.
 } atcmd_t;
 
 

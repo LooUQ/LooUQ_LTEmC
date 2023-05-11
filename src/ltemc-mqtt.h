@@ -170,7 +170,7 @@ typedef struct mqttCtrl_tag
 {
     char streamType;                                /// stream type
     dataCntxt_t dataContext;                        /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    streamRxHndlr_func streamRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    dataRxHndlr_func dataRxHndlr;                   /// function to handle data streaming, initiated by eventMgr() or atcmd module
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */

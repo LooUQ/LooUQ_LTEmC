@@ -72,7 +72,7 @@ static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr)
 /**
  *	@brief Create a socket data control(TCP/UDP/SSL).
  */
-void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamTypes_t protocol, scktAppRecv_func recvCallback)
+void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t protocol, scktAppRecv_func recvCallback)
 {
     ASSERT(dataCntxt < dataCntxt__cnt);
 

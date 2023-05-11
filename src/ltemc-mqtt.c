@@ -94,7 +94,7 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt)
 
     mqttCtrl->streamType = streamType_MQTT;
     mqttCtrl->streamUrcHndlr = S__mqttUrcHandler;                       // for MQTT, URC handler performs all necessary functions
-    mqttCtrl->streamRxHndlr = NULL;                                     // marshalling data from buffer to app done by URC handler
+    mqttCtrl->dataRxHndlr = NULL;                                       // marshalls data from buffer to app done by URC handler
 }
 
 

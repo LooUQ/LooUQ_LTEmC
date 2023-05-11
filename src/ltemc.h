@@ -161,6 +161,12 @@ void ltem_eventMgr();
 
 
 /**
+ *	\brief Background work task runner. To be called in application Loop() periodically.
+ */
+streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType);
+
+
+/**
  *	\brief Registers the address (void*) of your application yield callback handler.
  *  \param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */

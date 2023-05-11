@@ -87,7 +87,7 @@ typedef struct httpCtrl_tag
 {
     char streamType;                            /// stream type
     dataCntxt_t dataContext;                    /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    streamRxHndlr_func streamRxHndlr;           /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    dataRxHndlr_func streamRxHndlr;             /// function to handle data streaming, initiated by eventMgr() or atcmd module
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
@@ -104,7 +104,7 @@ typedef struct httpCtrl_tag
     uint16_t httpStatus;                        /// set to 0 during a request, initialized to 0xFFFF before any request
     uint32_t pageSize;                          /// if provided in page response, the page size 
     uint32_t pageRemaining;                     /// set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
-    uint8_t defaultTimeoutS;                    /// default timeout for page requests (BGx is 60 secs)
+    uint8_t timeoutSec;                         /// default timeout for GET/POST/read requests (BGx is 60 secs)
     uint16_t defaultBlockSz;                    /// default size of block (in of bytes) to transfer to app from page read (page read spans blocks)
     bool pageCancellation;                      /// set to abandon further page loading
 } httpCtrl_t;

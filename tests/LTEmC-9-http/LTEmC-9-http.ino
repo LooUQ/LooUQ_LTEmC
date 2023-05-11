@@ -94,7 +94,7 @@ void setup() {
     ltem_setProviderScanMode(ntwkScanMode_lteonly);
     ltem_setIotMode(ntwkIotMode_m1);
     ltem_setDefaultNetwork(PDP_DATA_CONTEXT, PDP_PROTOCOL_IPV4, PDP_APN_NAME);
-    ltem_start(resetAction_skipIfOn);
+    ltem_start(resetAction_swReset);
 
     providerInfo_t *provider;
     while(true)
@@ -158,7 +158,7 @@ void loop()
         pageChars = 0;
         PRINTF(dbgColor__none, "\r\r");
 
-        if (loopCnt % 2 == 0)
+        if (loopCnt % 2 == 1)
         {
             // resultCode_t http_get(httpCtrl_t *httpCtrl, const char* url)   
             // default HTTP timeout is 60 seconds
@@ -236,10 +236,18 @@ void httpRecvCB(dataCntxt_t dataCntxt, char *recvData, uint16_t dataSz, bool isF
 
 void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (eventType == appEvent_fault_assertFailed)
+    if (eventType > appEvent__FAULTS)
+    {
         PRINTF(dbgColor__error, "LTEmC Fault: %s\r", notifyMsg);
+    }
+    else if (eventType > appEvent__WARNINGS)
+    {
+        PRINTF(dbgColor__warn, "LTEmC Warning: %s\r", notifyMsg);
+    }
     else 
+    {
         PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+    }
     return;
 }
 

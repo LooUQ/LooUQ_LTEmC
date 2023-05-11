@@ -62,7 +62,10 @@ static resultCode_t S__filesRxHndlr();
  */
 void file_setAppReceiver(fileReceiver_func fileReceiver)
 {
-    ASSERT(fileReceiver != NULL);
+    ASSERT(fileReceiver != NULL);                                           // assert user provided receiver function
+
+    g_lqLTEM.fileCtrl->streamType = streamType_file;                        // init singleton fileCtrl
+    g_lqLTEM.fileCtrl->dataRxHndlr = S__filesRxHndlr;
     g_lqLTEM.fileCtrl->appRecvDataCB = fileReceiver;
 }
 
@@ -166,7 +169,7 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
 
 resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* fileHandle)
 {
-    ASSERT(strlen(filename) > 0);
+    ASSERT(strlen(filename) > 0);                                           // assert user provided a filename
     resultCode_t rslt;
     char *workPtr;
 
@@ -193,8 +196,6 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
         // parse response >> +QFOPEN: <filehandle>
         workPtr = atcmd_getResponse() + file__dataOffset_open;
         *fileHandle = strtol(workPtr, NULL, 10);
-
-        // ASSERT(fileHandle > 0);
         break;
     } while (0);
 
@@ -278,7 +279,7 @@ resultCode_t file_closeAll()
 resultCode_t file_read(uint16_t fileHandle, uint16_t readSz)
 {
     resultCode_t rslt = resultCode__success;
-    ASSERT(g_lqLTEM.fileCtrl->appRecvDataCB);
+    ASSERT(g_lqLTEM.fileCtrl->appRecvDataCB);                                   // assert that there is a app func registered to receive read data
 
     if (readSz > 0)
         rslt = atcmd_tryInvoke("AT+QFREAD=%d,%d", fileHandle, readSz);
@@ -410,8 +411,6 @@ static cmdParseRslt_t S__writeStatusParser()
 static resultCode_t S__filesRxHndlr()
 {
     char wrkBffr[32];
-    fileCtrl_t* fileCtrl = S__getFileCtrl();
-    ASSERT(fileCtrl);
     
     uint8_t popCnt = cbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
     if (popCnt == CBFFR_NOFIND)
@@ -423,7 +422,7 @@ static resultCode_t S__filesRxHndlr()
     uint16_t readSz = strtol(wrkBffr + 8, NULL, 10);
     uint16_t streamSz = readSz + file__readTrailerSz;
 
-    PRINTF(dbgColor__cyan, "filesDataRcvr() fHandle=%d sz=%d\r", fileCtrl->handle, streamSz);
+    PRINTF(dbgColor__cyan, "filesDataRcvr() fHandle=%d sz=%d\r", g_lqLTEM.fileCtrl->handle, streamSz);
     while (streamSz > 0)
     {
         uint32_t readTimeout = pMillis();
@@ -442,7 +441,7 @@ static resultCode_t S__filesRxHndlr()
             char* streamPtr;
             uint16_t blockSz = cbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readSz);                        // get address from rxBffr
             PRINTF(dbgColor__cyan, "filesRxHndlr() ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
-            ((fileReceiver_func)(*fileCtrl->appRecvDataCB))(fileCtrl->handle, streamPtr, blockSz);                  // forward to application
+            ((fileReceiver_func)(*g_lqLTEM.fileCtrl->appRecvDataCB))(g_lqLTEM.fileCtrl->handle, streamPtr, blockSz);                  // forward to application
             cbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                 // commit POP
             readSz -= blockSz;
             streamSz -= blockSz;

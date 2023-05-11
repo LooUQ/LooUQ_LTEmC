@@ -350,6 +350,25 @@ void ltem_eventMgr()
 }
 
 
+streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType)
+{
+    for (size_t i = 0; i < ltem__streamCnt; i++)
+    {
+        if (g_lqLTEM.streams[i]->dataContext == context)
+        {
+            if (streamType == 0)
+            {
+                return g_lqLTEM.streams[i];
+            }
+            else if (g_lqLTEM.streams[i]->streamType == streamType)
+            {
+                return g_lqLTEM.streams[i];
+            }
+        }
+    }
+    return NULL;
+}
+
 /**
  *	@brief Notify host application of significant events. Application may ignore, display, save status, whatever. 
  */

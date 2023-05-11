@@ -48,20 +48,17 @@ void atcmd_reset(bool releaseLock);
 
 
 /**
- *	@brief Reset AT command options to defaults.
- *  @details Use after setOptions() to reset AT-Cmd behaviors to default settings.
- */
-void atcmd_restoreOptionDefaults();
-
-
-/**
- *	@brief Set/clear data stream for the current command operation.
- *  @details Individual commands (ex: file_read() could initiate a data stream, this function allows the command to register the required handler.
+ * @brief Configure atcmd automatic datamode processing
  * 
- *	@param [in] prefix Pointer to the stream control.
- *	@param [in] streamCtrl [in] Pointer to the stream control.
+ * @param contextKey 
+ * @param trigger 
+ * @param dataHndlr 
+ * @param dataLoc 
+ * @param dataSz 
+ * @param applRecvDataCB 
+ * @param skipParser True to skip response parser after successful datamode processing
  */
-void atcmd_setStreamControl(const char *prefix, streamCtrl_t *streamCtrl);
+void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func dataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool skipParser);
 
 
 /**
@@ -87,15 +84,15 @@ void atcmd_invokeReuseLock(const char *cmdTemplate, ...);
 void atcmd_close();
 
 
-/**
- *	@brief Performs blind send data transfer to device.
- *  @details ASSERTS atcmd lock; does not change lock state.
- *           This is a blocking function (no copy), returns when send count = 0.
- *           Intended to send blocks of text in middle of a command stream.
- *  @param data [in] Pointer to the block of character data to send
- *  @param dataSz [in] The size of the data block
- */
-void atcmd_sendCmdData(const char *data, uint16_t dataSz);
+// /**
+//  *	@brief Performs blind send data transfer to device.
+//  *  @details ASSERTS atcmd lock; does not change lock state.
+//  *           This is a blocking function (no copy), returns when send count = 0.
+//  *           Intended to send blocks of text in middle of a command stream.
+//  *  @param data [in] Pointer to the block of character data to send
+//  *  @param dataSz [in] The size of the data block
+//  */
+// void atcmd_sendCmdData(const char *data, uint16_t dataSz);
 
 
 /**
@@ -216,12 +213,29 @@ void atcmd_exitTextMode();
 cmdParseRslt_t atcmd_stdResponseParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, uint8_t valueIndx, const char *finale, uint16_t lengthReqd);
 
 
-/**
- *	@brief LTEmC internal testing parser to capture incoming response until timeout. This is generally not used by end-user applications.
- *  @return Parse status result (always pending for this test parser)
- */
-cmdParseRslt_t ATCMD_testResponseTrace();
+// /**
+//  *	@brief LTEmC internal testing parser to capture incoming response until timeout. This is generally not used by end-user applications.
+//  *  @return Parse status result (always pending for this test parser)
+//  */
+// cmdParseRslt_t ATCMD_testResponseTrace();
 
+
+/**
+ *	@brief Stardard TX (out) data handler used by dataMode. Sends data and checks for OK response.
+ */
+resultCode_t atcmd_stdTxDataHndlr();
+
+
+/**
+ *	@brief TX (out) data handler that performs a blind send of data.
+ */
+resultCode_t atcmd_txDataHndlrRaw();
+
+
+/**
+ *	@brief Stardard RX (in) data handler used by dataMode.
+ */
+resultCode_t atcmd_stdRxDataHndlr();
 
 #ifdef __cplusplus
 }

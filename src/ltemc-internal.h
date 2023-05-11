@@ -78,7 +78,7 @@ typedef enum recvEvent_tag
 typedef struct fileCtrl_tag
 {
     char streamType;                            /// stream type
-    streamRxHndlr_func streamRxHndlr;           /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
 
     uint8_t handle;
     appRcvProto_func appRecvDataCB;
