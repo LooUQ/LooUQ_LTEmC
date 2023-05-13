@@ -78,7 +78,7 @@ void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t 
 
     memset(scktCtrl, 0, sizeof(scktCtrl_t));
 
-    scktCtrl->dataContext = dataCntxt;
+    scktCtrl->dataCntxt = dataCntxt;
     g_lqLTEM.streams[dataCntxt]->streamType = (char)protocol;
     scktCtrl->useTls = protocol == streamType_SSL;
     scktCtrl->irdPending = false;
@@ -109,21 +109,21 @@ resultCode_t sckt_open(scktCtrl_t *scktCtrl, bool cleanSession)
     uint8_t pdpCntxt = g_lqLTEM.providerInfo->defaultContext;
     resultCode_t atResult;
 
-    if (g_lqLTEM.streams[scktCtrl->dataContext]->streamType == 'U')                 // protocol == UDP
+    if (g_lqLTEM.streams[scktCtrl->dataCntxt]->streamType == 'U')                 // protocol == UDP
     {
-        atcmd_tryInvoke("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataContext, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
+        atcmd_tryInvoke("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
         atResult = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__udptcpOpenCompleteParser);
     }
 
-    else if (g_lqLTEM.streams[scktCtrl->dataContext]->streamType == 'T')            // protocol == TCP
+    else if (g_lqLTEM.streams[scktCtrl->dataCntxt]->streamType == 'T')            // protocol == TCP
     {
-        atcmd_tryInvoke("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataContext, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
+        atcmd_tryInvoke("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
         atResult = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__udptcpOpenCompleteParser);
     }
 
-    else if (g_lqLTEM.streams[scktCtrl->dataContext]->streamType == 'S')            // protocol == SSL/TLS
+    else if (g_lqLTEM.streams[scktCtrl->dataCntxt]->streamType == 'S')            // protocol == SSL/TLS
     {
-        atcmd_tryInvoke("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataContext, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
+        atcmd_tryInvoke("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
         atResult = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__sslOpenCompleteParser);
     }
     return atResult;
@@ -140,9 +140,9 @@ void sckt_close(scktCtrl_t *scktCtrl)
         return;
 
     if (scktCtrl->useTls)
-        atcmd_tryInvokeDefaults("AT+QSSLCLOSE=%d", scktCtrl->dataContext);        // BGx syntax different for SSL
+        atcmd_tryInvokeDefaults("AT+QSSLCLOSE=%d", scktCtrl->dataCntxt);        // BGx syntax different for SSL
     else
-        atcmd_tryInvokeDefaults("AT+QICLOSE=%d", scktCtrl->dataContext);          // BGx syntax different for TCP/UDP
+        atcmd_tryInvokeDefaults("AT+QICLOSE=%d", scktCtrl->dataCntxt);          // BGx syntax different for TCP/UDP
     
     if (atcmd_awaitResult() == resultCode__success)
     {
@@ -168,10 +168,10 @@ void SCKT_closeCntxt(uint8_t cntxtNm)
  */
 bool sckt_flush(scktCtrl_t *scktCtrl)
 {
-    // if ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[scktCtrl->dataContext] == NULL)              // not open
+    // if ((scktCtrl_t *)g_lqLTEM.iop->streamPeers[scktCtrl->dataCntxt] == NULL)              // not open
     //     return;
 
-    // if (s_requestIrdData(scktCtrl->dataContext, scktCtrl->recvBufCtrl._bufferSz, true))      // initiate an IRD flow
+    // if (s_requestIrdData(scktCtrl->dataCntxt, scktCtrl->recvBufCtrl._bufferSz, true))      // initiate an IRD flow
     // {
     //     scktCtrl->flushing = true;
     //     return true;
@@ -198,7 +198,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 
     if (ATCMD_awaitLock(atcmd__defaultTimeout))
     {
-        atcmd_invokeReuseLock("AT+QISEND=%d,%d", scktCtrl->dataContext, dataSz);      // reusing manual lock
+        atcmd_invokeReuseLock("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz);      // reusing manual lock
         atResult = atcmd_awaitResult();                                             // waiting for data prompt, leaving action open on return if sucessful
 
         // await data prompt atResult successful, now send data sub-command to actually transfer data, now automatically close action after data sent
@@ -247,8 +247,8 @@ static void S__scktUrcHndlr()
         return;
     }
 
-    bool isUdpTcp = cbffr_find(rxBffr, "+QIURC", 0, 0, false) != CBFFR_NOFIND;
-    bool isSslTls = cbffr_find(rxBffr, "+QSSLURC", 0, 0, false) != CBFFR_NOFIND;
+    bool isUdpTcp = CBFFR_FOUND(cbffr_find(rxBffr, "+QIURC", 0, 0, false));
+    bool isSslTls = CBFFR_FOUND(cbffr_find(rxBffr, "+QSSLURC", 0, 0, false));
     if (!isUdpTcp && !isSslTls)
     {
         return;
@@ -340,7 +340,7 @@ static resultCode_t S__scktRxHndlr(streamCtrl_t *streamCtrl)
     ASSERT(scktCtrl);
     
     uint8_t popCnt = cbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
-    if (popCnt == CBFFR_NOFIND)
+    if (CBFFR_NOTFOUND(popCnt))
     {
         return resultCode__internalError;
     }
@@ -349,7 +349,7 @@ static resultCode_t S__scktRxHndlr(streamCtrl_t *streamCtrl)
     wrkPtr = memchr(wrkBffr, ':', popCnt) + 2;
     uint16_t availSz = strtol(wrkPtr, NULL, 10);
 
-    PRINTF(dbgColor__cyan, "scktRxHndlr() cntxt=%d sz=%d\r", scktCtrl->dataContext, availSz);
+    PRINTF(dbgColor__cyan, "scktRxHndlr() cntxt=%d sz=%d\r", scktCtrl->dataCntxt, availSz);
     while (availSz > 0)
     {
         uint32_t readTimeout = pMillis();
@@ -368,7 +368,7 @@ static resultCode_t S__scktRxHndlr(streamCtrl_t *streamCtrl)
         PRINTF(dbgColor__cyan, "scktRxHndlr() ptr=%p, blkSz=%d, availSz=%d\r", streamPtr, blockSz, availSz);
 
         availSz -= blockSz;
-        ((scktAppRecv_func)(*scktCtrl->appRecvDataCB))(scktCtrl->dataContext, streamPtr, blockSz, availSz == 0);    // forward to application
+        ((scktAppRecv_func)(*scktCtrl->appRecvDataCB))(scktCtrl->dataCntxt, streamPtr, blockSz, availSz == 0);    // forward to application
         cbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                         // commit POP
 
         if (cbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= sckt__readTrailerSz)                                         // cleanup: remove trailer
@@ -398,8 +398,8 @@ static resultCode_t S__scktRxHndlr(streamCtrl_t *streamCtrl)
 //             return scktCtrl->irdPending;
 
 //         // need to requery IRD/SSLRECV
-//         char proto = g_lqLTEM.streams[scktCtrl->dataContext]->streamType[0];
-//         S__requestIrdData(scktCtrl->dataContext, proto == 'S', bffrSz);
+//         char proto = g_lqLTEM.streams[scktCtrl->dataCntxt]->streamType[0];
+//         S__requestIrdData(scktCtrl->dataCntxt, proto == 'S', bffrSz);
 //     }
 //     else
 //         return 0;

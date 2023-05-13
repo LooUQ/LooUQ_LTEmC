@@ -277,7 +277,6 @@ enum IOP__Constants
  * ================================================================================================
  */
 
-
 typedef enum streamType_tag
 {
     streamType_UDP = 'U',
@@ -285,21 +284,23 @@ typedef enum streamType_tag
     streamType_SSL = 'S',
     streamType_MQTT = 'M',
     streamType_HTTP = 'H',
-    streamType_file = 'f'
+    streamType_file = 'f',
+    streamType__ANY = 0
 } streamType_t;
 
 
 // function prototypes
-typedef void (*urcHndlr_func)();                    // URC detection and action
-typedef resultCode_t (*dataRxHndlr_func)();         // data comes from rxBuffer, this function parses and forwards to application via recvDataCB
+typedef resultCode_t (*urcEvntHndlr_func)();        // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
+typedef resultCode_t (*dataRxHndlr_func)();         // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
 typedef void (*appRcvProto_func)();                 // prototype func() for stream recvData callback
 
 
 typedef struct streamCtrl_tag
 {
     char streamType;                                /// stream type
-    dataCntxt_t dataContext;                        /// integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataCntxt_t dataCntxt;                          /// integer representing the source of the stream; fixed for protocols, file handle for FS
     dataRxHndlr_func dataRxHndlr;                   /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcHndlr;                     /// function to handle data streaming, initiated by eventMgr() or atcmd module
 } streamCtrl_t;
 
 

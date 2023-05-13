@@ -56,7 +56,6 @@ extern int8_t qbg_initCmdsCnt;
 
 /* Private static functions
  --------------------------------------------------------------------------------------------- */
-bool S__issueStartCommand(const char *cmdStr);
 bool S__statusFix();
 
 
@@ -225,18 +224,28 @@ void QBG_setOptions()
     PRINTF(dbgColor__none, "BGx Init:\r");
     bool initError = false;
     uint8_t tries = 0;
+    char cmdBffr[120];
+
     do
     {
         tries++;
+
         for (size_t i = 0; i < qbg_initCmdsCnt; i++)                                    // sequence through list of start cmds
         {
             PRINTF(dbgColor__none, " > %s\r", qbg_initCmds[i]);
-            if (!S__issueStartCommand(qbg_initCmds[i]))
+            strcpy(cmdBffr, qbg_initCmds[i]);
+
+            if (atcmd_tryInvoke(cmdBffr))
             {
-                PRINTF(dbgColor__error, "BGx Init CmdError: %s\r", qbg_initCmds[i]);
-                initError = true;
-                break;
+                if (atcmd_awaitResultWithOptions(2000, NULL) == resultCode__success)    // somewhat unknown cmd list for modem initialization, relax timeout
+                {
+                    continue;
+                }
             }
+
+            PRINTF(dbgColor__error, "BGx Init CmdError: %s\r", qbg_initCmds[i]);
+            initError = true;
+            break;
         }
         PRINTF(dbgColor__none, " -End BGx Init-\r");
         if (initError)
@@ -285,16 +294,4 @@ const char *QBG_getModuleType()
 
 
 #pragma endregion
-
-
-bool S__issueStartCommand(const char *cmdStr)
-{
-    if (atcmd_tryInvoke(cmdStr))
-    {
-        // somewhat unknown cmd list for modem initialization, relax timeout
-        if (atcmd_awaitResultWithOptions(2000, NULL) == resultCode__success)    
-            return true;
-    }
-    return false;
-}
 

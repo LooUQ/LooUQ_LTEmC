@@ -101,7 +101,7 @@
 #define MQTT_IOTHUB_DEVICEID "864581067550933"
 #define MQTT_IOTHUB_USERID MQTT_IOTHUB "/" MQTT_IOTHUB_DEVICEID "/?api-version=2021-04-12"
 
-#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-a-prod-loouq.azure-devices.net%2Fdevices%2F864581067550933&sig=79LZvDhbdkPodyqllXRNXuizxrbntFOW%2BuU5yRy1eJg%3D&se=1683476081"
+#define MQTT_IOTHUB_SASTOKEN "SharedAccessSignature sr=iothub-a-prod-loouq.azure-devices.net%2Fdevices%2F864581067550933&sig=xxdlCJJQckhNtGE9uJIiYDaf9%2BetQLrETHhN134Ufxo%3D&se=1684066382"
 
 #define MQTT_IOTHUB_D2C_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/events/"
 #define MQTT_IOTHUB_C2D_TOPIC "devices/" MQTT_IOTHUB_DEVICEID "/messages/devicebound/#"
@@ -158,22 +158,23 @@ void setup() {
     tls_configure(dataCntxt_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
 
     mqtt_initControl(&mqttCtrl, MQTT_DATACONTEXT);
-    mqtt_initTopicControl(&topicCtrl, MQTT_IOTHUB_C2D_TOPIC, true, mqttQos_1, mqttRecvCB);
+    mqtt_initTopicControl(&topicCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1, mqttRecvCB);
 
     mqtt_subscribeTopic(&mqttCtrl, &topicCtrl);
     mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, true, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
 
     mqtt_start(&mqttCtrl, true);
+
+    lastCycle = pMillis();
 }
 
-bool kickIt = true;
+
 
 void loop() 
 {
-    if (kickIt || pElapsed(lastCycle, cycle_interval))
+    if (pElapsed(lastCycle, cycle_interval))
     {
         lastCycle = pMillis();
-        kickIt = false;
         loopCnt++;
 
         double windspeed = random(0, 4999) * 0.01;
@@ -185,17 +186,17 @@ void loop()
         uint32_t publishTck = pMillis();
 
         PRINTF(dbgColor__white, "Publishing message: %d\r", loopCnt);
-        rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage, 30);
+        rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage, strlen(mqttMessage), 30);
         if (rslt != resultCode__success)
         {
             PRINTF(dbgColor__warn, "Publish Failed! >> %d\r", rslt);
-            rslt = mqtt_reset(&mqttCtrl, true);
 
-            if (rslt != resultCode__success)
-            {
-                PRINTF(dbgColor__error, "Reset Failed (%d)\r", rslt);
-                while (true) {}
-            }
+            // rslt = mqtt_reset(&mqttCtrl, true);
+            // if (rslt != resultCode__success)
+            // {
+            //     PRINTF(dbgColor__error, "Reset Failed (%d)\r", rslt);
+            //     while (true) {}
+            // }
         }
 
         PRINTF(dbgColor__magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
@@ -210,10 +211,23 @@ void loop()
 
 void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId, mqttMsgSegment_t segment, char* dataPtr, uint16_t dataSz, bool isFinal)
 {
+    PRINTF(dbgColor__dCyan, "AppRcv: context=%d, msgId=%d, segment=%d, blockPtr=%p, blockSz=%d, isFinal=%d\r", dataCntxt, msgId, segment, dataPtr, dataSz, isFinal);
 
-    PRINTF(dbgColor__cyan, "AppRcv: segment=%d, msgId=%d, streamPtr=%p, blockSz=%d, isFinal=%d\r", segment, msgId, dataPtr, dataSz, isFinal);
-
-
+    if (segment == mqttMsgSegment_topic)
+    {
+        dataPtr[dataSz] = '\0';
+        PRINTF(dbgColor__cyan, "Topic=%s\r", dataPtr);
+    }
+    else if (segment == mqttMsgSegment_topicExt)
+    {
+        dataPtr[dataSz] = '\0';
+        PRINTF(dbgColor__cyan, "TopicExt=%s\r", dataPtr);
+    }
+    else if (segment == mqttMsgSegment_msgBody)
+    {
+        dataPtr[dataSz] = '\0';
+        PRINTF(dbgColor__cyan, "MsgBody=%s\r", dataPtr);
+    }
     // PRINTF(dbgColor__cyan, "   msgId:=%d   topicSz=%d, propsSz=%d, messageSz=%d\r", msgId, strlen(topic), strlen(topicVar), strlen(message));
     // PRINTF(dbgColor__cyan, "   topic: %s\r", topic);
     // PRINTF(dbgColor__cyan, "   props: %s\r", topicVar);

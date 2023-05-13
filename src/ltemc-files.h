@@ -128,20 +128,6 @@ typedef struct fileWriteResult_tag
 } fileWriteResult_t;
 
 
-
-
-// typedef struct fileCtrl_tag
-// {
-//     char streamType[streams__typeCodeSz];       /// stream type
-//     dataCntxt_t dataContext;                    /// integer representing the source of the stream; fixed for protocols, file handle for FS
-//     streamRxHndlr_func streamRxHndlr;           /// function to handle data streaming, initiated by eventMgr() or atcmd module
-//     streamClose_func streamClose;               /// handler to perform orderly shutdown of data service
-
-//     uint8_t handle;
-//     cbProto_func appRecvDataCB;
-// } fileCtrl_t;
-
-
 /** 
  *  @brief typedef for the filesystem services data receiver function. Connects filesystem processing to the application (receive).
 */

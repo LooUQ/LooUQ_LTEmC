@@ -288,7 +288,8 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t readSz)
 
     if (rslt)
     {
-        atcmd_setStreamControl("CONNECT", g_lqLTEM.fileCtrl);
+        atcmd_configDataMode(0, "CONNECT", S__filesRxHndlr, NULL, 0, g_lqLTEM.fileCtrl->appRecvDataCB, true);
+        // atcmd_setStreamControl("CONNECT", g_lqLTEM.fileCtrl);
         g_lqLTEM.fileCtrl->handle = fileHandle;
         return atcmd_awaitResult() == resultCode__success;                     // dataHandler will be invoked by atcmd module and return a resultCode
     }
@@ -306,12 +307,13 @@ resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t wri
 
     do
     {
+        atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, writeData, writeSz, NULL, false);
         atcmd_invokeReuseLock("AT+QFWRITE=%d,%d", fileHandle, writeSz);
-        rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(5), ATCMD_connectPromptParser);
+        rslt = atcmd_awaitResult();
         if (rslt == resultCode__success)                                                        // "CONNECT" prompt result
         {
             atcmd_reset(false);                                                                 // clear CONNECT event from atcmd results
-            atcmd_sendCmdData(writeData, writeSz);
+            // atcmd_sendCmdData(writeData, writeSz);
         }
 
         rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__writeStatusParser);       // wait for "+QFWRITE result
@@ -413,7 +415,7 @@ static resultCode_t S__filesRxHndlr()
     char wrkBffr[32];
     
     uint8_t popCnt = cbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
-    if (popCnt == CBFFR_NOFIND)
+    if (CBFFR_NOTFOUND(popCnt))
     {
         return resultCode__internalError;
     }

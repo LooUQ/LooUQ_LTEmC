@@ -25,19 +25,17 @@
 ***************************************************************************** */
 
 
-const char *ltemcVersion = "3.0.1";
-
-#define SRCFILE "LTE"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define SRCFILE "LTE"                               // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
+#define _DEBUG 2                                    // set to non-zero value for PRINTF debugging output, 
+// debugging output options                         // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
-    asm(".global _printf_float");       // forces build to link in float support for printf
+    asm(".global _printf_float");                   // forces build to link in float support for printf
     #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
+    #define SERIAL_DBG 1                            // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #include <jlinkRtt.h>                           // output debug PRINTF macros to J-Link RTT channel
     #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
@@ -62,7 +60,8 @@ ltemDevice_t g_lqLTEM;
  * ------------------------------------------------------------------------------------------------ */
 const char* const qbg_initCmds[] = 
 { 
-    "ATE0"                 // don't echo AT commands on serial
+    "ATE0",                                         // don't echo AT commands on serial
+    "AT+QURCCFG=\"urcport\",\"uart1\""              // URC events are reported to UART1
 };
 
 // makes for compile time automatic sz determination
@@ -82,7 +81,7 @@ void S__initLTEmDevice(bool ltemReset);
  */
 void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEvntNotify_func eventNotifCallback)
 {
-    ASSERT(g_lqLTEM.atcmd == NULL);                    // prevent multiple calls, memory leak calloc()
+    ASSERT(g_lqLTEM.atcmd == NULL);                 // prevent multiple calls, memory leak calloc()
 
 	g_lqLTEM.pinConfig = ltem_config;
     g_lqLTEM.spi = spi_create(g_lqLTEM.pinConfig.spiCsPin);
@@ -301,7 +300,7 @@ void ltem_reset(bool hardReset)
  */
 const char *ltem_getSwVersion()
 {
-    return ltemcVersion;
+    return LTEmC_VERSION;
 }
 
 
@@ -324,29 +323,58 @@ deviceState_t ltem_getDeviceState()
  */
 void ltem_eventMgr()
 {
-    // /* look for a new incoming URC 
-    //  */
-    // int16_t urcPossible = cbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);       // look for prefix char in URC
-    // if (urcPossible == CBFFR_NOFIND)
-    // {
-    //     return;
-    // }
+    /* look for a new incoming URC 
+     */
+    int16_t urcPossible = cbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);       // look for prefix char in URC
+    if (CBFFR_NOTFOUND(urcPossible))
+    {
+        return;
+    }
 
-    // for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
-    // {
-    //     resultCode_t serviceRslt;
-    //     if (g_lqLTEM.streams[i]->streamRxHndlr)                                     // URC type data receiver in this stream, offer the data to the handler
-    //     {
-    //         serviceRslt = g_lqLTEM.streams[i]->streamRxHndlr();
-    //     }
-    //     if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
-    //     {
-    //         continue;
-    //     }
-    //     break;                                                                      // service attempted (might have errored), so this event is over
-    // }
+    for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
+    {
+        resultCode_t serviceRslt;
+        if (g_lqLTEM.streams[i] != NULL &&  g_lqLTEM.streams[i]->urcHndlr != NULL)  // URC event handler in this stream, offer the data to the handler
+        {
+            serviceRslt = g_lqLTEM.streams[i]->urcHndlr();
+        }
+        if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
+        {
+            continue;
+        }
+        break;                                                                      // service attempted (might have errored), so this event is over
+    }
 
     // S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
+}
+
+
+void ltem_addStream(streamCtrl_t *streamCtrl)
+{
+    ASSERT(ltem_getStreamFromCntxt(streamCtrl->dataCntxt, 0) == NULL);          // assert that a stream for context has not previously been added to streams table
+
+    for (size_t i = 0; i < ltem__streamCnt; i++)
+    {
+        if (g_lqLTEM.streams[i] == NULL)
+        {
+            g_lqLTEM.streams[i] = streamCtrl;
+            return;
+        }
+    }
+}
+
+
+void ltem_deleteStream(streamCtrl_t *streamCtrl)
+{
+    for (size_t i = 0; i < ltem__streamCnt; i++)
+    {
+        if (g_lqLTEM.streams[i]->dataCntxt == streamCtrl->dataCntxt)
+        {
+            ASSERT(memcmp(g_lqLTEM.streams[i], streamCtrl, sizeof(streamCtrl_t)) == 0);     // compare the common fields
+            g_lqLTEM.streams[i] = NULL;
+            return;
+        }
+    }
 }
 
 
@@ -354,7 +382,7 @@ streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType)
 {
     for (size_t i = 0; i < ltem__streamCnt; i++)
     {
-        if (g_lqLTEM.streams[i]->dataContext == context)
+        if (g_lqLTEM.streams[i]->dataCntxt == context)
         {
             if (streamType == 0)
             {
@@ -421,24 +449,27 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 //     }
 // }
 
-uint8_t LTEM__getStreamIndx(dataCntxt_t dataCntxt)
-{
-    for (size_t indx = 0; indx < ltem__streamCnt; indx++)
-    {
-        if (g_lqLTEM.streams[indx]->dataContext == dataCntxt)
-        {
-            return indx;
-        }
-    }
-}
+// uint8_t LTEM__getStreamIndx(dataCntxt_t dataCntxt)
+// {
+//     for (size_t indx = 0; indx < ltem__streamCnt; indx++)
+//     {
+//         if (g_lqLTEM.streams[indx]->dataContext == dataCntxt)
+//         {
+//             return indx;
+//         }
+//     }
+// }
 
 
 #pragma endregion
 
 #pragma region Static Function Definitions
 
-
-S__ltemUrcHandler()
+/**
+ * @brief Global URC handler
+ * @details Services URC events that are not specific to a stream/protocol
+ */
+S__ltemUrcHandler()                                                     
 {
     cBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
     char parseBffr[30];

@@ -76,7 +76,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func
 
     httpCtrl->streamType = streamType_HTTP;
     httpCtrl->appRecvDataCB = recvCallback;
-    httpCtrl->streamRxHndlr = S__httpRxHndlr;
+    httpCtrl->dataRxHndlr = S__httpRxHndlr;
 
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
@@ -231,7 +231,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         if (httpCtrl->useTls)
         {
             // AT+QHTTPCFG="sslctxid",<httpCtrl->sckt>
-            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataContext);
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt);
             rslt = atcmd_awaitResult();
             if (rslt != resultCode__success)
             {
@@ -284,7 +284,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
             snprintf(cstmRequest, sizeof(cstmRequest), "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrs);
             PRINTF(dbgColor__dMagenta, "CustomRqst:\r%s\r", cstmRequest);
 
-            atcmd_configDataMode(httpCtrl->dataContext, "CONNECT", atcmd_stdTxDataHndlr, cstmRequest, strlen(cstmRequest), NULL, false);
+            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, cstmRequest, strlen(cstmRequest), NULL, false);
             atcmd_invokeReuseLock("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, strlen(cstmRequest));
         }
         else
@@ -299,7 +299,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
             if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
             {
                 httpCtrl->requestState = httpState_requestComplete;                                         // update httpState, got GET/POST response
-                PRINTF(dbgColor__magenta, "GetRqst dCntxt:%d, status=%d\r", httpCtrl->dataContext, httpCtrl->httpStatus);
+                PRINTF(dbgColor__magenta, "GetRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
             }
         }
         else
@@ -344,7 +344,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
         if (httpCtrl->useTls)
         {
             // AT+QHTTPCFG="sslctxid",<httpCtrl->sckt>
-            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataContext);
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt);
             rslt = atcmd_awaitResult();
             if (rslt != resultCode__success)
             {
@@ -382,7 +382,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
         uint16_t httpRequestLen = postDataSz;                                                           // requestLen starts with postDataSz
         httpRequestLen += (httpCtrl->cstmHdrsSz > 0) ? (httpCtrl->cstmHdrsSz + 2) : 0;                  // add the custom headers + 2 char for EOL after hdrs
 
-        atcmd_configDataMode(httpCtrl->dataContext, "CONNECT", atcmd_stdTxDataHndlr, postData, postDataSz, NULL, false);
+        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, postData, postDataSz, NULL, false);
 
         if (httpCtrl->cstmHdrsSz)
         {
@@ -405,7 +405,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
                 if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                 {
                     httpCtrl->requestState = httpState_requestComplete;                                 // update httpState, got GET/POST response
-                    PRINTF(dbgColor__magenta, "PostRqst dCntxt:%d, status=%d\r", httpCtrl->dataContext, httpCtrl->httpStatus);
+                    PRINTF(dbgColor__magenta, "PostRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
                 }
             }
             else
@@ -442,7 +442,7 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
 
     if (atcmd_tryInvoke("AT+QHTTPREAD=%d", httpCtrl->timeoutSec))
     {
-        atcmd_configDataMode(httpCtrl->dataContext, "CONNECT", S__httpRxHndlr, NULL, 0, httpCtrl->appRecvDataCB, true);
+        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", S__httpRxHndlr, NULL, 0, httpCtrl->appRecvDataCB, true);
         // atcmd_setStreamControl("CONNECT", (streamCtrl_t*)httpCtrl);
         return atcmd_awaitResult();                                             // dataHandler will be invoked by atcmd module and return a resultCode
     }
@@ -534,7 +534,7 @@ static resultCode_t S__httpRxHndlr()
     ASSERT(httpCtrl != NULL);                                                                           // ASSERT data mode and stream context are consistent
 
     uint8_t popCnt = cbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
-    if (popCnt == CBFFR_NOFIND)
+    if (CBFFR_NOTFOUND(popCnt))
     {
         return resultCode__internalError;
     }
@@ -558,7 +558,7 @@ static resultCode_t S__httpRxHndlr()
             PRINTF(dbgColor__cyan, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, CBFFR_FOUND(trailerIndx));
 
             // forward to application
-            ((httpRecv_func)(*httpCtrl->appRecvDataCB))(httpCtrl->dataContext, streamPtr, blockSz, CBFFR_FOUND(trailerIndx));
+            ((httpRecv_func)(*httpCtrl->appRecvDataCB))(httpCtrl->dataCntxt, streamPtr, blockSz, CBFFR_FOUND(trailerIndx));
             cbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                             // commit POP
         }
 

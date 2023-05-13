@@ -46,8 +46,6 @@
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-#define CTRL(x) (#x[0]-'a'+1)
-
 extern ltemDevice_t g_lqLTEM;
 
 
@@ -352,7 +350,8 @@ uint16_t atcmd_getErrorDetailCode()
  */
 void atcmd_exitTextMode()
 {
-    IOP_startTx(CTRL(z), 1);
+    char ctrlZ[] = { 0x1A };
+    IOP_startTx(ctrlZ, sizeof(ctrlZ));
 }
 
 
@@ -422,7 +421,7 @@ static resultCode_t S__readResult()
         if (g_lqLTEM.atcmd->dataMode.dataHndlr != NULL)
         {
             // looking for streamPrefix phrase 
-            if (cbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true) != CBFFR_NOFIND)
+            if (CBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true)))
             {
                 PRINTF(dbgColor__white, "%s:dataMode>\r", g_lqLTEM.atcmd->streamPrefix);                // entered stream data mode
                 resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)();

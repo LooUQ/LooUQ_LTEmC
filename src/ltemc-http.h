@@ -86,8 +86,9 @@ typedef enum httpState_tag
 typedef struct httpCtrl_tag
 {
     char streamType;                            /// stream type
-    dataCntxt_t dataContext;                    /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func streamRxHndlr;             /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    dataCntxt_t dataCntxt;                      /// integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcEvntHndlr;             /// function to determine if "potential" URC event is for an open stream and perform reqd actions
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
