@@ -96,20 +96,26 @@ void atcmd_reset(bool releaseLock)
 /**
  *	@brief Setup automatic data mode switch/servicing.
  */
-void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func dataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool skipParser)
+void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool skipParser)
 {
     ASSERT(strlen(trigger) > 0);                                        // verify 3rd party setup (stream)
-    ASSERT(dataHndlr != NULL);                                          // 
+    ASSERT(rxDataHndlr != NULL);                                          // 
 
     memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
 
     g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
-    g_lqLTEM.atcmd->dataMode.dataHndlr = dataHndlr;
-    g_lqLTEM.atcmd->dataMode.dataLoc = dataLoc;
-    g_lqLTEM.atcmd->dataMode.dataSz = dataSz;
+    g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
+    g_lqLTEM.atcmd->dataMode.txDataLoc = dataLoc;
+    g_lqLTEM.atcmd->dataMode.txDataSz = dataSz;
     g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
     g_lqLTEM.atcmd->dataMode.skipParser = skipParser;
+}
+
+
+void atcmd_configDataModeEot(uint8_t eotChar)
+{
+    g_lqLTEM.iop->txEot = (char)eotChar;
 }
 
 
@@ -346,7 +352,7 @@ uint16_t atcmd_getErrorDetailCode()
 
 
 /**
- *	@brief Sends ESC character to ensure BGx is not in text mode (">" prompt awaiting ^Z/ESC, MQTT publish etc.).
+ *	@brief Sends ^Z character to ensure BGx is not in text mode.
  */
 void atcmd_exitTextMode()
 {
@@ -356,9 +362,17 @@ void atcmd_exitTextMode()
 
 
 /**
- *	@brief Sends +++ sequence to transition BGx out of data mode to command mode.
+ *	@brief Sends break sequence to transition BGx out of fixed-size data mode to command mode (up to 1500 char).
  */
 void atcmd_exitDataMode()
+{
+}
+
+
+/**
+ *	@brief Sends +++ sequence to transition BGx out of transparent data mode to command mode.
+ */
+void atcmd_exitTransparentMode()
 {
     lDelay(1000);
     IOP_startTx("+++", 3);         // send +++, gaurded by 1 second of quiet
@@ -529,76 +543,13 @@ cmdParseRslt_t ATCMD_okResponseParser()
     return atcmd_stdResponseParser("", false, "", 0, 0, "OK\r\n", 0);
 }
 
-// /**
-//  *	@brief LTEmC internal testing parser to capture incoming response until timeout.
-//  */
-// cmdParseRslt_t ATCMD_testResponseTrace()
-// {
-//     return cmdParseRslt_pending;
-// }
-
-
-// /**
-//  *	@brief [private] Transmit data ready to send "data prompt" parser.
-//  *
-//  *  @param response [in] Character data recv'd from BGx to parse for task complete
-//  *  @param endptr [out] Char pointer to the char following parsed text
-//  * 
-//  *  @return HTTP style result code, 0 = not complete
-//  */
-// cmdParseRslt_t ATCMD_txDataPromptParser() 
-// {
-//     return ATCMD_readyPromptParser("> ");
-// }
-
-
-// /**
-//  *	@brief "CONNECT" prompt parser.
-//  *
-//  *  @param response [in] Character data recv'd from BGx to parse for task complete
-//  *  @param endptr [out] Char pointer to the char following parsed text
-//  * 
-//  *  @return HTTP style result code, 0 = not complete
-//  */
-// cmdParseRslt_t ATCMD_connectPromptParser()
-// {
-//     return ATCMD_readyPromptParser("CONNECT\r\n");
-// }
-
-
-// /**
-//  *	@brief Response parser looking for "ready-to-proceed" prompt in order to send to network
-//  *
-//  *  @param response [in] The character string received from BGx (so far, may not be complete).
-//  *  @param rdyPrompt [in] Prompt text to check for.
-//  *  @param endptr [out] Pointer to the char after match.
-//  * 
-//  *  @return Result code enum value (http status code)
-//  */
-// cmdParseRslt_t ATCMD_readyPromptParser(const char *rdyPrompt)
-// {
-//     char*endptr;
-
-//     endptr = strstr(g_lqLTEM.atcmd->rawResponse, rdyPrompt);
-//     if (endptr != NULL)
-//     {
-//         g_lqLTEM.atcmd->response = endptr + strlen(rdyPrompt);                   // point past data prompt
-//         return cmdParseRslt_success;
-//     }
-//     endptr = strstr(g_lqLTEM.atcmd->rawResponse, "ERROR");
-//     if (endptr != NULL)
-//     {
-//         return cmdParseRslt_error;
-//     }
-//     return cmdParseRslt_pending;
-// }
 
 /**
  *	@brief Stardard TX (out) data handler used by dataMode.
  */
 resultCode_t atcmd_stdTxDataHndlr()
 {
-    IOP_startTx(g_lqLTEM.atcmd->dataMode.dataLoc, g_lqLTEM.atcmd->dataMode.dataSz);
+    IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz);
 
     uint32_t startTime = pMillis();
 
@@ -615,13 +566,6 @@ resultCode_t atcmd_stdTxDataHndlr()
     return resultCode__timeout;
 }
 
-
-/**
- *	@brief Stardard RX (in) data handler used by dataMode.
- */
-resultCode_t atcmd_stdRxDataHndlr()
-{
-}
 
 /**
  *	@brief Stardard atCmd response parser, flexible response pattern match and parse. 

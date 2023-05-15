@@ -216,7 +216,7 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
 /*
  ----------------------------------------------------------------------------------------------- */
 
-uint8_t LTEM__getStreamIndx(dataCntxt_t dataCntxt);
+// uint8_t LTEM__getStreamIndx(dataCntxt_t dataCntxt);
 
 
 // /**

@@ -43,10 +43,15 @@
 #endif
 
 
-// define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+/* specify the pin configuration
+ * --------------------------------------------------------------------------------------------- */
+// #define HOST_FEATHER_UXPLOR             
+// #define HOST_FEATHER_LTEM3F
+#define HOST_FEATHER_UXPLOR_L
+
 #define PDP_DATA_CONTEXT 1
-#define PDP_APN_NAME "iot.aer.net"
+#define PDP_APN_NAME "hologram"
+
 
 #include <ltemc.h>
 #include <ltemc-sckt.h>
@@ -60,12 +65,13 @@
 
 // test setup
 #define CYCLE_INTERVAL 10000
-#define SEND_BUFFER_SZ 201
+#define SCKTTEST_TXBUFSZ 256
+#define SCKTTEST_RXBUFSZ 256
+
 #define SCKTTEST_PROTOCOL streamType_UDP
-#define SCKTTEST_HOST "24.247.65.244"   // put your server information here 
+#define SCKTTEST_HOST "71.13.234.38"    // put your test host information here 
 #define SCKTTEST_PORT 9011              // and here
 
-#define SCKTTEST_RXBUFSZ 256
 
 uint16_t loopCnt = 0;
 uint32_t lastCycle;
@@ -91,7 +97,7 @@ void setup() {
     PRINTF(dbgColor__none, "BGx %s\r", mdminfo_ltem()->fwver);
 
     PRINTF(dbgColor__dflt, "Waiting on network...\r");
-    providerInfo_t *provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
+    providerInfo_t* provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
     while (strlen(provider->name) == 0)
     {
         PRINTF(dbgColor__dYellow, ">");
@@ -100,7 +106,7 @@ void setup() {
 
     // create a socket control and open it
     sckt_initControl(&scktCtrl, dataCntxt_0, SCKTTEST_PROTOCOL, scktRecvCB);
-    sckt_setConnection(&scktCtrl, SCKTTEST_HOST, SCKTTEST_PORT, 0);
+    sckt_setConnection(&scktCtrl, PDP_DATA_CONTEXT, SCKTTEST_HOST, SCKTTEST_PORT, 0);
     resultCode_t scktResult = sckt_open(&scktCtrl,  true);
 
     if (scktResult == resultCode__previouslyOpened)
@@ -114,6 +120,7 @@ void setup() {
     }
 }
 
+char sendBffr[SCKTTEST_TXBUFSZ];
 
 void loop() 
 {
@@ -123,38 +130,32 @@ void loop()
         showStats();
 
         #define SEND_TEST 0
+        uint8_t ctrlZ = 0x1a;
+        memset(sendBffr, 0, sizeof(sendBffr));
 
         #if SEND_TEST == 1
         /* test for short-send, fits is 1 TX chunk */
-        snprintf(sendBuf, SEND_BUFFER_SZ, "%d-%lu drops=%d  ABCDEFGHIJKLMNOPQRSTUVWXYZ", loopCnt, pMillis(), drops);
-        uint16_t sendSz = strlen(sendBuf);
-        #elif SEND_TEST == 1
+        snprintf(sendBffr, SCKTTEST_TXBUFSZ, "%d-%lu drops=%d  ABCDEFGHIJKLMNOPQRSTUVWXYZ%c", loopCnt, pMillis(), drops, ctrlZ);
+
+        #elif SEND_TEST == 2
         /* test for longer, 2+ tx chunks */
-        snprintf(sendBuf, SEND_BUFFER_SZ, "#%d-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz--0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz", loopCnt);
-        uint16_t sendSz = strlen(sendBuf);
+        snprintf(sendBffr, SCKTTEST_TXBUFSZ, "#%d-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz--0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz%c", loopCnt, ctrlZ);
+
         #else
         /* test for transparent data, sockets should allow binary and ignore embedded \0 */
-        char sendBuf[] = "01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ0abcdefghijklmnopqrstuvwxyz";
-        uint16_t sendSz = strlen(sendBuf) - 1;
-        sendBuf[25] = 0;                                                // test for data transparency, embedded NULL
+        strcpy(sendBffr, "01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ0abcdefghijklmnopqrstuvwxyz");
+        sendBffr[strlen(sendBffr)] = ctrlZ;
+        uint16_t sendSz = strlen(sendBffr);                                 // get length before inserting \0
+        sendBffr[25] = 0;                                                   // test for data transparency, embedded NULL
         #endif
 
-        resultCode_t sendResult = sckt_send(&scktCtrl, sendBuf, sendSz);
-
+        resultCode_t sendResult = sckt_send(&scktCtrl, sendBffr, sendSz);
         PRINTF(dbgColor__info, "Send result=%d\r", sendResult);
         
-        // if (sendResult != resultCode__success)
-        // {
-        //     if (scktRecover() == resultCode__success)                 // attempt recovery: close/reopen socket if network closed it remotely
-        //         sendResult = sckt_send(&scktCtrl, sendBuf, sendSz);
-        // }
-        // txCnt = (sendResult == resultCode__success) ? ++txCnt : txCnt;
-        // PRINTF((sendResult == resultCode__success) ? dbgColor__cyan : dbgColor__warn, "Send Loop %d, sendRslt=%d \r", loopCnt, sendResult);
-
         loopCnt++;
     }
-    /* NOTE: ltem1_eventMgr() background pipeline processor is required for async receive operations; like UDP/TCP receive.
-     *       Event manager has light weight and has no side effects other than taking time. It should be invoked liberally. 
+    /* NOTE: ltem1_eventMgr() background pipeline processor is required for async RECEIVE operations; like UDP/TCP receive.
+     *       Event manager is light weight and has no side effects other than taking time, it should be invoked liberally. 
      */
     ltem_eventMgr();
 }

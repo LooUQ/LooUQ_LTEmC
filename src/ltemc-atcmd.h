@@ -58,7 +58,15 @@ void atcmd_reset(bool releaseLock);
  * @param applRecvDataCB 
  * @param skipParser True to skip response parser after successful datamode processing
  */
-void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func dataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool skipParser);
+void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* txDataLoc, uint16_t txDataSz, appRcvProto_func applRecvDataCB, bool skipParser);
+
+/**
+ * @brief Set the TX end-of-transmission (EOT) signally character
+ * @details The EOT character is automatically sent by the IOP module when the TX side of the UART goes idle. Cleared automatically on send.
+ * 
+ * @param eotChar 
+ */
+void atcmd_configDataModeEot(uint8_t eotChar);
 
 
 /**
@@ -173,16 +181,21 @@ uint32_t atcmd_getDuration();
 
 
 /**
- *	@brief Sends +++ sequence to transition BGx out of data mode to command mode.
+ *	@brief Sends ^Z character to ensure BGx is not in text mode.
+ */
+void atcmd_exitTextMode();
+
+
+/**
+ *	@brief Sends break sequence to transition BGx out of fixed-size data mode to command mode (up to 1500 char).
  */
 void atcmd_exitDataMode();
 
 
 /**
- *	@brief Sends ESC character to ensure BGx is not in text mode (">" prompt awaiting ^Z/ESC, MQTT publish etc.).
+ *	@brief Sends +++ sequence to transition BGx out of transparent data mode to command mode.
  */
-void atcmd_exitTextMode();
-
+void atcmd_exitTransparentMode();
 
 
 // /**
