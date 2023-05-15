@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "nxp-sc16is741a.h": "c",
+        "cstdio": "c",
+        "cstddef": "c",
+        "limits": "c",
+        "type_traits": "c",
+        "ltemc.h": "c",
+        "ltemc-internal.h": "c",
+        "lq-platform.h": "c",
+        "ltemc-filesys.h": "c"
+    },
+    "cmake.configureOnOpen": false
+}

@@ -42,8 +42,11 @@
 #endif
 
 
-// define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+/* specify the pin configuration
+ * --------------------------------------------------------------------------------------------- */
+//#define HOST_FEATHER_UXPLOR   
+#define HOST_FEATHER_UXPLOR_L          
+// #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
 
@@ -58,15 +61,15 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "LTEm1c test5-modemInfo\r\n");
+    PRINTF(dbgColor__red, "LTEmC test5-modemInfo\r\n");
     
     randomSeed(analogRead(0));
-    lqDiag_registerEventCallback(appEventCB);                       // configure ASSERTS to callback into application
+    lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appEventCB);                        // create LTEmC modem
-    ltem_start(false);                                              // ... and start it
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);              // create LTEmC modem, no yield req'd for testing
+    ltem_start(resetAction_swReset);                                // ... and start it
 
-    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_ltemcVersion());
+    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_getSwVersion());
 
     // char opList[300];
     // ntwk_getOperators(opList, sizeof(opList));
@@ -87,7 +90,7 @@ void loop() {
     PRINTF(dbgColor__cyan, "Firmware = %s \r", modemInfo->fwver);
     PRINTF(dbgColor__cyan, "Mfg/Model = %s \r", modemInfo->mfgmodel);
 
-    PRINTF(dbgColor__info, "\rRSSI = %d dBm \r",mdminfo_rssi());
+    PRINTF(dbgColor__info, "\rRSSI = %d dBm \r",mdminfo_signalRSSI());
 
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
@@ -98,14 +101,18 @@ void loop() {
 /* test helpers
 ========================================================================================================================= */
 
-void appEventCB(uint8_t eventType, const char *eventMsg)
+
+void applEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (eventType > 200)
+    if (eventType == appEvent_fault_assertFailed)
+    if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", eventMsg);
-        while (1) {}
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", eventMsg);
+    else 
+    {
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+    }
     return;
 }
 
@@ -116,9 +123,9 @@ void indicateLoop(int loopCnt, int waitNext)
 
     for (int i = 0; i < 6; i++)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(50);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(50);
     }
 
@@ -136,9 +143,9 @@ void indicateFailure(char failureMsg[])
     uint8_t halt = 1;
     while (halt)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(1000);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(100);
     }
 }

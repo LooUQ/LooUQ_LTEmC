@@ -7,20 +7,12 @@
         {
             "name": "Cortex Debug",
             "type": "cortex-debug",
-            "cwd": "${workspaceRoot}",
-            "executable": ".//.build/ltemc-7-sockets.ino.elf",
+            "cwd": "${workspaceFolder}",
+            "executable": ".//build/ltemc-7-sockets/ltemc-7-sockets.ino.elf",
             "request": "launch",
             "servertype": "jlink",
-            "device": "ATSAMD21G18",
-            "runToMain": true
-        },
-        {
-            "name": "Cortex Debug (attach)",
-            "type": "cortex-debug",
-            "cwd": "${workspaceRoot}",
-            "executable": ".//.build/ltemc-7-sockets.ino.elf",
-            "request": "attach",
-            "servertype": "jlink",
+            "runToEntryPoint": "main",
+            "serverArgs": ["-gui"],
             "device": "ATSAMD21G18"
         }
     ]

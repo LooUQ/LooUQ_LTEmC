@@ -1,29 +1,31 @@
-/******************************************************************************
- *  \file ltemc-mdminfo.c
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * Obtain basic modem identification and operational information 
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \brief Public API get modem information
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+  \note This module provides user/application level API to modem functions.
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
@@ -39,20 +41,18 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
+#define SRCFILE "MDM"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
 
-
-#define IMEI_OFFSET 2
-#define IMEI_SIZE 15
-#define ICCID_OFFSET 10
-#define ICCID_SIZE 20
+extern ltemDevice_t g_lqLTEM;
 
 
-extern ltemDevice_t g_ltem;
+#define MIN(x, y) (((x)<(y)) ? (x):(y))
+#define MAX(x, y) (((x)>(y)) ? (x):(y))
 
 
 // private local declarations
-static resultCode_t S_iccidCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
 
 
 /* Public functions
@@ -61,109 +61,117 @@ static resultCode_t S_iccidCompleteParser(const char *response, char **endptr);
 
 
 /**
- *  @brief Get the LTEm1 static device identification/provisioning information.
+ *  \brief Get the LTEm1 static device identification/provisioning information.
 */
 modemInfo_t *mdminfo_ltem()
 {
-    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
+    if (ATCMD_awaitLock(atcmd__defaultTimeout))
     {
-        atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd__useDefaultOKCompletionParser);
-
-        if (((modemInfo_t*)g_ltem.modemInfo)->imei[0] == 0)
+        if (g_lqLTEM.modemInfo->imei[0] == 0)
         {
             atcmd_invokeReuseLock("AT+GSN");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                strncpy(((modemInfo_t*)g_ltem.modemInfo)->imei, ATCMD_getLastResponse() + 2, IMEI_SIZE);        // skip leading /r/n
+                strncpy(g_lqLTEM.modemInfo->imei, atcmd_getResponse(), ntwk__imeiSz);
             }
         }
 
-        if (((modemInfo_t*)g_ltem.modemInfo)->fwver[0] == 0)
+        if (g_lqLTEM.modemInfo->fwver[0] == 0)
         {
             atcmd_invokeReuseLock("AT+QGMR");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                char *term;
-                term = strstr(ATCMD_getLastResponse() + 2, "\r\n");
-                *term = '\0';
-                strcpy(((modemInfo_t*)g_ltem.modemInfo)->fwver, ATCMD_getLastResponse() + 2);
-                term = strchr(((modemInfo_t*)g_ltem.modemInfo)->fwver, '_');
-                *term = ' ';
+                char * eol;
+                if ((eol = strstr(atcmd_getResponse(), "\r\n")) != NULL)
+                {
+                    uint8_t sz = eol - atcmd_getResponse();
+                    memcpy(g_lqLTEM.modemInfo->fwver, atcmd_getResponse(), MIN(sz, ntwk__dvcFwVerSz));
+                }
             }
         }
 
-        if (((modemInfo_t*)g_ltem.modemInfo)->mfgmodel[0] == 0)
+        if (g_lqLTEM.modemInfo->mfgmodel[0] == 0)
         {
             atcmd_invokeReuseLock("ATI");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                char *term;
-                term = strstr(ATCMD_getLastResponse() + 2, "\r\nRev");
-                *term = '\0';
-                strcpy(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, ATCMD_getLastResponse() + 2);
-                term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\r');
-                *term = ':';
-                term = strchr(((modemInfo_t*)g_ltem.modemInfo)->mfgmodel, '\n');
-                *term = ' ';
+                char * eol;
+                if ((eol = strstr(atcmd_getResponse(), "\r\nRevision")) != NULL)
+                {
+                    uint8_t sz = eol - atcmd_getResponse();
+                    memcpy(g_lqLTEM.modemInfo->mfgmodel, atcmd_getResponse(), MIN(sz, ntwk__dvcMfgSz));
+                    *(strchr(g_lqLTEM.modemInfo->mfgmodel, '\r')) = ':';
+                    *(strchr(g_lqLTEM.modemInfo->mfgmodel, '\n')) = ' ';
+                }
             }
         }
 
-        if (((modemInfo_t*)g_ltem.modemInfo)->iccid[0] == 0)
+        if (g_lqLTEM.modemInfo->iccid[0] == 0)
         {
-            atcmd_setOptions(atcmd__defaultTimeoutMS, S_iccidCompleteParser);
             atcmd_invokeReuseLock("AT+ICCID");
-            if (atcmd_awaitResult() == resultCode__success)
+            if (atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__iccidCompleteParser) == resultCode__success)
             {
-                strncpy(((modemInfo_t*)g_ltem.modemInfo)->iccid, ATCMD_getLastResponse() + ICCID_OFFSET, ICCID_SIZE);
+                strncpy(g_lqLTEM.modemInfo->iccid, atcmd_getResponse(), ntwk__iccidSz);
             }
         }
         atcmd_close();
     }
-    return (modemInfo_t*)(g_ltem.modemInfo);
+    return (modemInfo_t*)(g_lqLTEM.modemInfo);
 }
 
 
 /**
- *  @brief Get the static device provisioning information about the LTEm1.
+ *  \brief Get the signal strength reported by the LTEm device at a percent
 */
-int16_t mdminfo_signalRSSI()
+uint8_t mdmInfo_signalPercent()
 {
-    uint8_t csq = 0;
-    int8_t rssi = -999;
+    double csq;
+    uint8_t signal = 0;
+    const double csqFactor = 3.23;
 
-    if (ltem_chkHwReady())
+    if (ltem_getDeviceState())
     {
         if (atcmd_tryInvoke("AT+CSQ"))
         {
             if (atcmd_awaitResult() == resultCode__success)
             {
                 char *term;
-                char *lastResponse = ATCMD_getLastResponse();
-                term = strstr(ATCMD_getLastResponse() + 2, "+CSQ");
-                csq = strtol(term + 5, NULL, 10);
+                char *lastResponse = atcmd_getResponse();
+                term = strstr(atcmd_getResponse(), "+CSQ");
+                csq = strtod(term + 6, NULL);
             }
-            rssi = (csq == 99) ? -999 : csq * 2 - 113;        // raw=99: no signal, range -51 to -113
+            // CSQ 99=no signal, range -51(best)  to -113(worst)
+            signal = (csq == 99) ? 0 : (uint8_t)(csq * csqFactor);
             atcmd_close();
         }
     }
-    return rssi;
+    return signal;
 }
 
 
 /**
- *  @brief Get the signal strength reported by the LTEm device at a percent
+ *  \brief Get the static device provisioning information about the LTEm1.
 */
-uint8_t mdmInfo_signalPercent()
+int16_t mdminfo_signalRSSI()
 {
-    // The radio signal strength in the range of -51dBm to -113dBm (-999 is no signal)
-    int16_t rssi = mdminfo_rssi(); 
+    const int8_t rssiBase = -113;
+    const int8_t rssiRange = 113 - 51;
 
-    if (rssi == -999)
-        return 0;
+    uint8_t signalPercent = mdmInfo_signalPercent();
+    return (signalPercent == 0) ? rssiBase : (signalPercent * 0.01 * rssiRange) + rssiBase;
+}
 
-    rssi += 113;
-    rssi /= 62;
-    return (uint8_t)rssi;
+
+/** 
+ *  \brief Get the signal strength, as a bar count for visualizations, (like on a smartphone) 
+ * */
+uint8_t mdminfo_signalBars(uint8_t displayBarCount)
+{
+    const int8_t barOffset = 20;                                // adjust point for full-bar percent (20 = full bar count at 80%)
+
+    uint8_t barSpan = 100 / displayBarCount;
+    uint8_t signalPercent = MIN(mdmInfo_signalPercent() + barOffset, 100);
+    return (uint8_t)(signalPercent / barSpan);
 }
 
 #pragma endregion
@@ -175,11 +183,11 @@ uint8_t mdmInfo_signalPercent()
 
 
 /**
- *	@brief Action response parser for iccid value request. 
+ *	\brief Action response parser for iccid value request. 
  */
-static resultCode_t S_iccidCompleteParser(const char *response, char **endptr)
+static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem)
 {
-    return atcmd_defaultResultParser(response, "+ICCID: ", true, 20, "OK\r\n", endptr);
+    return atcmd_stdResponseParser("+ICCID: ", true, "", 0, 0, "\r\n\r\nOK\r\n", 20);
 }
 
 

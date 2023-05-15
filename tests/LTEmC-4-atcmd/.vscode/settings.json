@@ -5,7 +5,15 @@
         "cstddef": "c",
         "limits": "c",
         "type_traits": "c",
-        "bitset": "cpp",
-        "cfloat": "cpp"
+        "ltemc.h": "c",
+        "ltemc-internal.h": "c",
+        "lq-platform.h": "c",
+        "cstdlib": "c",
+        "ltemc-types.h": "c",
+        "ltemc-nxp-sc16is.h": "c",
+        "lq-cbuffer.h": "c",
+        "lq-types.h": "c",
+        "lq-str.h": "c",
+        "lqplatform-spi.h": "c"
     }
 }

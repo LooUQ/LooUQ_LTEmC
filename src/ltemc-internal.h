@@ -1,61 +1,91 @@
-/******************************************************************************
- *  \file ltemc-internal.h
- *  \author Greg Terrell, Jensen Miller
- *  \license MIT License
- *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * Internal define and type definitions for LTEmC modules.
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \brief LTEmC INTERNAL type/enum/struct definitions
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+  \warning Updates should be only be done as directed by LooUQ staff.
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #ifndef __LTEMC_INTERNAL_H__
 #define __LTEMC_INTERNAL_H__
 
+#define PRODUCT "LM" 
 
-// Internal static buffers you may need to change for your application. Consult with LooUQ for details.
+// Internal static buffers you may need to change for your application. Contact LooUQ for details.
 // #define IOP_RX_COREBUF_SZ 256
 // #define IOP_TX_BUFFER_SZ 1460
 
-#include <lq-types.h>
-#include <lq-diagnostics.h>
-#include "ltemc-srcfiles.h"
+#include "ltemc.h"
+#include <lq-str.h>                         /// most LTEmC modules use LooUQ string functions
+#include <lq-cBuffer.h>
+#include "ltemc-types.h"
 
-#include "lq-platform.h"
-#include "ltemc-nxp-sc16is.h"
 #include "ltemc-quectel-bg.h"
+#include "ltemc-nxp-sc16is.h"
 #include "ltemc-iop.h"
-#include "ltemc-atcmd.h"
-#include "ltemc-mdminfo.h"
-#include "ltemc-network.h"
-#include "ltemc-streams.h"
 
-// // optional services
-// #include "ltemc-sckt.h"
-// #include "ltemc-mqtt.h"
-// #include "ltemc-http.h"
-// #include "ltemc-gnss.h"
-// #include "ltemc-geo.h"
 
-/* LTEmC global fields/properties as Singleton 
- * Kept internal here, future support for multiple LTEmC instances would replace this with function calls to serve instances
+
+/* ================================================================================================================================
+ * LTEmC Global Structure
+ *
+ * LTEmC device is created as a global singleton variable
+ * ==============================================================================================================================*/
+
+
+
+/* Metric Type Definitions
  * ------------------------------------------------------------------------------------------------------------------------------*/
+typedef struct ltemMetrics_tag
+{
+    // metrics
+    uint32_t cmdInvokes;
+
+} ltemMetrics_t;
+
+/**
+ * @brief enum describing the last receive event serviced by the ISR
+ */
+typedef enum recvEvent_tag
+{
+    recvEvent_none = 0,
+    recvEvent_data,
+    recvEvent_timeout
+} recvEvent_t;
+
+
+typedef struct fileCtrl_tag
+{
+    char streamType;                            /// stream type
+    /*
+     * NOTE: Does NOT follow exact struct field layout of the other streams, shares 1st field to validate type before casting 
+     */
+    uint8_t handle;
+    dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by atcmd dataMode (RX only)
+    appRcvProto_func appRecvDataCB;
+} fileCtrl_t;
+
 
  /** 
  *  \brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
@@ -64,47 +94,33 @@
  */
 typedef struct ltemDevice_tag
 {
-    // ltem1Functionality_t funcLevel;      ///< Enum value indicating services enabled during ltemC startup.
-	ltemPinConfig_t pinConfig;              ///< GPIO pin configuration for required GPIO and SPI interfacing.
-    bool cancellationRequest;               ///< For RTOS implementations, token to request cancellation of long running task/action.
-    qbgDeviceState_t qbgDeviceState;        ///< Device state of the BGx module
-    appEventCallback_func appEventCB;       ///< Event notification callback to parent application
-    uint8_t instNm;                         ///< LTEm instance number 0=undefined, 1..254
-    char moduleType[8];                     ///< c-str indicating module type. BG96, BG95-M3 (so far)
+	ltemPinConfig_t pinConfig;                  /// GPIO pin configuration for required GPIO and SPI interfacing
+    bool cancellationRequest;                   /// For RTOS implementations, token to request cancellation of long running task/action
+    deviceState_t deviceState;                  /// Device state of the BGx module
+    appEvntNotify_func appEvntNotifyCB;         /// Event notification callback to parent application
+    char moduleType[ltem__moduleTypeSz];        /// c-str indicating module type. BG96, BG95-M3, BG77, etc. (so far)
+    void *spi;                                  /// SPI device (methods signatures compatible with Arduino)
+    iop_t *iop;                                 /// IOP subsystem controls
+    atcmd_t *atcmd;                             /// Action subsystem controls
+    modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
+	modemInfo_t *modemInfo;                     /// Data structure holding persistent information about application modem state
+    providerInfo_t *providerInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
+    streamCtrl_t* streams[ltem__streamCnt];     /// Data streams: protocols or file system
+    fileCtrl_t* fileCtrl;
 
-    void *spi;                              ///< SPI device (methods signatures compatible with Arduino).
-    void *pdpContext;                       ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.
-    void *iop;                              ///< IOP subsystem controls.
-    void *atcmd;                            ///< Action subsystem controls.
-	void *modemInfo;                        ///< Data structure holding persistent information about application modem state.
-    void *network;                          ///< Data structure representing the cellular network.
-
-    moduleDoWorkFunc_t streamWorkers[6];    ///< Stream background doWork functions, registered by Open;
-
-
-
-    // spiDevice_t *spi;                   ///< SPI device (methods signatures compatible with Arduino).
-    // // uint16_t faultCode;                 ///< debugging fault code set by driver ASSERT flows
-    // appNotifyFunc_t appNotifyCB;         ///< Notification callback to application
-    // uint8_t pdpContext;                 ///< The primary packet data protocol (PDP) context with the network carrier for application transfers.
-    // void *iop;                ///< IOP subsystem controls.
-    // atcmd_t *atcmd;                     ///< Action subsystem controls.
-	// modemInfo_t *modemInfo;             ///< Data structure holding persistent information about application modem state.
-    // network_t *network;                 ///< Data structure representing the cellular network.
-
-    // /* optional services                only taking room for some pointers if not implemented */
-	// void *sockets;                      ///< IP sockets subsystem (TCP/UDP/SSL).
-    // void (*scktWork_func)();            ///< Sockets background do work function
-    // void *mqtt;                         ///< MQTT protocol subsystem.
-    // void (*mqttWork_func)();            ///< MQTT background do work function
-
-    // array of function pointers to each protocol doWork(), create protoCtrl factory will init()
-    // needed for sockets, ...
+    ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
 } ltemDevice_t;
 
-extern ltemDevice_t g_ltem;            ///< The LTEm "object".
 
-/* ------------------------------------------------------------------------------------------------------------------------------*/
+/* ================================================================================================================================
+ * LTEmC Global Structure */
+
+extern ltemDevice_t g_lqLTEM;                   // The LTEm "object".
+
+/* LTEmC device is created as a global singleton variable
+ * ==============================================================================================================================*/
+
+
 
 
 #ifdef __cplusplus
@@ -112,12 +128,89 @@ extern "C"
 {
 #endif // __cplusplus
 
-// LTEM Internal
-void LTEM_initIo();
-void LTEM_registerDoWorker(moduleDoWorkFunc_t *doWorker);
 
-// IOP Internal 
-void IOP_rxParseForEvents();            // atcmd dependency
+// LTEM Internal
+// void LTEM_initIo();
+// void LTEM_registerDoWorker(doWork_func *doWorker);
+// void LTEM_registerUrcHandler(urcHandler_func *urcHandler);
+
+#pragma region ATCMD LTEmC Internal Functions
+/* LTEmC internal, not intended for user application consumption.
+ * --------------------------------------------------------------------------------------------- */
+
+// /**
+//  *	\brief Checks recv buffer for command response and sets atcmd structure data with result.
+//  */
+// resultCode_t ATCMD_readResult();
+
+/**
+ *  \brief Default AT command result parser.
+*/
+cmdParseRslt_t ATCMD_okResponseParser();
+
+/**
+ *  \brief Awaits exclusive access to QBG module command interface.
+ *  \param timeoutMS [in] - Number of milliseconds to wait for a lock.
+ *  @return true if lock aquired prior to the timeout period.
+*/
+bool ATCMD_awaitLock(uint16_t timeoutMS);
+
+/**
+ *	\brief Returns the current atCmd lock state
+ *  \return True if atcmd lock is active (command underway)
+ */
+bool ATCMD_isLockActive();
+
+/* LTEmC INTERNAL prompt parsers 
+ * ------------------------------------------------------------------------- */
+
+/**
+ *	\brief Base parser looking for a simple prompt string.
+ */
+cmdParseRslt_t ATCMD_readyPromptParser(const char *rdyPrompt);
+
+/**
+ *	\brief Parser looking for BGx transmit data prompt "> "
+ */
+cmdParseRslt_t ATCMD_txDataPromptParser();
+
+/**
+ *	\brief Parser looking for BGx CONNECT data prompt.
+ */
+cmdParseRslt_t ATCMD_connectPromptParser();
+
+#pragma endregion
+/* ------------------------------------------------------------------------------------------------
+ * End ATCMD LTEmC Internal Functions */
+
+
+#pragma region NTWK LTEmC Internal Functions
+/* LTEmC internal, not intended for user application consumption.
+ * --------------------------------------------------------------------------------------------- */
+
+
+/**
+ *	\brief Initialize BGx Radio Access Technology (RAT) options.
+ */
+void NTWK_initRatOptions();
+
+
+/**
+ *	\brief Apply the default PDP context config to BGx.
+ */
+void NTWK_applyDefaulNetwork();
+
+
+#pragma endregion
+/* ------------------------------------------------------------------------------------------------
+ * End NTWK LTEmC Internal Functions */
+
+
+
+
+/*
+---------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------*/
 
 #ifdef __cplusplus
 }

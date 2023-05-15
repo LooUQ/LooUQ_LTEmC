@@ -27,6 +27,7 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
+
 #define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG)
@@ -41,11 +42,14 @@
 #define PRINTF(c_, f_, ...) ;
 #endif
 
-
-// define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+// define options, specify the pin configuration
+#define HOST_FEATHER_UXPLOR_L
+// #define HOST_FEATHER_UXPLOR
+// #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
+
+#define STRCMP(x,y)  (strcmp(x, y) == 0)
 
 
 void setup() 
@@ -59,11 +63,11 @@ void setup()
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "LTEmC test4: AT Commands\r");
-    lqDiag_registerNotifCallback(appNotifyCB);                    // configure ASSERTS to callback into application
+    PRINTF(dbgColor__red, "\r\rLTEmC - Test #4: AT Commands\r");
+    lqDiag_setNotifyCallback(applEvntNotify);                           // enable ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifyCB);                     // create LTEmC modem
-    ltem_start();                                                 // ... and start it
+    ltem_create(ltem_pinConfig, NULL, applEvntNotify);                  // create LTEmC modem
+    ltem_start(resetAction_swReset);                                    // ... and start it
 }
 
 
@@ -83,30 +87,29 @@ void loop()
     */
 
     uint8_t regValue = 0;
-    // char cmdStr[] = "ATI\r\0";
-    //char cmdStr[] = "AT+CPIN?\r\0";
-    char cmdStr[] = "AT+QCCID\r\0";
+    char cmdStr[] = "ATI";
+    // char cmdStr[] = "AT+CPIN?";
+    // char cmdStr[] = "AT+QCCID";
     PRINTF(dbgColor__none, "Invoking cmd: %s \r\n", cmdStr);
 
     if (atcmd_tryInvoke(cmdStr))
     {
         resultCode_t atResult = atcmd_awaitResult();
         
-        if (atResult == resultCode__success)                                                // statusCode == 200 (similar to HTTP codes)
-        {
-            char *response = atcmd_getLastResponse();
+            char *response = atcmd_getRawResponse();
             PRINTF(dbgColor__info, "Got %d chars\r", strlen(response));
-            PRINTF(dbgColor__cyan, "Resp: %s\r", response);
+            PRINTF(dbgColor__white, "Resp:");
+            PRINTF(dbgColor__cyan, "%s\r", response);
                                                                                             // test response v. expected 
             char *validResponse = "\r\nQuectel\r\nBG";                                      // near beginning (depends on BGx echo)
-            char *trailer = response + (strlen(response) - 4);
-            if (!( strstr(response, validResponse) && strncmp(trailer, "OK\r\n", 4) == 0 ))        // should end with OK
-                indicateFailure("Unexpected command response... failed."); 
-        }
-        else
+            if (!strstr(response, validResponse))
+                indicateFailure("Expected cmd response missing... failed."); 
+
+        if (atResult != resultCode__success)                                                // statusCode == 200 (similar to HTTP codes)
         {
             PRINTF(dbgColor__error, "atResult=%d \r", atResult);
             // indicateFailure("Unexpected command response... failed."); 
+            indicateFailure("Invalid BGx response");
         }
 
         /* atcmd_close();       Not needed here since tryInvokeDefaults(). 
@@ -120,36 +123,16 @@ void loop()
 }
 
 
-/*
-========================================================================================================================= */
-
-
-// void recvResponse(char *response)
-// {
-//     iopXfrResult_t rxResult;
-//     uint8_t retries;
-//     do
-//     {
-//         rxResult = iop_rxGetCmdQueued(response, 65);
-//         timing_delay(100);
-//         retries++;
-//     } while (rxResult == iopXfrResult_incomplete && retries < 5);
-// }
-
-
-
 /* test helpers
 ========================================================================================================================= */
 
 
-void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
+void applEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (notifType > 200)
-    {
-        PRINTF( dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
-        while (1) {}
-    }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
+    if (eventType == appEvent_fault_assertFailed)
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
+    else 
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
     return;
 }
 
@@ -164,9 +147,9 @@ void indicateFailure(char failureMsg[])
     bool halt = true;
     while (halt)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(1000);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(100);
     }
     #endif
@@ -179,9 +162,9 @@ void indicateLoop(int loopCnt, int waitNext)
 
     for (int i = 0; i < 6; i++)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(50);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(50);
     }
 

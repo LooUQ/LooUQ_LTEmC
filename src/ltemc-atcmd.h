@@ -1,114 +1,81 @@
-/******************************************************************************
- *  \file ltemc-atcmd.h
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #ifndef __LTEMC_ATCMD_H__
 #define __LTEMC_ATCMD_H__
 
-#include "ltemc-iop.h"
-
-/** 
- *  @brief Typed constants for AT-CMD module.
-*/
-enum atcmd__constants
-{
-    atcmd__defaultTimeoutMS = 800,
-    atcmd__useDefaultOKCompletionParser = 0,
-
-    atcmd__setLockModeManual = 0,
-    atcmd__setLockModeAuto = 1,
-
-    atcmd__parserPendingResult = 0xFFFF      ///< value returned from response parsers indicating a pattern match has not yet been detected
-};
-
-
-/** 
- *  @brief Structure to control invocation and management of an AT command with the BGx module.
-*/
-typedef struct atcmd_tag
-{
-    char cmdStr[IOP__rxCoreBufferSize];         ///< AT command string to be passed to the BGx module.
-    uint32_t timeoutMS;                         ///< Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
-    bool isOpenLocked;                          ///< True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
-    bool autoLock;                              ///< last invoke was auto and should be closed automatically on complete
-    uint32_t invokedAt;                         ///< Tick value at the command invocation, used for timeout detection.
-    char *response;                             ///< The response to the command received from the BGx. Points into IOP core buffer
-    char *responseTail;                         ///< Pointer to the unparsed section of the response, beyond complete parser's match
-    uint32_t execDuration;                      ///< duration of command's execution in milliseconds
-    resultCode_t resultCode;
-
-    uint16_t (*completeParser_func)(const char *response, char **endptr);  ///< Function to parse the response looking for completion.
-} atcmd_t;
-
-
-/** 
- *  @brief Result structure returned from a action request (await or get).
-*/
-typedef struct atcmdResult_tag
-{
-    resultCode_t statusCode;                    ///< The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
-    char *response;                             ///< The char c-string containing the full response from the BGx.
-    uint16_t responseCode;                      ///< Numeric response value from many "status" action parsers (suffixed with _rc)
-} atcmdResult_t;
-
-
+#include "ltemc-types.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/**
- *	@brief Sets options for BGx AT command control (atcmd). 
- *  @param timeoutMS [in] Number of milliseconds the action can take. Use system default ACTION_TIMEOUTms or your value.
- *  @param customCmdCompleteParser_func [in] Custom command response parser to signal result is complete. NULL for std parser.
- *  @return True if action was invoked, false if not
- */
-void atcmd_setOptions(uint32_t timeoutMS, uint16_t (*customCmdCompleteParser_func)(const char *response, char **endptr));
+// /**
+//  *	@brief Sets options for BGx AT command control (atcmd). 
+//  *  @param timeoutMS [in] Number of milliseconds the action can take. Use system default ACTION_TIMEOUTms or your value.
+//  *  @param cmdResponseParser [in] Custom command response parser to signal result is complete. NULL for std parser.
+//  */
+// void atcmd_setOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser);
 
 
 /**
- *	@brief Reset AT command options to defaults.
- *  
- *  @details Use after setOptions() to reset AT-Cmd behaviors to default settings.
+ *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
+ *  @param releaseLock [in] If false, clears ATCMD internal state, but leaves the command lock state unchanged
  */
-void atcmd_restoreOptionDefaults();
+void atcmd_reset(bool releaseLock);
+
+
+/**
+ * @brief Configure atcmd automatic datamode processing
+ * 
+ * @param contextKey 
+ * @param trigger 
+ * @param dataHndlr 
+ * @param dataLoc 
+ * @param dataSz 
+ * @param applRecvDataCB 
+ * @param skipParser True to skip response parser after successful datamode processing
+ */
+void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* txDataLoc, uint16_t txDataSz, appRcvProto_func applRecvDataCB, bool skipParser);
+
+/**
+ * @brief Set the TX end-of-transmission (EOT) signally character
+ * @details The EOT character is automatically sent by the IOP module when the TX side of the UART goes idle. Cleared automatically on send.
+ * 
+ * @param eotChar 
+ */
+void atcmd_configDataModeEot(uint8_t eotChar);
 
 
 /**
  *	@brief Invokes a BGx AT command using default option values (automatic locking).
- *	@param cmdStrTemplate [in] The command string to send to the BG96 module.
- *  @param ... [in] Variadic parameter list to integrate into the cmdStrTemplate.
+ *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
+ *  @param [in] variadic "..."  parameter list to integrate into the cmdStrTemplate.
  *  @return True if action was invoked, false if not
  */
 bool atcmd_tryInvoke(const char *cmdTemplate, ...);
-
-/**
- *	@brief Invokes a BGx AT command using set option values, previously set with setOptions() (automatic locking).
- *	@param cmdStrTemplate [in] The command string to send to the BG96 module.
- *  @param ... [in] Variadic parameter list to integrate into the cmdStrTemplate.
- *  @return True if action was invoked, false if not
- */
-bool atcmd_tryInvokeWithOptions(const char *cmdTemplate, ...);
 
 
 /**
@@ -125,21 +92,15 @@ void atcmd_invokeReuseLock(const char *cmdTemplate, ...);
 void atcmd_close();
 
 
-/**
- *	@brief Performs blind send data transfer to device.
- *  @details Operates in without regard to atcmd lock. Doesn't set/reset lock, doesn't check for lock.
- *           Typically used to send subcommand text
- *  @param data [in] - Pointer to the block of character data to send
- *  @param dataSz [in] - The size of the data block
- *  @param eotPhrase [in] - Char string that terminates the sent characters
- */
-void atcmd_sendCmdData(const char *data, uint16_t dataSz, const char* eotPhrase);
-
-
-/**
- *	@brief Checks recv buffer for command response and sets atcmd structure data with result.
- */
-void atcmd_getResult();
+// /**
+//  *	@brief Performs blind send data transfer to device.
+//  *  @details ASSERTS atcmd lock; does not change lock state.
+//  *           This is a blocking function (no copy), returns when send count = 0.
+//  *           Intended to send blocks of text in middle of a command stream.
+//  *  @param data [in] Pointer to the block of character data to send
+//  *  @param dataSz [in] The size of the data block
+//  */
+// void atcmd_sendCmdData(const char *data, uint16_t dataSz);
 
 
 /**
@@ -149,81 +110,145 @@ resultCode_t atcmd_awaitResult();
 
 
 /**
- *	@brief Returns the atCmd result code, 0xFFFF or atcmd__parserPendingResult if command is pending completion
+ *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
+ *  @param timeoutMS Time to wait for command response (0==no change). 
+ *  @param cmdResponseParser If provided sets parser as the response parser (NULL==no change). 
  */
-resultCode_t atcmd_getLastResult();
+resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser);
+
+
+/**
+ *	@brief Returns the atCmd result code or 0 if command is pending completion
+ *  @return HTTP style result code.
+ */
+resultCode_t atcmd_getResult();
+
+
+/**
+ *	@brief Returns the atCmd parsed response (preamble to finale) if completed. An empty C-string will return prior to completion.
+ *  @return Char pointer to the command response (note: this is stripped of preamble and finale strings)
+ */
+char *atcmd_getRawResponse();
+
+
+/**
+ *	@brief Returns the string captured from the last command response with prefixing white-space and any preamble removed.
+ *  @return Char pointer to the command response (note: this is stripped of preamble and finale strings)
+ */
+char *atcmd_getResponse();
+
+
+/**
+ *	@brief Returns true if the last atCmd response contained a requested preamble. If no preamble specified will return false.
+ *  @return True if preamble string was detected in the AT command response
+ */
+bool atcmd_getPreambleFound();
+
+
+/**
+ *	@brief Returns the atCmd result value
+ *  @return If the parser was instructed to capture a value (see atcmd_stdResponseParser()) the signed integer value found
+ */
+int32_t atcmd_getValue();
+
+
+/**
+ *	@brief Returns the atCmd parser result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
+ *  @return The PARSER result from the last interation of the parser execution. This is generally not applicable to end-user applications.
+ */
+cmdParseRslt_t atcmd_getParserResult();
+
+
+/**
+ *	@brief Returns the BGx reported CME/CMS error code. Use this function to get details on a resultCode_t = 500
+ *  @return Pointer to a error value reported by the BGx module. Note that not all BGx errors have a detailed descriptor.
+ */
+char *atcmd_getErrorDetail();
+
+
+/**
+ *	@brief Returns the BGx reported CME/CMS error code as a numeric value.
+ *  @return Numeric CM* error code, 999 otherwise.
+ */
+uint16_t atcmd_getErrorDetailCode();
 
 
 /**
  *	@brief Returns the atCmd last execution duration in milliseconds
+ *  @return The number of milliseconds. If the command timed out this will be approximately timeout value.
  */
-uint32_t atcmd_getLastDuration();
+uint32_t atcmd_getDuration();
 
 
 /**
- *	@brief Returns the atCmd response text if completed, will be empty C-string prior to completion
- */
-char *ATCMD_getLastResponse();
-
-
-/**
- *	@brief Returns the atCmd response text beyond internal completion parser's progress
- */
-char *ATCMD_getLastResponseTail();
-
-/**
- *	@brief Sends ESC character to ensure BGx is not in text mode (">" prompt awaiting ^Z/ESC, MQTT publish etc.).
+ *	@brief Sends ^Z character to ensure BGx is not in text mode.
  */
 void atcmd_exitTextMode();
 
 
 /**
- *	@brief Sends +++ sequence to transition BGx out of data mode to command mode.
+ *	@brief Sends break sequence to transition BGx out of fixed-size data mode to command mode (up to 1500 char).
  */
 void atcmd_exitDataMode();
 
 
+/**
+ *	@brief Sends +++ sequence to transition BGx out of transparent data mode to command mode.
+ */
+void atcmd_exitTransparentMode();
 
-#pragma region LTEmC Internal Functions
+
+// /**
+//  *	@brief Protocols register for URC callbacks
+//  */
+// void ATCMD_registerStream(streamPeer_t streamIndx, iopStreamCtrl_t *streamCtrl);
+
+
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *  @brief Awaits exclusive access to QBG module command interface.
- *  @param timeoutMS [in] - Number of milliseconds to wait for a lock.
- *  @return true if lock aquired prior to the timeout period.
-*/
-bool ATCMD_awaitLock(uint16_t timeoutMS);
+ *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
+ *  @details LTEmC internal function, not static as it is used by several LTEmC modules
+ *           Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). 
+ *           Note: If no stop condition is specified, finale, tokensReqd, and lengthReqd are all omitted, the parser will return with 
+ *                 the first block of characters received.
+ *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getValue()
+ *           and atcmd_getResponse() functions respectively.
+ *  @param [in] preamble - C-string containing the expected phrase that starts response. 
+ *  @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
+ *  @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
+ *  @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
+ *  @param [in] valueIndx - (optional: 0=N/A, 1=first) Indicates the 1-n position (chars/tokens) of an integer value to grab from the response.
+ *  @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
+ *  @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
+ *  @return Parse status result
+ */
+cmdParseRslt_t atcmd_stdResponseParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, uint8_t valueIndx, const char *finale, uint16_t lengthReqd);
+
+
+// /**
+//  *	@brief LTEmC internal testing parser to capture incoming response until timeout. This is generally not used by end-user applications.
+//  *  @return Parse status result (always pending for this test parser)
+//  */
+// cmdParseRslt_t ATCMD_testResponseTrace();
 
 
 /**
- *	@brief Returns the current atCmd lock state
- *  @return True if atcmd lock is active (command underway)
+ *	@brief Stardard TX (out) data handler used by dataMode. Sends data and checks for OK response.
  */
-bool ATCMD_isLockActive();
+resultCode_t atcmd_stdTxDataHndlr();
 
 
 /**
- *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
+ *	@brief TX (out) data handler that performs a blind send of data.
  */
-void ATCMD_reset(bool releaseLock);
-
-#pragma endregion
-/*-----------------------------------------------------------------------------------------------*/
+resultCode_t atcmd_txDataHndlrRaw();
 
 
-
-resultCode_t atcmd_okResultParser(const char *response, char** endptr);
-resultCode_t atcmd_defaultResultParser(const char *response, const char *landmark, bool landmarkReqd, uint8_t gap, const char *terminator, char** endptr);
-resultCode_t atcmd_tokenResultParser(const char *response, const char *landmark, char separator, uint8_t reqdTokens, const char *terminator, char** endptr);
-resultCode_t atcmd_serviceResponseParser(const char *response, const char *landmark, uint8_t resultIndx, char** endptr);
-resultCode_t atcmd_serviceResponseParserTerm(const char *response, const char *landmark, uint8_t resultIndx, const char *terminator, char** endptr);
-
-resultCode_t atcmd_readyPromptParser(const char *response, const char *rdyPrompt, char **endptr);
-resultCode_t atcmd_txDataPromptParser(const char *response, char **endptr);
-resultCode_t atcmd_connectPromptParser(const char *response, char **endptr);
-
-char *atcmd_strToken(char *source, int delimiter, char *token, uint8_t tokenMax);
-void ATCMD_getResult();
+/**
+ *	@brief Stardard RX (in) data handler used by dataMode.
+ */
+resultCode_t atcmd_stdRxDataHndlr();
 
 #ifdef __cplusplus
 }

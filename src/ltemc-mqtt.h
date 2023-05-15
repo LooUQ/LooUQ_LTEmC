@@ -1,35 +1,33 @@
-/******************************************************************************
- *  \file ltemc-mqtt.h
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * MQTT protocol support 
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #ifndef __MQTT_H__
 #define __MQTT_H__
 
-#include "ltemc-internal.h"
-
+#include "ltemc-types.h"
 
 /** 
  *  @brief typed numeric constants used by MQTT subsystem.
@@ -40,19 +38,27 @@ enum mqtt__constants
     mqtt__notUsingTls = 0,
     mqtt__publishTimeout = 15000,
 
-    mqtt__messageSz = 1548,                                             ///< Maximum message size for BGx family (BG96, BG95, BG77)
-
+    mqtt__messageSz = 1548,                                             /// Maximum message size for BGx family (BG96, BG95, BG77)
+    mqtt__topicsCnt = 4,
     mqtt__topic_offset = 24,
-    mqtt__topic_nameSz = 90,                                            ///< Azure IoTHub typically 50-70 chars
-    mqtt__topic_propsSz = 320,                                          ///< typically 250-300 bytes
-    mqtt__topic_publishCmdOvrhdSz = 27,                                 ///< when publishing, number of extra chars in outgoing buffer added to AT cmd
-    mqtt__topic_subscriptionCnt = 2,                                    ///< number of slots for MQTT service subscriptions (reduce for mem conservation)
-    mqtt__topic_bufferSz = (mqtt__topic_nameSz + mqtt__topic_propsSz),  ///< Total topic size (name+props) for buffer sizing
-    mqtt__topic_publishCmdSz = (mqtt__topic_bufferSz + mqtt__topic_publishCmdOvrhdSz),
+    mqtt__topic_nameSz = 90,                                            /// Azure IoTHub typically 50-70 chars
+    mqtt__topic_propsSz = 320,                                          /// typically 250-300 bytes
+    mqtt__topicSz = (mqtt__topic_nameSz + mqtt__topic_propsSz),         /// Total topic size (name+props) for buffer sizing
+    mqtt__topic_publishCmdOvrhdSz = 27,                                 /// when publishing, number of extra chars in outgoing buffer added to AT cmd
 
-    mqtt__propertiesCnt = 12                                            ///< Azure IoTHub 3-sysProps, 3-props, plus your application
+    mqtt__topic_publishCmdSz = (mqtt__topic_nameSz + mqtt__topic_propsSz + mqtt__topic_publishCmdOvrhdSz),
+
+    /* Azure IoTHub Note: 3-system properties, 3-properties, plus application specified properties
+    */
+    mqtt__propertiesCnt = 12,
+
+    mqtt__clientIdSz = 20,
+    mqtt__userNameSz = 100,
+    mqtt__userPasswordSz = 200
 };
 
+
+#define MQTT_URC_PREFIXES "QMTRECV,QMTSTAT"
 
 /* Example connection strings key/SAS token
 * ---------------------------------------------------------------------------------------------------------------------
@@ -70,9 +76,9 @@ Azure IoTHub cloud to device
 */
 typedef enum mqttResult_tag
 {
-    mqttResult_success = 0,         ///< Sucessful publish.
-    mqttResult_retransmission = 1,  ///< Publish Sucessful, with retransmission.
-    mqttResult_failed = 2           ///< Publish failed.
+    mqttResult_success = 0,         /// Sucessful publish.
+    mqttResult_retransmission = 1,  /// Publish Sucessful, with retransmission.
+    mqttResult_failed = 2           /// Publish failed.
 } mqttResult_t;
 
 
@@ -81,8 +87,8 @@ typedef enum mqttResult_tag
 */
 typedef enum mqttVersion_tag
 {
-    mqttVersion_3 = 3,              ///< Set behavior to MQTT version 3.0
-    mqttVersion_311 = 4             ///< Set behavior to MQTT version 3.1.1, Note: this is not MQTT 4.0
+    mqttVersion_3 = 3,              /// Set behavior to MQTT version 3.0
+    mqttVersion_311 = 4             /// Set behavior to MQTT version 3.1.1, Note: this is not MQTT 4.0
 } mqttVersion_t;
 
 
@@ -91,21 +97,21 @@ typedef enum mqttVersion_tag
 */
 typedef enum mqttQos_tag
 {
-    mqttQos_0 = 0,                  ///< QOS 0: At most once (aka send and forget)
-    mqttQos_1 = 1,                  ///< QOS 1: At least once
-    mqttQos_2 = 2,                  ///< QOS 2: Exactly once
-    mqttQos_maxAzure = 1            ///< MS Azure IoTHub max QOS (setting to QOS2 will force disconnect)
+    mqttQos_0 = 0,                  /// QOS 0: At most once (aka send and forget)
+    mqttQos_1 = 1,                  /// QOS 1: At least once
+    mqttQos_2 = 2,                  /// QOS 2: Exactly once
+    mqttQos_maxAzure = 1            /// MS Azure IoTHub max QOS (setting to QOS2 will force disconnect)
 } mqttQos_t;
 
 
-/** 
- *  @brief Enum specifying behavior for messages pre-session establishment (session starts with connect, not open).
-*/
-typedef enum mqttSession_tag
-{
-    mqttSession_preserve = 0,       ///< Preserve message that arrive previous to session and deliver to application.
-    mqttSession_cleanStart = 1,     ///< Clear out any previously received messages and start session "clean".
-} mqttSession_t;
+// /** 
+//  *  @brief Enum specifying behavior for messages pre-session establishment (session starts with connect, not open).
+// */
+// typedef enum mqttSession_tag
+// {
+//     mqttSession_preserve = 0,       /// Preserve message that arrive previous to session and deliver to application.
+//     mqttSession_cleanStart = 1,     /// Clear out any previously received messages and start session "clean".
+// } mqttSession_t;
 
 
 /** 
@@ -113,33 +119,48 @@ typedef enum mqttSession_tag
 */
 typedef enum mqttState_tag
 {
-    mqttState_closed = 0,          ///< MQTT is idle, not active.
-    mqttState_open = 1,           ///< MQTT is open, open but not connected.
-    mqttState_connected = 2,       ///< MQTT is connected, in session with server.
+    mqttState_closed = 0,           /// MQTT is idle, not active.
+    mqttState_open = 1,             /// MQTT is open, open but not connected.
+    mqttState_connected = 2,        /// MQTT is connected, in session with server.
     mqttState_invalidHost = 201,
-    mqttState_pending = 202         ///< MQTT is attempting connect (BGx MQTT problem area that needs to be detected, reset BGx if stays here).
+    mqttState_pending = 202         /// MQTT is attempting connect (BGx MQTT problem area that needs to be detected, reset BGx if stays here).
 } mqttState_t;
 
+
+// /** 
+//  *  @brief Struct describing a MQTT topic subscription.
+// */
+// typedef struct mqttTopicSub_tag
+// {
+//     char topicName[mqtt__topic_nameSz];     /// Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
+//     char wildcard;                          /// Set to '#' if multilevel wildcard specified when subscribing to topic.
+// } mqttTopicSub_t;
+// typedef enum mqttRecvState_tag
+// {
+//     mqttRecvState_none = 0,
+//     mqttRecvState_signalled,
+//     mqttRecvState_topicDelivered,
+//     mqttRecvState_msgUnderway
+// } mqttRecvState_t;
+
+
+typedef enum mqttMsgSegment_tag
+{
+    mqttMsgSegment_topic = 0,
+    mqttMsgSegment_topicExt = 1,
+    mqttMsgSegment_msgBody = 2
+} mqttMsgSegment_t;
 
 /** 
  *  @brief Struct describing a MQTT topic subscription.
 */
-typedef struct mqttTopicSub_tag
+typedef struct mqttTopicCtrl_tag
 {
-    char topicName[mqtt__topic_nameSz];     ///< Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
-    char wildcard;                          ///< Set to '#' if multilevel wildcard specified when subscribing to topic.
-} mqttTopicSub_t;
-
-
-/** 
- *  @brief Callback function for data received event. Notifies application that new data is available and needs serviced.
- *  @details The *data and dataSz values are for convenience, since the application supplied the buffer to LTEmC.
- *  @param peerId [in] Data peer (data context or filesys) 
- *  @param handle [in] Subordinate data ID to give application information about received data
- *  @param data [in] Pointer to received data buffer
- *  @param dataSz [in] The number of bytes available
-*/
-typedef void (*mqttRecvFunc_t)(dataContext_t dataCntxt, uint16_t msgId, const char *topic, char *topicProps, char *message, uint16_t messageSz);
+    char topicName[PROPLEN(mqtt__topic_nameSz)];    /// Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
+    char wildcard;                                  /// Set to '#' if multilevel wildcard specified when subscribing to topic.
+    uint8_t Qos;
+    appRcvProto_func appRecvDataCB;                 /// callback into host application with data (cast from generic func* to stream specific function)
+} mqttTopicCtrl_t;
 
 
 /** 
@@ -147,22 +168,45 @@ typedef void (*mqttRecvFunc_t)(dataContext_t dataCntxt, uint16_t msgId, const ch
 */
 typedef struct mqttCtrl_tag
 {
-    uint8_t ctrlMagic;                                      ///< magic flag to validate incoming requests 
-    dataContext_t dataCntxt;                                ///< Data context where this control operates
-    protocol_t protocol;                                    ///< Control's protocol : UDP/TCP/SSL, MQTT, HTTP, etc.
-    bool useTls;                                            ///< flag indicating SSL/TLS applied to stream
-    rxDataBufferCtrl_t recvBufCtrl;                         ///< RX smart buffer 
+    char streamType;                            /// stream type
+    dataCntxt_t dataCntxt;                      /// integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcEvntHndlr;             /// function to determine if "potential" URC event is for an open stream and perform reqd actions
 
-    mqttRecvFunc_t dataRecvCB;                              ///< callback to application, signals data ready
-    mqttVersion_t useMqttVersion;
-    mqttState_t state;                                      ///< Current state of the MQTT protocol services on device.
-    uint16_t msgId;                                         ///< MQTT message ID for QOS, automatically incremented, rolls at max value.
-    bool canReuseConn;                                      ///< default=true, set if an open connection can be reused
-    bool connReused;                                        ///< set by open(), true if the current server connection was found open and reused
-    mqttTopicSub_t topicSubs[mqtt__topic_subscriptionCnt];  ///< Array of MQTT topic subscriptions.
-    uint32_t doWorkLastTck;                                 ///< last check for URC/dataPending
-    uint16_t lastBufferReqd;                                ///< last receive buffer required size, provides feedback to developer to minimize buffer sizing     
+    /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
+    */
+    mqttState_t state;                          /// Current state of the MQTT protocol services on device.
+    bool useTls;                                /// flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];                  /// URL or IP address of host
+    uint16_t hostPort;                          /// IP port number host is listening on (allows for 65535/0)
+    mqttTopicCtrl_t* topics[mqtt__topicsCnt];   /// array of topic controls, provides for independent app receive functions per topic
+    char clientId[PROPLEN(mqtt__clientIdSz)];   /// for auto-restart
+    char username[PROPLEN(mqtt__userNameSz)];
+    char password[PROPLEN(mqtt__userPasswordSz)];
+    mqttVersion_t mqttVersion;
+    uint16_t sentMsgId;                             /// MQTT TX message ID for QOS, automatically incremented, rolls at max value.
+    uint16_t recvMsgId;                             /// last received message identifier
+    uint8_t errCode;
 } mqttCtrl_t;
+
+
+
+
+/** 
+ *  @brief Callback function to transfer incoming message data to app
+ * 
+ *  @details This func will be invoked multiple times (at least twice) to deliver received MQTT message data to the host
+ *  application (app). The topic and msgBody will always be sent, the topicExtension (sometimes used for property pairs) may  
+ *  be sent. IsFinal only applies to the msgBody part of the flow.
+ *  =============================================================================================================================
+ *  @param dataCntxt The data context receiving data.
+ *  @param msgId MQTT ID of the message received.
+ *  @param segment Enum specifying the part of the message being transfered to the app: topic, topicExtension, messageBody
+ *  @param dataPtr Pointer to received data, now available to the application (see msgPart above)
+ *  @param DataSz The size of the current block of data available at the streamPtr address for app consumption
+ *  @param isFinal Will be true if the current block of data is the end of the received MQTT msg
+ */
+typedef void (*mqttAppRecv_func)(dataCntxt_t dataCntxt, uint16_t msgId, mqttMsgSegment_t segment, char* dataPtr, uint16_t dataSz, bool isFinal);
 
 
 #ifdef __cplusplus
@@ -174,25 +218,106 @@ extern "C"
 /**
  *  @brief Initialize a MQTT protocol control structure.
  *  @param mqttCtrl [in] Pointer to MQTT control structure governing communications.
- *  @param dataCntxt [in] Data context to host this protocol stream.
- *  @param useTls [in] Specifies if a SSL/TLS configuration has been applied to data context to protect communications.
- *  @param useMqttVersion [in] Specifies the MQTT protocol revision to use for communications.
- *  @param recvBuf [in] Pointer to application provided receive data buffer.
- *  @param recvBufSz [in] Size of provided data buffer.
+ *  @param dataCntxt [in] Socket/data context to host this protocol stream.
  *  @param recvCallback [in] Callback function to be invoked when received data is ready.
- *  @return A mqtt object to govern operations for this protocol stream value indicating the state of the MQTT connection.
 */
-void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataContext_t dataCntxt, bool useTls, mqttVersion_t useMqttVersion, uint8_t *recvBuf, uint16_t recvBufSz, mqttRecvFunc_t recvCallback);
+void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt);
+
+
+/**
+ * @brief Initialize a (subscription) topic control structure
+ * @details The topic control supports multilevel wildcards only, by suffixing your topic with /# the wildcard will be detected and 
+ * handled during message receipt. The application receive function will be called multiple times per message, each invoke delivering
+ * different parts of the incoming message.
+ * 
+ * @param topicCtrl Pointer to the control to initialize
+ * @param topic Topic name to subscribe to on the MQTT server
+ * @param qos The MQTT defined quality-of-service for messages serviced in this topic (0=At most once, 1=At least once, 2=Exactly once)
+ * @param appTopicRecvCB Pointer to the application function to receive incoming messages for this topic
+ */
+void mqtt_initTopicControl(mqttTopicCtrl_t* topicCtrl, const char* topic, uint8_t qos, mqttAppRecv_func appTopicRecvCB);
+
+/**
+ *  @brief Set the remote server connection values.
+*/
+void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t useMqttVersion, const char *deviceId, const char *userId, const char *secret);
+
 
 
 /**
  *  @brief Open a remote MQTT server for use.
- *  @param mqttCtrl [in] MQTT type stream control to operate on.
- *  @param host [in] The host IP address or name of the remote server.
- *  @param port [in] The IP port number to use for the communications.
+ *
+ *  @param [in] mqttCtrl MQTT stream control to operate with.
+ *  @param [in] cleanSession 
  *  @return A resultCode_t value indicating the success or type of failure.
 */
-resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port);
+resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession);
+
+
+/**
+ *  @brief Open a remote MQTT server for use.
+ *  @details The recommended approach is to use mqtt_start() and mqtt_reset() for server connections. The 
+ * 
+ *  @param [in] mqttCtrl MQTT type stream control to operate on.
+ *  @return A resultCode_t value indicating the success or type of failure.
+*/
+resultCode_t mqtt__open(mqttCtrl_t *mqttCtrl);
+
+
+/**
+ *  @brief Authenicate to MQTT server and create a connected data session.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param cleanSession [in] True if connection should be flushed of prior msgs to start
+ *  @return A resultCode_t value indicating the success or type of failure.
+*/
+resultCode_t mqtt__connect(mqttCtrl_t *mqttCtrl, bool cleanSession);
+
+
+
+/**
+ *  @brief Subscribe to a MQTT topic on the server.
+ *  @param [in] mqttCtrl Pointer to MQTT type stream control to operate on.
+ *  @param [in] topic C-string containing the topic you are subcribing to.
+ *  @param qos [in] (enum) Received message qos options for subscribed messages 
+ *  @return A resultCode_t value indicating the success or type of failure.
+*/
+resultCode_t mqtt_subscribeTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtrl);
+
+
+/**
+ *  @brief Unsubscribe from a MQTT topic on the server.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param topic [in] C-string containing the topic you are no longer interested in.
+ *  @return A resultCode_t value indicating the success or type of failure.
+*/
+resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtrl);
+
+
+/**
+ *  @brief Publish (send) a message to the MQTT server.
+ * 
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param topic The topic for the message being sent, the server will resend the msg to other clients subscribed to the topic.
+ *  @param qos The quality-of-service for this message (delivery assurance consideration)
+ *  @param message The message to send (< 4096 chars)
+ *  @param messageSz Size of the message
+ *  @param timeoutSec The number of seconds to wait for completion of the send operation.
+ *  @return A resultCode_t value indicating the success or type of failure.
+*/
+resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint16_t messageSz, uint8_t timeoutSec);
+
+
+// /**
+//  *  @brief Publish (send) a message to the MQTT server.
+//  * 
+//  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+//  *  @param topic The topic for the message being sent, the server will resend the msg to other clients subscribed to the topic.
+//  *  @param qos The quality-of-service for this message (delivery assurance consideration)
+//  *  @param message The message to send (< 560 chars, cannot include " char, should be UUEncoded or Base64 Encoded).
+//  *  @param timeoutSec The number of seconds to wait for completion of the send operation.
+//  *  @return A resultCode_t value indicating the success or type of failure.
+// */
+// resultCode_t mqtt_publishDirect(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSec);
 
 
 /**
@@ -202,17 +327,52 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl, const char *host, uint16_t port);
 void mqtt_close(mqttCtrl_t *mqttCtrl);
 
 
-resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, const char *clientId, const char *username, const char *password, mqttSession_t cleanSession);
-resultCode_t mqtt_subscribe(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos);
-resultCode_t mqtt_unsubscribe(mqttCtrl_t *mqttCtrl, const char *topic);
+/**
+ *  @brief Disconnect and close a connection to a MQTT server
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param resetModem [in] True if modem should be reset prior to reestablishing MQTT connection.
+*/
+resultCode_t mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem);
 
-resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint8_t timeoutSeconds);
 
+/**
+ *  @brief Get current MQTT connection state
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+*/
 mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl);
-mqttState_t mqtt_getStatusForContext(dataContext_t cntxt);
-uint8_t mqtt_fetchContextMap(); 
-uint16_t mqtt_getMsgId(mqttCtrl_t *mqttCtrl);
-uint16_t mqtt_getLastBufferReqd(mqttCtrl_t *mqttCtrl);
+
+
+/**
+ *  @brief Query device for current MQTT connection state.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @return A mqttState_t value indicating the state of the MQTT connection.
+*/
+mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl);
+
+
+/**
+ *  @brief Get the last outgoing message ID.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @returns Integer value of the message identifier.
+*/
+uint16_t mqtt_getSentMsgId(mqttCtrl_t *mqttCtrl);
+
+
+/**
+ *  @brief Get the last incoming message ID.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @returns Integer value of the message identifier.
+*/
+uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl);
+
+
+/**
+ *  @brief Get the MQTT status error code.
+ *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @returns Integer value of the MQTT status error code.
+*/
+uint16_t mqtt_getErrCode(mqttCtrl_t *mqttCtrl);
+
 
 #ifdef __cplusplus
 }

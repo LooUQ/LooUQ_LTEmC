@@ -1,29 +1,28 @@
-/******************************************************************************
- *  \file ltemc-sckt.c
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * TCP/IP sockets protocol support: TCP, UDP, SSL, TLS
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \brief Public API providing socket streams (UDP/TCP/SSL/TLS) support
+  \author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
 
 
 #define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
@@ -40,26 +39,33 @@
 #define PRINTF(c_, f_, ...)
 #endif
 
-
+#define SRCFILE "SKT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#include "ltemc-internal.h"
 #include "ltemc-sckt.h"
+
+extern ltemDevice_t g_lqLTEM;
 
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(x, y) (((x) < (y)) ? (y) : (x))
 
-#define ASCII_sSENDOK "SEND OK\r\n"
+#define DETECT_STALL(tick, threshold)  if (pMillis() - tick > threshold) return resultCode__timeout
+#define ASSERT_NOTSTALLED(tick, threshold)  ASSERT(pMillis() - tick > threshold)
 
-
-extern ltemDevice_t g_ltem;
 
 
 // file scope local function declarations
-static bool S_requestIrdData(dataContext_t dataPeer, uint16_t reqstSz, bool applyLock);
-static resultCode_t S_tcpudpOpenCompleteParser(const char *response, char **endptr);
-static resultCode_t S_sslOpenCompleteParser(const char *response, char **endptr);
-static resultCode_t S_socketSendCompleteParser(const char *response, char **endptr);
-static resultCode_t S_socketStatusParser(const char *response, char **endptr);
-void S_scktDoWork();
+static resultCode_t S__scktTxDataHndlr();
+static void S__scktUrcHndlr();
+static resultCode_t S__scktRxHndlr();
+
+static cmdParseRslt_t S__irdResponseHeaderParser();
+static cmdParseRslt_t S__sslrecvResponseHeaderParser();
+static cmdParseRslt_t S__udptcpOpenCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__sslOpenCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__socketSendCompleteParser(const char *response, char **endptr);
+static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr);
+
 
 
 #pragma region public sockets (IP:TCP/UDP/SSL) functions
@@ -69,88 +75,68 @@ void S_scktDoWork();
 /**
  *	@brief Create a socket data control(TCP/UDP/SSL).
  */
-void sckt_initControl(scktCtrl_t *scktCtrl, dataContext_t dataCntxt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback)
+void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t protocol, scktAppRecv_func recvCallback)
 {
-    ASSERT(scktCtrl != NULL && recvBuf != NULL && recvCallback != NULL, srcfile_ltemc_sckt_c);
-    ASSERT(dataCntxt < dataContext__cnt, srcfile_ltemc_sckt_c);
-    ASSERT(protocol < protocol_socket, srcfile_ltemc_sckt_c);
+    ASSERT(dataCntxt < dataCntxt__cnt);
 
     memset(scktCtrl, 0, sizeof(scktCtrl_t));
 
-    scktCtrl->ctrlMagic = streams__ctrlMagic;
     scktCtrl->dataCntxt = dataCntxt;
-    scktCtrl->protocol = protocol;
-    scktCtrl->useTls = protocol == protocol_ssl;
-
-    uint16_t bufferSz = IOP_initRxBufferCtrl(&(scktCtrl->recvBufCtrl), recvBuf, recvBufSz);
-    ASSERT_W(recvBufSz == bufferSz, srcfile_ltemc_sckt_c, "RxBufSz != multiple of 128bytes");
-    ASSERT(bufferSz >= 128, srcfile_ltemc_sckt_c);
-    
-    //scktCtrl->doWorkTimeout = (uint32_t)(scktCtrl->recvBufCtrl._bufferSz / IOP__uartFIFOBufferSz * IOP__uartFIFO_fillMS * 0.8);
-    scktCtrl->dataRecvCB = recvCallback;
-    scktCtrl->dataPending = false;
+    scktCtrl->streamType = (char)protocol;
+    scktCtrl->useTls = protocol == streamType_SSLTLS;
+    scktCtrl->irdPending = false;
     scktCtrl->flushing = false;
     scktCtrl->statsRxCnt = 0;
     scktCtrl->statsTxCnt = 0;
+    scktCtrl->appRecvDataCB = recvCallback;
+
+    g_lqLTEM.streams[dataCntxt] = (streamCtrl_t*)scktCtrl;
+}
+
+
+/**
+ *	@brief Set connection parameters for a socket connection (TCP/UDP)
+ */
+void sckt_setConnection(scktCtrl_t *scktCtrl, uint8_t pdpCntxt, const char *hostUrl, uint16_t hostPort, uint16_t lclPort)
+{
+    strncpy(scktCtrl->hostUrl, hostUrl, sckt__urlHostSz);
+    scktCtrl->pdpCntxt = pdpCntxt;
+    scktCtrl->hostPort = hostPort;
+    scktCtrl->lclPort = lclPort;
 }
 
 
 /**
  *	@brief Open a data connection (socket) to d data to an established endpoint via protocol used to open socket (TCP/UDP/TCP INCOMING).
- *
- *  @param sckt [in] - Pointer to the control block for the socket.
- *	@param host [in] - The IP address (string) or domain name of the remote host to communicate with.
- *  @param rmtPort [in] - The port number at the remote host.
- *  @param lclPort [in] - The port number on this side of the conversation, set to 0 to auto-assign.
- *  @param cleanSession [in] - If the port is found already open, TRUE: flushes any previous data from the socket session.
- * 
- *  @return Result code similar to http status code, OK = 200
  */
-resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uint16_t lclPort, bool cleanSession)
+resultCode_t sckt_open(scktCtrl_t *scktCtrl, bool cleanSession)
 {
-    ASSERT(sckt->ctrlMagic == streams__ctrlMagic, srcfile_ltemc_sckt_c);
-    ASSERT(sckt->dataCntxt < dataContext__cnt || ((iop_t*)g_ltem.iop)->streamPeers[sckt->dataCntxt] != NULL, srcfile_ltemc_sckt_c);
-    ASSERT(sckt->protocol < protocol_socket, srcfile_ltemc_sckt_c);
+    uint8_t pdpCntxt = (scktCtrl->pdpCntxt == 0) ? g_lqLTEM.providerInfo->defaultContext : scktCtrl->pdpCntxt;
+    resultCode_t rslt;
 
-    ((iop_t*)g_ltem.iop)->scktMap &= 0x01 << sckt->dataCntxt;
-
-    switch (sckt->protocol)
+    if (scktCtrl->streamType == 'U')                    // protocol == UDP
     {
-    case protocol_udp:
-        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
-        atcmd_tryInvokeWithOptions("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
-        break;
-  case protocol_tcp:
-        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_tcpudpOpenCompleteParser);
-        atcmd_tryInvokeWithOptions("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
-        break;
-
-    case protocol_ssl:
-        atcmd_setOptions(sckt__defaultOpenTimeoutMS, S_sslOpenCompleteParser);
-        atcmd_tryInvokeWithOptions("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", g_ltem.pdpContext, sckt->dataCntxt, host, rmtPort, lclPort);
-        break;
+        atcmd_tryInvoke("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
+        rslt = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__udptcpOpenCompleteParser);
     }
-    // await result of open from inside switch() above
-    resultCode_t atResult = atcmd_awaitResult();
 
-    // finish initialization and run background tasks to prime data pipeline
-    if (atResult == resultCode__success || atResult == sckt__resultCode_previouslyOpen)
+    else if (scktCtrl->streamType == 'T')               // protocol == TCP
     {
-        ((iop_t*)g_ltem.iop)->streamPeers[sckt->dataCntxt] = sckt;
-        ((iop_t*)g_ltem.iop)->scktMap |= 0x01 << sckt->dataCntxt;
+        atcmd_tryInvoke("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
+        rslt = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__udptcpOpenCompleteParser);
+    }
 
-        LTEM_registerDoWorker(S_scktDoWork);
-    }
-    
-    if (atResult == sckt__resultCode_previouslyOpen)
+    else if (scktCtrl->streamType == 'S')               // protocol == SSL/TLS
     {
-        atResult = resultCode__previouslyOpened;                                                        // translate 563 BGx response into 200 range
-        ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[sckt->dataCntxt])->flushing = cleanSession;
-        ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[sckt->dataCntxt])->dataPending = true;
-        PRINTF(dbgColor__white, "Flushing sckt=%d\r", sckt->dataCntxt);
-        S_scktDoWork();                                                                                 // run doWork to perform flush
+        atcmd_tryInvoke("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
+        rslt = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__sslOpenCompleteParser);
     }
-    return atResult;
+
+    if (rslt == resultCode__success)
+    {
+        ltem_addStream(scktCtrl);
+    }
+    return rslt;
 }
 
 
@@ -160,78 +146,62 @@ resultCode_t sckt_open(scktCtrl_t *sckt, const char *host, uint16_t rmtPort, uin
  */
 void sckt_close(scktCtrl_t *scktCtrl)
 {
-    ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic, 0xFE30);
-
-    char closeCmd[20] = {0};
-    uint8_t socketBitMask = 0x01 << scktCtrl->dataCntxt;
-    scktCtrl_t *thisSckt = (scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[scktCtrl->dataCntxt];    // for readability
-
-    if (thisSckt == 0)                           // not open
+    if (scktCtrl->state == scktState_closed)                                    // not open
         return;
 
-    if (thisSckt->useTls)
-    {
-        snprintf(closeCmd, 20, "AT+QSSLCLOSE=%d", scktCtrl->dataCntxt);                                 // BGx syntax different for SSL
-    }
+    if (scktCtrl->useTls)
+        atcmd_tryInvokeDefaults("AT+QSSLCLOSE=%d", scktCtrl->dataCntxt);        // BGx syntax different for SSL
     else
-    {
-        snprintf(closeCmd, 20, "AT+QICLOSE=%d", scktCtrl->dataCntxt);                                   // BGx syntax different for TCP/UDP
-    }
+        atcmd_tryInvokeDefaults("AT+QICLOSE=%d", scktCtrl->dataCntxt);          // BGx syntax different for TCP/UDP
     
-    if (atcmd_tryInvokeDefaults(closeCmd))
+    if (atcmd_awaitResult() == resultCode__success)
     {
-        if (atcmd_awaitResult() == resultCode__success)
-        {
-            thisSckt = 0;
-            ((iop_t*)g_ltem.iop)->scktMap &= ~socketBitMask;
-        }
+        scktCtrl->state = scktState_closed;
+        ltem_deleteStream(scktCtrl);
     }
+}
+
+
+/**
+ *	@brief Close an established (open) connection socket by context number.
+ *  @details This is provided for LTEm use in the case of a connection close/loss.
+ */
+void SCKT_closeCntxt(uint8_t cntxtNm)
+{
+    streamCtrl_t* streamCtrl = ltem_getStreamFromCntxt(cntxtNm, streamType__SCKT);
+    ASSERT(streamCtrl);
+
+    sckt_close(streamCtrl);
 }
 
 
 /**
  *	@brief Reset open socket connection. This function drains the connection's data pipeline. 
+ *
+ *  NOT IMPLEMENTED
  */
 bool sckt_flush(scktCtrl_t *scktCtrl)
 {
-    ASSERT(scktCtrl->ctrlMagic != streams__ctrlMagic, 0xFE30);
-
-    if ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[scktCtrl->dataCntxt] == NULL)       // not open
-        return;
-
-    if (s_requestIrdData(scktCtrl->dataCntxt, scktCtrl->recvBufCtrl._bufferSz, true))        // initiate an IRD flow
+    if (scktCtrl->state == scktState_open)
     {
-        scktCtrl->flushing = true;
-        return true;
+    // if (s_requestIrdData(scktCtrl->dataCntxt, scktCtrl->recvBufCtrl._bufferSz, true))      // initiate an IRD flow
+    // {
+    //     scktCtrl->flushing = true;
+         return true;
+    // }
+
     }
+
     return false;                                                                       // unable to obtain action lock
-}
-
-
-/**
- *  @brief Close out all TCP/IP sockets on a context
-*/
-void sckt_closeAll()
-{
-    for (size_t i = 0; i < dataContext__cnt; i++)
-    {
-        sckt_close(i);
-    }
 }
 
 
 /**
  *	@brief Retrieve the state of a socket connection
  */
-bool sckt_getState(scktCtrl_t *sckt)
+bool sckt_getState(scktCtrl_t *scktCtrl)
 {
-    ASSERT(sckt->ctrlMagic != streams__ctrlMagic, srcfile_ltemc_sckt_c);
-
-    atcmd_setOptions(atcmd__defaultTimeoutMS, S_socketStatusParser);
-    if (!atcmd_tryInvokeWithOptions("AT+QISTATE=1,%d", sckt->dataCntxt))
-        return resultCode__conflict;
-
-    return atcmd_awaitResult() == resultCode__success;
+    return scktCtrl->state;
 }
 
 
@@ -240,227 +210,288 @@ bool sckt_getState(scktCtrl_t *sckt)
  */
 resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
-    resultCode_t atResult;
-    ASSERT(scktCtrl != 0 && (((iop_t*)g_ltem.iop)->scktMap & 0x01 << scktCtrl->dataCntxt) != 0, srcfile_ltemc_sckt_c);
-    ASSERT(dataSz > 0, srcfile_ltemc_sckt_c);
+    resultCode_t rslt;
 
-    // AT+QISEND command initiates send by signaling we plan to send dataSz bytes on a socket,
-    // send has subcommand to actual transfer the bytes, so don't automatically close action cmd
+    atcmd_configDataMode(scktCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, data, dataSz, NULL, true);
+    atcmd_configDataModeEot(0x1A);
 
-    atcmd_setOptions(atcmd__defaultTimeoutMS, atcmd_txDataPromptParser);
-    if (ATCMD_awaitLock(atcmd__defaultTimeoutMS))
+    if (atcmd_tryInvoke("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz))
     {
-        atcmd_invokeReuseLock("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz);      // reusing manual lock
-        atResult = atcmd_awaitResult();                                             // waiting for data prompt, leaving action open on return if sucessful
-
-        // await data prompt atResult successful, now send data sub-command to actually transfer data, now automatically close action after data sent
-        if (atResult == resultCode__success)
+        rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__socketSendCompleteParser);
+        if (rslt == resultCode__success)
         {
-            atcmd_setOptions(atcmd__defaultTimeoutMS, S_socketSendCompleteParser);
-            atcmd_sendCmdData(data, dataSz, "");    // parse for BGx send complete
-            atResult = atcmd_awaitResult();
             scktCtrl->statsTxCnt++;
         }
     }
     atcmd_close();
-    return atResult;                                                            // return sucess -OR- failure from sendRequest\sendRaw action
+    return rslt;                                                            // return sucess -OR- failure from sendRequest\sendRaw action
 }
 
 
-/**
- *   @brief Perform background tasks to move socket data through pipeline.
- * 
- *   1) check for existing IRD flow and proccess
- *   2) deliver received data to application
- *   3) if no IRD flow underway, check for other sockets that have dataPending
-*/
-// private to LTEmc
-//void SCKT__doWork();
-void S_scktDoWork()
-{
-    iop_t *iopPtr = (iop_t*)g_ltem.iop;                 // shortcut to the IOP subsystem
+// static resultCode_t S__scktTxDataHndlr()
+// {
+//     IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz);
 
-    /* PROCESS ACTIVE DATA STREAM FLOW 
-     *-------------------------------------------------------------------------------------------*/
-    if (iopPtr->rxStreamCtrl != NULL &&                                     // there is an active receive stream peer
-        ((baseCtrl_t *)iopPtr->rxStreamCtrl)->protocol < protocol_socket)   // AND it is a socket
-    {
-        // readability vars
-        scktCtrl_t *scktPtr = ((scktCtrl_t *)iopPtr->rxStreamCtrl);
-        uint8_t dataCntxt = scktPtr->dataCntxt;
-        ASSERT(scktPtr == iopPtr->streamPeers[dataCntxt], srcfile_ltemc_sckt_c);    // ASSERT dataCntxt cross-links are still valid
-        rxDataBufferCtrl_t *bufPtr = &(scktPtr->recvBufCtrl);                       // smart-buffer for this operation
+//     uint32_t startTime = pMillis();
 
-        uint16_t dataAvailable = 0;
-        do
-        {
-            /* Check for IRD size unknown and data in IOP page, determine IRD and start segment flow */
-            if (scktPtr->irdRemaining == -1 && rxPageDataAvailable(bufPtr, !bufPtr->iopPg) > 9)     // IRD unknown && IOP sufficient for IRD header
-            {
-                PRINTF(dbgColor__cyan, "scktDoWork-IRDOpen iopPg=%d, [0]=%d, [1]=%d\r", bufPtr->iopPg, rxPageDataAvailable(bufPtr, 0), rxPageDataAvailable(bufPtr, 1));
-                                                                                                    // -- 1st data chuck has data header with size of queued data in BGx
-                iopPtr->txSendStartTck = 0;                                                         // stop IRD request timeout timer
-                char *irdSzAt = bufPtr->pages[!bufPtr->iopPg]._buffer + 9;                          // data prefix from BGx:  len("\r\n+QIRD: ") == 9
-                ASSERT(bufPtr->pages[!bufPtr->iopPg]._buffer[7] == ':', srcfile_ltemc_sckt_c);      // check BGx response if not valid IRD, we are lost
-                scktPtr->irdRemaining = strtol(irdSzAt, &bufPtr->pages[!bufPtr->iopPg].tail, 10);   // parse IRD segment sz:  \r\n+QIRD: <dataSz>, tail points to data
-                bufPtr->pages[!bufPtr->iopPg].tail += 2;                                            // ignore /r/n between data size and data
-            }
+//     while (pMillis() - startTime < g_lqLTEM.atcmd->timeout)
+//     {
+//         if (CBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "SEND OK", 0, 0, true)))
+//         {
+//             cbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND OK") + 1);
+//             return resultCode__success;
+//         }
+//         else if(CBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "SEND FAIL", 0, 0, true)))
+//         {
+//             cbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND FAIL") + 1);
+//             return resultCode__tooManyRequests;
+//         }
+//         else if(CBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "ERROR", 0, 0, true)))
+//         {
+//             cbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND FAIL") + 1);
+//             return resultCode__internalError;
+//         }
 
-            /* Process the data available following the IRD header */
-            dataAvailable = rxPageDataAvailable(bufPtr, !bufPtr->iopPg);
-
-            if (scktPtr->irdRemaining > 0 && dataAvailable)                         // IRD segment not complete, send available to appl
-            {
-                PRINTF(dbgColor__cyan, "scktDoWork-sendApp ird=%d, da=%d\r", scktPtr->irdRemaining, dataAvailable);
-
-                uint16_t applAvailable = MIN(dataAvailable, scktPtr->irdRemaining);     // send what we have, up to irdRemaining
-                if (!scktPtr->flushing)
-                {
-                    /* data ready event, send to application
-                     * invoke application socket receiver_func: socket number, data pointer, number of bytes in buffer */
-                    scktPtr->dataRecvCB(dataCntxt, bufPtr->pages[!bufPtr->iopPg].tail, applAvailable);
-                    scktPtr->irdRemaining -= applAvailable;
-                }
-                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);                  // delivered, clear buffer page
-            }
-
-            if (scktPtr->irdRemaining == 0)                                         // IRD segement complete
-            {
-                PRINTF(dbgColor__cyan, "scktDoWork-CloseCk iopPg=%d, [0]=%d, [1]=%d\r", bufPtr->iopPg, rxPageDataAvailable(bufPtr, 0), rxPageDataAvailable(bufPtr, 1));
-
-                PRINTF(dbgColor__dGreen, "closeIRD sckt=%d\r", dataCntxt);
-                iopPtr->rxStreamCtrl = NULL;                                        // take IOP out of data mode
-                scktPtr->dataPending = false;
-                scktPtr->flushing = false;
-                scktPtr->doWorkLastTck = pMillis();                                 // leaving URC\IRD servicing, restart URC cycle
-                IOP_resetRxDataBufferPage(bufPtr, !bufPtr->iopPg);                  // IRD response buffer processed, clear buffer page
-                atcmd_close();                                                      // close IRD request action and release action lock
-                break;
-            }
-
-            /* Check for IOP buffer page with data and RX idle, pull data forward to finish the IRD segment */
-            if  (rxPageDataAvailable(bufPtr, bufPtr->iopPg) && IOP_getRxIdleDuration() > 200)
-            {
-                PRINTF(dbgColor__cyan, "Idle sckt=%d, swapToPg=%d\r", dataCntxt, bufPtr->iopPg);
-                IOP_swapRxBufferPage(bufPtr);                                       // pull page forward
-            }
-            dataAvailable = rxPageDataAvailable(bufPtr, !bufPtr->iopPg);
-
-        } while (dataAvailable);
-
-        /* check for timeout on IRD request, so we don't wait forever.
-         * irdReqstAt is a global (singleton) in ltemc-sckt, only one request can be threaded through BGx
-         *-----------------------------------------------------------------------------------------------------------*/
-
-        if (pElapsed(iopPtr->txSendStartTck, 10000))              // if check for IRD timeout
-        // if (pElapsed(iopPtr->txSendStartTck, ATCMD__defaultTimeoutMS))              // if check for IRD timeout
-        {
-            iopPtr->txSendStartTck = 0;                                             // no longer waiting for IRD response
-            atcmd_close();                                                          // release action lock
-            ltem_notifyApp(appEvent_prto_recvFault , "IRD timeout");
-        }
-    }
-
-    /* PROCESS OPEN SOCKETS WITHOUT AN ACTIVE DATA STREAM FLOW 
-     *------------------------------------------------------------------------------------------------------
-     * Now see if any other sockets are open and have dataPending reported by BGx (+QIURC/+QSSLURC event)
-     *----------------------------------------------------------------------------------------------------*/
-    if (!ATCMD_isLockActive() && iopPtr->scktMap)                               // if no ATCMD underway AND there are sockets open 
-    {
-        iopPtr->scktLstWrk = ++iopPtr->scktLstWrk % dataContext__cnt;           // IRD fairness: if mult sckts. Skip last, get next possible context
-        uint8_t nextIrd;
-        for (uint8_t i = 0; i < dataContext__cnt; i++)
-        {
-            nextIrd = (iopPtr->scktLstWrk + i) % dataContext__cnt;              // rotate to look for next open sckt for IRD request
-            scktCtrl_t *scktPtr = ((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[nextIrd]);
-
-            if (iopPtr->scktMap & 0x01 << nextIrd)                              // socket is OPEN
-            {
-                ASSERT_W(!pElapsed(scktPtr->doWorkLastTck, IOP__rxDefaultTimeout), srcfile_ltemc_sckt_c, "doWork freq slow:bffr ovrflw risk");
-                scktPtr->doWorkLastTck = pMillis();                             // last check for URC\data pending check cycle
-
-                if (scktPtr->dataPending)                                       // socket has data reported (BGx URC)
-                {
-                    if (S_requestIrdData((dataContext_t)nextIrd, 0, true))      // Request maximum data (IRD) with action lock 
-                    {                                                           // this puts IOP in data mode (IRD is hybrid of cmd and data)
-                        ((scktCtrl_t*)iopPtr->rxStreamCtrl)->statsRxCnt++;      // tally RX (IRD) segments, full IRD counts as only 1
-                        PRINTF(dbgColor__dGreen, "SCKT-openIRD sckt=%d\r", i);
-                        break;                              // If the IRD request gets a lock, the IRD process starts for the socket[i]
-                                                            // If the request cannot get a lock (maybe a send\transmit cmd is underway) it silently returns
-                                                            // 
-                                                            // The IRD process is a true BGx action that block other foreground actions until the 
-                                                            // pipeline is emptied and no more data is pending. This releases the lock and allows
-                                                            // other types of commands to be sent to BGx. 
-                    }
-                }
-            }
-        }
-        iopPtr->scktLstWrk = nextIrd;
-    }
-}
-
-#pragma endregion
+//         pDelay(1);
+//     }
+//     return resultCode__timeout;
+// }
 
 
 #pragma region private local static functions
 /*-----------------------------------------------------------------------------------------------*/
 
+#define SCKT_URC_HEADERSZ 30
+
 /**
- *  @brief [private] Invoke IRD command to request BGx for socket (read) data
- */
-static bool S_requestIrdData(dataContext_t dataCntx, uint16_t reqstSz, bool applyLock)
+ *   @brief Move socket data through pipeline.
+ * 
+*/
+
+    /*
+     * +QIURC: "recv",<connectID>       UDP/TCP incoming receive to retrieve with AT+QIRD
+     * +QIURC: "closed",<connectID>
+     * +QIURC: "incoming full"          NOT IMPLEMENTED
+     *
+     * +QSSLURC: "recv",<clientID>      SSL/TLS incoming receive to retrieve with AT+QSSLRECV
+     * +QSSLURC: "closed",<clientID>
+
+     * NOTE:
+     * +QIURC: "pdpdeact",<contextID>   // not handled here, falls through to global URC handler
+    */
+
+static void S__scktUrcHndlr()
 {
-    ASSERT(dataCntx < dataContext__cnt, srcfile_ltemc_sckt_c);                                    // ASSERT data context is valid context
-    ASSERT(((iop_t*)g_ltem.iop)->scktMap & 0x01 << dataCntx, srcfile_ltemc_sckt_c);               // ASSERT socket is open 
+    cBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
 
-    char irdCmd[24] = {0};
-    uint16_t requestedSz = (!reqstSz) ? SCKT__IRD_requestMaxSz : MAX(SCKT__IRD_requestMaxSz, reqstSz);
+    // not a socket URC or insufficient chars to parse URC header
+    if (cbffr_find(rxBffr, "\"pdpdeact\"", 0, 0, false) >= 0)           // +QIURC: "pdpdeact" handled at higher level, +QIURC overlaps with UDP/TCP
+    {
+        return;
+    }
 
-    if (((scktCtrl_t *)((iop_t*)g_ltem.iop)->streamPeers[dataCntx])->protocol == protocol_ssl)
-        snprintf(irdCmd, 24, "AT+QSSLRECV=%d,%d", dataCntx, requestedSz);
+    bool isUdpTcp = CBFFR_FOUND(cbffr_find(rxBffr, "+QIURC", 0, 0, false));
+    bool isSslTls = CBFFR_FOUND(cbffr_find(rxBffr, "+QSSLURC", 0, 0, false));
+    if (!isUdpTcp && !isSslTls)
+    {
+        return;
+    }
+
+    /* UDP/TCP/SSL/TLS URC
+     * ----------------------------------------------------------------------------------------- */
+
+    char workBffr[80] = {0};
+    char *workPtr = workBffr;
+
+    int16_t nextIndx = cbffr_find(rxBffr, "+QIURC", 0, 0, true);            // advance bffr-tail ptr to starting point
+    if (isUdpTcp) 
+    {
+        cbffr_skip(rxBffr, 9);                                              // UDP/TCP: + QIURC: "
+    }
+    else 
+    {
+        cbffr_skip(rxBffr, 11);                                             // SSL/TLS: +QSSLURC: "
+    }
+    uint16_t eolIndx = cbffr_find(rxBffr, "\r\n", 0, 30, false);
+    if (CBFFR_FOUND(eolIndx))                                               // got full line, work on URC
+    {
+        cbffr_skipTail(rxBffr, 9);                                          // ignore prefix
+        cbffr_pop(rxBffr, workBffr, eolIndx - 9);
+    }
     else
-        snprintf(irdCmd, 24, "AT+QIRD=%d,%d", dataCntx, requestedSz);
-    // PRINTF(dbgColor__white, "rqstIrd lck=%d, cmd=%s\r", applyLock, irdCmd);
+    {
+        return;                                                             // don't have full URC line yet, come back later
+    }
+    
+    /* URC ready to process
+     ----------------------------------------------------------------------- */
+    uint8_t dataCntxt;
 
-    if (applyLock && !ATCMD_awaitLock(atcmd__defaultTimeoutMS))
-        return false;
+    uint16_t irdAvailSz = 0;
+    // "recv" = socket new data receive
+    if (workBffr[0] == 'r')
+    {
+        dataCntxt = strtol(workPtr + sizeof("recv\""), NULL, 10);           // valid for both UDP/TCP and SSL
+        ASSERT(dataCntxt < dataCntxt__cnt);
 
-    ((iop_t*)g_ltem.iop)->rxStreamCtrl = ((iop_t*)g_ltem.iop)->streamPeers[dataCntx];       // set IOP in data mode
-    ((iop_t*)g_ltem.iop)->txSendStartTck = pMillis();
-    ((scktCtrl_t*)((iop_t*)g_ltem.iop)->rxStreamCtrl)->irdRemaining = -1;                   // signal IRD pending with unknown pending
+        streamCtrl_t* streamCtrl = ltem_getStreamFromCntxt(dataCntxt, streamType__ANY);
+        ASSERT(streamCtrl->streamType == streamType_UDP ||
+               streamCtrl->streamType == streamType_TCP ||
+               streamCtrl->streamType == streamType_SSLTLS);
+        scktCtrl_t* scktCtrl = (scktCtrl_t*)streamCtrl;
 
-    IOP_sendTx(irdCmd, strlen(irdCmd), false);
-    IOP_sendTx("\r", 1, true);
-    return true;
+        uint16_t irdRemain = 0;
+        do
+        {
+            uint16_t irdRqstSz = cbffr_getVacant(g_lqLTEM.iop->rxBffr) / 2;     // request up to half of available buffer space
+            if (isUdpTcp)
+            {
+                atcmd_configDataMode(scktCtrl->dataCntxt, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, true);
+                atcmd_tryInvoke("AT+QIRD=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
+            }
+            else
+            {
+                atcmd_configDataMode(scktCtrl->dataCntxt, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, true);
+                atcmd_tryInvoke("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
+            }
+            atcmd_awaitResult();
+            irdRemain = atcmd_getValue();
+
+        } while (irdRemain > 0);
+    }
+
+    // "closed" = socket closed
+    if (workBffr[0] == 'c')                                                
+    {
+        dataCntxt = strtol(workPtr + sizeof("closed\"") , NULL, 10);
+        ASSERT(dataCntxt < dataCntxt__cnt);
+
+        uint8_t indx = LTEM__getStreamIndx(dataCntxt);
+        ((scktCtrl_t*)g_lqLTEM.streams[indx])->state = scktState_closed;
+    }
+
+    return;
+}    
+
+
+/**
+ * @brief Socket protocol (UDP/TCP/SSL) stream RX data handler, marshalls incoming data from RX buffer to app (application).
+ */
+static resultCode_t S__scktRxHndlr()
+{
+    /* +QIRD: <read_actual_length>/r/n<data>
+     * +QSSLRECV: <havereadlen>/r/n<data>
+     */
+
+    char wrkBffr[32] = {0};
+    char *wrkPtr = wrkBffr;
+    streamCtrl_t* streamCtrl = ltem_getStreamFromCntxt(g_lqLTEM.atcmd->dataMode.contextKey, streamType__ANY);
+
+    ASSERT(streamCtrl->streamType == streamType_UDP ||                                                          // assert that the stream config is consistent
+           streamCtrl->streamType == streamType_TCP || 
+           streamCtrl->streamType == streamType_SSLTLS);
+    scktCtrl_t *scktCtrl = (scktCtrl_t*)streamCtrl;
+    
+    pDelay(1);                                                                                                  // ugly, but creating loop to wait 500uS seems silly
+    uint8_t popCnt = cbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
+    if (CBFFR_NOTFOUND(popCnt))
+    {
+        return resultCode__internalError;
+    }
+    
+    cbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                                       // pop preamble phrase to parse data length
+    wrkPtr = memchr(wrkBffr, ':', popCnt) + 2;
+    uint16_t irdSz = strtol(wrkPtr, NULL, 10);
+    g_lqLTEM.atcmd->retValue = irdSz;
+
+    PRINTF(dbgColor__cyan, "scktRxHndlr() cntxt=%d irdSz=%d\r", scktCtrl->dataCntxt, irdSz);
+
+    while (irdSz > 0)
+    {
+        uint32_t readTimeout = pMillis();
+        uint16_t bffrCnt;
+        do                                                                                                      // wait for buffer to recv IRD data
+        {
+            bffrCnt = cbffr_getOccupied(g_lqLTEM.iop->rxBffr);
+            ASSERT_NOTSTALLED(readTimeout, sckt__readTimeoutMs);
+        } while (bffrCnt < sckt__irdRequestPageSz);
+        
+        char* streamPtr;
+        uint16_t blockSz = cbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, irdSz);                             // get data ptr from rxBffr
+        PRINTF(dbgColor__cyan, "scktRxHndlr() ptr=%p, blkSz=%d, availSz=%d\r", streamPtr, blockSz, irdSz);
+
+        irdSz -= blockSz;
+        ((scktAppRecv_func)(*scktCtrl->appRecvDataCB))(scktCtrl->dataCntxt, streamPtr, blockSz, irdSz == 0);    // forward to application
+        cbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                     // commit POP
+
+        if (irdSz == 0)                                                                                         // done with data
+        {
+            while (cbffr_getOccupied(g_lqLTEM.iop->rxBffr) < sckt__readTrailerSz)
+            {
+                pDelay(1);                                                                                      // yield
+                ASSERT_NOTSTALLED(readTimeout, sckt__readTimeoutMs);
+            }
+            cbffr_skipTail(g_lqLTEM.iop->rxBffr, sckt__readTrailerSz);
+        }
+    }
+    return resultCode__success;
 }
 
+
+
+
+#pragma endregion
+
+
+#pragma region private service functions and UDP/TCP/SSL response parsers
+/*-----------------------------------------------------------------------------------------------*/
+
+/**
+ *	\brief [private] UDP/TCP (IRD Request) response parser.
+ *  \return LTEmC parse result
+ */
+static cmdParseRslt_t S__irdResponseHeaderParser() 
+{
+    return atcmd_stdResponseParser("+QIRD: ", true, ",", 1, 1, "\r\n", 0);
+}
+
+
+/**
+ *	\brief [private] UDP/TCP (IRD Request) response parser.
+ *  \return LTEmC parse result
+ */
+static cmdParseRslt_t S__sslrecvResponseHeaderParser() 
+{
+    return atcmd_stdResponseParser("+QSSLRECV: ", true, ",", 1, 1, "\r\n", 0);
+}
 
 
 /**
  *	@brief [private] TCP/UDP wrapper for open connection parser.
  */
-static resultCode_t S_tcpudpOpenCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S__udptcpOpenCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd_serviceResponseParser(response, "+QIOPEN: ", 1, endptr);
+    return atcmd_stdResponseParser("+QIOPEN: ", true, ",", 1, 1, "", 0);
 }
 
 
 /**
  *	@brief [private] SSL wrapper for open connection parser.
  */
-static resultCode_t S_sslOpenCompleteParser(const char *response, char **endptr) 
+static cmdParseRslt_t S__sslOpenCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd_serviceResponseParser(response, "+QSSLOPEN: ", 1, endptr);
+    return atcmd_stdResponseParser("+QSSLOPEN: ", true, ",", 1, 1, "", 0);
 }
 
 
 /**
  *	@brief [private] SSL wrapper for open connection parser.
  */
-static resultCode_t S_socketSendCompleteParser(const char *response, char **endptr)
+static cmdParseRslt_t S__socketSendCompleteParser(const char *response, char **endptr)
 {
-    return atcmd_defaultResultParser(response, "", false, 0, ASCII_sSENDOK, endptr);
+    return atcmd_stdResponseParser("", false, "", 0, 0, "SEND OK\r\n", 0);
 }
+
 
 /**
  *	@brief [static] Socket status parser
@@ -469,11 +500,10 @@ static resultCode_t S_socketSendCompleteParser(const char *response, char **endp
  *  @param endptr [out] Char pointer to the char following parsed text
  *  @return HTTP style result code, 0 = not complete
  */
-static resultCode_t S_socketStatusParser(const char *response, char **endptr) 
+static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr) 
 {
     // BGx +QMTCONN Read returns Status = 3 for connected, service parser returns 203
     return atcmd_serviceResponseParser(response, "+QISTATE: ", 5, endptr) == 202 ? resultCode__success : resultCode__unavailable;
 }
-
 
 #pragma endregion

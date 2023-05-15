@@ -1,29 +1,28 @@
-/******************************************************************************
-*  \file ltemc-nxp-sc16is.c
- *  \author Greg Terrell, Jensen Miller
- *  \license MIT License
- *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * NXP SC16is__ (740,741,750,760) support used in LooUQ designs
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \author Greg Terrell, Jensen Miller LooUQ Incorporated
+
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
 
 #ifndef __LTEMC_NXP_SC16IS_H__
 #define __LTEMC_NXP_SC16IS_H__
@@ -33,11 +32,12 @@
 #include <cstdlib>
 #include <cstdbool>
 #else
+#include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <stdbool.h>
 #endif // __cplusplus
 
+#include "ltemc-types.h"
 #include "platform/lqPlatform-spi.h"
 
 
@@ -56,7 +56,7 @@ typedef union    \
 typedef const uint8_t ro8;
 typedef uint8_t rw8;
 
-enum SC16IS74__constants
+enum SC16IS7xx__constants
 {
     // BGx default baudrate is 115200, LTEm-OSC raw clock is 7.378MHz (SC16IS740 section 7.8)
     SC16IS7xx__DLL_baudClockDivisorLOW = 0x04U,
@@ -64,13 +64,15 @@ enum SC16IS74__constants
 
     // Bridge<>BG96 UART framing - 8 data, no parity, 1 stop (bits)
     SC16IS7xx__LCR_UARTframing = 0x03U,
+    SC16IS7xx__LCR_break = 0x40U,
     //SC16IS7xx__SC16IS7xx_EFR_ENHANCED_FUNCTIONS = 0x10U
 
-    // [7:4] RX, [3:0] TX - level / 4 (buffer granularity is 4)
-    // SC16IS7xx__TLR_TriggerLevels = 0x22U,						// **!** testing value **!**
-    //SC16IS7xx__SC16IS7xx_TLR_TRIGGER_LEVELS = 0xFFU					    // 15 (*4) = 60 char buffer
+    // TLR Register [7:4] RX, [3:0] TX Interrupt trigger points (MCR[2]=1 and EFR[4]=1 required)
+    // set field to level / 4 (buffer granularity is 4)
+    // SC16IS7xx__TLR_TriggerLevels = 0x22U,						// **!** testing value - 8 char buffer **!**
+    // SC16IS7xx__TLR_TRIGGER_LEVELS = 0xFFU					    // 0xF=15 (*4) = 60 char buffer
 
-    // fcr is a RdOnly register, flush and FIFO enable are both in this register 
+    // fcr is a WrOnly register, flush and FIFO enable are both in this register 
     SC16IS7xx__FCR_BASIC_MODE = 0xB7U,
     SC16IS7xx__FCR_IOP_FIFO_ENABLE = 0xB1U,
     SC16IS7xx__FCR_IOP_RX_FLUSH = 0x02U,
@@ -80,9 +82,9 @@ enum SC16IS74__constants
     SC16IS7xx__FIFO_readRnW = 0x01,
     SC16IS7xx__FIFO_writeRnW = 0x00,
 
-    SC16IS7xx__REGSET_general = 0x00,
-    SC16IS7xx__REGSET_special = 0x80,
-    SC16IS7xx__REGSET_enhanced = 0xBF,
+    SC16IS7xx__LCR_REGSET_general = 0x00,
+    SC16IS7xx__LCR_REGSET_special = 0x80,
+    SC16IS7xx__LCR_REGSET_enhanced = 0xBF,
 
     SC16IS7xx__HW_resetDelay = 1U,
     SC16IS7xx__SW_resetMask = 0x08,
@@ -90,6 +92,7 @@ enum SC16IS74__constants
     SC16IS7xx__LSR_RHR_dataReady = 0x01U,
     SC16IS7xx__LSR_THR_empty = 0x02U,
     SC16IS7xx__LSR_FIFO_dataError = 0x80U,
+    SC16IS7xx__LSR_FIFO_overrun = 0x02U
 };
 
 
@@ -417,46 +420,49 @@ void SC16IS7xx_enableIrqMode();
 /**
  *	@brief Perform simple write/read using SC16IS741A scratchpad register. Used to test SPI communications.
  */
-bool SC16IS7xx_chkCommReady();
+bool SC16IS7xx_isAvailable();
 
 
 /**
  *	@brief Read from a SC16IS741A bridge register
- *	@param reg_addr [in] - The register address
- *  @return reg_data - Byte of data read from register
+ *	\param reg_addr [in] - The register address
+ *  \return reg_data - Byte of data read from register
  */
 uint8_t SC16IS7xx_readReg(uint8_t reg_addr);
 
 
 /**
  *	@brief Write to a SC16IS741A bridge register
- *	@param reg_addr [in] - The register address
- *	@param reg_data [in] - Pointer to the data to write to the register
+ *	\param reg_addr [in] - The register address
+ *	\param reg_data [in] - Pointer to the data to write to the register
  */
 void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data);
 
 
 /**
  *	@brief Reads through the SC16IS741A bridge (its RX FIFO)
- *	@param dest [out] - The destination buffer
- *	@param dest_len [in] - The length of the destination buffer
+ *	\param dest [out] - The destination buffer
+ *	\param dest_len [in] - The length of the destination buffer
  */
 void SC16IS7xx_read(void* dest, uint8_t dest_len);
 
 
 /**
  *	@brief Write through the SC16IS741A bridge
- *	@param src [in] - The source data to write
- *	@param src_len [in] - The length of the source
+ *	\param src [in] - The source data to write
+ *	\param src_len [in] - The length of the source
  */
 void SC16IS7xx_write(const void * src, uint8_t src_len);
 
 
 /**
  *	@brief Perform reset on bridge FIFO
- *  @param resetAction [in] - What to reset TX, RX or both
+ *  \param resetAction [in] - What to reset TX, RX or both
  */
 void SC16IS7xx_resetFifo(sc16IS7xx_FifoResetAction_t resetAction);
+
+
+void SC16IS7xx_sendBreak();
 
 
 /**

@@ -5,26 +5,8 @@
         "cstddef": "c",
         "limits": "c",
         "type_traits": "c",
-        "bitset": "cpp",
-        "cfloat": "cpp",
-        "ltem1c.h": "c",
-        "iop.h": "c",
-        "chrono": "cpp",
-        "network.h": "c",
-        "cstring": "c",
         "ltemc.h": "c",
-        "ltemc-iop.h": "c",
-        "lq-types.h": "c",
-        "stdint.h": "c",
         "ltemc-internal.h": "c",
-        "lq-platform.h": "c",
-        "lqplatform-spi.h": "c",
-        "cmath": "c",
-        "ltemc-mqtt.h": "c",
-        "ltemc-filecodes.h": "c",
-        "ltemc-atcmd.h": "c",
-        "ltemc-streams.h": "c",
-        "array": "c",
-        "*.tcc": "c"
+        "lq-platform.h": "c"
     }
 }

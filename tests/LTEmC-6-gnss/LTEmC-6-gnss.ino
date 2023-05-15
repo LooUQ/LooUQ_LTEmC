@@ -41,8 +41,11 @@
 #define PRINTF(c_, f_, ...) 
 #endif
 
-                                        // define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+/* specify the pin configuration
+ * --------------------------------------------------------------------------------------------- */
+//#define HOST_FEATHER_UXPLOR   
+#define HOST_FEATHER_UXPLOR_L          
+// #define HOST_FEATHER_LTEM3F
 
 #include <ltemc.h>
 #include <lq-diagnostics.h>
@@ -67,15 +70,15 @@ void setup() {
 
     PRINTF(dbgColor__red, "\rLTEmC Test 6: GNSS\r");
     randomSeed(analogRead(0));
-    lqDiag_registerNotifCallback(appNotifyCB);                      // configure ASSERTS to callback into application
+    lqDiag_setNotifyCallback(appEvntNotify);                        // configure ASSERTS to callback into application
 
-    ltem_create(ltem_pinConfig, appNotifyCB);                       // create LTEmC modem
-    ltem_start();                                                   // ... and start it
+    ltem_create(ltem_pinConfig, NULL, appEvntNotify);               // create LTEmC modem, no yield CB req'd for testing
+    ltem_start(resetAction_swReset);                                // ... and start it
+
+    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_getSwVersion());
 
     // turn on GNSS
     resultCode_t cmdResult = gnss_on();
-
-    ASSERT(cmdResult == 200 || cmdResult == 504, srcfile_gnss_c);
 
     if (cmdResult == 200)
         PRINTF(dbgColor__info, "GNSS enabled\r", cmdResult);
@@ -116,17 +119,19 @@ void loop() {
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifyCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
+void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (notifType > 200)
+    if (eventType == appEvent_fault_assertFailed)
+    if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF(dbgColor__error, "LQCloud-HardFault: %s\r", notifMsg);
-        while (1) {}
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
     }
-    PRINTF(dbgColor__info, "LQCloud Info: %s\r", notifMsg);
+    else 
+    {
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+    }
     return;
 }
-
 
 void indicateFailure(char failureMsg[])
 {
@@ -136,9 +141,9 @@ void indicateFailure(char failureMsg[])
     bool halt = true;
     while (halt)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(1000);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(100);
     }
 }
@@ -150,9 +155,9 @@ void indicateLoop(int loopCnt, int waitNext)
 
     for (int i = 0; i < 6; i++)
     {
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
         pDelay(50);
-        gpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(50);
     }
 

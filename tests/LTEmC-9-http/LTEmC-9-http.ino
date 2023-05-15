@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file LTEmC-9-http.ino
+ *  \file ltemc-9-http.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -34,7 +34,7 @@
     asm(".global _printf_float");       // forces build to link in float support for printf
     #if _DEBUG == 1
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #elif _DEBUG >= 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
     #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
@@ -43,15 +43,22 @@
 #endif
 
 
-// define options for how to assemble this build
-#define HOST_FEATHER_UXPLOR             // specify the pin configuration
+/* specify the pin configuration
+ * --------------------------------------------------------------------------------------------- */
+// #define HOST_FEATHER_UXPLOR             
+// #define HOST_FEATHER_LTEM3F
+#define HOST_FEATHER_UXPLOR_L
+
+#define PDP_DATA_CONTEXT 1
+#define PDP_APN_NAME "hologram"
+
+#include <lq-diagnostics.h>
+#include <lq-SAMDutil.h>                // allows read of reset cause
 
 #include <ltemc.h>
 #include <ltemc-tls.h>
 #include <ltemc-http.h>
-#include <string.h>
 
-#define DEFAULT_NETWORK_CONTEXT 1
 // #define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
 // #define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') appNotifyCB(255, failMsg)
 
@@ -63,9 +70,9 @@ uint32_t lastCycle;
 // ltem1 variables
 /* To avoid having to prefix httpCtrl1 with & in calls below, you can create a pointer
  * variable with: "httpCtrl_t *httpCtrl1 = &httpCtrl;"   */
-httpCtrl_t httpCtrl1;                    
-httpCtrl_t httpCtrl2;
-httpCtrl_t *httpPtr;                            // used for common READ 
+httpCtrl_t httpCtrlG;
+httpCtrl_t httpCtrlP;
+httpCtrl_t *httpCtrl;                            // used for common READ 
 
 static char webPageBuf[1024];
 //char cstmHdrs[256];                           // if you use custom HTTP headers then create a buffer to hold them
@@ -80,31 +87,34 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "\rLTEm1c test9-HTTP\r\n");
+    PRINTF(dbgColor__red, "\rLTEmC test9-HTTP\r");
+    lqDiag_setNotifyCallback(appEvntNotify);
 
-    ltem_create(ltem_pinConfig, appNotifCB);
-    ltem_start();
+    ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
+    ltem_setProviderScanMode(ntwkScanMode_lteonly);
+    ltem_setIotMode(ntwkIotMode_m1);
+    ltem_setDefaultNetwork(PDP_DATA_CONTEXT, PDP_PROTOCOL_IPV4, PDP_APN_NAME);
+    ltem_start(resetAction_swReset);
 
-    ntwk_setNwScanMode(ntwkScanMode_lteonly);
-    ntwk_setIotOpMode(ntwkIotMode_m1);
-
-    PRINTF(dbgColor__none, "Waiting on network...\r");
-    networkOperator_t networkOp = ntwk_awaitOperator(30000);
-    if (strlen(networkOp.operName) == 0)
-        appNotifCB(255, 0, 0, "Timout (30s) waiting for cellular network.");
-    PRINTF(dbgColor__info, "Network type is %s on %s\r", networkOp.ntwkMode, networkOp.operName);
-
-    uint8_t cntxtCnt = ntwk_fetchActivePdpCntxts();
-    if (cntxtCnt == 0)
+    providerInfo_t *provider;
+    while(true)
     {
-        ntwk_activatePdpContext(DEFAULT_NETWORK_CONTEXT, pdpCntxtProtocolType_IPV4, "");
+        provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
+        if (STREMPTY(provider->name))
+            PRINTF(dbgColor__warn, "Searching for provider...");
+        else
+            break;
+    }
+    if (strlen(provider->name) > 0)
+    {
+        PRINTF(dbgColor__info, "Connected to %s using %s, %d networks available.\r", provider->name, provider->iotMode, provider->networkCnt);
     }
 
     /* Basic connectivity established, moving on to HTTPS setup */
 
     // most sites use tls, 
     // NOTE: the TLS context MUST == the HTTP context if using SSL\TLS; dataContext_0 is this example
-    tls_configure(dataContext_0, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    tls_configure(dataCntxt_0, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
 
     // alternate test sites...
     // https://api.weather.gov/points/44.7582,-85.6022
@@ -121,19 +131,21 @@ void setup() {
      * -- https://forecast.weather.gov/obslocal.php?warnzone=MIZ026&local_place=Traverse%20City%20MI&zoneid=EDT&offset=14400
      */
 
-    // create a control for talking to the website
-    http_initControl(&httpCtrl1, dataContext_0, "https://api.weather.gov", webPageBuf, sizeof(webPageBuf), httpRecvCB);
-    PRINTF(dbgColor__dGreen, "URL Host1=%s\r", httpCtrl1.urlHost);
+    // // create a control for talking to the website
+    http_initControl(&httpCtrlG, dataCntxt_0, httpRecvCB);                  // initialize local (internal) structures
+    http_setConnection(&httpCtrlG, "https://api.weather.gov", 443);                                         // set remote web host
+    PRINTF(dbgColor__dGreen, "URL Host1=%s\r", httpCtrlG.hostUrl);
 
-    // you can use httpPtr or &httpCtrl in the line above to pass reference, below the &httpCtrl2 style is required
-    // since there is no "ptr" variable created (around line 65) to use here
+    // you can optionally setup a httpCtrl, EXAMPLE: httpCtrl *httpCtrl = &httpCtrl2
+    // Below the &httpCtrl2 style is required since there is no "ptr" variable created (around line 65) to use here
 
-    http_initControl(&httpCtrl2, dataContext_1, "http://httpbin.org", webPageBuf, sizeof(webPageBuf), httpRecvCB);
-    PRINTF(dbgColor__dGreen, "URL Host2=%s\r", httpCtrl2.urlHost);
+    http_initControl(&httpCtrlP, dataCntxt_1, httpRecvCB);
+    http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
+    PRINTF(dbgColor__dGreen, "URL Host2=%s\r", httpCtrlP.hostUrl);
 }
 
 resultCode_t rslt;
-char pageBuffer[4096] = {0};
+char pageBffr[101] = {0};
 uint16_t pageChars = 0;
 
 
@@ -148,12 +160,12 @@ void loop()
 
         if (loopCnt % 2 == 1)
         {
-            // resultCode_t http_get(httpCtrl_t *httpCtrl, const char* url, uint8_t timeoutSeconds);
+            // resultCode_t http_get(httpCtrl_t *httpCtrl, const char* url)   
             // default HTTP timeout is 60 seconds
-            rslt = http_get(&httpCtrl1, "/points/44.7582,-85.6022", http__noResponseHeaders, http__useDefaultTimeout);
+            rslt = http_get(&httpCtrlG, "/points/44.7582,-85.6022", http__noResponseHeaders);
             if (rslt == resultCode__success)
             {
-                httpPtr = &httpCtrl1;
+                httpCtrl = &httpCtrlG;
                 PRINTF(dbgColor__info, "GET invoked successfully\r");
             }
             else
@@ -163,11 +175,11 @@ void loop()
         {
             char postData[] = "{ \"field1\": 1, \"field2\": \"field2\" }";
 
-            // resultCode_t http_post(httpCtrl_t *httpCtrl, const char* url, const char* postData, uint16_t dataSz, uint8_t timeoutSeconds);
-            rslt = http_post(&httpCtrl2, "/anything", http__noResponseHeaders, postData, strlen(postData), http__useDefaultTimeout);
+            // resultCode_t http_post(httpCtrl_t *httpCtrl, const char* url, const char* postData, uint16_t dataSz);
+            rslt = http_post(&httpCtrlP, "/anything", http__noResponseHeaders, postData, strlen(postData));
             if (rslt == resultCode__success)
             {
-                httpPtr = &httpCtrl2;
+                httpCtrl = &httpCtrlP;
                 PRINTF(dbgColor__info, "POST invoked successfully\r");
             }
             else
@@ -190,45 +202,31 @@ void loop()
 
         if (rslt == resultCode__success)
         {
-            if (rslt = http_readPage(httpPtr, 20))
-            {
-                switch (rslt)
-                {
-                case resultCode__success:
-                    PRINTF(dbgColor__white, "Read page complete, %d chars received.\r", pageChars);
-                    break;
+            bool morePage = false;
+            uint16_t httpResult;
 
-                case resultCode__cancelled:
-                    PRINTF(dbgColor__warn, "Read page cancelled after %d chars.\r", pageChars);
-                    break;
-                
-                default:
-                    PRINTF(dbgColor__warn, "Problem reading page contents, result=%d.\r", rslt);
-                    break;
-                }
-            }
+            PRINTF(dbgColor__white, "Request complete, expecting %d chars.\rHTTP Page\r", httpCtrl->pageSize);
 
-            char printBuf[121];
-            strncpy(printBuf, pageBuffer, 120);
-            PRINTF(dbgColor__white, "Got (1st 120 chars):\r%s\r", printBuf);
+            httpResult = http_readPage(httpCtrl);               // content is delivered via the registered page receive callback
+            PRINTF(dbgColor__magenta, "Read status=%d\r", httpResult);
         }
         loopCnt++;
     }
-
-    /* NOTE: Advance data pipeline, ltem_doWork(). DoWork has no side effects other than taking a small amount of
-     * time to check and forward receive buffers. The ltem_doWork() function SHOULD BE invoked frequently. */
-    ltem_doWork();
 }
 
 
-// typedef void (*httpRecvFunc_t)(dataContext_t dataCntxt, char *data, uint16_t dataSz);
+// typedef void (*httpRecvFunc_t)(dataCntxt_t dataCntxt, char *recvData, uint16_t dataSz, bool isFinal);
 
-void httpRecvCB(dataContext_t cntxt, uint16_t httpStatus, char *recvData, uint16_t dataSz)
+void httpRecvCB(dataCntxt_t dataCntxt, char *recvData, uint16_t dataSz, bool isFinal)
 {
-    strncpy(pageBuffer + pageChars, recvData, dataSz);
+    //strncpy(pageBffr + pageChars, recvData, dataSz);
     pageChars += dataSz;
 
-    PRINTF(dbgColor__green, "\rAppRecv'd %d new chars, total page sz=%d\r", dataSz, pageChars);
+    PRINTF(dbgColor__magenta, "AppRecv'd %d new chars, total page sz=%d\r", dataSz, pageChars);
+    if (isFinal)
+    {
+        PRINTF(dbgColor__magenta, "Read Complete!\r");
+    }
 }
 
 
@@ -236,20 +234,21 @@ void httpRecvCB(dataContext_t cntxt, uint16_t httpStatus, char *recvData, uint16
 /* test helpers
 ========================================================================================================================= */
 
-void appNotifCB(uint8_t notifType, uint8_t assm, uint8_t inst, const char *notifMsg)
+void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
 {
-    if (notifType >= lqNotifType__CATASTROPHIC)
+    if (eventType > appEvent__FAULTS)
     {
-        PRINTF(dbgColor__error, "\r\n** %s \r\n", notifMsg);
-        volatile int halt = 1;
-        while (halt) {}
+        PRINTF(dbgColor__error, "LTEmC Fault: %s\r", notifyMsg);
     }
-
-    else if (notifType >= lqNotifType__WARNING)
-        PRINTF(dbgColor__warn, "\r\n** %s \r\n", notifMsg);
-
-    else
-        PRINTF(dbgColor__info, "\r\n%s \r\n", notifMsg);
+    else if (eventType > appEvent__WARNINGS)
+    {
+        PRINTF(dbgColor__warn, "LTEmC Warning: %s\r", notifyMsg);
+    }
+    else 
+    {
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+    }
+    return;
 }
 
 

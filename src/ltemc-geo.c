@@ -1,49 +1,49 @@
-/******************************************************************************
- *  \file ltemc-geo.c
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020,2021 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * BGx Geo-Fence support (requires ltemc-gnss)
- *****************************************************************************/
+/** ****************************************************************************
+  \file 
+  \brief Public API geo-fence support (requires GNSS included in project)
+  \author Greg Terrell, LooUQ Incorporated
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
+  \loouq
+
+--------------------------------------------------------------------------------
+
+    This project is released under the GPL-3.0 License.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+***************************************************************************** */
+
+
+#define _DEBUG 0                                // set to non-zero value for PRINTF debugging output, 
+// debugging output options                     // LTEmC will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
-    asm(".global _printf_float");       // forces build to link in float support for printf
+    asm(".global _printf_float");               // forces build to link in float support for printf
     #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
+    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
+    #include <jlinkRtt.h>                       // output debug PRINTF macros to J-Link RTT channel
     #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
 #define PRINTF(c_, f_, ...) 
 #endif
 
+#define SRCFILE "GEO"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include <stdlib.h>
-
-//#define _DEBUG
-#include "ltemc.h"
+#include "ltemc-internal.h"
 #include "ltemc-geo.h"
+
 
 // private local declarations
 static resultCode_t geoQueryResponseParser(const char *response);
