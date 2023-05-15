@@ -384,13 +384,22 @@ streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType)
     {
         if (g_lqLTEM.streams[i]->dataCntxt == context)
         {
-            if (streamType == 0)
+            if (streamType == streamType__ANY)
             {
                 return g_lqLTEM.streams[i];
             }
             else if (g_lqLTEM.streams[i]->streamType == streamType)
             {
                 return g_lqLTEM.streams[i];
+            }
+            else if (streamType == streamType__SCKT)
+            {
+                if (g_lqLTEM.streams[i]->streamType == streamType_UDP ||
+                    g_lqLTEM.streams[i]->streamType == streamType_TCP ||
+                    g_lqLTEM.streams[i]->streamType == streamType_SSLTLS)
+                {
+                    return g_lqLTEM.streams[i];
+                }
             }
         }
     }

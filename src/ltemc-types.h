@@ -281,11 +281,12 @@ typedef enum streamType_tag
 {
     streamType_UDP = 'U',
     streamType_TCP = 'T',
-    streamType_SSL = 'S',
+    streamType_SSLTLS = 'S',
     streamType_MQTT = 'M',
     streamType_HTTP = 'H',
-    streamType_file = 'f',
-    streamType__ANY = 0
+    streamType_file = 'F',
+    streamType__ANY = 0,
+    streamType__SCKT = 'k'
 } streamType_t;
 
 
@@ -319,8 +320,8 @@ typedef struct iop_tag
     volatile char* txBffr;
     volatile uint16_t txPending;
 
-    // cBuffer_t *txBffr;                      /// transmit buffer 3.0.1 to be relaced with consumer buffer switching below 
     cBuffer_t *rxBffr;                      /// receive buffer
+    char txEot;                             /// if not NULL, char to output on empty TX FIFO; clears automatically on use.
  
     volatile uint32_t lastTxAt;             /// tick count when TX send started, used for response timeout detection
     volatile uint32_t lastRxAt;             /// tick count when RX buffer fill level was known to have change
@@ -368,8 +369,8 @@ typedef struct dataMode_tag
     uint16_t contextKey;                                /// unique identifier for data flow, could be dataContext(proto), handle(files), etc.
     char trigger[atcmd__dataModeTriggerSz];             /// char sequence that signals the transition to data mode, data mode starts at the following character
     dataRxHndlr_func dataHndlr;                         /// data handler function (TX/RX)
-    char* dataLoc;                                      /// location of data buffer (TX only)
-    uint16_t dataSz;                                    /// size of TX data or RX request
+    char* txDataLoc;                                    /// location of data buffer (TX only)
+    uint16_t txDataSz;                                  /// size of TX data or RX request
     bool skipParser;                                    /// true = no invoke of response parser after successul datamode, error always skips parser
     appRcvProto_func applRecvDataCB;                    /// callback into app for received data delivery
 } dataMode_t;

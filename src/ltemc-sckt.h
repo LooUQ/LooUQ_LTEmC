@@ -55,9 +55,10 @@ enum sckt__constants
     sckt__resultCode_alreadyOpen = 563,
     sckt__defaultOpenTimeoutMS = 60000,
     sckt__irdRequestMaxSz = 1500,
+    sckt__irdRequestPageSz = sckt__irdRequestMaxSz / 2,
 
     sckt__readTrailerSz = 6,                /// /r/nOK/r/n
-    sckt__readTimeoutMs = 100
+    sckt__readTimeoutMs = 1000
 };
 
 
@@ -81,6 +82,7 @@ typedef struct scktCtrl_tag
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
+    uint8_t pdpCntxt;
     appRcvProto_func appRecvDataCB;             /// callback into host application with data (cast from generic func* to stream specific function)
     char hostUrl[SET_PROPLEN(sckt__urlHostSz)]; /// remote host URL/IP address
     uint16_t hostPort;
@@ -124,7 +126,7 @@ void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t 
  *  @param hostPort [in] - The port number at the remote host
  *  @param lclPort [in] - The port number on this side of the conversation, set to 0 to auto-assign
  */
-void sckt_setConnection(scktCtrl_t *scktCtrl, const char *hostUrl, const uint16_t hostPort, uint16_t lclPort);
+void sckt_setConnection(scktCtrl_t *scktCtrl, uint8_t pdpCntxt, const char *hostUrl, const uint16_t hostPort, uint16_t lclPort);
 
 
 /**
