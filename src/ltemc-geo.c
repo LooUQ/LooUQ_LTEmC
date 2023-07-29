@@ -40,7 +40,7 @@
 #endif
 
 #define SRCFILE "GEO"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#include <stdlib.h>
+#include <stdio.h>
 #include "ltemc-internal.h"
 #include "ltemc-geo.h"
 

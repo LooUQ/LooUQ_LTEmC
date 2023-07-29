@@ -27,7 +27,6 @@
 #ifndef __LTEMC_TLS_H__
 #define __LTEMC_TLS_H__
 
-//#include <lq-diagnostics.h>
 #include "ltemc-types.h"
 
 
@@ -65,6 +64,13 @@ tlsOptions_t tlsGetOptions(uint8_t sckt);
  */
 // future certificate management support
 // void tls_configureTRCertificate(context_t cntxt, const char *certificatePath);
+
+
+/* Release 3.0.3 Changes Below
+ * ==============================================================================================*/
+
+resultCode_t tls_configSni(dataCntxt_t cntx, bool setting);
+
 
 
 #ifdef __cplusplus

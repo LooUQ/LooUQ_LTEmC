@@ -86,7 +86,7 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
         // first get file system info
         atcmd_invokeReuseLock("AT+QFLDS=\"UFS\"");
         rslt = atcmd_awaitResult();
-        if (rslt != RESULT_CODE_SUCCESS)
+        if (rslt != resultCode__success)
         {
             break;
         }
@@ -138,7 +138,7 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
             atcmd_invokeReuseLock("AT+QFLST=\"%s\"", fileList->namePattern);
         }
         rslt = atcmd_awaitResult();
-        if (rslt != RESULT_CODE_SUCCESS)
+        if (rslt != resultCode__success)
             break;
 
         // parse response >>  +QFLST: <filename>,<file_size>

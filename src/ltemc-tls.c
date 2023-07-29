@@ -39,7 +39,6 @@
 #endif
 
 #define SRCFILE "TLS"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#include "ltemc-internal.h"
 #include "ltemc-tls.h"
 #include "ltemc-atcmd.h"
 
@@ -90,4 +89,21 @@ tlsOptions_t tlsGetOptions(uint8_t dataCntxt)
         atcmd_close();
     }
     return result;
+}
+
+
+resultCode_t tls_configSni(dataCntxt_t cntxt, bool setting)
+{
+    resultCode_t rslt = resultCode__internalError;
+
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"sni\",%d,%d", cntxt, setting))    // get SSL\TLS version
+    {   
+        if (atcmd_awaitResult() == resultCode__success)
+        {
+            PRINTF(0, "%s", atcmd_getLastResponse());
+            // strncpy(result.version, atResult.response);
+        }
+        atcmd_close();
+    }
+    return rslt;
 }

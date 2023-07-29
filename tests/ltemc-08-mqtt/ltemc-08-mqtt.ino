@@ -34,8 +34,7 @@
 #if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
     #if _DEBUG == 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #include <jlinkRtt.h>               // PRINTF debug macro output to J-Link RTT channel
     #else
     #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
@@ -269,6 +268,7 @@ extern "C" char* sbrk(int incr);
 #else  // __ARM__
 extern char *__brkval;
 #endif  // __arm__
+
 
 int getFreeMemory() 
 {
