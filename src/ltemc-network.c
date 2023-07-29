@@ -25,15 +25,15 @@
 ***************************************************************************** */
 
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
+#define _DEBUG 2                                // set to non-zero value for PRINTF debugging output, 
+// debugging output options                     // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG) && _DEBUG > 0
-    asm(".global _printf_float");       // forces build to link in float support for printf
+    asm(".global _printf_float");               // forces build to link in float support for printf
     #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
+    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
+    // #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;
@@ -127,7 +127,6 @@ void ntwk_setNetworkConfig(uint8_t pdpContextId, const char *protoType, const ch
         rslt = atcmd_awaitResult();
     }
     atcmd_close();
-    return rslt;
 }
 
 
@@ -325,18 +324,18 @@ uint8_t ntwk_getRegistrationStatus()
 }
 
 
-/**
- *	@brief Set network operator.
- *  @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
+// /**
+//  *	@brief Set network operator.
+//  *  @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
 
- *  @param [in] mode Action to be performed, set/clear/set default.
- *  @param [in] format The form for the ntwkOperator parameter value: long, short, numeric.
- *  @param [in] ntwkOperator Operator to select, presented in the "format". Not all modes require/act on this parameter.
- *  @return Current operator selection mode. Note:
- */
-uint8_t ntwk_setOperator(uint8_t mode, uint8_t format, const char* ntwkOperator)
-{
-}
+//  *  @param [in] mode Action to be performed, set/clear/set default.
+//  *  @param [in] format The form for the ntwkOperator parameter value: long, short, numeric.
+//  *  @param [in] ntwkOperator Operator to select, presented in the "format". Not all modes require/act on this parameter.
+//  *  @return Current operator selection mode. Note:
+//  */
+// uint8_t ntwk_setOperator(uint8_t mode, uint8_t format, const char* ntwkOperator)
+// {
+// }
 
 
 /** 
@@ -384,15 +383,6 @@ static void S__clearProviderInfo()
 static cmdParseRslt_t S__contextStatusCompleteParser(void *atcmd, const char *response)
 {
     return atcmd_stdResponseParser("+QIACT: ", false, NULL, 2, 2, NULL, 0);
-}
-
-
-/**
- *   \brief Get the network operator name and network mode.
- *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
-*/
-static providerInfo_t *S__getNetworkProvider()
-{
 }
 
 

@@ -107,7 +107,7 @@ void loop()
 /* test helpers
 ========================================================================================================================= */
 
-void applEvntNotify(appEvents_t eventType, const char *notifyMsg)
+void applEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType == appEvent_fault_assertFailed)
     {

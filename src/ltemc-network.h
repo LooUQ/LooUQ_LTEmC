@@ -126,16 +126,16 @@ networkInfo_t *ntwk_getNetworkInfo(uint8_t contxtId);
 uint8_t ntwk_getRegistrationStatus();
 
 
-/**
- *	@brief Set network operator.
- *  @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
+// /**
+//  *	@brief Set network operator.
+//  *  @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
 
- *  @param [in] mode Action to be performed, set/clear/set default.
- *  @param [in] format The form for the ntwkOperator parameter value: long, short, numeric.
- *  @param [in] ntwkOperator Operator to select, presented in the "format". Not all modes require/act on this parameter.
- *  @return Current operator selection mode. Note:
- */
-uint8_t ntwk_setOperator(uint8_t mode, uint8_t format, const char* ntwkOperator);
+//  *  @param [in] mode Action to be performed, set/clear/set default.
+//  *  @param [in] format The form for the ntwkOperator parameter value: long, short, numeric.
+//  *  @param [in] ntwkOperator Operator to select, presented in the "format". Not all modes require/act on this parameter.
+//  *  @return Current operator selection mode. Note:
+//  */
+// uint8_t ntwk_setOperator(uint8_t mode, uint8_t format, const char* ntwkOperator);
 
 
 /** 

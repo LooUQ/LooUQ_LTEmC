@@ -1,6 +1,6 @@
 {
     "sketch": "ltemc-11-gpio.ino",
-    "configuration": "opt=small,usbstack=arduino,debug=on",
-    "board": "adafruit:samd:adafruit_feather_m0",
+    "configuration": "opt=debug,usbstack=arduino,debug=off",
+    "board": "adafruit:samd:adafruit_feather_m0_express",
     "output": "./build"
 }

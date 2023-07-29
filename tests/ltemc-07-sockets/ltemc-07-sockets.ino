@@ -190,7 +190,7 @@ void scktRecvCB(dataCntxt_t dataCntxt, char* dataPtr, uint16_t dataSz, bool isFi
 /* test helpers
 ========================================================================================================================= */
 
-void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
+void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType == appEvent_fault_assertFailed)
         PRINTF(dbgColor__error, "LTEmC Fault: %s\r", notifyMsg);

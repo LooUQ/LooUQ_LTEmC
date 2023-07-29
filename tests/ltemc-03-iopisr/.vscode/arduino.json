@@ -1,8 +1,5 @@
 {
-    "sketch": "ltemc-3-iopisr.ino",
-    "configuration": "opt=small,usbstack=arduino,debug=on",
-    "board": "adafruit:samd:adafruit_feather_m0",
-    "output": "./build",
-    "buildPreferences": [
-    ]
+    "sketch": "ltemc-03-iopisr.ino",
+    "configuration": "opt=debug,usbstack=arduino,debug=off",
+    "board": "adafruit:samd:adafruit_feather_m0_express"
 }

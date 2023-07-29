@@ -234,7 +234,7 @@ void httpRecvCB(dataCntxt_t dataCntxt, char *recvData, uint16_t dataSz, bool isF
 /* test helpers
 ========================================================================================================================= */
 
-void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
+void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType > appEvent__FAULTS)
     {

@@ -249,7 +249,7 @@ void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId, mqttMsgSegment_t segment,
 /* test helpers
 ========================================================================================================================= */
 
-void applEvntNotify(appEvents_t eventType, const char *notifyMsg)
+void applEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType == appEvent_fault_assertFailed)
         PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);

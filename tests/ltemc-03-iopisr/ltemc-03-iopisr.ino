@@ -192,7 +192,7 @@ void startLTEm()
 }
 
 
-void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
+void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType == appEvent_fault_assertFailed)
     if (eventType == appEvent_fault_assertFailed)

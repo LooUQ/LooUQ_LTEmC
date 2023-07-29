@@ -38,6 +38,9 @@
 #include <stdbool.h>
 #endif // __cplusplus
 
+#include <string.h>
+#include <stdlib.h>
+
 #include <lq-types.h>
 #include <lq-cBuffer.h>
 

@@ -1,6 +1,5 @@
 {
-    "sketch": "ltemc-8-mqtt.ino",
+    "sketch": "ltemc-08-mqtt.ino",
     "configuration": "opt=debug,usbstack=arduino,debug=off",
-    "board": "adafruit:samd:adafruit_feather_m0_express",
-    "output": "./build"
+    "board": "adafruit:samd:adafruit_feather_m0_express"
 }

@@ -1,12 +1,6 @@
 {
-    "configuration": "opt=debug,usbstack=arduino,debug=on",
+    "sketch": "ltemc-09-http.ino",
+    "configuration": "opt=debug,usbstack=arduino,debug=off",
     "board": "adafruit:samd:adafruit_feather_m0_express",
-    "sketch": "ltemc-9-http.ino",
-    "output": "./build",
-    "buildPreferences": [
-        [
-            "compiler.cpp.extra_flags",
-            "-Og"
-        ]
-    ]
+    "output": "./build"
 }

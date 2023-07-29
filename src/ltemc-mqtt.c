@@ -32,8 +32,8 @@
     #if _DEBUG == 1
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
+    // #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
 #define PRINTF(c_, f_, ...) 
@@ -203,6 +203,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
             }
         }
     }
+    return resultCode__internalError;
 }
 
 
@@ -413,7 +414,6 @@ void mqtt_close(mqttCtrl_t *mqttCtrl)
             atcmd_awaitResultWithOptions(5000, NULL);
     }
     mqttCtrl->state == mqttState_closed;
-    return resultCode__success;
 }
 
 
@@ -422,7 +422,7 @@ void mqtt_close(mqttCtrl_t *mqttCtrl)
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
  *  @param resetModem [in] True if modem should be reset prior to reestablishing MQTT connection.
 */
-resultCode_t mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem)
+void mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem)
 {
     mqtt_close(mqttCtrl);
 
@@ -491,7 +491,7 @@ mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl)
 */
 uint16_t mqtt_getSentMsgId(mqttCtrl_t *mqttCtrl)
 {
-    mqttCtrl->sentMsgId;
+    return mqttCtrl->sentMsgId;
 }
 
 
@@ -500,7 +500,7 @@ uint16_t mqtt_getSentMsgId(mqttCtrl_t *mqttCtrl)
 */
 uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl)
 {
-    mqttCtrl->recvMsgId;
+    return mqttCtrl->recvMsgId;
 }
 
 
@@ -509,7 +509,7 @@ uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl)
 */
 uint16_t mqtt_getErrCode(mqttCtrl_t *mqttCtrl)
 {
-    mqttCtrl->errCode;
+    return mqttCtrl->errCode;
 }
 
 
@@ -565,6 +565,7 @@ static resultCode_t S__notifyServerTopicChange(mqttCtrl_t* mqttCtrl, mqttTopicCt
             return atcmd_awaitResult();
         }
     }
+    return resultCode__internalError;
 }
 
 

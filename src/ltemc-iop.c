@@ -65,8 +65,8 @@
     #if _DEBUG == 1
     #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG >= 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
+    // #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
 #define PRINTF(c_, f_, ...) ;

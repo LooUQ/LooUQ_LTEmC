@@ -27,14 +27,14 @@
 ***************************************************************************** */
 
 
-#define _DEBUG 2                                // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 0                                // set to non-zero value for PRINTF debugging output, 
 // debugging output options                     // LTEmC will satisfy PRINTF references with empty definition if not already resolved
 #if _DEBUG > 0
     asm(".global _printf_float");               // forces build to link in float support for printf
     #if _DEBUG == 1
     #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
     #elif _DEBUG == 2
-    #include <jlinkRtt.h>                       // output debug PRINTF macros to J-Link RTT channel
+    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
     #endif
 #else
 #define PRINTF(c_, f_, ...) 

@@ -34,7 +34,6 @@
     asm(".global _printf_float");       // forces build to link in float support for printf
     #if _DEBUG == 2
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #else
     #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
@@ -245,7 +244,7 @@ bool validOkResponse(const char *response)
 
 //typedef void (*eventNotifFunc_t)(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg);
 
-void appEvntNotify(appEvents_t eventType, const char *notifyMsg)
+void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType == appEvent_fault_assertFailed)
     if (eventType == appEvent_fault_assertFailed)
@@ -278,7 +277,7 @@ void indicateLoop(int loopCnt, int waitNext)
 }
 
 
-void indicateFailure(char failureMsg[])
+void indicateFailure(const char* failureMsg)
 {
 	PRINTF(dbgColor__error, "\r\n** %s \r\n", failureMsg);
     PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
