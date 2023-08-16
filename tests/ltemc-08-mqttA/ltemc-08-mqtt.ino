@@ -29,7 +29,7 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 1                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
@@ -134,11 +134,11 @@ void setup() {
     #endif
 
     PRINTF(dbgColor__red, "\rLTEmC Test-8 MQTT\r\n");
-    PRINTF(dbgColor__none,"RCause=%d \r", lqSAMD_getResetCause());
-    lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
+    // PRINTF(dbgColor__none,"RCause=%d \r", lqSAMD_getResetCause());
+    // lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, applEvntNotify);
-    ltem_setDefaultNetwork(PDP_DATA_CONTEXT, PDP_PROTOCOL_IPV4, PDP_APN_NAME);
+    ltem_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
     ltem_start(resetAction_swReset);
 
     PRINTF(dbgColor__dflt, "Waiting on network...\r");
@@ -198,7 +198,7 @@ void loop()
             // }
         }
 
-        PRINTF(dbgColor__magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
+        // PRINTF(dbgColor__magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
     }
 
     /* NOTE: ltem1_eventMgr() background pipeline processor is required for async receive operations; like MQTT topic subscriptions.
@@ -262,23 +262,23 @@ void applEvntNotify(appEvent_t eventType, const char *notifyMsg)
  * - Remove if not needed for production
 --------------------------------------------------------------------------------- */
 
-#ifdef __arm__
-// should use uinstd.h to define sbrk but Due causes a conflict
-extern "C" char* sbrk(int incr);
-#else  // __ARM__
-extern char *__brkval;
-#endif  // __arm__
+// #ifdef __arm__
+// // should use uinstd.h to define sbrk but Due causes a conflict
+// extern "C" char* sbrk(int incr);
+// #else  // __ARM__
+// extern char *__brkval;
+// #endif  // __arm__
 
 
-int getFreeMemory() 
-{
-    char top;
-    #ifdef __arm__
-    return &top - reinterpret_cast<char*>(sbrk(0));
-    #elif defined(CORE_TEENSY) || (ARDUINO > 103 && ARDUINO != 151)
-    return &top - __brkval;
-    #else  // __arm__
-    return __brkval ? &top - __brkval : &top - __malloc_heap_start;
-    #endif  // __arm__
-}
+// int getFreeMemory() 
+// {
+//     char top;
+//     #ifdef __arm__
+//     return &top - reinterpret_cast<char*>(sbrk(0));
+//     #elif defined(CORE_TEENSY) || (ARDUINO > 103 && ARDUINO != 151)
+//     return &top - __brkval;
+//     #else  // __arm__
+//     return __brkval ? &top - __brkval : &top - __malloc_heap_start;
+//     #endif  // __arm__
+// }
 

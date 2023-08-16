@@ -25,22 +25,13 @@
 ***************************************************************************** */
 
 
-#define _DEBUG 2                                // set to non-zero value for PRINTF debugging output, 
-// debugging output options                     // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG >= 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    //#define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #endif
-#else
-#define PRINTF(c_, f_, ...) ;
-#endif
-
-
 #define SRCFILE "FIL"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DPRINT                   // expand DPRINT into debug output
+#define ENABLE_DPRINT_VERBOSE           // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                 // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
+
 #include "ltemc-internal.h"
 #include "ltemc-files.h"
 
@@ -424,7 +415,7 @@ static resultCode_t S__filesRxHndlr()
     uint16_t readSz = strtol(wrkBffr + 8, NULL, 10);
     uint16_t streamSz = readSz + file__readTrailerSz;
 
-    PRINTF(dbgColor__cyan, "filesDataRcvr() fHandle=%d sz=%d\r", g_lqLTEM.fileCtrl->handle, streamSz);
+    DPRINT(PRNT_CYAN, "filesDataRcvr() fHandle=%d sz=%d\r", g_lqLTEM.fileCtrl->handle, streamSz);
     while (streamSz > 0)
     {
         uint32_t readTimeout = pMillis();
@@ -442,7 +433,7 @@ static resultCode_t S__filesRxHndlr()
         {
             char* streamPtr;
             uint16_t blockSz = cbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readSz);                        // get address from rxBffr
-            PRINTF(dbgColor__cyan, "filesRxHndlr() ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
+            DPRINT(PRNT_CYAN, "filesRxHndlr() ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
             ((fileReceiver_func)(*g_lqLTEM.fileCtrl->appRecvDataCB))(g_lqLTEM.fileCtrl->handle, streamPtr, blockSz);                  // forward to application
             cbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                 // commit POP
             readSz -= blockSz;

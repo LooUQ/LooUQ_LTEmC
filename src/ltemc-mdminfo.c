@@ -27,21 +27,13 @@
 ***************************************************************************** */
 
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    // #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #endif
-#else
-#define PRINTF(c_, f_, ...) ;
-#endif
+#define SRCFILE "MDM"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
 
-#define SRCFILE "MDM"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
 
 extern ltemDevice_t g_lqLTEM;

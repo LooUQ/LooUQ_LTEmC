@@ -27,90 +27,103 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 1                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if _DEBUG > 0
+#if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
     #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
+    #define SERIAL_DBG                  // enable serial port output using devl host platform serial
+    #elif _DEBUG == 2 
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
     #endif
 #else
-#define PRINTF(c_, f_, ...) 
+#define PRINTF(c_, f_, ...)
 #endif
 
-/* specify the pin configuration
+
+/* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
-//#define HOST_FEATHER_UXPLOR   
-#define HOST_FEATHER_UXPLOR_L          
+// #define HOST_FEATHER_UXPLOR             
 // #define HOST_FEATHER_LTEM3F
+// #define HOST_FEATHER_UXPLOR_L
+#define HOST_ESP32_DEVMOD_BMS
+
+#define PERIOD_FROM_SECONDS(period)  (period * 1000)
+#define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
+#define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
 
 #include <ltemc.h>
-#include <lq-diagnostics.h>
 #include <ltemc-gnss.h>
 
+// test controls
+uint16_t loopCnt = 0;
+uint16_t cycle_interval = 2000;
+uint32_t lastCycle;
+resultCode_t rslt;
 
-int loopCnt = 0;
 gnssLocation_t location;
 uint32_t fixWaitStart;
 uint32_t secondsToFix = 0;
 
 
 void setup() {
-    #ifdef SERIAL_OPT
+    #ifdef SERIAL_DBG
         Serial.begin(115200);
-        #if (SERIAL_OPT > 0)
-        while (!Serial) {}      // force wait for serial ready
-        #else
-        delay(5000);            // just give it some time
-        #endif
+        delay(5000);                // just give it some time
     #endif
+    PRINTF(0,"\n\n*** ltemc-05-modeminfo started ***\n\n");
+    //lqDiag_setNotifyCallback(applEvntNotify);                     // configure ASSERTS to callback into application
 
-    PRINTF(dbgColor__red, "\rLTEmC Test 6: GNSS\r");
-    randomSeed(analogRead(0));
-    lqDiag_setNotifyCallback(appEvntNotify);                        // configure ASSERTS to callback into application
-
-    ltem_create(ltem_pinConfig, NULL, appEvntNotify);               // create LTEmC modem, no yield CB req'd for testing
+    ltem_create(ltem_pinConfig, NULL, appEvntNotify);               // create LTEmC modem, no yield req'd for testing
     ltem_start(resetAction_swReset);                                // ... and start it
 
-    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_getSwVersion());
+    PRINTF(dbgColor__white, "LTEmC Ver: %s\r\n", ltem_getSwVersion());
+    lastCycle = cycle_interval;
 
     // turn on GNSS
-    resultCode_t cmdResult = gnss_on();
+    rslt = gnss_on();
+    if (rslt == 200)
+        PRINTF(dbgColor__info, "GNSS enabled\r\n", rslt);
+    if (rslt == 504)
+        PRINTF(dbgColor__warn, "GNSS was already on\r\n", rslt);
 
-    if (cmdResult == 200)
-        PRINTF(dbgColor__info, "GNSS enabled\r", cmdResult);
-    if (cmdResult == 504)
-        PRINTF(dbgColor__warn, "GNSS was already on\r", cmdResult);
+    ltem_setRadioPriority(radioPriority_gnss);
 
-    
+    lastCycle = cycle_interval;
     fixWaitStart = pMillis();
 }
 
 
-void loop() {
-
-    location = gnss_getLocation();
-
-    if (location.statusCode == 200)
+void loop() 
+{
+    if (ELAPSED(lastCycle, cycle_interval))
     {
-        char cLat[14];
-        char cLon[14];
+        lastCycle = millis();
+        loopCnt++;
 
-        if (secondsToFix == 0)
-            secondsToFix = (pMillis() - fixWaitStart) / 1000 + 1;       // if less than 1 second, round up
 
-        PRINTF(dbgColor__none, "Location Information\r");
-        PRINTF(dbgColor__cyan, "(double) Lat=%4.4f, Lon=%4.4f  FixSecs=%d\r", location.lat.val, location.lon.val, secondsToFix);
-        PRINTF(dbgColor__cyan, "(int4d)  Lat=%d, Lon=%d  FixSecs=%d\r", (int32_t)(location.lat.val * 10000.0), (int32_t)(location.lon.val * 10000.0), secondsToFix);
+        location = gnss_getLocation();
+
+        if (location.statusCode == 200)
+        {
+            char cLat[14];
+            char cLon[14];
+
+            if (secondsToFix == 0)
+            {
+                secondsToFix = (pMillis() - fixWaitStart) / 1000 + 1;       // if less than 1 second, round up
+            }
+            PRINTF(dbgColor__none, "Location Information\r\n");
+            PRINTF(dbgColor__cyan, "UTC=%s   FixSecs=%d\r\n", location.utc, secondsToFix);
+
+            PRINTF(dbgColor__cyan, "(double) Lat=%4.4f, Lon=%4.4f\r\n", location.lat.val, location.lon.val);
+            PRINTF(dbgColor__cyan, "(int4d)  Lat=%d, Lon=%d\r\n", (int32_t)(location.lat.val * 10000.0), (int32_t)(location.lon.val * 10000.0));
+        }
+        else
+            PRINTF(dbgColor__warn, "Location is not available (GNSS not fixed)\r\n");
+
+        PRINTF(0,"\r\nLoop=%d \r\n", loopCnt);
     }
-    else
-        PRINTF(dbgColor__warn, "Location is not available (GNSS not fixed)\r");
-
-    loopCnt ++;
-    indicateLoop(loopCnt, random(1000));
 }
 
 
@@ -124,14 +137,15 @@ void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
     if (eventType == appEvent_fault_assertFailed)
     if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r\n", notifyMsg);
     }
     else 
     {
-        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r\n", notifyMsg);
     }
     return;
 }
+
 
 void indicateFailure(char failureMsg[])
 {
@@ -146,47 +160,5 @@ void indicateFailure(char failureMsg[])
         platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
         pDelay(100);
     }
-}
-
-
-void indicateLoop(int loopCnt, int waitNext) 
-{
-    PRINTF(dbgColor__info, "\r\nLoop=%i \r\n", loopCnt);
-
-    for (int i = 0; i < 6; i++)
-    {
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        pDelay(50);
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        pDelay(50);
-    }
-
-    PRINTF(dbgColor__dMagenta, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(dbgColor__dMagenta, "NextTest (millis)=%i\r\r", waitNext);
-    pDelay(waitNext);
-}
-
-
-/* Check free memory (stack-heap) 
- * - Remove if not needed for production
---------------------------------------------------------------------------------- */
-
-#ifdef __arm__
-// should use uinstd.h to define sbrk but Due causes a conflict
-extern "C" char* sbrk(int incr);
-#else  // __ARM__
-extern char *__brkval;
-#endif  // __arm__
-
-int getFreeMemory() 
-{
-    char top;
-    #ifdef __arm__
-    return &top - reinterpret_cast<char*>(sbrk(0));
-    #elif defined(CORE_TEENSY) || (ARDUINO > 103 && ARDUINO != 151)
-    return &top - __brkval;
-    #else  // __arm__
-    return __brkval ? &top - __brkval : &top - __malloc_heap_start;
-    #endif  // __arm__
 }
 

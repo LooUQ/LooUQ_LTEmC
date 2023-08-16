@@ -24,22 +24,13 @@
  
 ***************************************************************************** */
 
+#define SRCFILE "GNS"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DPRINT                    // expand DPRINT into debug output
+#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
 
-#define _DEBUG 0                                // set to non-zero value for PRINTF debugging output, 
-// debugging output options                     // LTEmC will satisfy PRINTF references with empty definition if not already resolved
-#if _DEBUG > 0
-    asm(".global _printf_float");               // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    // #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #endif
-#else
-#define PRINTF(c_, f_, ...) 
-#endif
-
-#define SRCFILE "GNS"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
 #include "ltemc-gnss.h"
 
@@ -109,29 +100,31 @@ gnssLocation_t gnss_getLocation()
         atcmd_invokeReuseLock("AT+QGPSLOC=2");
         resultCode_t atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, gnssLocCompleteParser);
 
+        memset(&gnssResult, 0, sizeof(gnssLocation_t));
         gnssResult.statusCode = atResult;
         if (atResult != resultCode__success)                                            // return on failure, continue on success
             return gnssResult;
 
-        PRINTF(dbgColor__warn, "getLocation(): parse starting...\r");
+        DPRINT(PRNT_WARN, "getLocation(): parse starting...\r\n");
 
         char *parsedResponse = atcmd_getResponse();
         char *delimAt;
 
+        DPRINT_V(PRNT_WHITE, "Raw=%s", parsedResponse);
 
         if ((delimAt = strchr(parsedResponse, (int)',')) != NULL)
             strncpy(gnssResult.utc, parsedResponse, delimAt - parsedResponse);
 
-        gnssResult.lat.val = strtof(parsedResponse, &parsedResponse);                         // grab a float
+        gnssResult.lat.val = strtof(delimAt + 1, &parsedResponse);                         // grab a float
         gnssResult.lat.dir = ' ';
-        gnssResult.lon.val = strtof(++parsedResponse, &parsedResponse);                       // ++parsedResponse, pre-incr to skip previous comma
+        gnssResult.lon.val = strtof(parsedResponse + 1, &parsedResponse);
         gnssResult.lon.dir = ' ';
-        gnssResult.hdop = strtof(++parsedResponse, &parsedResponse);
-        gnssResult.altitude = strtof(++parsedResponse, &parsedResponse);
-        gnssResult.fixType = strtol(++parsedResponse, &parsedResponse, 10);                   // grab an integer
-        gnssResult.course = strtof(++parsedResponse, &parsedResponse);
-        gnssResult.speedkm = strtof(++parsedResponse, &parsedResponse);
-        gnssResult.speedkn = strtof(++parsedResponse, &parsedResponse);
+        gnssResult.hdop = strtof(parsedResponse + 1, &parsedResponse);
+        gnssResult.altitude = strtof(parsedResponse + 1, &parsedResponse);
+        gnssResult.fixType = strtol(parsedResponse + 1, &parsedResponse, 10);                   // grab an integer
+        gnssResult.course = strtof(parsedResponse + 1, &parsedResponse);
+        gnssResult.speedkm = strtof(parsedResponse + 1, &parsedResponse);
+        gnssResult.speedkn = strtof(parsedResponse + 1, &parsedResponse);
 
         if ((delimAt = strchr(parsedResponse, (int)',')) != NULL)
             strncpy(gnssResult.date, tokenBuf, 7);
@@ -139,7 +132,7 @@ gnssLocation_t gnss_getLocation()
         gnssResult.nsat = strtol(parsedResponse, &parsedResponse, 10);
         atcmd_close();
 
-        PRINTF(dbgColor__warn, "getLocation(): parse completed\r");
+        DPRINT_V(PRNT_WARN, "getLocation(): parse completed\r\n");
     }
     return gnssResult;
 }
@@ -159,7 +152,7 @@ static cmdParseRslt_t gnssLocCompleteParser(const char *response, char **endptr)
 {
     //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr
     cmdParseRslt_t parseRslt = atcmd_stdResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, "", 0);
-    PRINTF(0, "gnssParser(): result=%i\r", parseRslt);
+    DPRINT(PRNT_DEFAULT, "gnssParser(): result=%d\r\n", parseRslt);
     return parseRslt;
 }
 

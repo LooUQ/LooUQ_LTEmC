@@ -24,21 +24,15 @@
  
 ***************************************************************************** */
 
-
-#define _DEBUG 2                                    // set to non-zero value for PRINTF debugging output, 
-// debugging output options                         // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
-    asm(".global _printf_float");                   // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                            // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    #endif
-#else
-#define PRINTF(c_, f_, ...) ;
-#endif
-
 #define SRCFILE "LTE"                               // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DPRINT                   // expand DPRINT into debug output
+#define ENABLE_DPRINT_VERBOSE           // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                 // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
+
+#include <stdbool.h>
+#include "ltemc.h"
 #include "ltemc-internal.h"
 
 /* ------------------------------------------------------------------------------------------------
@@ -81,9 +75,10 @@ void S__initLTEmDevice(bool ltemReset);
 void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEvntNotify_func eventNotifCallback)
 {
     ASSERT(g_lqLTEM.atcmd == NULL);                 // prevent multiple calls, memory leak calloc()
-
+    memset(&g_lqLTEM, 0, sizeof(ltemDevice_t));
+    
 	g_lqLTEM.pinConfig = ltem_config;
-    g_lqLTEM.spi = spi_create(g_lqLTEM.pinConfig.spiCsPin);
+    g_lqLTEM.platformSpi = spi_create(g_lqLTEM.pinConfig.spiClkPin, g_lqLTEM.pinConfig.spiMisoPin, g_lqLTEM.pinConfig.spiMosiPin, g_lqLTEM.pinConfig.spiCsPin);
 
     g_lqLTEM.modemSettings =  calloc(1, sizeof(modemSettings_t));
     ASSERT(g_lqLTEM.modemSettings != NULL);
@@ -123,7 +118,7 @@ void ltem_destroy()
     ip_destroy();
     free(g_lqLTEM.atcmd);
     iop_destroy();
-    spi_destroy(g_lqLTEM.spi);
+    spi_destroy(g_lqLTEM.platformSpi);
 }
 
 
@@ -182,10 +177,25 @@ void ltem_setIotMode(ntwkIotMode_t iotMode)
 /**
  *	\brief Build default data context configuration for modem to use on startup.
  */
-void ltem_setDefaultNetwork(uint8_t pdpContextId, const char *protoType, const char *apn)
+resultCode_t ltem_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn)
 {
-    ntwk_setDefaulNetworkConfig(pdpContextId, protoType, apn);
+    return ntwk_configPdpNetwork(pdpContextId, protoType, apn);
 }
+
+/**
+ *	@brief Set radio priority. 
+ *  @return Result code representing status of operation, OK = 200.
+ */
+resultCode_t ltem_setRadioPriority(radioPriority_t radioPriority)
+{
+    if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d"))              // only checking for trailing OK here
+    {
+        return atcmd_awaitResult();
+    }
+    return resultCode__conflict;
+}
+
+
 
 
 /**
@@ -205,7 +215,7 @@ void ltem_start(resetAction_t resetAction)
 	platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
 	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
 
-    spi_start(g_lqLTEM.spi);                                                // start host SPI
+    spi_start(g_lqLTEM.platformSpi);                                        // start host SPI
 
     bool ltemReset = true;
     if (QBG_isPowerOn())
@@ -245,13 +255,13 @@ void S__initLTEmDevice(bool ltemReset)
     {
         if (IOP_awaitAppReady())
         {
-            PRINTF(dbgColor__info, "AppRdy recv'd\r");
+            DPRINT(PRNT_INFO, "AppRdy recv'd\r\n");
         }
         else
         {
             if (g_lqLTEM.deviceState == deviceState_powerOn)
             {
-                PRINTF(dbgColor__warn, "AppRdy timeout\r");
+                DPRINT(PRNT_WARN, "AppRdy timeout\r\n");
                 g_lqLTEM.deviceState = deviceState_appReady;        // missed it somehow
             }
 
@@ -260,15 +270,22 @@ void S__initLTEmDevice(bool ltemReset)
     else
     {
         g_lqLTEM.deviceState = deviceState_appReady;        // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
-        PRINTF(dbgColor__info, "LTEm ON (AppRdy)\r");
+        DPRINT(PRNT_INFO, "LTEm ON (AppRdy)\r\n");
     }
 
-    IOP_attachIrq();                                        // attach I/O processor ISR to IRQ
+    // DPRINT(0, "S__initLTEmDevice(): AppRdy");
     SC16IS7xx_enableIrqMode();                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
+    // DPRINT(0, "S__initLTEmDevice(): nxp in irdmode");
+    IOP_attachIrq();                                        // attach I/O processor ISR to IRQ
+    // DPRINT(0, "S__initLTEmDevice(): irq attached");
     QBG_setOptions();                                       // initialize BGx operating settings
+    // DPRINT(0, "S__initLTEmDevice(): bgx options set");
     NTWK_initRatOptions();                                  // initialize BGx Radio Access Technology (RAT) options
-    NTWK_applyDefaulNetwork();                              // configures default PDP context for likely autostart with provider attach
+    // DPRINT(0, "S__initLTEmDevice(): rat options set");
+    NTWK_applyPpdNetworkConfig();                           // configures default PDP context for likely autostart with provider attach
+    // DPRINT(0, "S__initLTEmDevice(): pdp ntwk configured");
     ntwk_awaitProvider(2);                                  // attempt to warm-up provider/PDP briefly. If longer duration required, leave that to application
+    // DPRINT(0, "S__initLTEmDevice(): provider warmed up");
 }
 
 
@@ -277,7 +294,7 @@ void S__initLTEmDevice(bool ltemReset)
  */
 void ltem_stop()
 {
-    spi_stop(g_lqLTEM.spi);
+    spi_stop(g_lqLTEM.platformSpi);
     IOP_stopIrq();
     g_lqLTEM.deviceState = deviceState_powerOff;
     QBG_powerOff();

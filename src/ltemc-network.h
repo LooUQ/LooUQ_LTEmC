@@ -56,21 +56,19 @@ void ntwk_create();
  *  @param [in] apn The APN name if required by network carrier.
  *  
  */
-void *ntwk_configureNetwork(uint8_t pdpContextId, const char *protoType, const char *apn);
+resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t protoType, const char *apn);
 
 
-/* Deferred Implementation: Cannot find a network provider requiring authentication and Quectel doesn't support beyond IPV4
-*/
-// /**
-//  *	@brief Configure PDP Context requiring authentication.
-//  *  @param [in] pdpContextId The PDP context to work with, typically 0 or 1.
-//  *  @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
-//  *  @param [in] apn The APN name if required by network carrier.
-//  *  @param [in] userName String with user name
-//  *  @param [in] pw String with password
-//  *  @param [in] authMethod Enum specifying the type of authentication expected by network
-//  */
-// networkInfo_t *ntwk_configureNetworkWithAuth(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
+/**
+ *	@brief Configure PDP Context requiring authentication.
+ *  @details Only IPV4 is supported 
+ *  @param [in] pdpContextId The PDP context to work with, typically 0 or 1.
+ *  @param [in] apn The APN name if required by network carrier.
+ *  @param [in] userName String with user name
+ *  @param [in] pw String with password
+ *  @param [in] authMethod Enum specifying the type of authentication expected by network
+ */
+resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
 
 
 /**
@@ -81,11 +79,11 @@ void *ntwk_configureNetwork(uint8_t pdpContextId, const char *protoType, const c
 providerInfo_t *ntwk_awaitProvider(uint16_t waitSec);
 
 
-// /**
-//  *	@brief Set the default/data context number for provider. Default is 1 if not overridden here.
-//  *  @param [in] defaultContext The data context to operate on. Typically 0 or 1, up to 15
-//  */
-// void ntwk_setProviderDefaultContext(uint8_t defaultContext);
+/**
+ *	@brief Set the default/data context number for provider. Default is 1 if not overridden here.
+ *  @param [in] defaultContext The data context to operate on. Typically 0 or 1, up to 15
+ */
+void ntwk_setProviderDefaultContext(uint8_t defaultContext);
 
 
 /**
@@ -93,8 +91,6 @@ providerInfo_t *ntwk_awaitProvider(uint16_t waitSec);
  *  @param [in] contextId The APN number to operate on.
  */
 void ntwk_deactivateNetwork(uint8_t contextId);
-
-
 
 
 /**

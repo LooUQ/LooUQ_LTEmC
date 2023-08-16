@@ -24,22 +24,13 @@
  
 ***************************************************************************** */
 
-
-#define _DEBUG 2                                // set to non-zero value for PRINTF debugging output, 
-// debugging output options                     // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
-    asm(".global _printf_float");               // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    // #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #endif
-#else
-#define PRINTF(c_, f_, ...) ;
-#endif
-
 #define SRCFILE "NWK"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DPRINT                    // expand DPRINT into debug output
+#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
+
 #include "ltemc-internal.h"
 #include "ltemc-network.h"
 
@@ -73,19 +64,6 @@ void ntwk_create()
 
 
 /**
- *	\brief Configure PDP Context
- */
-void ntwk_setDefaulNetworkConfig(uint8_t pdpContextId, const char *protoType, const char *apn)
-{
-    ASSERT(g_lqLTEM.providerInfo != NULL);                                             // ASSERT g_lqLTEM.providerInfo has been initialized
-    ASSERT_W(strcmp(protoType, PDP_PROTOCOL_IPV4) == 0, "OnlyIPV4SupportedCurrently"); // warn on not IPv4 and IPv4 override
-
-    snprintf(g_lqLTEM.modemSettings->defaultNtwkConfig, sizeof(g_lqLTEM.modemSettings->defaultNtwkConfig), "AT+CGDCONT=%d,\"%s\",\"%s\"\r", pdpContextId, PDP_PROTOCOL_IPV4, apn);
-}
-
-
-
-/**
  *	\brief Initialize BGx Radio Access Technology (RAT) options.
  */
 void NTWK_initRatOptions()
@@ -96,55 +74,59 @@ void NTWK_initRatOptions()
 }
 
 
+resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t protoType, const char *apn)
+{
+    ASSERT(g_lqLTEM.providerInfo != NULL);                                              // ASSERT g_lqLTEM.providerInfo has been initialized
+    ASSERT_W(protoType == pdpProtocol_IPV4, "OnlyIPV4SupportedCurrently");              // warn on not IPv4
+
+    snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
+
+    resultCode_t rslt = resultCode__accepted;
+    if (g_lqLTEM.deviceState == deviceState_appReady)
+    {
+        if(atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+        {
+            rslt = atcmd_awaitResult();
+        }
+        atcmd_close();
+    }
+    return rslt;
+}
+
+
 /**
- *	\brief Apply the default PDP context config to BGx.
+ *	\brief Configure PDP Context requiring authentication
+ *  \details This configuration only supports IP4 data contexts
  */
-void NTWK_applyDefaulNetwork()
+resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn, const char *userName, const char *pw, pdpCntxtAuthMethods_t authMethod)
 {
     resultCode_t rslt;
-    if(strlen(g_lqLTEM.modemSettings->defaultNtwkConfig) > 0 &&
-        atcmd_tryInvoke(g_lqLTEM.modemSettings->defaultNtwkConfig))
+
+    snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,1,\"%s\",\"%s\",\"%s\",%d", pdpContextId, apn, userName, pw, authMethod);
+
+    if(atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+    {
+        rslt = atcmd_awaitResult();
+    }
+    atcmd_close();
+    return rslt;
+}
+
+
+/**
+ *	\brief Apply the default PDP context configuration settings to BGx.
+ */
+void NTWK_applyPpdNetworkConfig()
+{
+    resultCode_t rslt;
+    if(strlen(g_lqLTEM.modemSettings->pdpNtwkConfig) > 0 && atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
     {
         rslt = atcmd_awaitResult();
         if (rslt != resultCode__success)
-            PRINTF(dbgColor__cyan, "DefaultNtwk Config Failed=%d\r", rslt);
+            DPRINT(PRNT_CYAN, "DefaultNtwk Config Failed=%d\r", rslt);
     }
     atcmd_close();
 }
-
-
-void ntwk_setNetworkConfig(uint8_t pdpContextId, const char *protoType, const char *apn)
-{
-    ASSERT(g_lqLTEM.providerInfo != NULL);                                             // ASSERT g_lqLTEM.providerInfo has been initialized
-    ASSERT_W(strcmp(protoType, PDP_PROTOCOL_IPV4) == 0, "OnlyIPV4SupportedCurrently"); // warn on not IPv4 and IPv4 override
-    // protoType = pdpProtocolType_IPV4;
-
-    snprintf(g_lqLTEM.modemSettings->defaultNtwkConfig, sizeof(g_lqLTEM.modemSettings->defaultNtwkConfig), "AT+CGDCONT=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
-
-    resultCode_t rslt;
-    if(atcmd_tryInvoke("AT+CGDCONT=%d,%d,\"%s\"\r", pdpContextId, protoType, apn))
-    {
-        rslt = atcmd_awaitResult();
-    }
-    atcmd_close();
-}
-
-
-/* Deferred Implementation: Cannot find a network provider requiring authentication and Quectel doesn't support beyond IPV4
-*/
-// /**
-//  *	\brief Configure PDP Context requiring authentication
-//  */
-// networkInfo_t * ntwk_configureNetworkWithAuth(uint8_t pdpContextId, pdpProtocolType_t protoType, const char *apn, const char *userName, const char *pw, pdpCntxtAuthMethods_t authMethod)
-// {
-//     resultCode_t rslt;
-//     if(atcmd_tryInvoke("AT+QICSGP=%d,1,\"%s\",\"%s\",\"%s\",%d", pdpContextId, apn, userName, pw, authMethod))
-//     {
-//         rslt = atcmd_awaitResult();
-//     }
-//     atcmd_close();
-//     return rslt;
-// }
 
 
 /**
@@ -156,9 +138,9 @@ providerInfo_t *ntwk_awaitProvider(uint16_t waitSec)
 
     uint32_t startMillis, endMillis;
     startMillis = endMillis = pMillis();
-    uint32_t waitDuration = (waitSec > 300) ? 300000 : waitSec * 1000;      // max is 5 minutes
+    uint32_t waitMs = (waitSec > 300) ? 300000 : waitSec * 1000;            // max is 5 minutes
 
-    if (ATCMD_awaitLock(waitSec))                                           // open a reusable lock to complete multiple steps
+    if (ATCMD_awaitLock(waitMs))                                            // open a reusable lock to complete multiple steps
     {
         S__clearProviderInfo();
         do 
@@ -184,7 +166,7 @@ providerInfo_t *ntwk_awaitProvider(uint16_t waitSec)
 
             pDelay(1000);                                                                   // this yields, allowing alternate execution
             endMillis = pMillis();
-        } while (endMillis - startMillis < waitDuration || g_lqLTEM.cancellationRequest);   // timed out waiting OR global cancellation
+        } while (endMillis - startMillis < waitMs || g_lqLTEM.cancellationRequest);         // timed out waiting OR global cancellation
 
 
         // got PROVIDER, get networks 
@@ -197,17 +179,17 @@ providerInfo_t *ntwk_awaitProvider(uint16_t waitSec)
             char *pContinue;
             uint8_t ntwkIndx = 0;
 
-            atcmd_invokeReuseLock("AT+CGACT?");
+            atcmd_invokeReuseLock("AT+QIACT?");
             if (atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(20), NULL) == resultCode__success)
             {
-                pContinue = strstr(atcmd_getResponse(), "+CGACT: ");
+                pContinue = strstr(atcmd_getResponse(), "+QIACT: ");
                 while (pContinue != NULL && ntwkIndx < ntwk__pdpContextCnt)
                 {
                     g_lqLTEM.providerInfo->networks[ntwkIndx].pdpContextId = strtol(pContinue + 8, &pContinue, 10);
                     g_lqLTEM.providerInfo->networks[ntwkIndx].isActive = *(++pContinue) == '1';
                     // only supported protocol now is IPv4, alias IP
-                    strcpy(g_lqLTEM.providerInfo->networks[ntwkIndx].pdpProtocolType, PDP_PROTOCOL_IPV4);
-                    pContinue = strstr(pContinue, "+CGACT: ");
+                    g_lqLTEM.providerInfo->networks[ntwkIndx].pdpProtocol = pdpProtocol_IPV4;
+                    pContinue = strstr(pContinue, "+QIACT: ");
                     if (pContinue == NULL)
                         break;
                     ntwkIndx++;
@@ -341,7 +323,7 @@ uint8_t ntwk_getRegistrationStatus()
 /** 
  *  \brief Development/diagnostic function to retrieve visible providers from cell radio.
  */
-void ntwkDIAG_getProviders(char *providersList, uint16_t listSz)
+void ntwkPRNT_getProviders(char *providersList, uint16_t listSz)
 {
     /* AT+COPS=? */
     ASSERT_W(false, "ntwk_getProviders() blocks and is SLOW!");

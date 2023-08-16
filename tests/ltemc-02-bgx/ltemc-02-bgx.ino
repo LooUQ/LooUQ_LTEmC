@@ -1,135 +1,106 @@
-/******************************************************************************
- *  \file ltemc-2-bgx.ino
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020-2022 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * Test 2: tests the LTEm NXP serial bridge chip and BGx module for basic
- * serial operations. 
- * 
- * The sketch is designed for debug output to observe results.
- *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG)
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #else
-    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
-    #endif
-#else
-#define PRINTF(c_, f_, ...) ;
-#endif
+#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
 
-// specify host pinout
-#define HOST_FEATHER_UXPLOR_L                       // LooUQ UXplor development adapter for Feather
-//#define HOST_FEATHER_UXPLOR                         // LooUQ UXplor development adapter for Feather
-// #define HOST_FEATHER_LTEM3F                        // LooUQ CR-LTEM3F device
+/* specify the pin configuration 
+ * --------------------------------------------------------------------------------------------- */
+// #define HOST_FEATHER_UXPLOR             
+// #define HOST_FEATHER_LTEM3F
+// #define HOST_FEATHER_UXPLOR_L
+#define HOST_ESP32_DEVMOD_BMS
 
-// #include <ltemc.h>
+// LTEmC Includes
 #include <ltemc-internal.h>                         /* not usually referenced in user application */
 #include <ltemc-types.h>                            // - necessary to access internal buffers
 #include <ltemc-nxp-sc16is.h>                       // - necessary to perform direct component access via SPI
 
 ltemDevice_t g_lqLTEM;                              // - normally created in the ltemc.c file, this test is low-level and performs direct IO
 
-void setup() {
-    #ifdef SERIAL_DBG
+#define PERIOD_FROM_SECONDS(period)  (period * 1000)
+#define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
+#define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
+#define STRCMP(n, h)  (strcmp(n, h) == 0)
+
+// test controls
+uint8_t testPattern;
+uint16_t loopCnt = 0;
+uint16_t cycle_interval = 2000;
+uint32_t lastCycle;
+
+
+void setup() 
+{
+    #ifdef DIAGPRINT_SERIAL
         Serial.begin(115200);
-        #if (SERIAL_OPT > 0)
-        while (!Serial) {}      // force wait for serial ready
-        #else
-        delay(5000);            // just give it some time
-        #endif
+        delay(5000);                // just give it some time
     #endif
-
-    PRINTF(dbgColor__red, "LTEmC - Test #2: BGx communications\r\n");
-    lqDiag_setNotifyCallback(appEvntNotify);                            // configure ASSERTS to callback into application
-
-    /*  Manually create/initialize modem parts used, this is a low-level test
-     */
-	g_lqLTEM.pinConfig = ltem_pinConfig;                                // initialize the I/O modem internal settings
-    g_lqLTEM.spi = spi_create(g_lqLTEM.pinConfig.spiCsPin);
+    DIAGPRINT(PRNT_RED,"\n\n*** LTEmC Test: ltemc-02-bgx started ***\n\n");
     g_lqLTEM.appEvntNotifyCB = appEvntNotify;                           // set the callback address
 
+    //  Manually create/initialize modem parts used, this is a low-level test
+	g_lqLTEM.pinConfig = ltem_pinConfig;                                // initialize the I/O modem internal settings
     initIO();                                                           // initialize GPIO, SPI
-    spi_start(g_lqLTEM.spi);
-    
+
     /* QBG_ (caps prefix) indicates a function for LTEmC internal use. This test is a low-level
      * direct test of LTEmX I/O and BGx module functionality requiring more direct access to 
      * modem functions.
      */
     if (QBG_isPowerOn())                                                // verify/apply BGx power (normally )
-        PRINTF(dbgColor__dGreen, "LTEm found already powered on.\r\n");
+        DIAGPRINT(PRNT_dGREEN, "LTEm found already powered on.\r\n");
     else
     {
         QBG_powerOn();
-        PRINTF(dbgColor__dGreen, "Powered LTEm on.\r\n");
+        DIAGPRINT(PRNT_dGREEN, "Powered LTEm on.\r\n");
         pDelay(5);
     }
     SC16IS7xx_start();                                                  // start SPI-UART bridge
 
+    // prepare for running loop
     randomSeed(analogRead(0));
+    lastCycle = cycle_interval;
 }
 
 
-int loopCnt = 0;
-uint8_t testPattern;
-int nullResponses = 0;
+void loop() 
+{
+    if (ELAPSED(lastCycle, cycle_interval))
+    {
+        lastCycle = millis();
+        loopCnt++;
 
-void loop() {
-    testPattern = random(256);
-    uint8_t txBuffer_reg;
-    uint8_t rxBuffer_reg;
+        testPattern = random(256);
+        uint8_t txBuffer_reg;
+        uint8_t rxBuffer_reg;
 
-    txBuffer_reg = testPattern;
-    // rxBuffer doesn't matter prior to read
-    
-    SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, txBuffer_reg);
-    rxBuffer_reg = SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr);
+        txBuffer_reg = testPattern;
+        // rxBuffer doesn't matter prior to read
+        
+        SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, txBuffer_reg);
+        rxBuffer_reg = SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr);
 
-    if (testPattern != rxBuffer_reg)
-        indicateFailure("Scratchpad write/read failed (write/read register)."); 
+        if (testPattern != rxBuffer_reg)
+            indicateFailure("Scratchpad write/read failed (write/read register)."); 
 
-    /* BG96 test pattern: get IMEI
-    *
-    *  AT+GSN
-    *         
-    *  <IMEI value (20 char)>
-    *
-    *  OK
-    */
+        /* BG96 test pattern: get IMEI
+        *  AT+GSN\r\r
+        *  <IMEI value (20 char)>\r\r
+        *  OK\r
+        */
+
+       // BGx Test
 
     uint8_t regValue = 0;
+    // char cmd[] = "GSN\r\0";                      // less than one bridge buffer
     char cmd[] = "ATI\r\0";
-    // char cmd[] = "AT+QPOWD=0\r\0";
-    PRINTF(0, "Invoking cmd: %s \r\n", cmd);
+    // char cmd[] = "AT+QPOWD=0\r\0";               // if others fail, but this powers down modem, RX failing
+    DIAGPRINT(PRNT_DEFAULT, "Invoking cmd: %s \r\n", cmd);
 
     sendCommand(cmd);
-
     // wait for BG96 response in FIFO buffer
     char response[65] = {0};
-
     recvResponse(response);
 
     //\r\nQuectel\r\nBG96\r\nRevision: BG96MAR02A07M1G\r\n\r\nOK\r\n", 
@@ -141,18 +112,17 @@ void loop() {
 
     if (strstr(response, "APP RDY"))
     {
-        PRINTF(dbgColor__warn, "Received APP RDY from LTEm.\r\n");
+        DIAGPRINT(PRNT_WARN, "Received APP RDY from LTEm.\r\n");
     }
     if (strstr(response, "RDY"))
     {
-        PRINTF(dbgColor__warn, "Received BG RDY from LTEm.\r\n");
+        DIAGPRINT(PRNT_WARN, "Received BG RDY from LTEm.\r\n");
     }
     if (strlen(response) == 0)
     {
-        PRINTF(dbgColor__warn, "Got no response from BGx.\r\n");
-        nullResponses++;
-        if (nullResponses > 2)
-            indicateFailure("BGx is not responding to cmds... failed."); 
+        DIAGPRINT(PRNT_WARN, "Got no response from BGx.\r\n");
+        // if (nullResponses > 2)
+        //     indicateFailure("BGx is not responding to cmds... failed."); 
     }
 
     if (strlen(response) > 40 )
@@ -161,23 +131,47 @@ void loop() {
         {
             tailAt = strstr(response, "OK\r\n");
             if (tailAt != NULL)
-                PRINTF(0, "Got correctly formed response: \r\n%s", response);  
+                DIAGPRINT(PRNT_DEFAULT, "Got correctly formed response: \r\n%s", response);  
             else
-                PRINTF(dbgColor__warn, "Missing final OK in response.\r");
+                DIAGPRINT(PRNT_WARN, "Missing final OK in response.\r");
         }
         else
             indicateFailure("Unexpected device information returned on cmd test... failed."); 
     }
-    loopCnt ++;
-    indicateLoop(loopCnt, random(1000));
+
+
+        DIAGPRINT(PRNT_DEFAULT,"Loop=%d \n\n", loopCnt);
+     }
 }
 
 
-/*
-========================================================================================================================= */
+/* Test Helpers
+ * ============================================================================================= */
+
+void initIO()
+{
+	// on Arduino, ensure pin is in default "logical" state prior to opening
+	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
+	platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
+
+	platform_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	platform_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+
+	platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
+	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
+
+    // SPI bus
+    g_lqLTEM.platformSpi = spi_create(g_lqLTEM.pinConfig.spiClkPin, g_lqLTEM.pinConfig.spiMisoPin, g_lqLTEM.pinConfig.spiMosiPin, g_lqLTEM.pinConfig.spiCsPin);
+    spi_start(g_lqLTEM.platformSpi);
+}
+
 
 #define ASCII_CR 13U
 
+// This functionality is normally handled in the IOP module. 
+// ISR functionality is tested in the ltemc-03-iopisr test
 void sendCommand(const char* cmd)
 {
     size_t sendSz = strlen(cmd);
@@ -193,6 +187,8 @@ void sendCommand(const char* cmd)
 }
 
 
+// This functionality is normally handled in the IOP module's interrupt service routine (ISR). 
+// ISR functionality is tested in the ltemc-03-iopisr test
 void recvResponse(char *response)
 {
     bool dataAvailable = false;
@@ -217,73 +213,13 @@ void recvResponse(char *response)
 }
 
 
-
-/**
- *	\brief Validate the response ends in a BG96 OK value.
- *
- *	\param[in] response The command response received from the BG96.
- *  \return bool If the response string ends in a valid OK sequence
- */
-bool validOkResponse(const char *response)
-{
-    #define BUFF_SZ 64
-    #define EXPECTED_TERMINATOR_STR "OK\r\n"
-    #define EXPECTED_TERMINATOR_LEN 4
-
-    const char * end = (const char *)memchr(response, '\0', BUFF_SZ);
-    if (end == NULL)
-        end = response + BUFF_SZ;
-
-    return strncmp(EXPECTED_TERMINATOR_STR, end - EXPECTED_TERMINATOR_LEN, EXPECTED_TERMINATOR_LEN) == 0;
-}
-
-#define STRCMP(n, h)  (strcmp(n, h) == 0)
-
-/* test helpers
-========================================================================================================================= */
-
-//typedef void (*eventNotifFunc_t)(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg);
-
-void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
-{
-    if (eventType == appEvent_fault_assertFailed)
-    if (eventType == appEvent_fault_assertFailed)
-    {
-        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
-    }
-    else 
-    {
-        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
-    }
-    return;
-}
-
-
-void indicateLoop(int loopCnt, int waitNext) 
-{
-    PRINTF(dbgColor__info, "Loop: %i \r\n", loopCnt);
-
-    for (int i = 0; i < 6; i++)
-    {
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        delay(50);
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        delay(50);
-    }
-
-    PRINTF(dbgColor__magenta, "Free memory: %u \r\n", getFreeMemory());
-    PRINTF(0, "Next test in (millis): %i\r\n\r\n", waitNext);
-    delay(waitNext);
-}
-
-
 void indicateFailure(const char* failureMsg)
 {
-	PRINTF(dbgColor__error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
+	DIAGPRINT(PRNT_ERROR, "\r\n** %s \r\n", failureMsg);
+    DIAGPRINT(PRNT_ERROR, "** Test Assertion Failed. \r\n");
 
     int halt = 1;
-    PRINTF(dbgColor__error, "** Halting Execution \r\n");
+    DIAGPRINT(PRNT_ERROR, "** Halting Execution \r\n");
     while (halt)
     {
         platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
@@ -293,41 +229,19 @@ void indicateFailure(const char* failureMsg)
     }
 }
 
-void initIO()
+
+//typedef void (*eventNotifFunc_t)(uint8_t notifType, uint8_t notifAssm, uint8_t notifInst, const char *notifMsg);
+
+void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
-	// on Arduino, ensure pin is in default "logical" state prior to opening
-	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
-	platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
-	platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
-
-	platform_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	platform_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
-
-	platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
-	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
+    if (eventType == appEvent_fault_assertFailed)
+    if (eventType == appEvent_fault_assertFailed)
+    {
+        DIAGPRINT(PRNT_ERROR, "LTEmC-HardFault: %s\r", notifyMsg);
+    }
+    else 
+    {
+        DIAGPRINT(PRNT_WHITE, "LTEmC Info: %s\r", notifyMsg);
+    }
+    return;
 }
-
-/* Check free memory (stack-heap) 
- * - Remove if not needed for production
---------------------------------------------------------------------------------- */
-
-#ifdef __arm__
-// should use uinstd.h to define sbrk but Due causes a conflict
-extern "C" char* sbrk(int incr);
-#else  // __ARM__
-extern char *__brkval;
-#endif  // __arm__
-
-int getFreeMemory() 
-{
-    char top;
-    #ifdef __arm__
-    return &top - reinterpret_cast<char*>(sbrk(0));
-    #elif defined(CORE_TEENSY) || (ARDUINO > 103 && ARDUINO != 151)
-    return &top - __brkval;
-    #else  // __arm__
-    return __brkval ? &top - __brkval : &top - __malloc_heap_start;
-    #endif  // __arm__
-}
-

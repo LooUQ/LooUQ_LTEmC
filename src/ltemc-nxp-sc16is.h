@@ -38,7 +38,7 @@
 #endif // __cplusplus
 
 #include "ltemc-types.h"
-#include "platform/lqPlatform-spi.h"
+//#include "platform/platform-spi.h"
 
 
 #define DEF_SC16IS7xx_REG(REG_NAME, REG_BITS) \

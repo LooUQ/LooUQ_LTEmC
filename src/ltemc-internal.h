@@ -99,7 +99,10 @@ typedef struct ltemDevice_tag
     deviceState_t deviceState;                  /// Device state of the BGx module
     appEvntNotify_func appEvntNotifyCB;         /// Event notification callback to parent application
     char moduleType[ltem__moduleTypeSz];        /// c-str indicating module type. BG96, BG95-M3, BG77, etc. (so far)
-    void *spi;                                  /// SPI device (methods signatures compatible with Arduino)
+
+    platformSpi_t* platformSpi;
+    //void *spi;                                  /// SPI device (methods signatures compatible with Arduino)
+    
     iop_t *iop;                                 /// IOP subsystem controls
     atcmd_t *atcmd;                             /// Action subsystem controls
     modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
@@ -109,6 +112,7 @@ typedef struct ltemDevice_tag
     fileCtrl_t* fileCtrl;
 
     ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
+    uint16_t isrInvokeCnt;
 } ltemDevice_t;
 
 

@@ -25,23 +25,15 @@
 ***************************************************************************** */
 
 
-#define SRCFILE "ATC"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define SRCFILE "ATC"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DPRINT                    // expand DPRINT into debug output
+#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
+
 #include <stdarg.h>
 #include "ltemc-internal.h"
-
-#define _DEBUG 0                                // set to non-zero value for PRINTF debugging output, 
-// debugging output options                     // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if _DEBUG > 0
-    asm(".global _printf_float");               // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG >= 2
-    #include <jlinkRtt.h>                       // output debug PRINTF macros to J-Link RTT channel
-    //#define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #endif
-#else
-#define PRINTF(c_, f_, ...) 
-#endif
 
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -231,7 +223,7 @@ resultCode_t atcmd_awaitResult()
     {
         char dbg[81] = {0};
         cbffr_pop(g_lqLTEM.iop->rxBffr, dbg, 80);
-        PRINTF(dbgColor__yellow, "*!* %s", dbg);
+        DPRINT(PRNT_YELLOW, "*!* %s", dbg);
     }
     #endif
 
@@ -395,16 +387,17 @@ bool ATCMD_awaitLock(uint16_t timeoutMS)
 {
     uint32_t waitStart = pMillis();
                                                                     
-    while (pMillis() - waitStart < timeoutMS)           // cannot set lock while... 
-    {                                                       // can set new lock if...
-        if (!g_lqLTEM.atcmd->isOpenLocked)                  // !not existing lock
+    do
+    {
+        if (!g_lqLTEM.atcmd->isOpenLocked)                  // if not existing lock
         {
-            g_lqLTEM.atcmd->isOpenLocked = true;            // acquired new lock
+            g_lqLTEM.atcmd->isOpenLocked = true;            // ...acquired new lock
             return true;
         }
         pYield();                                           // call back to platform yield() in case there is work there that can be done
         ltem_eventMgr();                                    // process any new receives prior to starting cmd invoke
-    }
+
+    } while (pMillis() - waitStart < timeoutMS);            // until timed out 
     return false;                                           // timed out waiting for lock
 }
 
@@ -437,7 +430,6 @@ static resultCode_t S__readResult()
             // looking for streamPrefix phrase 
             if (CBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true)))
             {
-                PRINTF(dbgColor__white, "%s:dataMode>\r", g_lqLTEM.atcmd->streamPrefix);                // entered stream data mode
                 resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)();
                 if (dataRslt == resultCode__success)
                 {
@@ -452,7 +444,7 @@ static resultCode_t S__readResult()
                         g_lqLTEM.atcmd->resultCode = dataRslt;
                     }
                 }
-                PRINTF(dbgColor__white, "Exit dataMode rslt=%d\r", dataRslt);
+                DPRINT(PRNT_WHITE, "Exit dataMode rslt=%d\r", dataRslt);
                 memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));                               // done with dataMode settings
             }
         }
@@ -467,7 +459,7 @@ static resultCode_t S__readResult()
             /* - */
             g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();                     /* *** parse for command response *** */
             /* - */
-            PRINTF(dbgColor__gray, "prsr=%d \r", g_lqLTEM.atcmd->parserResult);
+            DPRINT(PRNT_GRAY, "prsr=%d \r", g_lqLTEM.atcmd->parserResult);
         }
     }
 
@@ -727,7 +719,7 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 //     // */
 //     // if (g_lqLTEM.iop->scktMap > 0 && (foundAt = strstr(urcBffr, "+QSSLURC: \"recv\",")))         // shortcircuit if no sockets
 //     // {
-//     //     PRINTF(dbgColor__cyan, "-p=sslURC");
+//     //     DPRINT(PRNT_CYAN, "-p=sslURC");
 //     //     uint8_t urcLen = strlen("+QSSLURC: \"recv\",");
 //     //     char *cntxtIdPtr = urcBffr + urcLen;
 //     //     char *endPtr = NULL;
@@ -742,7 +734,7 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 //     // // preserve temporarily Nov29-2022
 //     // // else if (g_lqLTEM.iop->scktMap && memcmp("+QIURC: \"recv", urcStartPtr, strlen("+QIURC: \"recv")) == 0)         // shortcircuit if no sockets
 //     // // {
-//     // //     PRINTF(dbgColor__cyan, "-p=ipURC");
+//     // //     DPRINT(PRNT_CYAN, "-p=ipURC");
 //     // //     char *cntxIdPtr = g_lqLTEM.iop->rxCBuffer->prevHead + strlen("+QIURC: \"recv");
 //     // //     char *endPtr = NULL;
 //     // //     uint8_t cntxId = (uint8_t)strtol(cntxIdPtr, &endPtr, 10);
@@ -755,7 +747,7 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 //     // */
 //     // else if (g_lqLTEM.iop->scktMap && (foundAt = strstr(urcBffr, "+QIURC: \"recv\",")))         // shortcircuit if no sockets
 //     // {
-//     //     PRINTF(dbgColor__cyan, "-p=ipURC");
+//     //     DPRINT(PRNT_CYAN, "-p=ipURC");
 //     //     uint8_t urcLen = strlen("+QIURC: \"recv\",");
 //     //     char *cntxtIdPtr = urcBffr + urcLen;
 //     //     char *endPtr = NULL;
@@ -771,7 +763,7 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 //     // */
 //     // else if (g_lqLTEM.iop->mqttMap && (foundAt = strstr(urcBffr, "+QMTRECV: ")))
 //     // {
-//     //     PRINTF(dbgColor__cyan, "-p=mqttR");
+//     //     DPRINT(PRNT_CYAN, "-p=mqttR");
 //     //     uint8_t urcLen = strlen("+QMTRECV: ");
 //     //     char *cntxtIdPtr = urcBffr + urcLen;
 //     //     char *endPtr = NULL;
@@ -803,7 +795,7 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 //     // else if (g_lqLTEM.iop->mqttMap &&
 //     //          (foundAt = MAX(strstr(urcBffr, "+QMTSTAT: "), strstr(urcBffr, "+QMTDISC: "))))
 //     // {
-//     //     PRINTF(dbgColor__cyan, "-p=mqttS");
+//     //     DPRINT(PRNT_CYAN, "-p=mqttS");
 //     //     uint8_t urcLen = MAX(strlen("+QMTSTAT: "), strlen("+QMTDISC: "));
 //     //     char *cntxtIdPtr = urcBffr + urcLen;
 //     //     char *endPtr = NULL;
@@ -820,7 +812,7 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 //     // */
 //     // else if ((foundAt = strstr(urcBffr, "+QIURC: \"pdpdeact\",")))
 //     // {
-//     //     PRINTF(dbgColor__cyan, "-p=pdpD");
+//     //     DPRINT(PRNT_CYAN, "-p=pdpD");
 //     //     uint8_t urcLen = strlen("+QIURC: \"pdpdeact\",");
 //     //     char *pdpCntxtIdPtr = urcBffr + urcLen;
 //     //     char *endPtr = NULL;

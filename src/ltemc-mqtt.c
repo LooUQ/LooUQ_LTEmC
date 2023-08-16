@@ -25,19 +25,19 @@
 ***************************************************************************** */
 
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if _DEBUG > 0
-    asm(".global _printf_float");       // forces build to link in float support for printf
+#define _DEBUG 1                        // set to non-zero value for DPRINT debugging output, 
+// debugging output options             // LTEm1c will satisfy DPRINT references with empty definition if not already resolved
+#if defined(_DEBUG) && _DEBUG > 0
+    asm(".global _DPRINT_float");       // forces build to link in float support for DPRINT
     #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    // #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
+    #define SERIAL_DBG                  // enable serial port output using devl host platform serial
+    #elif _DEBUG == 2 
+    #include <jlinkRtt.h>               // output debug DPRINT macros to J-Link RTT channel
     #endif
 #else
-#define PRINTF(c_, f_, ...) 
+#define DPRINT(c_, f_, ...) ;
 #endif
+#define _DEBUGLVL _DEBUGLVL_DIAG
 
 #define SRCFILE "MQT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
@@ -179,6 +179,8 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
     if (atcmd_tryInvoke("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, mqttCtrl->hostUrl, mqttCtrl->hostPort))
     {
         resultCode_t rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(45), S__mqttOpenCompleteParser);
+        DPRINT_V(PRNT_WARN, "MQTT Open Resp: %s", atcmd_getRawResponse());
+
         if (rslt == resultCode__success && atcmd_getValue() == 0)
         {
             mqttCtrl->state = mqttState_open;
@@ -223,6 +225,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
 
     atcmd_tryInvoke("AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->dataCntxt, mqttCtrl->clientId, mqttCtrl->username, mqttCtrl->password);
     rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), S__mqttConnectCompleteParser);     // in autolock mode, so this will release lock
+    DPRINT_V(PRNT_WARN, "MQTT Open Resp: %s", atcmd_getRawResponse());
 
     if (rslt == resultCode__success)                                    // COMMAND executed, outcome of CONNECTION may not be a success
     {
@@ -260,14 +263,14 @@ resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession)
         rslt = mqtt_open(mqttCtrl);
         if (rslt != resultCode__success)
         {
-            PRINTF(dbgColor__warn, "Open fail status=%d\r", rslt);
+            DPRINT(PRNT_WARN, "Open fail status=%d\r", rslt);
             break;
         }
 
         rslt = mqtt_connect(mqttCtrl, true);
         if (rslt != resultCode__success)
         {
-            PRINTF(dbgColor__warn, "Connect fail status=%d\r", rslt);
+            DPRINT(PRNT_WARN, "Connect fail status=%d\r", rslt);
             break;
         }
 
@@ -283,7 +286,7 @@ resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession)
                 break;
             }
         }
-        PRINTF(dbgColor__green, "MQTT Started\r");
+        DPRINT(PRNT_GREEN, "MQTT Started\r");
     } while (false);
 
     return rslt;
@@ -363,7 +366,7 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtrl)
 //         rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(timeoutSeconds), NULL);
 //         if (rslt != resultCode__success)                                        
 //         {
-//             PRINTF(dbgColor__dYellow, "MQTT-PUB ERROR: rslt=%d(%d)\r", rslt, atcmd_getValue());
+//             DPRINT(PRNT_YELLOW, "MQTT-PUB ERROR: rslt=%d(%d)\r", rslt, atcmd_getValue());
 //         }
 //     }
 //     atcmd_close();
@@ -393,7 +396,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
             if (rslt == resultCode__success)                                        
             {
                 atcmd_close();
-                PRINTF(dbgColor__dYellow, "MQTT-PUB Success: rslt=%d\r", rslt);
+                DPRINT(PRNT_YELLOW, "MQTT-PUB Success: rslt=%d\r", rslt);
                 return rslt;
             }
         }
@@ -638,7 +641,7 @@ static void S__mqttUrcHandler()
         ASSERT(topicFound);                                                                 // assert that we can find topic that we told server to send us
 
         // forward topic
-        PRINTF(dbgColor__dCyan, "mqttUrcHndlr() topic ptr=%p blkSz=%d \r", workPtr, topicLen);
+        DPRINT(PRNT_dCYAN, "mqttUrcHndlr() topic ptr=%p blkSz=%d \r", workPtr, topicLen);
         ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_topic, workPtr, topicLen, false);
 
         // forward topic extension
@@ -647,7 +650,7 @@ static void S__mqttUrcHandler()
         if (extensionLen > 0)
         {
             extensionLen -= 3;                                                              // remove topic(w/extension) and message body delimiter
-            PRINTF(dbgColor__dCyan, "mqttUrcHndlr() topicExt ptr=%p blkSz=%d \r", workPtr, extensionLen);
+            DPRINT(PRNT_dCYAN, "mqttUrcHndlr() topicExt ptr=%p blkSz=%d \r", workPtr, extensionLen);
             ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_topicExt, workPtr, extensionLen, false);
         }
 
@@ -660,7 +663,7 @@ static void S__mqttUrcHandler()
             eomFound = lq_strnstr(streamPtr, "\"\r\n", blockSz) != NULL;
             blockSz -= (eomFound) ? 3 : 0;                                                  // adjust blockSz to not include in app content
 
-            PRINTF(dbgColor__dCyan, "mqttUrcHndlr() msgBody ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, eomFound);
+            DPRINT(PRNT_dCYAN, "mqttUrcHndlr() msgBody ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, eomFound);
 
             // signal new receive data available to host application
             ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_msgBody, streamPtr, blockSz, eomFound);

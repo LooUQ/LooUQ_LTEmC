@@ -26,23 +26,15 @@
  
 ***************************************************************************** */
 
+#define SRCFILE "NXP"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
 
-#define _DEBUG 0                                // set to non-zero value for PRINTF debugging output, 
-// debugging output options                     // LTEmC will satisfy PRINTF references with empty definition if not already resolved
-#if _DEBUG > 0
-    asm(".global _printf_float");               // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    #endif
-#else
-#define PRINTF(c_, f_, ...) 
-#endif
-
-#define SRCFILE "NXP"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
-#include "lq-platform.h"
+#include "ltemc-platform.h"
 #include "ltemc-nxp-sc16is.h"
 
 extern ltemDevice_t g_lqLTEM;
@@ -161,7 +153,7 @@ uint8_t SC16IS7xx_readReg(uint8_t reg_addr)
 	reg_payload.reg_addr.A = reg_addr;
 	reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-	reg_payload.reg_payload = spi_transferWord(g_lqLTEM.spi, reg_payload.reg_payload);
+	reg_payload.reg_payload = spi_transferWord(g_lqLTEM.platformSpi, reg_payload.reg_payload);
 	return reg_payload.reg_data;
 }
 
@@ -176,7 +168,7 @@ void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data)
 	reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 	reg_payload.reg_data = reg_data;
 
-	spi_transferWord(g_lqLTEM.spi, reg_payload.reg_payload);
+	spi_transferWord(g_lqLTEM.platformSpi, reg_payload.reg_payload);
 }
 
 
@@ -189,7 +181,7 @@ void SC16IS7xx_read(void* dest, uint8_t dest_len)
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-    spi_transferBuffer(g_lqLTEM.spi, reg_addr.reg_address, dest, dest_len);
+    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, dest, dest_len);
 }
 
 
@@ -202,7 +194,7 @@ void SC16IS7xx_write(const void* src, uint8_t src_len)
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 
-    spi_transferBuffer(g_lqLTEM.spi, reg_addr.reg_address, src, src_len);
+    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, src, src_len);
 }
 
 
@@ -255,9 +247,9 @@ void SC16IS7xx_flushRxFifo()
  */
 void SC16IS74__displayFifoStatus(const char *dispMsg)
 {
-    PRINTF(dbgColor__gray, "%s...\r\n", dispMsg);
+    DIAGPRINT(PRNT_GRAY, "%s...\r\n", dispMsg);
     uint8_t bufFill = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-    PRINTF(dbgColor__gray, "  -- RX buf level=%d\r\n", bufFill);
+    DIAGPRINT(PRNT_GRAY, "  -- RX buf level=%d\r\n", bufFill);
     bufFill = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
-    PRINTF(dbgColor__gray, "  -- TX buf level=%d\r\n", bufFill);
+    DIAGPRINT(PRNT_GRAY, "  -- TX buf level=%d\r\n", bufFill);
 }

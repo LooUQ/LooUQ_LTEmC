@@ -25,23 +25,15 @@
 ***************************************************************************** */
 
 
-#define SRCFILE "HTT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define SRCFILE "HTT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DPRINT                    // expand DPRINT into debug output
+#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
+
 #include "ltemc-internal.h"
 #include "ltemc-http.h"
-
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG >= 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    // #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #endif
-#else
-#define PRINTF(c_, f_, ...) ;
-#endif
 
 extern ltemDevice_t g_lqLTEM;
 
@@ -250,7 +242,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         rslt = S__setUrl(httpCtrl->hostUrl, relativeUrl);
         if (rslt != resultCode__success)
         {
-            PRINTF(dbgColor__warn, "Failed set URL rslt=%d\r", rslt);
+            DPRINT(PRNT_WARN, "Failed set URL rslt=%d\r", rslt);
             atcmd_close();
             return rslt;
         }
@@ -282,7 +274,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
 
             char cstmRequest[240];
             snprintf(cstmRequest, sizeof(cstmRequest), "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrs);
-            PRINTF(dbgColor__dMagenta, "CustomRqst:\r%s\r", cstmRequest);
+            DPRINT(PRNT_dMAGENTA, "CustomRqst:\r%s\r", cstmRequest);
 
             atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, cstmRequest, strlen(cstmRequest), NULL, false);
             atcmd_invokeReuseLock("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, strlen(cstmRequest));
@@ -299,14 +291,14 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
             if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
             {
                 httpCtrl->requestState = httpState_requestComplete;                                         // update httpState, got GET/POST response
-                PRINTF(dbgColor__magenta, "GetRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+                DPRINT(PRNT_MAGENTA, "GetRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
             }
         }
         else
         {
             httpCtrl->requestState = httpState_idle;
             httpCtrl->httpStatus = atcmd_getValue();
-            PRINTF(dbgColor__warn, "Closed failed GET request, status=%d %s\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
+            DPRINT(PRNT_WARN, "Closed failed GET request, status=%d %s\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
         }
         atcmd_close();
         return httpCtrl->httpStatus;
@@ -363,7 +355,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
         rslt = S__setUrl(httpCtrl->hostUrl, relativeUrl);
         if (rslt != resultCode__success)
         {
-            PRINTF(dbgColor__warn, "Failed set URL rslt=%d\r", rslt);
+            DPRINT(PRNT_WARN, "Failed set URL rslt=%d\r", rslt);
             atcmd_close();
             return rslt;
         }
@@ -405,14 +397,14 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
                 if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                 {
                     httpCtrl->requestState = httpState_requestComplete;                                 // update httpState, got GET/POST response
-                    PRINTF(dbgColor__magenta, "PostRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+                    DPRINT(PRNT_MAGENTA, "PostRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
                 }
             }
             else
             {
                 httpCtrl->requestState = httpState_idle;
                 httpCtrl->httpStatus = rslt;
-                PRINTF(dbgColor__warn, "Closed failed POST request, status=%d (%s)\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
+                DPRINT(PRNT_WARN, "Closed failed POST request, status=%d (%s)\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
             }
         }
         else
@@ -493,7 +485,7 @@ static resultCode_t S__setUrl(const char *host, const char *relative)
             strcat(url, relative);                                                              // host suffix is not '/' and relative prefix is '/'
         }
     }
-    PRINTF(dbgColor__dMagenta, "URL(%d)=\"%s\" \r", strlen(url), url);
+    DPRINT(PRNT_dMAGENTA, "URL(%d)=\"%s\" \r", strlen(url), url);
     
     atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, url, strlen(url), NULL, true);     // setup for URL dataMode transfer 
     atcmd_invokeReuseLock("AT+QHTTPURL=%d,5", strlen(url));
@@ -540,7 +532,7 @@ static resultCode_t S__httpRxHndlr()
     }
     
     cbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                               // pop CONNECT phrase for parsing data length
-    PRINTF(dbgColor__cyan, "httpPageRcvr() stream started\r");
+    DPRINT(PRNT_CYAN, "httpPageRcvr() stream started\r");
 
     memset(wrkBffr, 0, sizeof(wrkBffr));                                                                // need clean wrkBffr for trailer parsing
     uint32_t readStart = pMillis();
@@ -555,7 +547,7 @@ static resultCode_t S__httpRxHndlr()
         {
             char* streamPtr;
             uint16_t blockSz = cbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, reqstBlockSz);              // get address from rxBffr
-            PRINTF(dbgColor__cyan, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, CBFFR_FOUND(trailerIndx));
+            DPRINT(PRNT_CYAN, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, CBFFR_FOUND(trailerIndx));
 
             // forward to application
             ((httpRecv_func)(*httpCtrl->appRecvDataCB))(httpCtrl->dataCntxt, streamPtr, blockSz, CBFFR_FOUND(trailerIndx));

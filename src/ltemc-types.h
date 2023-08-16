@@ -73,6 +73,9 @@ enum streams__constants
 
 typedef struct ltemPinConfig_tag
 {
+    int spiClkPin;
+    int spiMisoPin;
+    int spiMosiPin;
     int spiCsPin;
     int irqPin;
     int statusPin;
@@ -133,6 +136,16 @@ typedef void (*powerSaveCallback_func)(uint8_t newPowerSaveState);
 
 
 /** 
+ *  \brief Enum describing the priority for radio receive.
+*/
+typedef enum radioPriority_tag
+{
+    radioPriority_gnss = 0,
+    radioPriority_wwan = 1,
+} radioPriority_t;
+
+
+/** 
  *  \brief Enum describing the mode the BGx module is using to look for available networks (carriers).
 */
 typedef enum ntwkScanMode_tag
@@ -164,7 +177,7 @@ enum ntwk
     ntwk__iotModeNameSz = 11,
     ntwk__pdpProtoSz = 7,
     ntwk__ipAddressSz = 40,
-    ntwk__ntwkConfigSz = 60,
+    ntwk__pdpNtwkConfigSz = 60,
 
     ntwk__imeiSz = 15,
     ntwk__iccidSz = 20,
@@ -173,11 +186,22 @@ enum ntwk
     ntwk__dvcMfgSz = 40
 };
 
+// // BGx representation
+// #define PDP_PROTOCOL_IPV4 "IP"
+// #define PDP_PROTOCOL_IPV6 "IPV6"
+// #define PDP_PROTOCOL_IPV4V6 "IPV4V6"
+// #define PDP_PROTOCOL_PPP "PPP"
 
-#define PDP_PROTOCOL_IPV4 "IP"
-#define PDP_PROTOCOL_IPV6 "IPV6"
-#define PDP_PROTOCOL_IPV4V6 "IPV4V6"
-#define PDP_PROTOCOL_PPP "PPP"
+
+typedef enum pdpProtocol_tag
+{
+    pdpProtocol_notSet = 0,
+    pdpProtocol_IPV4 = 1,
+    pdpProtocol_IPV6 = 2,
+    pdpProtocol_IPV4V6 = 3,
+    pdpProtocol_PPP = 99                    // not supported by LTEmC
+} pdpProtocol_t;
+
 
 // /** 
 //  *  \brief Enum of the two available PDP contexts for BGx provided by network carriers.
@@ -208,7 +232,7 @@ typedef struct modemSettings_tag
     char scanSequence[12];
     ntwkScanMode_t scanMode;
     ntwkIotMode_t iotMode;
-    char defaultNtwkConfig[ntwk__ntwkConfigSz]; /// Invoke ready default context config
+    char pdpNtwkConfig[ntwk__pdpNtwkConfigSz]; /// Invoke ready default context config
 } modemSettings_t;
 
 
@@ -232,7 +256,7 @@ typedef struct networkInfo_tag
 {
     bool isActive;
     uint8_t pdpContextId;                           /// context ID recognized by the carrier (valid are 1 to 16)
-    char pdpProtocolType[ntwk__pdpProtoSz];         /// IPv4, IPv6, PPP
+    pdpProtocol_t pdpProtocol;                      /// IPv4, IPv6, etc.
 	char ipAddress[ntwk__ipAddressSz];              /// The IP address obtained from the carrier for this context. The IP address of the modem.
 } networkInfo_t;
 

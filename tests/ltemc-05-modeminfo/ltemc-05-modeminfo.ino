@@ -27,110 +27,95 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
+#define _DEBUG 1                        // set to non-zero value for PRINTF debugging output, 
 // debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
 #if defined(_DEBUG)
     asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 2
+    #if _DEBUG == 1
+    #define SERIAL_DBG                  // enable serial port output using devl host platform serial
+    #elif _DEBUG == 2 
     #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #else
-    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
     #endif
 #else
-#define PRINTF(c_, f_, ...) ;
+#define PRINTF(c_, f_, ...)
 #endif
 
 
-/* specify the pin configuration
+/* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
-//#define HOST_FEATHER_UXPLOR   
-#define HOST_FEATHER_UXPLOR_L          
+// #define HOST_FEATHER_UXPLOR             
 // #define HOST_FEATHER_LTEM3F
+// #define HOST_FEATHER_UXPLOR_L
+#define HOST_ESP32_DEVMOD_BMS
+
+#define PERIOD_FROM_SECONDS(period)  (period * 1000)
+#define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
+#define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
 
 #include <ltemc.h>
 
 
-void setup() {
-    #ifdef SERIAL_OPT
-        Serial.begin(115200);
-        #if (SERIAL_OPT > 0)
-        while (!Serial) {}      // force wait for serial ready
-        #else
-        delay(5000);            // just give it some time
-        #endif
-    #endif
+// test controls
+uint16_t loopCnt = 0;
+uint16_t cycle_interval = 2000;
+uint32_t lastCycle;
+resultCode_t rslt;
 
-    PRINTF(dbgColor__red, "LTEmC test5-modemInfo\r\n");
-    
-    randomSeed(analogRead(0));
-    lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
-
-    ltem_create(ltem_pinConfig, NULL, applEvntNotify);              // create LTEmC modem, no yield req'd for testing
-    ltem_start(resetAction_swReset);                                // ... and start it
-
-    PRINTF(dbgColor__white, "LTEmC Ver: %s\r", ltem_getSwVersion());
-
-    // char opList[300];
-    // ntwk_getOperators(opList, sizeof(opList));
-    // PRINTF(dbgColor__green, "Ops: %s\r", opList);
-}
-
-
-int loopCnt = 0;
 modemInfo_t *modemInfo;
 
 
-void loop() {
-    modemInfo = mdminfo_ltem();
+void setup() 
+{
+    #ifdef SERIAL_DBG
+        Serial.begin(115200);
+        delay(5000);                // just give it some time
+    #endif
+    PRINTF(0,"\n\n*** ltemc-05-modeminfo started ***\n\n");
+    //lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
-    PRINTF(dbgColor__cyan, "\rModem Information\r");
-    PRINTF(dbgColor__cyan, "IMEI = %s \r", modemInfo->imei);
-    PRINTF(dbgColor__cyan, "ICCID = %s \r", modemInfo->iccid);
-    PRINTF(dbgColor__cyan, "Firmware = %s \r", modemInfo->fwver);
-    PRINTF(dbgColor__cyan, "Mfg/Model = %s \r", modemInfo->mfgmodel);
+    ltem_create(ltem_pinConfig, NULL, appEvntNotify);              // create LTEmC modem, no yield req'd for testing
+    ltem_start(resetAction_swReset);                                // ... and start it
 
-    PRINTF(dbgColor__info, "\rRSSI = %d dBm \r",mdminfo_signalRSSI());
-
-    loopCnt ++;
-    indicateLoop(loopCnt, random(1000));
+    PRINTF(dbgColor__white, "LTEmC Ver: %s\r\n", ltem_getSwVersion());
+    lastCycle = cycle_interval;
 }
 
+
+void loop() 
+{
+    if (ELAPSED(lastCycle, cycle_interval))
+    {
+        lastCycle = millis();
+        loopCnt++;
+
+        modemInfo = mdminfo_ltem();
+        PRINTF(dbgColor__cyan, "\rModem Information\r\n");
+        PRINTF(dbgColor__cyan, "IMEI = %s \r\n", modemInfo->imei);
+        PRINTF(dbgColor__cyan, "ICCID = %s \r\n", modemInfo->iccid);
+        PRINTF(dbgColor__cyan, "Firmware = %s \r\n", modemInfo->fwver);
+        PRINTF(dbgColor__cyan, "Mfg/Model = %s \r\n", modemInfo->mfgmodel);
+
+        PRINTF(dbgColor__info, "\rRSSI = %d dBm \r\n",mdminfo_signalRSSI());
+        PRINTF(0,"\r\nLoop=%d \r\n", loopCnt);
+    }
+}
 
 
 /* test helpers
 ========================================================================================================================= */
 
-void applEvntNotify(appEvent_t eventType, const char *notifyMsg)
+void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType == appEvent_fault_assertFailed)
     if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
+        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r\n", notifyMsg);
     }
     else 
     {
-        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+        PRINTF(dbgColor__white, "LTEmC Info: %s\r\n", notifyMsg);
     }
     return;
-}
-
-
-void indicateLoop(int loopCnt, int waitNext) 
-{
-    PRINTF(dbgColor__magenta, "\r\nLoop=%i \r\n", loopCnt);
-
-    for (int i = 0; i < 6; i++)
-    {
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        pDelay(50);
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        pDelay(50);
-    }
-
-    PRINTF(dbgColor__gray, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(dbgColor__gray, "NextTest (millis)=%i\r\r", waitNext);
-    pDelay(waitNext);
 }
 
 
@@ -148,28 +133,3 @@ void indicateFailure(char failureMsg[])
         pDelay(100);
     }
 }
-
-
-/* Check free memory (stack-heap) 
- * - Remove if not needed for production
---------------------------------------------------------------------------------- */
-
-#ifdef __arm__
-// should use uinstd.h to define sbrk but Due causes a conflict
-extern "C" char* sbrk(int incr);
-#else  // __ARM__
-extern char *__brkval;
-#endif  // __arm__
-
-int getFreeMemory() 
-{
-    char top;
-    #ifdef __arm__
-    return &top - reinterpret_cast<char*>(sbrk(0));
-    #elif defined(CORE_TEENSY) || (ARDUINO > 103 && ARDUINO != 151)
-    return &top - __brkval;
-    #else  // __arm__
-    return __brkval ? &top - __brkval : &top - __malloc_heap_start;
-    #endif  // __arm__
-}
-

@@ -58,21 +58,12 @@
 
 #pragma region Header
 
-#define _DEBUG 0                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if _DEBUG > 0
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG >= 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    // #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #endif
-#else
-#define PRINTF(c_, f_, ...) ;
-#endif
-
 #define SRCFILE "IOP"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DPRINT                    // expand DPRINT into debug output
+#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
 
 #include "ltemc-internal.h"
 #include "ltemc-iop.h"
@@ -145,7 +136,7 @@ void IOP_attachIrq()
 {
     g_lqLTEM.iop->txBffr = NULL;
     g_lqLTEM.iop->txPending = 0;
-    spi_usingInterrupt(g_lqLTEM.spi, g_lqLTEM.pinConfig.irqPin);
+    spi_usingInterrupt(g_lqLTEM.platformSpi, g_lqLTEM.pinConfig.irqPin);
     platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
 }
 
@@ -184,7 +175,7 @@ bool IOP_awaitAppReady()
                 head += rxLevel;
                 if (strstr(buf, "APP RDY"))
                 {
-                    PRINTF(dbgColor__white, "AppRdy @ %lums\r", pMillis() - waitStart);
+                    DPRINT(PRNT_WHITE, "AppRdy @ %lums\r", pMillis() - waitStart);
                     g_lqLTEM.deviceState = deviceState_appReady;
                     return true;
                 }
@@ -192,7 +183,7 @@ bool IOP_awaitAppReady()
         }
         pYield();                                                           // give application time for non-comm startup activities or watchdog
     }
-    PRINTF(dbgColor__warn, "AppRdy Fault: ");
+    DPRINT(PRNT_WARN, "AppRdy Fault: ");
     return false;
 }
 
@@ -290,33 +281,34 @@ static void S_interruptCallbackISR()
     iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
     do
     {
+        g_lqLTEM.isrInvokeCnt++;
         uint8_t regReads = 0;
         while(iirVal.IRQ_nPENDING == 1 && regReads < 60)                               // wait for register, IRQ was signaled; safety limit at 60 in case of error gpio
         {
             iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
-            PRINTF(dbgColor__dRed, "*");
+            DPRINT(PRNT_dRED, "*");
             regReads++;
         }
 
         txLevel = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
         rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-        PRINTF(dbgColor__white, "\rISR[%02X/t%d/r%d-iSrc=%d ", iirVal.reg, txLevel, rxLevel, iirVal.IRQ_SOURCE);
+        DPRINT(PRNT_WHITE, "\rISR[%02X/t%d/r%d-iSrc=%d ", iirVal.reg, txLevel, rxLevel, iirVal.IRQ_SOURCE);
 
         // RX Error
         if (iirVal.IRQ_SOURCE == 3)                                                         // priority 1 -- receiver line status error : clear fifo of bad char
         {
             uint8_t lnStatus = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
-            PRINTF(dbgColor__error, "rxERR(%02X)-lvl=%d ", lnStatus, rxLevel);
-            PRINTF(dbgColor__warn, "bffrO=%d ", cbffr_getOccupied(g_lqLTEM.iop->rxBffr));
+            DPRINT(PRNT_ERROR, "rxERR(%02X)-lvl=%d ", lnStatus, rxLevel);
+            DPRINT(PRNT_WARN, "bffrO=%d ", cbffr_getOccupied(g_lqLTEM.iop->rxBffr));
 
             #if _DEBUG > 2
-                PRINTF(dbgColor__yellow, " >FIFO Dump\r");
+                DPRINT(PRNT_YELLOW, " >FIFO Dump\r");
                 char fifoTop;
                 for (size_t i = 0; i < rxLevel; i++)
                 {
                     lnStatus = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
                     SC16IS7xx_read(&fifoTop, 1);
-                    PRINTF(dbgColor__yellow, " >%02d-%02d 0x%02X\r", i, fifoTop, lnStatus);
+                    DPRINT(PRNT_YELLOW, " >%02d-%02d 0x%02X\r", i, fifoTop, lnStatus);
                 }
             #elif _DEBUG > 0
                 char dbg[65] = {0};
@@ -337,7 +329,7 @@ static void S_interruptCallbackISR()
                 rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
 
                 uint16_t bWrCnt = cbffr_pushBlock(g_lqLTEM.iop->rxBffr, &bAddr, rxLevel);   // get contiguous block to write from UART
-                PRINTF(dbgColor__dYellow, "-rx(%p:%d) -Bo=%d ", bAddr, bWrCnt, cbffr_getOccupied(g_lqLTEM.iop->rxBffr));
+                DPRINT(PRNT_dYELLOW, "-rx(%p:%d) -Bo=%d ", bAddr, bWrCnt, cbffr_getOccupied(g_lqLTEM.iop->rxBffr));
                 SC16IS7xx_read(bAddr, bWrCnt);
                 cbffr_pushBlockFinalize(g_lqLTEM.iop->rxBffr, true);
 
@@ -345,7 +337,7 @@ static void S_interruptCallbackISR()
                 {
                     rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);                   // get new rx number, push new receipts
                     bWrCnt = cbffr_pushBlock(g_lqLTEM.iop->rxBffr, &bAddr, rxLevel);
-                    PRINTF(dbgColor__dYellow, "-Wrx(%p:%d) -Bo=%d ", bAddr, bWrCnt, cbffr_getOccupied(g_lqLTEM.iop->rxBffr));
+                    DPRINT(PRNT_dYELLOW, "-Wrx(%p:%d) -Bo=%d ", bAddr, bWrCnt, cbffr_getOccupied(g_lqLTEM.iop->rxBffr));
                     SC16IS7xx_read(bAddr, bWrCnt);
                     cbffr_pushBlockFinalize(g_lqLTEM.iop->rxBffr, true);
                 }
@@ -354,14 +346,14 @@ static void S_interruptCallbackISR()
 
                 iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
                 rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-                PRINTF(dbgColor__white, "--rxLvl=%d,iir=%02X ", rxLevel, iirVal.reg);
+                DPRINT(PRNT_WHITE, "--rxLvl=%d,iir=%02X ", rxLevel, iirVal.reg);
             }
         }
 
         // TX - write data to UART from txBuffer
         if (iirVal.IRQ_SOURCE == 1)                                                         // priority 3 -- transmit THR (threshold) : TX ready for more data
         {
-            PRINTF(dbgColor__dYellow, "-txP(%d) ", g_lqLTEM.iop->txPending);
+            DPRINT(PRNT_dYELLOW, "-txP(%d) ", g_lqLTEM.iop->txPending);
 
             if (g_lqLTEM.iop->txPending > 0)
             {
@@ -387,7 +379,7 @@ static void S_interruptCallbackISR()
 
     } while (iirVal.IRQ_nPENDING == 0);
 
-    PRINTF(dbgColor__white, "]\r");
+    DPRINT(PRNT_WHITE, "]\r");
 
     gpioPinValue_t irqPin = platform_readPin(g_lqLTEM.pinConfig.irqPin);
     if (irqPin == gpioValue_low)
@@ -396,7 +388,7 @@ static void S_interruptCallbackISR()
         txLevel = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
         rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
 
-        PRINTF(dbgColor__yellow, "^IRQ: nIRQ=%d,iir=%d,txLvl=%d,rxLvl=%d^ ", iirVal.IRQ_nPENDING, iirVal.reg, txLevel, rxLevel);
+        DPRINT(PRNT_YELLOW, "^IRQ: nIRQ=%d,iir=%d,txLvl=%d,rxLvl=%d^ ", iirVal.IRQ_nPENDING, iirVal.reg, txLevel, rxLevel);
         goto retryIsr;
     }
 }

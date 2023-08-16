@@ -24,22 +24,13 @@
  
 ***************************************************************************** */
 
-
-#define _DEBUG 0                                // set to non-zero value for PRINTF debugging output, 
-// debugging output options                     // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if _DEBUG > 0
-    asm(".global _printf_float");               // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    // #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #endif
-#else
-#define PRINTF(c_, f_, ...)
-#endif
-
 #define SRCFILE "SKT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DPRINT                    // expand DPRINT into debug output
+#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
+
 #include "ltemc-internal.h"
 #include "ltemc-sckt.h"
 
@@ -404,7 +395,7 @@ static resultCode_t S__scktRxHndlr()
     uint16_t irdSz = strtol(wrkPtr, NULL, 10);
     g_lqLTEM.atcmd->retValue = irdSz;
 
-    PRINTF(dbgColor__cyan, "scktRxHndlr() cntxt=%d irdSz=%d\r", scktCtrl->dataCntxt, irdSz);
+    DPRINT(PRNT_CYAN, "scktRxHndlr() cntxt=%d irdSz=%d\r", scktCtrl->dataCntxt, irdSz);
 
     while (irdSz > 0)
     {
@@ -418,7 +409,7 @@ static resultCode_t S__scktRxHndlr()
         
         char* streamPtr;
         uint16_t blockSz = cbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, irdSz);                             // get data ptr from rxBffr
-        PRINTF(dbgColor__cyan, "scktRxHndlr() ptr=%p, blkSz=%d, availSz=%d\r", streamPtr, blockSz, irdSz);
+        DPRINT(PRNT_CYAN "scktRxHndlr() ptr=%p, blkSz=%d, availSz=%d\r", streamPtr, blockSz, irdSz);
 
         irdSz -= blockSz;
         ((scktAppRecv_func)(*scktCtrl->appRecvDataCB))(scktCtrl->dataCntxt, streamPtr, blockSz, irdSz == 0);    // forward to application

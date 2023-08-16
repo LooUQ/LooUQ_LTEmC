@@ -26,23 +26,16 @@
  
 ***************************************************************************** */
 
-#define _DEBUG 2                                // set to non-zero value for PRINTF debugging output, 
-// debugging output options                     // LTEmC will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
-    asm(".global _printf_float");               // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                        // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG == 2
-    #include <jlinkRtt.h>                       // PRINTF debug macro output to J-Link RTT channel
-    #endif
-#else
-#define PRINTF(c_, f_, ...) ;
-#endif
-
 #define SRCFILE "BGX"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DPRINT                    // expand DPRINT into debug output
+#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
+#include <lqdiag.h>
+
 #include "ltemc-internal.h"
 #include "ltemc-quectel-bg.h"
-#include "platform\lqPlatform-gpio.h"
+#include "platform\platform-gpio.h"
 
 extern ltemDevice_t g_lqLTEM;
 
@@ -96,13 +89,13 @@ void QBG_powerOn()
 {
     if (QBG_isPowerOn())
     {
-        PRINTF(dbgColor__none, "LTEm found powered on\r");
+        DPRINT(PRNT_DEFAULT, "LTEm found powered on\r");
         g_lqLTEM.deviceState = deviceState_appReady;                    // APP READY msg comes only once, shortly after chip start, would have missed it 
         return;
     }
     g_lqLTEM.deviceState = deviceState_powerOff;
 
-    PRINTF(dbgColor__none, "Powering LTEm On...");
+    DPRINT(PRNT_DEFAULT, "Powering LTEm On...");
     platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_high);  // toggle powerKey pin to power on/off
     pDelay(BGX__powerOnDelay);
     platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
@@ -112,13 +105,13 @@ void QBG_powerOn()
     {
         if (waitAttempts++ == 60)
         {
-            PRINTF(dbgColor__none, "FAILED\r");
+            DPRINT(PRNT_DEFAULT, "FAILED\r");
             return;
         }
         pDelay(100);                                                    // allow background tasks to operate
     }
     g_lqLTEM.deviceState = deviceState_powerOn;
-    PRINTF(dbgColor__none, "DONE\r");
+    DPRINT(PRNT_DEFAULT, "DONE\r");
 }
 
 
@@ -129,12 +122,12 @@ void QBG_powerOff()
 {
     if (!QBG_isPowerOn())
     {
-        PRINTF(dbgColor__none, "LTEm found powered off\r");
+        DPRINT(PRNT_DEFAULT, "LTEm found powered off\r");
         g_lqLTEM.deviceState = deviceState_powerOff;
         return;
     }
 
-    PRINTF(dbgColor__none, "Powering LTEm Off...");
+    DPRINT(PRNT_DEFAULT, "Powering LTEm Off...");
 	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_high);  // toggle powerKey pin to power on/off
 	pDelay(BGX__powerOffDelay);
 	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
@@ -144,13 +137,13 @@ void QBG_powerOff()
     {
         if (waitAttempts++ == 60)
         {
-            PRINTF(dbgColor__none, "FAILED\r");
+            DPRINT(PRNT_DEFAULT, "FAILED\r");
             return;
         }
         pDelay(100);                                                    // allow background tasks to operate
     }
     g_lqLTEM.deviceState = deviceState_powerOff;
-    PRINTF(dbgColor__none, "DONE\r");
+    DPRINT(PRNT_DEFAULT, "DONE\r");
 }
 
 
@@ -177,7 +170,7 @@ void QBG_reset(resetAction_t resetAction)
             yield();                                                        // give application some time back for processing
             if (pMillis() - waitStart > PERIOD_FROM_SECONDS(3))
             {
-                PRINTF(dbgColor__warn, "LTEm swReset:OFF timeout\r");
+                DPRINT(PRNT_WARN, "LTEm swReset:OFF timeout\r");
                 // SC16IS7xx_sendBreak();
                 // atcmd_exitTextMode();                                    // clear possible text mode (hung MQTT publish, etc.)
                 QBG_reset(resetAction_powerReset);                          // recursive call with power-cycle reset specified
@@ -191,25 +184,25 @@ void QBG_reset(resetAction_t resetAction)
             yield();                                                        // give application some time back for processing
             if (pMillis() - waitStart > PERIOD_FROM_SECONDS(3))
             {
-                PRINTF(dbgColor__warn, "LTEm swReset:ON timeout\r");
+                DPRINT(PRNT_WARN, "LTEm swReset:ON timeout\r");
                 return;
             }
         }
-        PRINTF(dbgColor__white, "LTEm swReset\r");
+        DPRINT(PRNT_WHITE, "LTEm swReset\r");
     }
     else if (resetAction == resetAction_hwReset)
     {
         platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_high);     // hardware reset: reset pin (LTEm inverts)
         pDelay(4000);                                                       // BG96: active for 150-460ms , BG95: 2-3.8s
         platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
-        PRINTF(dbgColor__white, "LTEm hwReset\r");
+        DPRINT(PRNT_WHITE, "LTEm hwReset\r");
     }
     else // if (resetAction == powerReset)
     {
         QBG_powerOff();                                                     
         pDelay(500);
         QBG_powerOn();
-        PRINTF(dbgColor__white, "LTEm pwrReset\r");
+        DPRINT(PRNT_WHITE, "LTEm pwrReset\r");
     }
 }
 
@@ -219,7 +212,7 @@ void QBG_reset(resetAction_t resetAction)
  */
 void QBG_setOptions()
 {
-    PRINTF(dbgColor__none, "BGx Init:\r");
+    DPRINT(PRNT_DEFAULT, "BGx Init:\r");
     bool initError = false;
     uint8_t tries = 0;
     char cmdBffr[120];
@@ -230,7 +223,7 @@ void QBG_setOptions()
 
         for (size_t i = 0; i < qbg_initCmdsCnt; i++)                                    // sequence through list of start cmds
         {
-            PRINTF(dbgColor__none, " > %s\r", qbg_initCmds[i]);
+            DPRINT(PRNT_DEFAULT, " > %s\r", qbg_initCmds[i]);
             strcpy(cmdBffr, qbg_initCmds[i]);
 
             if (atcmd_tryInvoke(cmdBffr))
@@ -241,11 +234,11 @@ void QBG_setOptions()
                 }
             }
 
-            PRINTF(dbgColor__error, "BGx Init CmdError: %s\r", qbg_initCmds[i]);
+            DPRINT(PRNT_ERROR, "BGx Init CmdError: %s\r", qbg_initCmds[i]);
             initError = true;
             break;
         }
-        PRINTF(dbgColor__none, " -End BGx Init-\r");
+        DPRINT(PRNT_DEFAULT, " -End BGx Init-\r");
         if (initError)
         {
             /* If above awaitResult gets a 408 (timeout), perform a HW check. The HW check 1st looks at status pin,the inspects
@@ -257,7 +250,7 @@ void QBG_setOptions()
                 ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");         // send notification, maybe app can recover
             }
         }
-        PRINTF(dbgColor__none, "\r");
+        DPRINT(PRNT_DEFAULT, "\r");
     } while (initError && tries == 1);
     
     if (initError)
