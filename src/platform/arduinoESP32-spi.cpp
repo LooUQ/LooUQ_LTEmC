@@ -19,7 +19,7 @@
  *  @param chipSelLine [in] - GPIO for CS 
  *  \return SPI device
  */
-platformSpi_t* spi_create(uint8_t clkPin, uint8_t misoPin, uint8_t mosiPin, uint8_t csPin)
+platformSpi_t* spi_createFromPins(uint8_t clkPin, uint8_t misoPin, uint8_t mosiPin, uint8_t csPin)
 {
     platformSpi_t *platformSpi = (platformSpi_t*)malloc(sizeof(platformSpi_t));
 	if (platformSpi == NULL)
@@ -36,8 +36,6 @@ platformSpi_t* spi_create(uint8_t clkPin, uint8_t misoPin, uint8_t mosiPin, uint
     platformSpi->spi = new SPIClass(HSPI);
     return platformSpi;
 }
-
-
 
 /**
  *	@brief Start SPI facility.

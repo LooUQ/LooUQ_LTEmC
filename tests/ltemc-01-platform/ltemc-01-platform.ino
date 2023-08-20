@@ -1,16 +1,18 @@
 
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
-// #define HOST_FEATHER_LTEM3F
-// #define HOST_FEATHER_UXPLOR_L
-#define HOST_ESP32_DEVMOD_BMS
+#ifdef ARDUINO_ARCH_ESP32
+    #define HOST_ESP32_DEVMOD_BMS
+#else
+    #define HOST_FEATHER_UXPLOR_L
+    // #define HOST_FEATHER_UXPLOR             
+    // #define HOST_FEATHER_LTEM3F
+#endif
 
 #include <ltemc.h>
 #include <ltemc-nxp-sc16is.h>                                           // need internal references, low-level test here
@@ -26,8 +28,8 @@ uint16_t cycle_interval = 2000;
 uint32_t lastCycle;
 
 // this test has no reference to global g_lqLTEM variable
-// so we need a surrogate spi pointer here to test locally 
-platformSpi_t* spi; 
+// so we need a surrogate a pointer here to test locally 
+platformSpi_t* platformSpi; 
 
 union regBuffer { uint16_t val; struct { uint8_t msb; uint8_t lsb; }; };
 regBuffer txBuffer;
@@ -64,16 +66,22 @@ void setup()
 
     DPRINT(PRNT_INFO, "Turn modem on for SPI tests\r\n");
     powerModemOn();
-	spi = spi_create(ltem_pinConfig.spiClkPin, ltem_pinConfig.spiMisoPin, ltem_pinConfig.spiMosiPin, ltem_pinConfig.spiCsPin);
-	if (spi == NULL)
+
+    #if defined(ARDUINO_ARCH_SAMD)
+	platformSpi = spi_createFromIndex(ltem_pinConfig.spiIndx, ltem_pinConfig.spiCsPin);
+    #else
+	spi = spi_createFromPins(ltem_pinConfig.spiClkPin, ltem_pinConfig.spiMisoPin, ltem_pinConfig.spiMosiPin, ltem_pinConfig.spiCsPin);
+    #endif
+
+	if (platformSpi == NULL)
 	{
         DPRINT(PRNT_WARN, "SPI setup failed.\r\n");
 	}
-    spi_start(spi);
+    spi_start(platformSpi);
 
     txBuffer.msb = SC16IS7xx_SPR_regAddr << 3;                                          // clear SPI and NXP-bridge
     txBuffer.lsb = 0;
-    spi_transferWord(spi, txBuffer.val);
+    spi_transferWord(platformSpi, txBuffer.val);
 
     lastCycle = cycle_interval;
 }
@@ -97,16 +105,16 @@ void loop()
         // rxBuffer.lsb doesn't matter prior to read
 
         DPRINT(0, "Writing scratchpad regiser %d with transfer WORD...", testPattern);
-        uint16_t d = spi_transferWord(spi, txBuffer.val);
-        rxBuffer.val = spi_transferWord(spi, rxBuffer.val);
+        uint16_t d = spi_transferWord(platformSpi, txBuffer.val);
+        rxBuffer.val = spi_transferWord(platformSpi, rxBuffer.val);
 
         if (testPattern == rxBuffer.lsb)
         {
-            DPRINT(dbgColor__info, "Scratchpad transfer WORD success.\r\n");
+            DPRINT(PRNT_INFO, "Scratchpad transfer WORD success.\r\n");
         }
         else
         {
-            DPRINT(dbgColor__warn, "Scratchpad transfer WORD write/read failed (expected=%d, got=%d).\r\n", testPattern, rxBuffer.lsb);
+            DPRINT(PRNT_WARN, "Scratchpad transfer WORD write/read failed (expected=%d, got=%d).\r\n", testPattern, rxBuffer.lsb);
             wFaults++;
             #ifdef HALT_ON_FAULT
                 while(1){;}
@@ -120,16 +128,16 @@ void loop()
         txBuffer.lsb = testPattern;
 
         DPRINT(0, "Writing scratchpad regiser %d with transfer BUFFER...", testPattern);
-        spi_transferBuffer(spi, txBuffer.msb, &txBuffer.lsb, 1);
-        spi_transferBuffer(spi, rxBuffer.msb, &rxBuffer.lsb, 1);
+        spi_transferBuffer(platformSpi, txBuffer.msb, &txBuffer.lsb, 1);
+        spi_transferBuffer(platformSpi, rxBuffer.msb, &rxBuffer.lsb, 1);
 
         if (rxBuffer.lsb == testPattern)
         {
-            DPRINT(dbgColor__info, "Scratchpad transfer BUFFER success.\r\n");
+            DPRINT(PRNT_INFO, "Scratchpad transfer BUFFER success.\r\n");
         }
         else
         {
-            DPRINT(dbgColor__warn, "Scratchpad transfer BUFFER write/read failed (expected=%d, got=%d).\r\n", testPattern, rxBuffer.lsb);
+            DPRINT(PRNT_WARN, "Scratchpad transfer BUFFER write/read failed (expected=%d, got=%d).\r\n", testPattern, rxBuffer.lsb);
             bFaults++;
             #ifdef HALT_ON_FAULT
                 while(1){;}

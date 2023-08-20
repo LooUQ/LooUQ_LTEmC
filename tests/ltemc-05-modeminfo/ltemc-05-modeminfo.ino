@@ -27,26 +27,21 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define _DEBUG 1                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG)
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG                  // enable serial port output using devl host platform serial
-    #elif _DEBUG == 2 
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #endif
-#else
-#define PRINTF(c_, f_, ...)
-#endif
+#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define ENABLE_ASSERT
+#include <lqdiag.h>
 
 
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
-// #define HOST_FEATHER_LTEM3F
-// #define HOST_FEATHER_UXPLOR_L
-#define HOST_ESP32_DEVMOD_BMS
+#ifdef ARDUINO_ARCH_ESP32
+    #define HOST_ESP32_DEVMOD_BMS
+#else
+    #define HOST_FEATHER_UXPLOR_L
+    // #define HOST_FEATHER_UXPLOR             
+    // #define HOST_FEATHER_LTEM3F
+#endif
 
 #define PERIOD_FROM_SECONDS(period)  (period * 1000)
 #define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
@@ -70,13 +65,13 @@ void setup()
         Serial.begin(115200);
         delay(5000);                // just give it some time
     #endif
-    PRINTF(0,"\n\n*** ltemc-05-modeminfo started ***\n\n");
+    DPRINT(PRNT_DEFAULT,"\n\n*** ltemc-05-modeminfo started ***\n\n");
     //lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);              // create LTEmC modem, no yield req'd for testing
     ltem_start(resetAction_swReset);                                // ... and start it
 
-    PRINTF(dbgColor__white, "LTEmC Ver: %s\r\n", ltem_getSwVersion());
+    DPRINT(PRNT_WHITE, "LTEmC Ver: %s\r\n", ltem_getSwVersion());
     lastCycle = cycle_interval;
 }
 
@@ -89,14 +84,14 @@ void loop()
         loopCnt++;
 
         modemInfo = mdminfo_ltem();
-        PRINTF(dbgColor__cyan, "\rModem Information\r\n");
-        PRINTF(dbgColor__cyan, "IMEI = %s \r\n", modemInfo->imei);
-        PRINTF(dbgColor__cyan, "ICCID = %s \r\n", modemInfo->iccid);
-        PRINTF(dbgColor__cyan, "Firmware = %s \r\n", modemInfo->fwver);
-        PRINTF(dbgColor__cyan, "Mfg/Model = %s \r\n", modemInfo->mfgmodel);
+        DPRINT(PRNT_CYAN, "\rModem Information\r\n");
+        DPRINT(PRNT_CYAN, "IMEI = %s \r\n", modemInfo->imei);
+        DPRINT(PRNT_CYAN, "ICCID = %s \r\n", modemInfo->iccid);
+        DPRINT(PRNT_CYAN, "Firmware = %s \r\n", modemInfo->fwver);
+        DPRINT(PRNT_CYAN, "Mfg/Model = %s \r\n", modemInfo->mfgmodel);
 
-        PRINTF(dbgColor__info, "\rRSSI = %d dBm \r\n",mdminfo_signalRSSI());
-        PRINTF(0,"\r\nLoop=%d \r\n", loopCnt);
+        DPRINT(PRNT_INFO, "\rRSSI = %d dBm \r\n",mdminfo_signalRSSI());
+        DPRINT(0,"\r\nLoop=%d \r\n", loopCnt);
     }
 }
 
@@ -109,11 +104,11 @@ void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
     if (eventType == appEvent_fault_assertFailed)
     if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r\n", notifyMsg);
+        DPRINT(PRNT_ERROR, "LTEmC-HardFault: %s\r\n", notifyMsg);
     }
     else 
     {
-        PRINTF(dbgColor__white, "LTEmC Info: %s\r\n", notifyMsg);
+        DPRINT(PRNT_WHITE, "LTEmC Info: %s\r\n", notifyMsg);
     }
     return;
 }
@@ -121,8 +116,8 @@ void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(dbgColor__error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
+	DPRINT(PRNT_ERROR, "\r\n** %s \r\n", failureMsg);
+    DPRINT(PRNT_ERROR, "** Test Assertion Failed. \r\n");
 
     uint8_t halt = 1;
     while (halt)

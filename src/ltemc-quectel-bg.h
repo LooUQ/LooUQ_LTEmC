@@ -90,7 +90,7 @@ void QBG_reset(resetAction_t resetAction);
 /**
  *	@brief Initializes the BGx module
  */
-void QBG_setOptions();
+bool QBG_setOptions();
 
 
 /**

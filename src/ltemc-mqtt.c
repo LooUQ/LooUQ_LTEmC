@@ -24,22 +24,12 @@
  
 ***************************************************************************** */
 
+#define SRCFILE "MQT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define ENABLE_ASSERT
+#include <lqdiag.h>
 
-#define _DEBUG 1                        // set to non-zero value for DPRINT debugging output, 
-// debugging output options             // LTEm1c will satisfy DPRINT references with empty definition if not already resolved
-#if defined(_DEBUG) && _DEBUG > 0
-    asm(".global _DPRINT_float");       // forces build to link in float support for DPRINT
-    #if _DEBUG == 1
-    #define SERIAL_DBG                  // enable serial port output using devl host platform serial
-    #elif _DEBUG == 2 
-    #include <jlinkRtt.h>               // output debug DPRINT macros to J-Link RTT channel
-    #endif
-#else
-#define DPRINT(c_, f_, ...) ;
-#endif
-#define _DEBUGLVL _DEBUGLVL_DIAG
-
-#define SRCFILE "MQT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #include "ltemc-internal.h"
 #include "ltemc-mqtt.h"
 

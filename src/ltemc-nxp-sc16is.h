@@ -456,7 +456,7 @@ void SC16IS7xx_write(const void * src, uint8_t src_len);
 
 
 /**
- *	@brief Perform reset on bridge FIFO
+ *	@brief Clear FIFO contents
  *  \param resetAction [in] - What to reset TX, RX or both
  */
 void SC16IS7xx_resetFifo(sc16IS7xx_FifoResetAction_t resetAction);
@@ -465,10 +465,10 @@ void SC16IS7xx_resetFifo(sc16IS7xx_FifoResetAction_t resetAction);
 void SC16IS7xx_sendBreak();
 
 
-/**
- *	@brief Flush contents of RX FIFO
- */
-void SC16IS7xx_flushRxFifo();
+// /**
+//  *	@brief Flush contents of RX FIFO
+//  */
+// void SC16IS7xx_flushRxFifo();
 
 
 /**

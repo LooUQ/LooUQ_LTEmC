@@ -26,28 +26,21 @@
  * Test\demonstrate using the LTEm file system for persistent file storage.
  *****************************************************************************/
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if _DEBUG > 0
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG 1                // enable serial port output using devl host platform serial, 1=wait for port
-    #elif _DEBUG >= 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #endif
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+#include <lqdiag.h>
+
+/* specify the pin configuration 
+ * --------------------------------------------------------------------------------------------- */
+#ifdef ARDUINO_ARCH_ESP32
+    #define HOST_ESP32_DEVMOD_BMS
 #else
-#define PRINTF(c_, f_, ...) 
+    #define HOST_FEATHER_UXPLOR_L
+    // #define HOST_FEATHER_UXPLOR             
+    // #define HOST_FEATHER_LTEM3F
 #endif
 
-
-/* specify the pin configuration
- * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
-// #define HOST_FEATHER_LTEM3F
-#define HOST_FEATHER_UXPLOR_L
-
-#include <lq-diagnostics.h>
 #include <lq-SAMDutil.h>                // allows read of reset cause
 
 #include <ltemc.h>
@@ -77,7 +70,7 @@ char readData[256];
 extern ltemDevice_t g_lqLTEM;
 
 void setup() {
-    #ifdef SERIAL_OPT
+    #ifdef DIAGPRINT_SERIAL
         Serial.begin(115200);
         #if (SERIAL_OPT > 0)
         while (!Serial) {}      // force wait for serial ready
@@ -86,10 +79,10 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(DBGCOLOR_red, "\rLTEmC test-10-filesystem\r");
-    PRINTF(dbgColor__white, "RCause=%d\r\n", lqSAMD_getResetCause());
+    DPRINT(PRNT_RED, "\rLTEmC test-10-filesystem\r");
+    DPRINT(PRNT_WHITE, "RCause=%d\r\n", lqSAMD_getResetCause());
     platform_openPin(LED_BUILTIN, gpioMode_output);
-    lqDiag_setNotifyCallback(applEvntNotify);
+    //lqDiag_setNotifyCallback(applEvntNotify);
 
     ltem_create(ltem_pinConfig, NULL, applEvntNotify);
     ltem_start(resetAction_skipIfOn);                                            // start LTEm, if found on reset it
@@ -101,16 +94,16 @@ void setup() {
     file_setAppReceiver(fileReadReceiver);
 
     rslt = file_getFSInfo(&fsInfo);
-    PRINTF(dbgColor__green, "FileSystem: avail=%d, free=%d, fileCnt=%d, taken=%d\r", fsInfo.totalSz, fsInfo.freeSz, fsInfo.filesCnt, fsInfo.filesSz);
+    DPRINT(PRNT_GREEN, "FileSystem: avail=%d, free=%d, fileCnt=%d, taken=%d\r", fsInfo.totalSz, fsInfo.freeSz, fsInfo.filesCnt, fsInfo.filesSz);
 
     rslt = file_getFilelist(&fileList, "");
-    PRINTF(dbgColor__green, "\r\rFiles\r");
+    DPRINT(PRNT_GREEN, "\r\rFiles\r");
     for (size_t i = 0; i < fileList.fileCnt; i++)
     {
-        PRINTF(dbgColor__white, "FN=%s sz=%d\r", fileList.files[i].filename, fileList.files[i].fileSz);
+        DPRINT(PRNT_WHITE, "FN=%s sz=%d\r", fileList.files[i].filename, fileList.files[i].fileSz);
     }
-    PRINTF(dbgColor__dGreen, "---------------------\r");
-    PRINTF(dbgColor__dGreen, "-- Start Test Loop --\r");
+    DPRINT(PRNT_dGREEN, "---------------------\r");
+    DPRINT(PRNT_dGREEN, "-- Start Test Loop --\r");
 }
 
 
@@ -122,11 +115,11 @@ void loop()
 {
     char openlist[240] = {0};
     rslt = file_getOpenFiles(openlist, sizeof(openlist));
-    PRINTF(dbgColor__green, "\rOpen Files (t=%d)\r%s\r", loopCnt % testCnt, openlist);
+    DPRINT(PRNT_GREEN, "\rOpen Files (t=%d)\r%s\r", loopCnt % testCnt, openlist);
 
     if (loopCnt % testCnt == 1)
     {
-        PRINTF(0, "Closing all files.\r");
+        DPRINT(0, "Closing all files.\r");
         file_closeAll();
     }
     
@@ -142,7 +135,7 @@ void loop()
         char src[80] = { "0123456789abcdefghijklmnopqrstuvwxyz\r~" };
         rslt = file_open("testfile2", fileOpenMode_ovrRdWr, &fHandle2);
         rslt = file_write(fHandle2, src, 37, &writeRslt);
-        PRINTF(dbgColor__cyan, "FileWrite: written=%d, filesz=%d\r", writeRslt.writtenSz, writeRslt.fileSz);
+        DPRINT(PRNT_CYAN, "FileWrite: written=%d, filesz=%d\r", writeRslt.writtenSz, writeRslt.fileSz);
         rslt = file_close(fHandle2);
     }
 
@@ -160,11 +153,11 @@ void loop()
         ASSERT(fHandle3 != 0);
         if (rslt == resultCode__success)
         {
-            PRINTF(dbgColor__cyan, "testfile3 hndl=%d\r", fHandle3);
+            DPRINT(PRNT_CYAN, "testfile3 hndl=%d\r", fHandle3);
             createFileImage(filedata3, 256);
-            PRINTF(dbgColor__cyan, "wr=%d\r", file_write(fHandle3, filedata3, 256, &writeRslt));
-            PRINTF(dbgColor__cyan, "sk=%d\r", file_seek(fHandle3, 0, fileSeekMode_fromBegin));
-            PRINTF(dbgColor__cyan, "rd=%d\r", file_read(fHandle3, 200));
+            DPRINT(PRNT_CYAN, "wr=%d\r", file_write(fHandle3, filedata3, 256, &writeRslt));
+            DPRINT(PRNT_CYAN, "sk=%d\r", file_seek(fHandle3, 0, fileSeekMode_fromBegin));
+            DPRINT(PRNT_CYAN, "rd=%d\r", file_read(fHandle3, 200));
         }
     }
 
@@ -176,17 +169,17 @@ void loop()
     //     memset(readData, 0, sizeof(readData));
     //     rslt = file_seek(fHandle2, 11, fileSeekMode_fromBegin);
     //     rslt = file_getPosition(fHandle2, &fPtr);
-    //     PRINTF(dbgColor__cyan, "FilePtr=%d\r", fPtr);
+    //     DPRINT(PRNT_CYAN, "FilePtr=%d\r", fPtr);
 
     //     rslt = file_read(fHandle2, 5);
     //     rslt = file_getPosition(fHandle2, &fPtr);
-    //     PRINTF(dbgColor__cyan, "Post Read: FilePtr=%d\r", readData, fPtr);
+    //     DPRINT(PRNT_CYAN, "Post Read: FilePtr=%d\r", readData, fPtr);
     //     rslt = file_close(fHandle2);
     // }
 
     pDelay(1000);
     loopCnt++;
-    PRINTF(dbgColor__magenta, "\rFreeMem=%u  Loop=%d\r", getFreeMemory(), loopCnt);
+    DPRINT(PRNT_MAGENTA, "\rFreeMem=%u  Loop=%d\r", getFreeMemory(), loopCnt);
 }
 
 
@@ -197,7 +190,7 @@ void fileReadReceiver(uint16_t fHandle, const char *fileData, uint16_t dataSz)
     {
         uint8_t lineSz = MIN(80, dataSz);
         memcpy(pBffr, fileData, lineSz);
-        PRINTF(dbgColor__dGreen, "fH= %d>%s\r", fHandle, pBffr);
+        DPRINT(PRNT_dGREEN, "fH= %d>%s\r", fHandle, pBffr);
         fileData += lineSz;
         dataSz -= lineSz;
     }
@@ -226,11 +219,11 @@ void applEvntNotify(appEvent_t eventType, const char *notifyMsg)
     if (eventType == appEvent_fault_assertFailed)
     if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF(dbgColor__error, "LTEmC Fault: %s\r", notifyMsg);
+        DPRINT(PRNT_ERROR, "LTEmC Fault: %s\r", notifyMsg);
     }
     else 
     {
-        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+        DPRINT(PRNT_WHITE, "LTEmC Info: %s\r", notifyMsg);
     }
     return;
 }
@@ -238,8 +231,8 @@ void applEvntNotify(appEvent_t eventType, const char *notifyMsg)
 
 void indicateFailure(char failureMsg[], uint16_t status)
 {
-	PRINTF(DBGCOLOR_error, "\r** %s \r\n", failureMsg);
-    PRINTF(DBGCOLOR_error, "** Test Assertion Failed. r=%d\r", status);
+	DPRINT(PRNT_ERROR, "\r** %s \r\n", failureMsg);
+    DPRINT(PRNT_ERROR, "** Test Assertion Failed. r=%d\r", status);
     platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
 
     int halt = 1;

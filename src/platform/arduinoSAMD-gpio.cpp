@@ -9,7 +9,7 @@
 //#define ARDUINO_ARCH_SAMD
 #ifdef ARDUINO_ARCH_SAMD
 
-#include "lqPlatform-gpio.h"
+#include "platform-gpio.h"
 #include <Arduino.h>
 
 
@@ -41,7 +41,7 @@ void platform_writePin(uint8_t pNum, uint8_t val)
 /* The attachIsr function requires that no interrupt be pending for the IOP modules (from the LTEmX SPI\UART chip).
  * failure to assure that constraint will likely result in the LTEmC driver locking up in the IOP interrupt service
  * routine. */
-void platform_attachIsr(uint8_t pinNum, bool enabled, gpioIrqTrigger_t triggerOn, platformGpioPinIrqCallback isrCallback)
+void platform_attachIsr(uint8_t pinNum, bool enabled, uint8_t triggerOn, platformGpioPinIrqCallback isrCallback)
 {
     EIC->INTFLAG.reg = 0x01 << g_APinDescription[pinNum].ulExtInt;
     attachInterrupt(digitalPinToInterrupt(pinNum), isrCallback, triggerOn);

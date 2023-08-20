@@ -8,7 +8,7 @@
 
 #ifdef ARDUINO_ARCH_SAMD
 
-#include "lqPlatform-timing.h"
+#include "platform-timing.h"
 #include <Arduino.h>
 
 platform_yieldCB_func_t platform_yieldCB_func;

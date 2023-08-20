@@ -24,11 +24,10 @@
  
 ***************************************************************************** */
 
-#define SRCFILE "TLS"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define SRCFILE "TLS"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+//#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
 #include "ltemc-tls.h"

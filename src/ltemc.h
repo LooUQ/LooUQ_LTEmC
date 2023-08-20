@@ -48,8 +48,8 @@
 // #define IOP_TX_BUFFER_SZ 1460
 
 #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
-#include <lqdiag.h>                             /// PRINTDBG and ASSERT diagnostic data collection
 #include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
+#include <lqdiag.h>                             /// PRINTDBG and ASSERT diagnostic data collection
 
 #include "ltemc-platform.h"                     /// platform abstractions (arduino, etc.)
 #include "ltemc-atcmd.h"                        /// command processor interface

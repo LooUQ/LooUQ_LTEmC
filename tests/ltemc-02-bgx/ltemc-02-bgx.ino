@@ -1,16 +1,18 @@
 
 #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
-// #define HOST_FEATHER_LTEM3F
-// #define HOST_FEATHER_UXPLOR_L
-#define HOST_ESP32_DEVMOD_BMS
+#ifdef ARDUINO_ARCH_ESP32
+    #define HOST_ESP32_DEVMOD_BMS
+#else
+    #define HOST_FEATHER_UXPLOR_L
+    // #define HOST_FEATHER_UXPLOR             
+    // #define HOST_FEATHER_LTEM3F
+#endif
 
 // LTEmC Includes
 #include <ltemc-internal.h>                         /* not usually referenced in user application */
@@ -37,7 +39,7 @@ void setup()
         Serial.begin(115200);
         delay(5000);                // just give it some time
     #endif
-    DIAGPRINT(PRNT_RED,"\n\n*** LTEmC Test: ltemc-02-bgx started ***\n\n");
+    DPRINT(PRNT_RED,"\n\n*** LTEmC Test: ltemc-02-bgx started ***\n\n");
     g_lqLTEM.appEvntNotifyCB = appEvntNotify;                           // set the callback address
 
     //  Manually create/initialize modem parts used, this is a low-level test
@@ -49,11 +51,11 @@ void setup()
      * modem functions.
      */
     if (QBG_isPowerOn())                                                // verify/apply BGx power (normally )
-        DIAGPRINT(PRNT_dGREEN, "LTEm found already powered on.\r\n");
+        DPRINT(PRNT_dGREEN, "LTEm found already powered on.\r\n");
     else
     {
         QBG_powerOn();
-        DIAGPRINT(PRNT_dGREEN, "Powered LTEm on.\r\n");
+        DPRINT(PRNT_dGREEN, "Powered LTEm on.\r\n");
         pDelay(5);
     }
     SC16IS7xx_start();                                                  // start SPI-UART bridge
@@ -96,7 +98,7 @@ void loop()
     // char cmd[] = "GSN\r\0";                      // less than one bridge buffer
     char cmd[] = "ATI\r\0";
     // char cmd[] = "AT+QPOWD=0\r\0";               // if others fail, but this powers down modem, RX failing
-    DIAGPRINT(PRNT_DEFAULT, "Invoking cmd: %s \r\n", cmd);
+    DPRINT(PRNT_DEFAULT, "Invoking cmd: %s \r\n", cmd);
 
     sendCommand(cmd);
     // wait for BG96 response in FIFO buffer
@@ -112,15 +114,15 @@ void loop()
 
     if (strstr(response, "APP RDY"))
     {
-        DIAGPRINT(PRNT_WARN, "Received APP RDY from LTEm.\r\n");
+        DPRINT(PRNT_WARN, "Received APP RDY from LTEm.\r\n");
     }
     if (strstr(response, "RDY"))
     {
-        DIAGPRINT(PRNT_WARN, "Received BG RDY from LTEm.\r\n");
+        DPRINT(PRNT_WARN, "Received BG RDY from LTEm.\r\n");
     }
     if (strlen(response) == 0)
     {
-        DIAGPRINT(PRNT_WARN, "Got no response from BGx.\r\n");
+        DPRINT(PRNT_WARN, "Got no response from BGx.\r\n");
         // if (nullResponses > 2)
         //     indicateFailure("BGx is not responding to cmds... failed."); 
     }
@@ -131,16 +133,16 @@ void loop()
         {
             tailAt = strstr(response, "OK\r\n");
             if (tailAt != NULL)
-                DIAGPRINT(PRNT_DEFAULT, "Got correctly formed response: \r\n%s", response);  
+                DPRINT(PRNT_DEFAULT, "Got correctly formed response: \r\n%s", response);  
             else
-                DIAGPRINT(PRNT_WARN, "Missing final OK in response.\r");
+                DPRINT(PRNT_WARN, "Missing final OK in response.\r");
         }
         else
             indicateFailure("Unexpected device information returned on cmd test... failed."); 
     }
 
 
-        DIAGPRINT(PRNT_DEFAULT,"Loop=%d \n\n", loopCnt);
+        DPRINT(PRNT_DEFAULT,"Loop=%d \n\n", loopCnt);
      }
 }
 
@@ -163,7 +165,11 @@ void initIO()
 	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
 
     // SPI bus
-    g_lqLTEM.platformSpi = spi_create(g_lqLTEM.pinConfig.spiClkPin, g_lqLTEM.pinConfig.spiMisoPin, g_lqLTEM.pinConfig.spiMosiPin, g_lqLTEM.pinConfig.spiCsPin);
+    #if defined(ARDUINO_ARCH_ESP32)
+    g_lqLTEM.platformSpi = spi_createFromPins(g_lqLTEM.pinConfig.spiClkPin, g_lqLTEM.pinConfig.spiMisoPin, g_lqLTEM.pinConfig.spiMosiPin, g_lqLTEM.pinConfig.spiCsPin);
+    #else
+    g_lqLTEM.platformSpi = spi_createFromIndex(g_lqLTEM.pinConfig.spiIndx, g_lqLTEM.pinConfig.spiCsPin);
+    #endif
     spi_start(g_lqLTEM.platformSpi);
 }
 
@@ -215,11 +221,11 @@ void recvResponse(char *response)
 
 void indicateFailure(const char* failureMsg)
 {
-	DIAGPRINT(PRNT_ERROR, "\r\n** %s \r\n", failureMsg);
-    DIAGPRINT(PRNT_ERROR, "** Test Assertion Failed. \r\n");
+	DPRINT(PRNT_ERROR, "\r\n** %s \r\n", failureMsg);
+    DPRINT(PRNT_ERROR, "** Test Assertion Failed. \r\n");
 
     int halt = 1;
-    DIAGPRINT(PRNT_ERROR, "** Halting Execution \r\n");
+    DPRINT(PRNT_ERROR, "** Halting Execution \r\n");
     while (halt)
     {
         platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
@@ -237,11 +243,11 @@ void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
     if (eventType == appEvent_fault_assertFailed)
     if (eventType == appEvent_fault_assertFailed)
     {
-        DIAGPRINT(PRNT_ERROR, "LTEmC-HardFault: %s\r", notifyMsg);
+        DPRINT(PRNT_ERROR, "LTEmC-HardFault: %s\r", notifyMsg);
     }
     else 
     {
-        DIAGPRINT(PRNT_WHITE, "LTEmC Info: %s\r", notifyMsg);
+        DPRINT(PRNT_WHITE, "LTEmC Info: %s\r", notifyMsg);
     }
     return;
 }

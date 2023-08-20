@@ -24,14 +24,12 @@
  
 ***************************************************************************** */
 
-#define SRCFILE "LTE"                               // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DPRINT                   // expand DPRINT into debug output
-#define ENABLE_DPRINT_VERBOSE           // expand DPRINT and DPRINT_V into debug output
+#define SRCFILE "LTE"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                 // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
-#include <stdbool.h>
 #include "ltemc.h"
 #include "ltemc-internal.h"
 
@@ -53,8 +51,8 @@ ltemDevice_t g_lqLTEM;
  * ------------------------------------------------------------------------------------------------ */
 const char* const qbg_initCmds[] = 
 { 
-    "ATE0",                                         // don't echo AT commands on serial
-    "AT+QURCCFG=\"urcport\",\"uart1\""              // URC events are reported to UART1
+    "ATE0\r",                                       // don't echo AT commands on serial
+    "AT+QURCCFG=\"urcport\",\"uart1\"\r"            // URC events are reported to UART1
 };
 
 // makes for compile time automatic sz determination
@@ -78,7 +76,11 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     memset(&g_lqLTEM, 0, sizeof(ltemDevice_t));
     
 	g_lqLTEM.pinConfig = ltem_config;
-    g_lqLTEM.platformSpi = spi_create(g_lqLTEM.pinConfig.spiClkPin, g_lqLTEM.pinConfig.spiMisoPin, g_lqLTEM.pinConfig.spiMosiPin, g_lqLTEM.pinConfig.spiCsPin);
+    #if (ARDUINO_ARCH_ESP32)
+        g_lqLTEM.platformSpi = spi_createFromPins(g_lqLTEM.pinConfig.spiClkPin, g_lqLTEM.pinConfig.spiMisoPin, g_lqLTEM.pinConfig.spiMosiPin, g_lqLTEM.pinConfig.spiCsPin);
+    #else
+        g_lqLTEM.platformSpi = spi_createFromIndex(g_lqLTEM.pinConfig.spiIndx, g_lqLTEM.pinConfig.spiCsPin);
+    #endif
 
     g_lqLTEM.modemSettings =  calloc(1, sizeof(modemSettings_t));
     ASSERT(g_lqLTEM.modemSettings != NULL);
@@ -226,9 +228,8 @@ void ltem_start(resetAction_t resetAction)
         {
             if (resetAction == resetAction_swReset)
             {
-                if (!SC16IS7xx_isAvailable())
+                if (!SC16IS7xx_isAvailable())                               // fall back to power reset if UART not available
                     resetAction = resetAction_powerReset;
-                SC16IS7xx_start();                                          // NXP SPI-UART bridge may/may not be baseline operational, initialize base: baud, framing
             }
             QBG_reset(resetAction);                                         // do requested reset (sw, hw, pwrCycle)
         }
@@ -249,8 +250,7 @@ void S__initLTEmDevice(bool ltemReset)
     ASSERT(QBG_isPowerOn());
     ASSERT(SC16IS7xx_isAvailable());
 
-    SC16IS7xx_start();                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
-
+    SC16IS7xx_start();                                              // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
     if (ltemReset)
     {
         if (IOP_awaitAppReady())
@@ -264,28 +264,36 @@ void S__initLTEmDevice(bool ltemReset)
                 DPRINT(PRNT_WARN, "AppRdy timeout\r\n");
                 g_lqLTEM.deviceState = deviceState_appReady;        // missed it somehow
             }
-
         }
     }
     else
     {
-        g_lqLTEM.deviceState = deviceState_appReady;        // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
+        g_lqLTEM.deviceState = deviceState_appReady;                // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
         DPRINT(PRNT_INFO, "LTEm ON (AppRdy)\r\n");
     }
 
-    // DPRINT(0, "S__initLTEmDevice(): AppRdy");
-    SC16IS7xx_enableIrqMode();                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
-    // DPRINT(0, "S__initLTEmDevice(): nxp in irdmode");
-    IOP_attachIrq();                                        // attach I/O processor ISR to IRQ
-    // DPRINT(0, "S__initLTEmDevice(): irq attached");
-    QBG_setOptions();                                       // initialize BGx operating settings
-    // DPRINT(0, "S__initLTEmDevice(): bgx options set");
-    NTWK_initRatOptions();                                  // initialize BGx Radio Access Technology (RAT) options
-    // DPRINT(0, "S__initLTEmDevice(): rat options set");
-    NTWK_applyPpdNetworkConfig();                           // configures default PDP context for likely autostart with provider attach
-    // DPRINT(0, "S__initLTEmDevice(): pdp ntwk configured");
-    ntwk_awaitProvider(2);                                  // attempt to warm-up provider/PDP briefly. If longer duration required, leave that to application
-    // DPRINT(0, "S__initLTEmDevice(): provider warmed up");
+    SC16IS7xx_enableIrqMode();                                      // enable IRQ generation on SPI-UART bridge (IRQ mode)
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): nxp in irdmode");
+
+    IOP_attachIrq();                                                // attach I/O processor ISR to IRQ
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): irq attached");
+
+    if (!QBG_setOptions())
+    {
+        ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault"); // send notification, maybe app can recover
+        DPRINT(PRNT_DEFAULT, "\r");
+    }
+    else
+        DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): bgx options set");
+
+    NTWK_initRatOptions();                                          // initialize BGx Radio Access Technology (RAT) options
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
+
+    NTWK_applyPpdNetworkConfig();                                   // configures default PDP context for likely autostart with provider attach
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured");
+
+    ntwk_awaitProvider(2);                                          // attempt to warm-up provider/PDP briefly. If longer duration required, leave that to application
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up");
 }
 
 

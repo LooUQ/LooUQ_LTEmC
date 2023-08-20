@@ -59,10 +59,9 @@
 #pragma region Header
 
 #define SRCFILE "IOP"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DPRINT                    // expand DPRINT into debug output
-#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+//#define ENABLE_DIAGPRINT                        // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE                // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
 #include "ltemc-internal.h"
@@ -138,6 +137,7 @@ void IOP_attachIrq()
     g_lqLTEM.iop->txPending = 0;
     spi_usingInterrupt(g_lqLTEM.platformSpi, g_lqLTEM.pinConfig.irqPin);
     platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
+    SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);            // ensure FIFO state is empty, UART will not refire interrupt if pending
 }
 
 
@@ -300,23 +300,24 @@ static void S_interruptCallbackISR()
             uint8_t lnStatus = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
             DPRINT(PRNT_ERROR, "rxERR(%02X)-lvl=%d ", lnStatus, rxLevel);
             DPRINT(PRNT_WARN, "bffrO=%d ", cbffr_getOccupied(g_lqLTEM.iop->rxBffr));
+            SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);                            // buffer is shot, clear to attempt recovery
 
-            #if _DEBUG > 2
-                DPRINT(PRNT_YELLOW, " >FIFO Dump\r");
-                char fifoTop;
-                for (size_t i = 0; i < rxLevel; i++)
-                {
-                    lnStatus = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
-                    SC16IS7xx_read(&fifoTop, 1);
-                    DPRINT(PRNT_YELLOW, " >%02d-%02d 0x%02X\r", i, fifoTop, lnStatus);
-                }
-            #elif _DEBUG > 0
-                char dbg[65] = {0};
-                SC16IS7xx_read(dbg, 64);
-                SC16IS7xx_flushRxFifo();
-            #else
-                ASSERT(false);                                                              // should have caught earlier, dead now.
-            #endif
+            // #if _DEBUG > 2
+            //     DPRINT(PRNT_YELLOW, " >FIFO Dump\r");
+            //     char fifoTop;
+            //     for (size_t i = 0; i < rxLevel; i++)
+            //     {
+            //         lnStatus = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
+            //         SC16IS7xx_read(&fifoTop, 1);
+            //         DPRINT(PRNT_YELLOW, " >%02d-%02d 0x%02X\r", i, fifoTop, lnStatus);
+            //     }
+            // #elif _DEBUG > 0
+            //     char dbg[65] = {0};
+            //     SC16IS7xx_read(dbg, 64);
+            //     SC16IS7xx_flushRxFifo();
+            // #else
+            //     ASSERT(false);                                                              // should have caught earlier, dead now.
+            // #endif
         }
 
         // RX - read data from UART to rxBuffer

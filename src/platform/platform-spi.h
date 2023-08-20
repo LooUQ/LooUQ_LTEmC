@@ -22,8 +22,8 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  *****************************************************************************/
-#ifndef __LQPLATFORM_spi_H__
-#define __LQPLATFORM_spi_H__
+#ifndef __LQPLATFORM_SPI_H__
+#define __LQPLATFORM_SPI_H__
 
 #include <stdint.h>
 
@@ -71,7 +71,9 @@ extern "C"
 {
 #endif
 
-platformSpi_t* spi_create(uint8_t clkPin, uint8_t misoPin, uint8_t mosiPin, uint8_t csPin);
+platformSpi_t* spi_createFromPins(uint8_t clkPin, uint8_t misoPin, uint8_t mosiPin, uint8_t csPin);
+platformSpi_t* spi_createFromIndex(uint8_t indx, uint8_t csPin);
+
 void spi_start(platformSpi_t* platformSpi);
 void spi_stop(platformSpi_t* platformSpi);
 
@@ -90,4 +92,4 @@ void* spi_readBuffer(platformSpi_t* platformSpi, uint8_t addressByte, uint16_t x
 }
 #endif // __cplusplus
 
-#endif  /* !__LQPLATFORM_spi_H__ */
+#endif  /* !__LQPLATFORM_SPI_H__ */

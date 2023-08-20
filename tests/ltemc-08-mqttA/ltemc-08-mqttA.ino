@@ -29,29 +29,24 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define _DEBUG 1                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG)
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 2
-    #include <jlinkRtt.h>               // PRINTF debug macro output to J-Link RTT channel
-    #else
-    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
-    #endif
-#else
-#define PRINTF(c_, f_, ...) ;
-#endif
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+#include <lqdiag.h>
 
-/* specify the pin configuration
+/* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
-// #define HOST_FEATHER_LTEM3F
-#define HOST_FEATHER_UXPLOR_L
+#ifdef ARDUINO_ARCH_ESP32
+    #define HOST_ESP32_DEVMOD_BMS
+#else
+    #define HOST_FEATHER_UXPLOR_L
+    // #define HOST_FEATHER_UXPLOR             
+    // #define HOST_FEATHER_LTEM3F
+#endif
 
 #define PDP_DATA_CONTEXT 1
 #define PDP_APN_NAME ""
 
-#include <lq-diagnostics.h>
 #include <lq-SAMDutil.h>                // allows read of reset cause
 
 #include <ltemc.h>
@@ -124,7 +119,7 @@ resultCode_t result;
 
 
 void setup() {
-    #ifdef SERIAL_OPT
+    #ifdef DIAGPRINT_SERIAL
         Serial.begin(115200);
         #if (SERIAL_OPT > 0)
         while (!Serial) {}      // force wait for serial ready
@@ -133,21 +128,21 @@ void setup() {
         #endif
     #endif
 
-    PRINTF(dbgColor__red, "\rLTEmC Test-8 MQTT\r\n");
-    // PRINTF(dbgColor__none,"RCause=%d \r", lqSAMD_getResetCause());
+    DPRINT(PRNT_RED, "\rLTEmC Test-8 MQTT\r\n");
+    // DPRINT(dbgColor__none,"RCause=%d \r", lqSAMD_getResetCause());
     // lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, applEvntNotify);
     ltem_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
     ltem_start(resetAction_swReset);
 
-    PRINTF(dbgColor__dflt, "Waiting on network...\r");
+    DPRINT(PRNT_DEFAULT, "Waiting on network...\r");
     providerInfo_t *provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
     while (strlen(provider->name) == 0)
     {
-        PRINTF(dbgColor__dYellow, ">");
+        DPRINT(PRNT_dYELLOW, ">");
     }
-    PRINTF(dbgColor__info, "Network type is %s on %s\r", provider->iotMode, provider->name);
+    DPRINT(PRNT_INFO, "Network type is %s on %s\r", provider->iotMode, provider->name);
 
 
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
@@ -184,21 +179,21 @@ void loop()
         resultCode_t rslt;
         uint32_t publishTck = pMillis();
 
-        PRINTF(dbgColor__white, "Publishing message: %d\r", loopCnt);
+        DPRINT(PRNT_WHITE, "Publishing message: %d\r", loopCnt);
         rslt = mqtt_publish(&mqttCtrl, mqttTopic, mqttQos_1, mqttMessage, strlen(mqttMessage), 30);
         if (rslt != resultCode__success)
         {
-            PRINTF(dbgColor__warn, "Publish Failed! >> %d\r", rslt);
+            DPRINT(PRNT_WARN, "Publish Failed! >> %d\r", rslt);
 
             // rslt = mqtt_reset(&mqttCtrl, true);
             // if (rslt != resultCode__success)
             // {
-            //     PRINTF(dbgColor__error, "Reset Failed (%d)\r", rslt);
+            //     DPRINT(PRNT_ERROR, "Reset Failed (%d)\r", rslt);
             //     while (true) {}
             // }
         }
 
-        // PRINTF(dbgColor__magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
+        // DPRINT(dbgColor__magenta, "\rFreeMem=%u  <<Loop=%d>>\r", getFreeMemory(), loopCnt);
     }
 
     /* NOTE: ltem1_eventMgr() background pipeline processor is required for async receive operations; like MQTT topic subscriptions.
@@ -210,37 +205,37 @@ void loop()
 
 void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId, mqttMsgSegment_t segment, char* dataPtr, uint16_t dataSz, bool isFinal)
 {
-    PRINTF(dbgColor__dCyan, "AppRcv: context=%d, msgId=%d, segment=%d, blockPtr=%p, blockSz=%d, isFinal=%d\r", dataCntxt, msgId, segment, dataPtr, dataSz, isFinal);
+    DPRINT(PRNT_dCYAN, "AppRcv: context=%d, msgId=%d, segment=%d, blockPtr=%p, blockSz=%d, isFinal=%d\r", dataCntxt, msgId, segment, dataPtr, dataSz, isFinal);
 
     if (segment == mqttMsgSegment_topic)
     {
         dataPtr[dataSz] = '\0';
-        PRINTF(dbgColor__cyan, "Topic=%s\r", dataPtr);
+        DPRINT(PRNT_CYAN, "Topic=%s\r", dataPtr);
     }
     else if (segment == mqttMsgSegment_topicExt)
     {
         dataPtr[dataSz] = '\0';
-        PRINTF(dbgColor__cyan, "TopicExt=%s\r", dataPtr);
+        DPRINT(PRNT_CYAN, "TopicExt=%s\r", dataPtr);
     }
     else if (segment == mqttMsgSegment_msgBody)
     {
         dataPtr[dataSz] = '\0';
-        PRINTF(dbgColor__cyan, "MsgBody=%s\r", dataPtr);
+        DPRINT(PRNT_CYAN, "MsgBody=%s\r", dataPtr);
     }
-    // PRINTF(dbgColor__cyan, "   msgId:=%d   topicSz=%d, propsSz=%d, messageSz=%d\r", msgId, strlen(topic), strlen(topicVar), strlen(message));
-    // PRINTF(dbgColor__cyan, "   topic: %s\r", topic);
-    // PRINTF(dbgColor__cyan, "   props: %s\r", topicVar);
-    // PRINTF(dbgColor__cyan, " message: %s\r", message);
+    // DPRINT(PRNT_CYAN, "   msgId:=%d   topicSz=%d, propsSz=%d, messageSz=%d\r", msgId, strlen(topic), strlen(topicVar), strlen(message));
+    // DPRINT(PRNT_CYAN, "   topic: %s\r", topic);
+    // DPRINT(PRNT_CYAN, "   props: %s\r", topicVar);
+    // DPRINT(PRNT_CYAN, " message: %s\r", message);
 
     // Azure IoTHub appends properties collection to the topic 
     // That is why Azure requires wildcard topic
     // keyValueDict_t mqttProps = lq_createQryStrDictionary(topicVar, strlen(topicVar));
-    // PRINTF(dbgColor__info, "Props(%d)\r", mqttProps.count);
+    // DPRINT(PRNT_INFO, "Props(%d)\r", mqttProps.count);
     // for (size_t i = 0; i < mqttProps.count; i++)
     // {
-    //     PRINTF(dbgColor__cyan, "%s=%s\r", mqttProps.keys[i], mqttProps.values[i]);
+    //     DPRINT(PRNT_CYAN, "%s=%s\r", mqttProps.keys[i], mqttProps.values[i]);
     // }
-    // PRINTF(0, "\r");
+    // DPRINT(0, "\r");
 }
 
 
@@ -251,9 +246,9 @@ void mqttRecvCB(dataCntxt_t dataCntxt, uint16_t msgId, mqttMsgSegment_t segment,
 void applEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType == appEvent_fault_assertFailed)
-        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
+        DPRINT(PRNT_ERROR, "LTEmC-HardFault: %s\r", notifyMsg);
     else 
-        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+        DPRINT(PRNT_WHITE, "LTEmC Info: %s\r", notifyMsg);
     return;
 }
 

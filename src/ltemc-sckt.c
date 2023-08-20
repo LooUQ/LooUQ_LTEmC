@@ -24,11 +24,10 @@
  
 ***************************************************************************** */
 
-#define SRCFILE "SKT"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DPRINT                    // expand DPRINT into debug output
-#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define SRCFILE "SKT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+//#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
 #include "ltemc-internal.h"
@@ -409,7 +408,7 @@ static resultCode_t S__scktRxHndlr()
         
         char* streamPtr;
         uint16_t blockSz = cbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, irdSz);                             // get data ptr from rxBffr
-        DPRINT(PRNT_CYAN "scktRxHndlr() ptr=%p, blkSz=%d, availSz=%d\r", streamPtr, blockSz, irdSz);
+        DPRINT(PRNT_CYAN, "scktRxHndlr() ptr=%p, blkSz=%d, availSz=%d\r", streamPtr, blockSz, irdSz);
 
         irdSz -= blockSz;
         ((scktAppRecv_func)(*scktCtrl->appRecvDataCB))(scktCtrl->dataCntxt, streamPtr, blockSz, irdSz == 0);    // forward to application

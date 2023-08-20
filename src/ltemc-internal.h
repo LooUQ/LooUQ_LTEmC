@@ -32,6 +32,12 @@
 
 #define PRODUCT "LM" 
 
+// Common macro functions used across LTEmC environment
+#define PERIOD_FROM_SECONDS(period)  (period * 1000)
+#define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
+#define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
+#define STRCMP(x,y)  (strcmp(x,y) == 0)
+
 // Internal static buffers you may need to change for your application. Contact LooUQ for details.
 // #define IOP_RX_COREBUF_SZ 256
 // #define IOP_TX_BUFFER_SZ 1460
@@ -39,7 +45,6 @@
 #include "ltemc.h"
 #include <lq-str.h>                         /// most LTEmC modules use LooUQ string functions
 #include <lq-cBuffer.h>
-#include "ltemc-types.h"
 
 #include "ltemc-quectel-bg.h"
 #include "ltemc-nxp-sc16is.h"

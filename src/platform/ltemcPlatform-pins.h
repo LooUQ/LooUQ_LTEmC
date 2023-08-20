@@ -38,25 +38,32 @@
 
 #define STATUS_LOW_PULLDOWN
 
-
 #ifdef HOST_FEATHER_UXPLOR_L
 const ltemPinConfig_t ltem_pinConfig =
 {
+    spiIndx : 0,
     spiCsPin : 13,
+    spiClkPin : 0,
+    spiMisoPin : 0,
+    spiMosiPin : 0,
     irqPin : 12,
     statusPin : 6,                  ///< HIGH indicates ON
     powerkeyPin : 11,               ///< toggle HIGH to change state
     resetPin : 10,                  ///< reset active HIGH
     ringUrcPin : 0,             
     connected : 0,    
-    wakePin : 0
+    wakePin : 0,
 };
 #endif
 
 #ifdef HOST_FEATHER_UXPLOR
 const ltemPinConfig_t ltem_pinConfig =
 {
+    spiIndx : 0,
     spiCsPin : 13,
+    spiClkPin : 0,
+    spiMisoPin : 0,
+    spiMosiPin : 0,
     irqPin : 12,
     statusPin : 19,                 ///< (aka A5) HIGH indicates ON 
     powerkeyPin : 11,               ///< toggle HIGH to change state
@@ -71,7 +78,11 @@ const ltemPinConfig_t ltem_pinConfig =
 #ifdef HOST_FEATHER_LTEM3F
 const ltemPinConfig_t ltem_pinConfig =
 {
+    spiIndx : 0,
     spiCsPin : 18,                  /// AKA A4
+    spiClkPin : 0,
+    spiMisoPin : 0,
+    spiMosiPin : 0,
     irqPin : 19,                    /// AKA A5
     statusPin : 12,                 /// HIGH indicates ON
     powerkeyPin : 10,               /// toggle HIGH to change state
@@ -86,7 +97,11 @@ const ltemPinConfig_t ltem_pinConfig =
 #ifdef HOST_FEATHER_BASIC
 const ltemPinConfig_t ltem_pinConfig =
 {
+    spiIndx : 0,
     spiCsPin : 13,
+    spiClkPin : 0,
+    spiMisoPin : 0,
+    spiMosiPin : 0,
     irqPin : 12,
     statusPin : 6,
     powerkeyPin : 11,
@@ -100,7 +115,11 @@ const ltemPinConfig_t ltem_pinConfig =
 #ifdef HOST_RASPI_UXPLOR
 const ltemPinConfig_t ltem_pinConfig = 
 {
+    spiIndx : -1,
     spiCsPin = 0, 			//< J8_24
+    spiClkPin : 0,
+    spiMisoPin : 0,
+    spiMosiPin : 0,
 	irqPin = 22U,		    //< J8_15
 	statusPin = 13U,		//< J8_22
 	powerkeyPin = 24U,		//< J8_18
@@ -113,10 +132,11 @@ const ltemPinConfig_t ltem_pinConfig =
 #ifdef HOST_ESP32_DEVMOD_BMS
 const ltemPinConfig_t ltem_pinConfig = 
 {
+    spiIndx : -1,
+    spiCsPin : 18,
     spiClkPin : 15,
     spiMisoPin : 16,
     spiMosiPin : 17,
-    spiCsPin : 18,
 	irqPin : 8,
 	statusPin : 47,
 	powerkeyPin : 45,
@@ -125,3 +145,22 @@ const ltemPinConfig_t ltem_pinConfig =
     wakePin : 48
 };
 #endif
+
+#ifdef HOST_LOOUQ_REMOTENODE
+const ltemPinConfig_t ltem_pinConfig =
+{
+    spiIndx : 1,
+    spiCsPin : 13,
+    spiClkPin : 0,
+    spiMisoPin : 0,
+    spiMosiPin : 0,
+    irqPin : 12,
+    statusPin : 6,                  ///< HIGH indicates ON
+    powerkeyPin : 11,               ///< toggle HIGH to change state
+    resetPin : 10,                  ///< reset active HIGH
+    ringUrcPin : 0,             
+    connected : 0,    
+    wakePin : 0,
+};
+#endif
+

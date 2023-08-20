@@ -27,26 +27,21 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define _DEBUG 1                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG)
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 1
-    #define SERIAL_DBG                  // enable serial port output using devl host platform serial
-    #elif _DEBUG == 2 
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #endif
-#else
-#define PRINTF(c_, f_, ...)
-#endif
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+#include <lqdiag.h>
 
 
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
-// #define HOST_FEATHER_LTEM3F
-// #define HOST_FEATHER_UXPLOR_L
-#define HOST_ESP32_DEVMOD_BMS
+#ifdef ARDUINO_ARCH_ESP32
+    #define HOST_ESP32_DEVMOD_BMS
+#else
+    #define HOST_FEATHER_UXPLOR_L
+    // #define HOST_FEATHER_UXPLOR             
+    // #define HOST_FEATHER_LTEM3F
+#endif
 
 #define PERIOD_FROM_SECONDS(period)  (period * 1000)
 #define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
@@ -71,21 +66,21 @@ void setup() {
         Serial.begin(115200);
         delay(5000);                // just give it some time
     #endif
-    PRINTF(0,"\n\n*** ltemc-05-modeminfo started ***\n\n");
+    DPRINT(PRNT_DEFAULT,"\n\n*** ltemc-05-modeminfo started ***\n\n");
     //lqDiag_setNotifyCallback(applEvntNotify);                     // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);               // create LTEmC modem, no yield req'd for testing
     ltem_start(resetAction_swReset);                                // ... and start it
 
-    PRINTF(dbgColor__white, "LTEmC Ver: %s\r\n", ltem_getSwVersion());
+    DPRINT(PRNT_WHITE, "LTEmC Ver: %s\r\n", ltem_getSwVersion());
     lastCycle = cycle_interval;
 
     // turn on GNSS
     rslt = gnss_on();
     if (rslt == 200)
-        PRINTF(dbgColor__info, "GNSS enabled\r\n", rslt);
+        DPRINT(PRNT_INFO, "GNSS enabled\r\n", rslt);
     if (rslt == 504)
-        PRINTF(dbgColor__warn, "GNSS was already on\r\n", rslt);
+        DPRINT(PRNT_WARN, "GNSS was already on\r\n", rslt);
 
     ltem_setRadioPriority(radioPriority_gnss);
 
@@ -113,16 +108,16 @@ void loop()
             {
                 secondsToFix = (pMillis() - fixWaitStart) / 1000 + 1;       // if less than 1 second, round up
             }
-            PRINTF(dbgColor__none, "Location Information\r\n");
-            PRINTF(dbgColor__cyan, "UTC=%s   FixSecs=%d\r\n", location.utc, secondsToFix);
+            DPRINT(PRNT_DEFAULT, "Location Information\r\n");
+            DPRINT(PRNT_CYAN, "UTC=%s   FixSecs=%d\r\n", location.utc, secondsToFix);
 
-            PRINTF(dbgColor__cyan, "(double) Lat=%4.4f, Lon=%4.4f\r\n", location.lat.val, location.lon.val);
-            PRINTF(dbgColor__cyan, "(int4d)  Lat=%d, Lon=%d\r\n", (int32_t)(location.lat.val * 10000.0), (int32_t)(location.lon.val * 10000.0));
+            DPRINT(PRNT_CYAN, "(double) Lat=%4.4f, Lon=%4.4f\r\n", location.lat.val, location.lon.val);
+            DPRINT(PRNT_CYAN, "(int4d)  Lat=%d, Lon=%d\r\n", (int32_t)(location.lat.val * 10000.0), (int32_t)(location.lon.val * 10000.0));
         }
         else
-            PRINTF(dbgColor__warn, "Location is not available (GNSS not fixed)\r\n");
+            DPRINT(PRNT_WARN, "Location is not available (GNSS not fixed)\r\n");
 
-        PRINTF(0,"\r\nLoop=%d \r\n", loopCnt);
+        DPRINT(0,"\r\nLoop=%d \r\n", loopCnt);
     }
 }
 
@@ -137,11 +132,11 @@ void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
     if (eventType == appEvent_fault_assertFailed)
     if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r\n", notifyMsg);
+        DPRINT(PRNT_ERROR, "LTEmC-HardFault: %s\r\n", notifyMsg);
     }
     else 
     {
-        PRINTF(dbgColor__white, "LTEmC Info: %s\r\n", notifyMsg);
+        DPRINT(PRNT_WHITE, "LTEmC Info: %s\r\n", notifyMsg);
     }
     return;
 }
@@ -149,8 +144,8 @@ void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(dbgColor__error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
+	DPRINT(PRNT_ERROR, "\r\n** %s \r\n", failureMsg);
+    DPRINT(PRNT_ERROR, "** Test Assertion Failed. \r\n");
 
     bool halt = true;
     while (halt)

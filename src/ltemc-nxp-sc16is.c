@@ -26,11 +26,12 @@
  
 ***************************************************************************** */
 
+// https://www.nxp.com/docs/en/data-sheet/SC16IS740_750_760.pdf
+
 #define SRCFILE "NXP"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+//#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
 #include "ltemc-internal.h"
@@ -221,21 +222,21 @@ void SC16IS7xx_sendBreak()
 }
 
 
-/**
- *	@brief Flush contents of RX FIFO
- */
-void SC16IS7xx_flushRxFifo()
-{
-    uint8_t rxFifoLvl = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-    uint8_t lsrValue = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
+// /**
+//  *	@brief Flush contents of RX FIFO
+//  */
+// void SC16IS7xx_flushRxFifo()
+// {
+//     uint8_t rxFifoLvl = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
+//     uint8_t lsrValue = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
 
-    for (size_t i = 0; i < SC16IS7xx__FIFO_bufferSz; i++)
-    {
-        uint8_t rxDiscard = SC16IS7xx_readReg(SC16IS7xx_FIFO_regAddr);
-    }
-    rxFifoLvl = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-    lsrValue = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
-}
+//     for (size_t i = 0; i < SC16IS7xx__FIFO_bufferSz; i++)
+//     {
+//         uint8_t rxDiscard = SC16IS7xx_readReg(SC16IS7xx_FIFO_regAddr);
+//     }
+//     rxFifoLvl = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
+//     lsrValue = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
+// }
 
 
 #pragma endregion

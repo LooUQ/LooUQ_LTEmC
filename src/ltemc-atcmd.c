@@ -26,10 +26,9 @@
 
 
 #define SRCFILE "ATC"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DPRINT                    // expand DPRINT into debug output
-#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
 #include <stdarg.h>
@@ -459,7 +458,7 @@ static resultCode_t S__readResult()
             /* - */
             g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();                     /* *** parse for command response *** */
             /* - */
-            DPRINT(PRNT_GRAY, "prsr=%d \r", g_lqLTEM.atcmd->parserResult);
+            DPRINT_V(PRNT_GRAY, "prsr=%d \r", g_lqLTEM.atcmd->parserResult);
         }
     }
 

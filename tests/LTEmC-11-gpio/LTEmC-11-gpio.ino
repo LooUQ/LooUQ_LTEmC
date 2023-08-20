@@ -24,13 +24,21 @@
  ******************************************************************************
  *****************************************************************************/
 
-/* specify the pin configuration
- * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
-// #define HOST_FEATHER_LTEM3F
-#define HOST_FEATHER_UXPLOR_L
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+#include <lqdiag.h>
 
-#include <lq-diagnostics.h>
+/* specify the pin configuration 
+ * --------------------------------------------------------------------------------------------- */
+#ifdef ARDUINO_ARCH_ESP32
+    #define HOST_ESP32_DEVMOD_BMS
+#else
+    #define HOST_FEATHER_UXPLOR_L
+    // #define HOST_FEATHER_UXPLOR             
+    // #define HOST_FEATHER_LTEM3F
+#endif
+
 #include <lq-SAMDutil.h>                // allows read of reset cause
 
 #include <ltemc.h>
@@ -45,20 +53,17 @@ const uint8_t testGpio = 1;
 const uint8_t testAdc = 0;
 
 
-void setup() {
-    #ifdef SERIAL_OPT
+void setup() 
+{
+    #ifdef DIAGPRINT_SERIAL
         Serial.begin(115200);
-        #if (SERIAL_OPT > 0)
-        while (!Serial) {}      // force wait for serial ready
-        #else
         delay(5000);            // just give it some time
-        #endif
     #endif
 
-    PRINTF(DBGCOLOR_red, "\rLTEmC test-11-gpio\r");
-    PRINTF(dbgColor__white, "RCause=%d\r\n", lqSAMD_getResetCause());
+    DPRINT(PRNT_RED, "\rLTEmC test-11-gpio\r");
+    DPRINT(PRNT_WHITE, "RCause=%d\r\n", lqSAMD_getResetCause());
     platform_openPin(LED_BUILTIN, gpioMode_output);
-    lqDiag_setNotifyCallback(applEvntNotify);
+    //lqDiag_setNotifyCallback(applEvntNotify);
 
     ltem_create(ltem_pinConfig, NULL, applEvntNotify);
     ltem_start(resetAction_skipIfOn);                                            // start LTEm, if found on reset it
@@ -66,11 +71,11 @@ void setup() {
     modemInfo_t *modemInfo  = mdminfo_ltem();
     if (strcmp(modemInfo->mfgmodel,"BG77") == 0)
     {
-        PRINTF(dbgColor__info, "Modem: LTEM3F\r");
+        DPRINT(PRNT_INFO, "Modem: LTEM3F\r");
     }
     else
     {
-        PRINTF(dbgColor__error, "Modem does not support GPIO\r");
+        DPRINT(PRNT_ERROR, "Modem does not support GPIO\r");
         while (1);
     }
 
@@ -89,13 +94,13 @@ void loop()
 
     if (pinValue != loopCnt % 2)
     {
-        PRINTF(dbgColor__error, "GPIO compare failed.\r");
+        DPRINT(PRNT_ERROR, "GPIO compare failed.\r");
         while (1) {}
     }
 
     uint16_t adcValue;
     gpio_adcRead(testAdc, &adcValue);
-    PRINTF(dbgColor__cyan, "ADC value=%dmV\r");
+    DPRINT(PRNT_CYAN, "ADC value=%dmV\r");
 
     pDelay(2000);
     loopCnt ++;
@@ -111,11 +116,11 @@ void applEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType == appEvent_fault_assertFailed)
     {
-        PRINTF(dbgColor__error, "LTEmC-HardFault: %s\r", notifyMsg);
+        DPRINT(PRNT_ERROR, "LTEmC-HardFault: %s\r", notifyMsg);
     }
     else 
     {
-        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+        DPRINT(PRNT_WHITE, "LTEmC Info: %s\r", notifyMsg);
     }
     return;
 }
@@ -123,7 +128,7 @@ void applEvntNotify(appEvent_t eventType, const char *notifyMsg)
 
 void indicateLoop(int loopCnt, int waitNext) 
 {
-    PRINTF(dbgColor__magenta, "\r\nLoop=%i \r\n", loopCnt);
+    DPRINT(PRNT_MAGENTA, "\r\nLoop=%i \r\n", loopCnt);
 
     for (int i = 0; i < 6; i++)
     {
@@ -133,16 +138,16 @@ void indicateLoop(int loopCnt, int waitNext)
         pDelay(50);
     }
 
-    PRINTF(dbgColor__gray, "FreeMem=%u\r\n", getFreeMemory());
-    PRINTF(dbgColor__gray, "NextTest (millis)=%i\r\r", waitNext);
+    DPRINT(PRNT_DEFAULT, "FreeMem=%u\r\n", getFreeMemory());
+    DPRINT(PRNT_DEFAULT, "NextTest (millis)=%i\r\r", waitNext);
     pDelay(waitNext);
 }
 
 
 void indicateFailure(char failureMsg[])
 {
-	PRINTF(dbgColor__error, "\r\n** %s \r\n", failureMsg);
-    PRINTF(dbgColor__error, "** Test Assertion Failed. \r\n");
+	DPRINT(PRNT_ERROR, "\r\n** %s \r\n", failureMsg);
+    DPRINT(PRNT_ERROR, "** Test Assertion Failed. \r\n");
 
     uint8_t halt = 1;
     while (halt)

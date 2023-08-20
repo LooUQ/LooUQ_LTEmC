@@ -27,27 +27,20 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_ASSERT
+#include <lqdiag.h>
 
-#define _DEBUG 2                        // set to non-zero value for PRINTF debugging output, 
-// debugging output options             // LTEm1c will satisfy PRINTF references with empty definition if not already resolved
-#if defined(_DEBUG)
-    asm(".global _printf_float");       // forces build to link in float support for printf
-    #if _DEBUG == 2
-    #include <jlinkRtt.h>               // output debug PRINTF macros to J-Link RTT channel
-    #define PRINTF(c_,f_,__VA_ARGS__...) do { rtt_printf(c_, (f_), ## __VA_ARGS__); } while(0)
-    #else
-    #define SERIAL_DBG _DEBUG           // enable serial port output using devl host platform serial, _DEBUG 0=start immediately, 1=wait for port
-    #endif
-#else
-#define PRINTF(c_, f_, ...)
-#endif
-
-
-/* specify the pin configuration
+/* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
-// #define HOST_FEATHER_UXPLOR             
-// #define HOST_FEATHER_LTEM3F
-#define HOST_FEATHER_UXPLOR_L
+#ifdef ARDUINO_ARCH_ESP32
+    #define HOST_ESP32_DEVMOD_BMS
+#else
+    #define HOST_FEATHER_UXPLOR_L
+    // #define HOST_FEATHER_UXPLOR             
+    // #define HOST_FEATHER_LTEM3F
+#endif
 
 #define PDP_DATA_CONTEXT 1
 #define PDP_APN_NAME "hologram"
@@ -55,7 +48,6 @@
 
 #include <ltemc.h>
 #include <ltemc-sckt.h>
-#include <lq-diagnostics.h>
 
 
 /* ----------------------------------------------------------------------------
@@ -80,29 +72,25 @@ static scktCtrl_t scktCtrl;                     // handle for socket operations
 static uint8_t receiveBuffer[SCKTTEST_RXBUFSZ]; // appl creates a rxBuffer for protocols, sized to your expected flows (will be incorporated into scktCtrl)
 
 void setup() {
-    #ifdef SERIAL_OPT
+    #ifdef DIAGPRINT_SERIAL
         Serial.begin(115200);
-        #if (SERIAL_OPT > 0)
-        while (!Serial) {}      // force wait for serial ready
-        #else
         delay(5000);            // just give it some time
-        #endif
     #endif
 
-    PRINTF(dbgColor__red, "\rLTEmC Test:7 Sockets\r\n");
-    lqDiag_setNotifyCallback(appEvntNotify);                        // configure ASSERTS to callback into application
+    DPRINT(PRNT_RED, "\rLTEmC Test:7 Sockets\r\n");
+    //lqDiag_setNotifyCallback(appEvntNotify);                        // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);               // create LTEmC modem, no yield req'd for testing
     ltem_start(resetAction_swReset);                                // ... and start it
-    PRINTF(dbgColor__none, "BGx %s\r", mdminfo_ltem()->fwver);
+    DPRINT(PRNT_DEFAULT, "BGx %s\r", mdminfo_ltem()->fwver);
 
-    PRINTF(dbgColor__dflt, "Waiting on network...\r");
+    DPRINT(PRNT_DEFAULT, "Waiting on network...\r");
     providerInfo_t* provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
     while (strlen(provider->name) == 0)
     {
-        PRINTF(dbgColor__dYellow, ">");
+        DPRINT(PRNT_dYELLOW, ">");
     }
-    PRINTF(dbgColor__info, "Network type is %s on %s\r", provider->iotMode, provider->name);
+    DPRINT(PRNT_INFO, "Network type is %s on %s\r", provider->iotMode, provider->name);
 
     // create a socket control and open it
     sckt_initControl(&scktCtrl, dataCntxt_0, SCKTTEST_PROTOCOL, scktRecvCB);
@@ -111,11 +99,11 @@ void setup() {
 
     if (scktResult == resultCode__previouslyOpened)
     {
-        PRINTF(dbgColor__warn, "Socket 0 found already open!\r");
+        DPRINT(PRNT_WARN, "Socket 0 found already open!\r");
     }
     else if (scktResult != resultCode__success)
     {
-        PRINTF(dbgColor__error, "Socket 0 open failed, resultCode=%d\r", scktResult);
+        DPRINT(PRNT_ERROR, "Socket 0 open failed, resultCode=%d\r", scktResult);
         while(true){}
     }
 }
@@ -135,11 +123,11 @@ void loop()
 
         #if SEND_TEST == 1
         /* test for short-send, fits is 1 TX chunk */
-        snprintf(sendBffr, SCKTTEST_TXBUFSZ, "%d-%lu drops=%d  ABCDEFGHIJKLMNOPQRSTUVWXYZ%c", loopCnt, pMillis(), drops, ctrlZ);
+        snDPRINT(sendBffr, SCKTTEST_TXBUFSZ, "%d-%lu drops=%d  ABCDEFGHIJKLMNOPQRSTUVWXYZ%c", loopCnt, pMillis(), drops, ctrlZ);
 
         #elif SEND_TEST == 2
         /* test for longer, 2+ tx chunks */
-        snprintf(sendBffr, SCKTTEST_TXBUFSZ, "#%d-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz--0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz%c", loopCnt, ctrlZ);
+        snDPRINT(sendBffr, SCKTTEST_TXBUFSZ, "#%d-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz--0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz%c", loopCnt, ctrlZ);
 
         #else
         /* test for transparent data, sockets should allow binary and ignore embedded \0 */
@@ -150,7 +138,7 @@ void loop()
         #endif
 
         resultCode_t sendResult = sckt_send(&scktCtrl, sendBffr, sendSz);
-        PRINTF(dbgColor__info, "Send result=%d\r", sendResult);
+        DPRINT(PRNT_INFO, "Send result=%d\r", sendResult);
         
         loopCnt++;
     }
@@ -163,7 +151,7 @@ void loop()
 
 uint16_t scktRecover()
 {
-    PRINTF(dbgColor__warn, "sgnl=%d, scktState=%d\r", mdminfo_signalRSSI(), sckt_getState(&scktCtrl));
+    DPRINT(PRNT_WARN, "sgnl=%d, scktState=%d\r", mdminfo_signalRSSI(), sckt_getState(&scktCtrl));
     sckt_close(&scktCtrl);
     return sckt_open(&scktCtrl, true);
 }
@@ -182,7 +170,7 @@ void scktRecvCB(dataCntxt_t dataCntxt, char* dataPtr, uint16_t dataSz, bool isFi
     // sckt_fetchRecv(&scktCtrl, temp, sizeof(temp));
     // temp[dataSz] = '\0';
 
-    // PRINTF(dbgColor__info, "appRcvd %d chars: %s\r", dataSz, temp);
+    // DPRINT(PRNT_INFO, "appRcvd %d chars: %s\r", dataSz, temp);
 }
 
 
@@ -193,9 +181,9 @@ void scktRecvCB(dataCntxt_t dataCntxt, char* dataPtr, uint16_t dataSz, bool isFi
 void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType == appEvent_fault_assertFailed)
-        PRINTF(dbgColor__error, "LTEmC Fault: %s\r", notifyMsg);
+        DPRINT(PRNT_ERROR, "LTEmC Fault: %s\r", notifyMsg);
     else 
-        PRINTF(dbgColor__white, "LTEmC Info: %s\r", notifyMsg);
+        DPRINT(PRNT_WHITE, "LTEmC Info: %s\r", notifyMsg);
     return;
 }
 
@@ -211,10 +199,10 @@ void showStats()
     // if (newRxCnt < newTxCnt)
     //     drops++;
 
-    // PRINTF((lastDrops == drops) ? dbgColor__magenta : dbgColor__warn, "\rTX=%d, RX=%d \r", scktCtrl.statsRxCnt, scktCtrl.statsRxCnt);
+    // DPRINT((lastDrops == drops) ? PRNT_MAGENTA : PRNT_WARN, "\rTX=%d, RX=%d \r", scktCtrl.statsRxCnt, scktCtrl.statsRxCnt);
 
-    PRINTF(dbgColor__magenta, "\rTX=%d, RX=%d \r", scktCtrl.statsRxCnt, scktCtrl.statsRxCnt);
-    PRINTF(dbgColor__magenta, "FreeMem=%u  Loop=%d\r", getFreeMemory(), loopCnt);
+    DPRINT(PRNT_MAGENTA, "\rTX=%d, RX=%d \r", scktCtrl.statsRxCnt, scktCtrl.statsRxCnt);
+    DPRINT(PRNT_MAGENTA, "FreeMem=%u  Loop=%d\r", getFreeMemory(), loopCnt);
 
     // lastTx = txCnt;
     // lastRx = rxCnt;

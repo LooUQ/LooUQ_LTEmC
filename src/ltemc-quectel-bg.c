@@ -26,11 +26,10 @@
  
 ***************************************************************************** */
 
-#define SRCFILE "BGX"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DPRINT                    // expand DPRINT into debug output
-#define ENABLE_DPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define SRCFILE "BGX"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+//#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
 #include "ltemc-internal.h"
@@ -210,69 +209,45 @@ void QBG_reset(resetAction_t resetAction)
 /**
  *	@brief Initializes the BGx module
  */
-void QBG_setOptions()
+bool QBG_setOptions()
 {
     DPRINT(PRNT_DEFAULT, "BGx Init:\r");
-    bool initError = false;
-    uint8_t tries = 0;
+    bool setOptionsSuccess = true;
     char cmdBffr[120];
 
-    do
+    for (size_t i = 0; i < qbg_initCmdsCnt; i++)                                    // sequence through list of start cmds
     {
-        tries++;
+        DPRINT(PRNT_DEFAULT, " > %s", qbg_initCmds[i]);
+        strcpy(cmdBffr, qbg_initCmds[i]);
 
-        for (size_t i = 0; i < qbg_initCmdsCnt; i++)                                    // sequence through list of start cmds
+        if (atcmd_tryInvoke(cmdBffr))
         {
-            DPRINT(PRNT_DEFAULT, " > %s\r", qbg_initCmds[i]);
-            strcpy(cmdBffr, qbg_initCmds[i]);
-
-            if (atcmd_tryInvoke(cmdBffr))
+            if (atcmd_awaitResultWithOptions(2000, NULL) == resultCode__success)    // somewhat unknown cmd list for modem initialization, relax timeout
             {
-                if (atcmd_awaitResultWithOptions(2000, NULL) == resultCode__success)    // somewhat unknown cmd list for modem initialization, relax timeout
-                {
-                    continue;
-                }
-            }
-
-            DPRINT(PRNT_ERROR, "BGx Init CmdError: %s\r", qbg_initCmds[i]);
-            initError = true;
-            break;
-        }
-        DPRINT(PRNT_DEFAULT, " -End BGx Init-\r");
-        if (initError)
-        {
-            /* If above awaitResult gets a 408 (timeout), perform a HW check. The HW check 1st looks at status pin,the inspects
-             * SPI for basic Wr/Rd.     *** If either of the HW tests fail, flow will not get here. ***
-             * The function below attempts to clear a confused BGx that is sitting in data state (awaiting an end-of-transmission).
-             */
-            if (!QBG_clearDataState())
-            {
-                ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");         // send notification, maybe app can recover
+                continue;
             }
         }
-        DPRINT(PRNT_DEFAULT, "\r");
-    } while (initError && tries == 1);
-    
-    if (initError)
-    {
-        ltem_notifyApp(appEvent_fault_hardFault, "BGx init seq fault");                 // send notification, maybe app can recover
-        while (true) {}                                                                 // should not get here!
+        DPRINT(PRNT_ERROR, "BGx Init CmdError: %s\r", qbg_initCmds[i]);
+        setOptionsSuccess = false;
+        break;
     }
+    DPRINT(PRNT_DEFAULT, " -End BGx Init-\r");
+    return setOptionsSuccess;
 }
 
 
-/**
- *	@brief Attempts recovery of command control of the BGx module left in data mode
- */
-bool QBG_clearDataState()
-{
-    IOP_forceTx("\x1B", 1);                                                          // send ASCII ESC
+// /**
+//  *	@brief Attempts recovery of command control of the BGx module left in data mode
+//  */
+// bool QBG_clearDataState()
+// {
+//     IOP_forceTx("\x1B", 1);                                                          // send ASCII ESC
 
-    atcmd_close();
-    atcmd_tryInvoke("AT");
-    resultCode_t result = atcmd_awaitResult();
-    return  result == resultCode__success;
-}
+//     atcmd_close();
+//     atcmd_tryInvoke("AT");
+//     resultCode_t result = atcmd_awaitResult();
+//     return  result == resultCode__success;
+// }
 
 
 /**

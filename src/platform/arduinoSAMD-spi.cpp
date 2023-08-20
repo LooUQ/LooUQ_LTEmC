@@ -10,33 +10,71 @@
 #ifdef ARDUINO_ARCH_SAMD
 
 #include <Arduino.h>
-#include <((SPIClass*)platformSpi->spi)->h>
-#include "lqPlatform-((SPIClass*)platformSpi->spi)->h"
+#include <SPI.h>
+#include "platform-spi.h"
+#include "lqdiag.h"
+
+
+// /**
+//  *	@brief Initialize and configure SPI resource.
+//  *
+//  *  @param [in] clkPin - GPIO pin for clock
+//  *  @return Pointer to platformSpi device
+//  */
+// platformSpi_t* spi_createFromPins(uint8_t clkPin, uint8_t misoPin, uint8_t mosiPin, uint8_t csPin)
+// {
+//     ASSERT()
+//     return 0;
+// }
 
 
 /**
  *	@brief Initialize and configure SPI resource.
  *
- *  @param chipSelLine [in] - GPIO for CS 
- *  \return SPI device
+ *  @param [in] indx Index (0..n) of the SPI to reference for LTEmC use.
+ *  @return Pointer to platformSpi device
  */
-platformSpi_t* spi_create(uint8_t clkPin, uint8_t misoPin, uint8_t mosiPin, uint8_t csPin)
+platformSpi_t* spi_createFromIndex(uint8_t indx, uint8_t csPin)
 {
-    // spi_settings = SPISettings(config.dataRate, (BitOrder)config.bitOrder, config.dataMode);
-
-    platformSpi_t *platformSpi = (platformSpi_t*)malloc(sizeof(platformSpi_t));
+    platformSpi_t *platformSpi = (platformSpi_t*)calloc(1, sizeof(platformSpi_t));
 	if (platformSpi == NULL)
 	{
 		return NULL;
 	}	
+
+    ASSERT(indx < SPI_INTERFACES_COUNT);
+    switch (indx)
+    {
+        #if SPI_INTERFACES_COUNT > 0
+        case 0:
+            platformSpi->spi = &SPI;
+            break;
+        #endif
+        #if SPI_INTERFACES_COUNT > 1
+        case 1:
+            platformSpi->spi = &SPI1;
+            break;
+        #endif
+        #if SPI_INTERFACES_COUNT > 2
+        case 2:
+            platformSpi->spi = &SPI2;
+            break;
+        #endif
+        #if SPI_INTERFACES_COUNT > 3
+        case 3:
+            platformSpi->spi = &SPI3;
+            break;
+        #endif
+    }
+
+    platformSpi->clkPin = 0;
+    platformSpi->misoPin = 0;
+    platformSpi->mosiPin = 0;
+
+    platformSpi->csPin = csPin;
     platformSpi->dataRate = 2000000U;
     platformSpi->dataMode = spiDataMode_0;
     platformSpi->bitOrder = spiBitOrder_msbFirst;
-    platformSpi->clkPin = clkPin;
-    platformSpi->misoPin = misoPin;
-    platformSpi->mosiPin = mosiPin;
-    platformSpi->csPin = csPin;
-    platformSpi->spi = nullptr;
     return platformSpi;
 }
 
@@ -48,6 +86,8 @@ void spi_start(platformSpi_t* platformSpi)
 {
     digitalWrite(platformSpi->csPin, HIGH);
     pinMode(platformSpi->csPin, OUTPUT);
+
+    ASSERT(platformSpi->spi != NULL);
     ((SPIClass*)platformSpi->spi)->begin();
 }
 
@@ -135,7 +175,6 @@ uint16_t spi_transferWord(platformSpi_t* platformSpi, uint16_t data)
 }
 
 
-
 /**
  *	@brief Transfer a buffer to the SPI device.
  *
@@ -144,7 +183,7 @@ uint16_t spi_transferWord(platformSpi_t* platformSpi, uint16_t data)
  *  @param buf [in/out] - The character pointer to the buffer to transfer to/from.
  *  @param xfer_len [in] - The number of characters to transfer.
  */
-void spi_transferBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, size_t xfer_len)
+void spi_transferBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len)
 {
     digitalWrite(platformSpi->csPin, LOW);
     ((SPIClass*)(platformSpi->spi))->beginTransaction(SPISettings(platformSpi->dataRate, (BitOrder)platformSpi->bitOrder, (uint8_t)platformSpi->dataMode));
@@ -157,7 +196,7 @@ void spi_transferBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* b
 }
 
 
-void spi_writeBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, size_t xfer_len)
+void spi_writeBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len)
 {   
     digitalWrite(platformSpi->csPin, LOW);
     ((SPIClass*)(platformSpi->spi))->beginTransaction(SPISettings(platformSpi->dataRate, (BitOrder)platformSpi->bitOrder, (uint8_t)platformSpi->dataMode));
@@ -173,7 +212,7 @@ void spi_writeBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf,
 }
 
 
-void spi_readBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, size_t xfer_len)
+void spi_readBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len)
 {
     digitalWrite(platformSpi->csPin, LOW);
     ((SPIClass*)(platformSpi->spi))->beginTransaction(SPISettings(platformSpi->dataRate, (BitOrder)platformSpi->bitOrder, (uint8_t)platformSpi->dataMode));

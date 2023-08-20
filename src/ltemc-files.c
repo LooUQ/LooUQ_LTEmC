@@ -25,11 +25,10 @@
 ***************************************************************************** */
 
 
-#define SRCFILE "FIL"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DPRINT                   // expand DPRINT into debug output
-#define ENABLE_DPRINT_VERBOSE           // expand DPRINT and DPRINT_V into debug output
+#define SRCFILE "FIL"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+//#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                 // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
 #include "ltemc-internal.h"

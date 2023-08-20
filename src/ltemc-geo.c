@@ -26,10 +26,9 @@
 
 
 #define SRCFILE "GEO"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+//#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-//#include <jlinkRtt.h>                     // Use J-Link RTT channel for debug output (not platform serial)
 #include <lqdiag.h>
 
 
@@ -123,9 +122,9 @@ geoPosition_t geo_query(uint8_t geoId)
     {
         if (atcmd_awaitResult() != resultCode__success)
             return geoPosition_unknown;
-        return resultCode__success;
+        return geoPosition_outside;
     }
-    return resultCode__conflict;
+    return geoPosition_unknown;
 };
 
 

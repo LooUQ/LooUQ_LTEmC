@@ -28,15 +28,21 @@
 #ifndef __LTEMC_TYPES_H__
 #define __LTEMC_TYPES_H__
 
-#ifdef __cplusplus
-#include <cstdint>
-#include <cstdlib>
-#include <cstdbool>
-#else
-#include <stddef.h>
-#include <stdint.h>
-#include <stdbool.h>
-#endif // __cplusplus
+/* LTEmC is C99, this header is only referenced internally
+ * https://stackoverflow.com/questions/13642827/cstdint-vs-stdint-h
+*/
+
+// TODO pull conditional, leave only std*.h
+
+// #ifdef __cplusplus
+// #include <cstdint>
+// #include <cstdlib>
+// #include <cstdbool>
+// #else
+// #include <stddef.h>
+// #include <stdint.h>
+// #include <stdbool.h>
+// #endif // __cplusplus
 
 #include <string.h>
 #include <stdlib.h>
@@ -73,10 +79,11 @@ enum streams__constants
 
 typedef struct ltemPinConfig_tag
 {
+    int spiIndx;
+    int spiCsPin;
     int spiClkPin;
     int spiMisoPin;
     int spiMosiPin;
-    int spiCsPin;
     int irqPin;
     int statusPin;
     int powerkeyPin;
