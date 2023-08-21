@@ -1,6 +1,6 @@
 /** ****************************************************************************
   \file 
-  \brief Public API get modem information
+  @brief Public API get modem information
   \author Greg Terrell, LooUQ Incorporated
 
   \loouq
@@ -52,7 +52,7 @@ static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
 
 
 /**
- *  \brief Get the LTEm1 static device identification/provisioning information.
+ *  @brief Get the LTEm1 static device identification/provisioning information.
 */
 modemInfo_t *mdminfo_ltem()
 {
@@ -112,13 +112,11 @@ modemInfo_t *mdminfo_ltem()
 
 
 /**
- *  \brief Get the signal strength reported by the LTEm device at a percent
+ *  @brief Get the signal strenght as raw value returned from BGx.
 */
-uint8_t mdmInfo_signalPercent()
+uint8_t mdminfo_signalRaw()
 {
-    double csq;
-    uint8_t signal = 0;
-    const double csqFactor = 3.23;
+    uint8_t signal = 99;
 
     if (ltem_getDeviceState())
     {
@@ -129,10 +127,8 @@ uint8_t mdmInfo_signalPercent()
                 char *term;
                 char *lastResponse = atcmd_getResponse();
                 term = strstr(atcmd_getResponse(), "+CSQ");
-                csq = strtod(term + 6, NULL);
+                signal = strtol(term + 6, NULL, 10);
             }
-            // CSQ 99=no signal, range -51(best)  to -113(worst)
-            signal = (csq == 99) ? 0 : (uint8_t)(csq * csqFactor);
             atcmd_close();
         }
     }
@@ -141,7 +137,22 @@ uint8_t mdmInfo_signalPercent()
 
 
 /**
- *  \brief Get the static device provisioning information about the LTEm1.
+ *  @brief Get the signal strength reported by the LTEm device at a percent
+*/
+uint8_t mdmInfo_signalPercent()
+{
+    double csq;
+    uint8_t signal = 0;
+    const double csqFactor = 3.23;
+
+    csq = (double)mdminfo_signalRaw();
+    signal = (csq == 99) ? 0 : (uint8_t)(csq * csqFactor);
+    return signal;
+}
+
+
+/**
+ *  @brief Get the signal strenght as RSSI (db).
 */
 int16_t mdminfo_signalRSSI()
 {
@@ -154,7 +165,7 @@ int16_t mdminfo_signalRSSI()
 
 
 /** 
- *  \brief Get the signal strength, as a bar count for visualizations, (like on a smartphone) 
+ *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone) 
  * */
 uint8_t mdminfo_signalBars(uint8_t displayBarCount)
 {
@@ -174,7 +185,7 @@ uint8_t mdminfo_signalBars(uint8_t displayBarCount)
 
 
 /**
- *	\brief Action response parser for iccid value request. 
+ *	@brief Action response parser for iccid value request. 
  */
 static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem)
 {

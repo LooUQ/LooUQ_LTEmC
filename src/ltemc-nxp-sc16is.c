@@ -1,11 +1,11 @@
 /** ****************************************************************************
-  \file 
+  \file
   \brief LTEmC INTERNAL SPI/UART support
   \author Greg Terrell, Jensen Miller LooUQ Incorporated
 
   \loouq
 
-  \warning This source unit is low-level processing code. Updates should only 
+  \warning This source unit is low-level processing code. Updates should only
   be performed as directed by LooUQ.
 --------------------------------------------------------------------------------
 
@@ -23,14 +23,15 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
- 
+
 ***************************************************************************** */
+
 
 // https://www.nxp.com/docs/en/data-sheet/SC16IS740_750_760.pdf
 
-#define SRCFILE "NXP"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-//#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define SRCFILE "NXP" // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+// #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+// #define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -40,19 +41,15 @@
 
 extern ltemDevice_t g_lqLTEM;
 
-
-#define REG_MODIFY(REG_NAME, MODIFY_ACTION)                 \
-REG_NAME REG_NAME##_reg = {0};                              \
-REG_NAME##_reg.reg = SC16IS7xx_readReg(REG_NAME##_regAddr); \
-MODIFY_ACTION                                               \
-SC16IS7xx_writeReg(REG_NAME##_regAddr, REG_NAME##_reg.reg);
-
-
+#define REG_MODIFY(REG_NAME, MODIFY_ACTION)                     \
+    REG_NAME REG_NAME##_reg = {0};                              \
+    REG_NAME##_reg.reg = SC16IS7xx_readReg(REG_NAME##_regAddr); \
+    MODIFY_ACTION                                               \
+    SC16IS7xx_writeReg(REG_NAME##_regAddr, REG_NAME##_reg.reg);
 
 #pragma region Public Functions
 #pragma endregion
 /*-----------------------------------------------------------------------------------------------*/
-
 
 #pragma region LTEm Internal Functions
 
@@ -60,53 +57,50 @@ SC16IS7xx_writeReg(REG_NAME##_regAddr, REG_NAME##_reg.reg);
 ------------------------------------------------------------------------------------------------ */
 void S_displayFifoStatus(const char *dispMsg);
 
-
 #pragma region Bridge Initialization
 
 /**
-*	@brief Configure base NXP bridge settings: reset, FIFO (polled mode), baud and framing
-*/
+ *	@brief Configure base NXP bridge settings: reset, FIFO (polled mode), baud and framing
+ */
 void SC16IS7xx_start()
 {
     // reset bridge to a known state, possible this is restart (already powered on)
     SC16IS7xx_writeReg(SC16IS7xx_UARTRST_regAddr, SC16IS7xx__SW_resetMask);
 
-    // Need EFR[4]=1 to enable bridge enhanced functions: TX trigger and TLR settings for IRQ 
+    // Need EFR[4]=1 to enable bridge enhanced functions: TX trigger and TLR settings for IRQ
     SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_enhanced);
-    REG_MODIFY(SC16IS7xx_EFR, SC16IS7xx_EFR_reg.ENHANCED_FNS_EN = 1;)                           // enable enhanced functions (TX trigger for now)
+    REG_MODIFY(SC16IS7xx_EFR, SC16IS7xx_EFR_reg.ENHANCED_FNS_EN = 1;) // enable enhanced functions (TX trigger for now)
     SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_general);
 
-	SC16IS7xx_FCR fcrRegister = {0};
-	fcrRegister.FIFO_EN = 1;
+    SC16IS7xx_FCR fcrRegister = {0};
+    fcrRegister.FIFO_EN = 1;
     fcrRegister.RX_TRIGGER_LVL = (int)RX_LVL_56CHARS;
     fcrRegister.TX_TRIGGER_LVL = (int)TX_LVL_56SPACES;
-	SC16IS7xx_writeReg(SC16IS7xx_FCR_regAddr, fcrRegister.reg);
+    SC16IS7xx_writeReg(SC16IS7xx_FCR_regAddr, fcrRegister.reg);
 
-	// set baudrate => starts clock and UART
-	SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_special);
-	SC16IS7xx_writeReg(SC16IS7xx_DLL_regAddr, SC16IS7xx__DLL_baudClockDivisorLOW);
-	SC16IS7xx_writeReg(SC16IS7xx_DLH_regAddr, SC16IS7xx__DLH_baudClockDivisorHIGH);
-	SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_general);
+    // set baudrate => starts clock and UART
+    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_special);
+    SC16IS7xx_writeReg(SC16IS7xx_DLL_regAddr, SC16IS7xx__DLL_baudClockDivisorLOW);
+    SC16IS7xx_writeReg(SC16IS7xx_DLH_regAddr, SC16IS7xx__DLH_baudClockDivisorHIGH);
+    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_general);
 
-	// set byte framing on the wire:  8 data, no parity, 1 stop required by BGx
-	SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_UARTframing);
+    // set byte framing on the wire:  8 data, no parity, 1 stop required by BGx
+    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_UARTframing);
 }
-
 
 /**
  *	@brief Enable IRQ servicing for communications between SC16IS741 and BG9x.
  */
 void SC16IS7xx_enableIrqMode()
 {
-    // // Need EFR[4]=1 and MCR[2]=1 TLR settings for IRQ 
+    // // Need EFR[4]=1 and MCR[2]=1 TLR settings for IRQ
     // SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_enhanced);
-	// SC16IS7xx_EFR efrRegister = {0};
-	// efrRegister.ENHANCED_FNS_EN = 1;
+    // SC16IS7xx_EFR efrRegister = {0};
+    // efrRegister.ENHANCED_FNS_EN = 1;
     // SC16IS7xx_writeReg(SC16IS7xx_EFR_regAddr, efrRegister.reg);
     // // REG_MODIFY(SC16IS7xx_EFR, SC16IS7xx_EFR_reg.ENHANCED_FNS_EN = 1;)
     // SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_general);
     // REG_MODIFY(SC16IS7xx_MCR, SC16IS7xx_MCR_reg.TCR_TLR_EN = 1;)
-
 
     // // /* reg field * 4 = trigger level, RX[7:4] / TX[3:0]
     // //  * 0x0=disabled, 0x1=4, 0x2=8, 0x3=12, 0x4=16, 0x5=20, 0x6=24, 0x7=28, 0x8=32, 0x9=36, 0xA=40, 0xB=44, 0xC=48, 0xD=52, 0xE=56, 0xF=60
@@ -119,14 +113,13 @@ void SC16IS7xx_enableIrqMode()
     // SC16IS7xx_writeReg(SC16IS7xx_TLR_regAddr, 0xDF);                // RX=0xD (52 chars), TX=0xF (60 spaces)
     // // EFR[4]=1 (enhanced functions) and MCR[2]=1 (TCR/TLR enable) remain set
 
-   	// IRQ to enable: RX chars available, TX spaces available, UART framing error : reg = 0x07
-	SC16IS7xx_IER ierSetting = {0};
-	ierSetting.RHR_DATA_AVAIL_INT_EN = 1;
-	ierSetting.THR_EMPTY_INT_EN = 1; 
+    // IRQ to enable: RX chars available, TX spaces available, UART framing error : reg = 0x07
+    SC16IS7xx_IER ierSetting = {0};
+    ierSetting.RHR_DATA_AVAIL_INT_EN = 1;
+    ierSetting.THR_EMPTY_INT_EN = 1;
     ierSetting.RECEIVE_LINE_STAT_INT_EN = 1;
-	SC16IS7xx_writeReg(SC16IS7xx_IER_regAddr, ierSetting.reg);
+    SC16IS7xx_writeReg(SC16IS7xx_IER_regAddr, ierSetting.reg);
 }
-
 
 /**
  *	@brief Read interrupt enable register, check IER for IRQ enabled (register is cleared at reset)
@@ -142,7 +135,6 @@ bool SC16IS7xx_isAvailable()
 #pragma endregion
 /* ----------------------------------------------------------------------------------------------------------------- */
 
-
 #pragma region bridgeReadWrite
 
 /**
@@ -150,75 +142,95 @@ bool SC16IS7xx_isAvailable()
  */
 uint8_t SC16IS7xx_readReg(uint8_t reg_addr)
 {
-	union __SC16IS7xx_reg_payload__ reg_payload = { 0 };
-	reg_payload.reg_addr.A = reg_addr;
-	reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
+    union __SC16IS7xx_reg_payload__ reg_payload = {0};
+    reg_payload.reg_addr.A = reg_addr;
+    reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-	reg_payload.reg_payload = spi_transferWord(g_lqLTEM.platformSpi, reg_payload.reg_payload);
-	return reg_payload.reg_data;
+    reg_payload.reg_payload = spi_transferWord(g_lqLTEM.platformSpi, reg_payload.reg_payload);
+    return reg_payload.reg_data;
 }
-
 
 /**
  *	@brief Write to a SC16IS741A bridge register
  */
 void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data)
 {
-	union __SC16IS7xx_reg_payload__ reg_payload = { 0 };
-	reg_payload.reg_addr.A = reg_addr;
-	reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
-	reg_payload.reg_data = reg_data;
+    union __SC16IS7xx_reg_payload__ reg_payload = {0};
+    reg_payload.reg_addr.A = reg_addr;
+    reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
+    reg_payload.reg_data = reg_data;
 
-	spi_transferWord(g_lqLTEM.platformSpi, reg_payload.reg_payload);
+    spi_transferWord(g_lqLTEM.platformSpi, reg_payload.reg_payload);
 }
-
 
 /**
  *	@brief Reads through the SC16IS741A bridge (its RX FIFO)
  */
-void SC16IS7xx_read(void* dest, uint8_t dest_len)
+void SC16IS7xx_read(void *dest, uint8_t dest_len)
 {
-    union __SC16IS7xx_reg_addr_byte__ reg_addr = { 0 };
+    union __SC16IS7xx_reg_addr_byte__ reg_addr = {0};
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
     spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, dest, dest_len);
 }
 
-
 /**
  *	@brief Write through the SC16IS741A bridge
  */
-void SC16IS7xx_write(const void* src, uint8_t src_len)
+void SC16IS7xx_write(const void *src, uint8_t src_len)
 {
-    union __SC16IS7xx_reg_addr_byte__ reg_addr = { 0 };
+    union __SC16IS7xx_reg_addr_byte__ reg_addr = {0};
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 
     spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, src, src_len);
 }
 
-
 /**
  *	@brief Perform reset on bridge FIFO
  */
 void SC16IS7xx_resetFifo(sc16IS7xx_FifoResetAction_t resetAction)
 {
-    // fcr is a RdOnly register, flush and FIFO enable are both in this register 
-    SC16IS7xx_writeReg(SC16IS7xx_FCR_regAddr,  resetAction |= SC16IS7xx__FCR_IOP_FIFO_ENABLE);
+    // fcr is a RdOnly register, flush and FIFO enable are both in this register
+    SC16IS7xx_writeReg(SC16IS7xx_FCR_regAddr, resetAction |= SC16IS7xx__FCR_IOP_FIFO_ENABLE);
 }
 
-
 /**
- *	@brief Perform reset on bridge FIFO
+ *	@brief Send serial break signal
  */
 void SC16IS7xx_sendBreak()
 {
     uint8_t lcrReg = SC16IS7xx_readReg(SC16IS7xx_LCR_regAddr);
 
-    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr,  lcrReg |= SC16IS7xx__LCR_break);
+    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, lcrReg |= SC16IS7xx__LCR_break);
     pDelay(2);
-    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr,  lcrReg &= ~SC16IS7xx__LCR_break);
+    SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, lcrReg &= ~SC16IS7xx__LCR_break);
+}
+
+
+/**
+ *	@brief Send Ctrl-Z 
+ */
+void SC16IS7xx_sendCtrlZ()
+{
+    SC16IS7xx_write("\026", 1);
+}
+
+/*
+TOTAL HACK to see if flush possible
+ */
+
+void SC16IS7xx_flushTx(char flushChar, uint16_t sendCnt)
+{
+    char buffer[2] = {0}; 
+    buffer[0] = flushChar;
+
+    for (uint16_t i = 0; i < sendCnt; i++)
+    {
+        SC16IS7xx_write(&buffer, 1);
+        pDelay(5);
+    }
 }
 
 
@@ -238,10 +250,8 @@ void SC16IS7xx_sendBreak()
 //     lsrValue = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
 // }
 
-
 #pragma endregion
 /* ----------------------------------------------------------------------------------------------------------------- */
-
 
 /**
  *	@brief DEBUG: Show FIFO buffers fill level

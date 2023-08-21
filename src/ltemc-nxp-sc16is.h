@@ -27,15 +27,15 @@
 #ifndef __LTEMC_NXP_SC16IS_H__
 #define __LTEMC_NXP_SC16IS_H__
 
-#ifdef __cplusplus
-#include <cstdint>
-#include <cstdlib>
-#include <cstdbool>
-#else
+// #ifdef __cplusplus
+// #include <cstdint>
+// #include <cstdlib>
+// #include <cstdbool>
+// #else
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#endif // __cplusplus
+// #endif // __cplusplus
 
 #include "ltemc-types.h"
 //#include "platform/platform-spi.h"
@@ -462,7 +462,22 @@ void SC16IS7xx_write(const void * src, uint8_t src_len);
 void SC16IS7xx_resetFifo(sc16IS7xx_FifoResetAction_t resetAction);
 
 
+/**
+ *	@brief Send serial break signal
+ */
 void SC16IS7xx_sendBreak();
+
+
+/**
+ *	@brief Send Ctrl-Z 
+ */
+void SC16IS7xx_sendCtrlZ();
+
+
+/**
+ *	@brief Send flushChar a number of times
+ */
+void SC16IS7xx_flushTx(char flushChar, uint16_t sendCnt);
 
 
 // /**

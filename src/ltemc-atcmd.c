@@ -443,7 +443,7 @@ static resultCode_t S__readResult()
                         g_lqLTEM.atcmd->resultCode = dataRslt;
                     }
                 }
-                DPRINT(PRNT_WHITE, "Exit dataMode rslt=%d\r", dataRslt);
+                DPRINT_V(PRNT_WHITE, "Exit dataMode rslt=%d\r", dataRslt);
                 memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));                               // done with dataMode settings
             }
         }

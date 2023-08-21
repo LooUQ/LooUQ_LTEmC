@@ -169,7 +169,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
     if (atcmd_tryInvoke("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, mqttCtrl->hostUrl, mqttCtrl->hostPort))
     {
         resultCode_t rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(45), S__mqttOpenCompleteParser);
-        DPRINT_V(PRNT_WARN, "MQTT Open Resp: %s", atcmd_getRawResponse());
+        DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
 
         if (rslt == resultCode__success && atcmd_getValue() == 0)
         {
@@ -215,7 +215,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
 
     atcmd_tryInvoke("AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->dataCntxt, mqttCtrl->clientId, mqttCtrl->username, mqttCtrl->password);
     rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), S__mqttConnectCompleteParser);     // in autolock mode, so this will release lock
-    DPRINT_V(PRNT_WARN, "MQTT Open Resp: %s", atcmd_getRawResponse());
+    DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
 
     if (rslt == resultCode__success)                                    // COMMAND executed, outcome of CONNECTION may not be a success
     {
@@ -372,7 +372,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
     ASSERT(messageSz <= 4096);                                                                                  // max msg length PUB=4096 (PUBEX=560)
     
     resultCode_t rslt = resultCode__conflict;                                                                   // assume lock not obtainable, conflict
-    uint32_t timeoutMS = (timeoutSec == 0) ? mqtt__publishTimeout : PERIOD_FROM_SECONDS(timeoutSec * 1000);
+    uint32_t timeoutMS = (timeoutSec == 0) ? mqtt__publishTimeout : PERIOD_FROM_SECONDS(timeoutSec);
 
         mqttCtrl->sentMsgId++;                                                                                  // keep sequence going regardless of MQTT QOS
         uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId;                                         // msgId not sent with QOS == 0, otherwise sent
@@ -386,7 +386,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
             if (rslt == resultCode__success)                                        
             {
                 atcmd_close();
-                DPRINT(PRNT_YELLOW, "MQTT-PUB Success: rslt=%d\r", rslt);
+                DPRINT(PRNT_dGREEN, "MQTT-PUB Success: rslt=%d\r", rslt);
                 return rslt;
             }
         }
@@ -404,7 +404,7 @@ void mqtt_close(mqttCtrl_t *mqttCtrl)
     if (mqttCtrl->state >= mqttState_open)                                                      // LTEmC uses CLOSE
     {
         if (atcmd_tryInvoke("AT+QMTCLOSE=%d", mqttCtrl->dataCntxt))
-            atcmd_awaitResultWithOptions(5000, NULL);
+            atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), NULL);
     }
     mqttCtrl->state == mqttState_closed;
 }
@@ -417,6 +417,7 @@ void mqtt_close(mqttCtrl_t *mqttCtrl)
 */
 void mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem)
 {
+    SC16IS7xx_flushTx(' ', 1548);
     mqtt_close(mqttCtrl);
 
     // more intrusive MQTT reset, BGx high-level protocols when faulted can fail to recover with less intrusive reset efforts
@@ -425,6 +426,16 @@ void mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem)
         ltem_start(resetAction_swReset);
     }
     mqtt_start(mqttCtrl, true);
+}
+
+
+void mqtt_flush(mqttCtrl_t *mqttCtrl)
+{
+    for (size_t i = 0; i < 1548; i++)
+    {
+        /* code */
+    }
+    
 }
 
 
@@ -467,7 +478,11 @@ mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl)
                     case 3:
                         mqttCtrl->state = mqttState_connected;
                         break;
+                    case 0:
+                        mqttCtrl->state = mqttState_closed;
+                        break;
                     default:
+                        mqttCtrl->state = mqttState_pending;
                         break;
                 }
             }

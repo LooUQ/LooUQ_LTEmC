@@ -55,6 +55,13 @@ uint8_t mdmInfo_signalPercent();
 int16_t mdminfo_signalRSSI();
 
 
+/**
+ *  @brief Get the signal strength reported by the LTEm device as RSSI reported
+ *  @return The raw radio signal level reported by BGx
+*/
+uint8_t mdminfo_signalRaw();
+
+
 /** 
  *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone) 
  *  @return The radio signal strength factored into a count of bars for UI display
