@@ -226,17 +226,17 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 
 //     while (pMillis() - startTime < g_lqLTEM.atcmd->timeout)
 //     {
-//         if (CBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "SEND OK", 0, 0, true)))
+//         if (BBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "SEND OK", 0, 0, true)))
 //         {
 //             cbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND OK") + 1);
 //             return resultCode__success;
 //         }
-//         else if(CBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "SEND FAIL", 0, 0, true)))
+//         else if(BBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "SEND FAIL", 0, 0, true)))
 //         {
 //             cbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND FAIL") + 1);
 //             return resultCode__tooManyRequests;
 //         }
-//         else if(CBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "ERROR", 0, 0, true)))
+//         else if(BBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "ERROR", 0, 0, true)))
 //         {
 //             cbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND FAIL") + 1);
 //             return resultCode__internalError;
@@ -272,7 +272,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 
 static void S__scktUrcHndlr()
 {
-    cBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
+    bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
 
     // not a socket URC or insufficient chars to parse URC header
     if (cbffr_find(rxBffr, "\"pdpdeact\"", 0, 0, false) >= 0)           // +QIURC: "pdpdeact" handled at higher level, +QIURC overlaps with UDP/TCP
@@ -280,8 +280,8 @@ static void S__scktUrcHndlr()
         return;
     }
 
-    bool isUdpTcp = CBFFR_FOUND(cbffr_find(rxBffr, "+QIURC", 0, 0, false));
-    bool isSslTls = CBFFR_FOUND(cbffr_find(rxBffr, "+QSSLURC", 0, 0, false));
+    bool isUdpTcp = BBFFR_FOUND(cbffr_find(rxBffr, "+QIURC", 0, 0, false));
+    bool isSslTls = BBFFR_FOUND(cbffr_find(rxBffr, "+QSSLURC", 0, 0, false));
     if (!isUdpTcp && !isSslTls)
     {
         return;
@@ -303,7 +303,7 @@ static void S__scktUrcHndlr()
         cbffr_skip(rxBffr, 11);                                             // SSL/TLS: +QSSLURC: "
     }
     uint16_t eolIndx = cbffr_find(rxBffr, "\r\n", 0, 30, false);
-    if (CBFFR_FOUND(eolIndx))                                               // got full line, work on URC
+    if (BBFFR_FOUND(eolIndx))                                               // got full line, work on URC
     {
         cbffr_skipTail(rxBffr, 9);                                          // ignore prefix
         cbffr_pop(rxBffr, workBffr, eolIndx - 9);
@@ -384,7 +384,7 @@ static resultCode_t S__scktRxHndlr()
     
     pDelay(1);                                                                                                  // ugly, but creating loop to wait 500uS seems silly
     uint8_t popCnt = cbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
-    if (CBFFR_NOTFOUND(popCnt))
+    if (BBFFR_NOTFOUND(popCnt))
     {
         return resultCode__internalError;
     }

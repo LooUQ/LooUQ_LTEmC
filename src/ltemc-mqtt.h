@@ -28,6 +28,7 @@
 #define __MQTT_H__
 
 #include "ltemc-types.h"
+#include "ltemc-tls.h"
 
 /** 
  *  @brief typed numeric constants used by MQTT subsystem.
@@ -119,11 +120,15 @@ typedef enum mqttQos_tag
 */
 typedef enum mqttState_tag
 {
-    mqttState_closed = 0,           /// MQTT is idle, not active.
-    mqttState_open = 1,             /// MQTT is open, open but not connected.
-    mqttState_connected = 2,        /// MQTT is connected, in session with server.
-    mqttState_invalidHost = 201,
-    mqttState_pending = 202         /// MQTT is attempting connect (BGx MQTT problem area that needs to be detected, reset BGx if stays here).
+    mqttState_closed = 0,           /// MQTT is idle, not active
+    mqttState_open = 1,             /// MQTT is open, open but not connected
+    mqttState_connected = 2,        /// MQTT is connected, in session with server
+
+    // BGx MQTT stack can hang in any of the next 3 states, only known recovery is soft-restart module
+    mqttState_PENDING = 100,        ///
+    mqttState_initializing = 101,   /// After connect cmd, MQTT is attempting connect
+    mqttState_connecting = 102,     /// After connect cmd, MQTT is attempting connect
+    mqttState_disconnecting = 104   /// After disconnect/close cmd
 } mqttState_t;
 
 
@@ -177,6 +182,7 @@ typedef struct mqttCtrl_tag
     */
     mqttState_t state;                          /// Current state of the MQTT protocol services on device.
     bool useTls;                                /// flag indicating SSL/TLS applied to stream
+    tlsCtrl_t* tlsCtrl;                         /// NULL for no TLS/SSL, otherwise a TLS control with settings
     char hostUrl[host__urlSz];                  /// URL or IP address of host
     uint16_t hostPort;                          /// IP port number host is listening on (allows for 65535/0)
     mqttTopicCtrl_t* topics[mqtt__topicsCnt];   /// array of topic controls, provides for independent app receive functions per topic
@@ -240,8 +246,13 @@ void mqtt_initTopicControl(mqttTopicCtrl_t* topicCtrl, const char* topic, uint8_
 /**
  *  @brief Set the remote server connection values.
 */
-void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t useMqttVersion, const char *deviceId, const char *userId, const char *secret);
+void mqtt_setConnection_D(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t useMqttVersion, const char *deviceId, const char *userId, const char *secret);
 
+
+/**
+ *  @brief Set the remote server connection values.
+*/
+void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, tlsCtrl_t* tlsCtrl, mqttVersion_t useMqttVersion, const char *deviceId, const char *userId, const char *secret);
 
 
 /**
@@ -372,6 +383,9 @@ uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl);
  *  @returns Integer value of the MQTT status error code.
 */
 uint16_t mqtt_getErrCode(mqttCtrl_t *mqttCtrl);
+
+
+bool mqtt_recover(mqttCtrl_t *mqtt);
 
 
 #ifdef __cplusplus

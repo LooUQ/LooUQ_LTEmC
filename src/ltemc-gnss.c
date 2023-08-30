@@ -84,6 +84,25 @@ resultCode_t gnss_off()
 
 
 /**
+ *	@brief Set RF priority on BG95/BG77 modules. 
+ *  @return Result code representing status of operation, OK = 200.
+ */
+resultCode_t gnss_setRfPriority(gnssRfPriority_t priority)
+{
+    if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
+        lq_strnstr(ltem_getModuleType(), "BG77", 40))
+    {
+        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d,0", priority))
+        {
+            return atcmd_awaitResult();
+        }
+        return resultCode__conflict;
+    }
+    return resultCode__preConditionFailed;
+}
+
+
+/**
  *	@brief Query BGx for current location/positioning information. 
  */
 gnssLocation_t gnss_getLocation()
@@ -97,24 +116,22 @@ gnssLocation_t gnss_getLocation()
     if (ATCMD_awaitLock(atcmd__defaultTimeout))
     {
         atcmd_invokeReuseLock("AT+QGPSLOC=2");
-        resultCode_t atResult = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, gnssLocCompleteParser);
+        resultCode_t rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, gnssLocCompleteParser);
 
         memset(&gnssResult, 0, sizeof(gnssLocation_t));
-        gnssResult.statusCode = atResult;
-        if (atResult != resultCode__success)                                            // return on failure, continue on success
-            return gnssResult;
+        gnssResult.statusCode = (rslt == 516) ? resultCode__gone : rslt;                    // translate "No fix" to gone
+        if (rslt != resultCode__success)
+            return gnssResult;                                                              // return on failure, continue to parse on success
 
         DPRINT(PRNT_WARN, "getLocation(): parse starting...\r\n");
-
         char *parsedResponse = atcmd_getResponse();
         char *delimAt;
-
         DPRINT_V(PRNT_WHITE, "Raw=%s", parsedResponse);
 
         if ((delimAt = strchr(parsedResponse, (int)',')) != NULL)
             strncpy(gnssResult.utc, parsedResponse, delimAt - parsedResponse);
 
-        gnssResult.lat.val = strtof(delimAt + 1, &parsedResponse);                         // grab a float
+        gnssResult.lat.val = strtof(delimAt + 1, &parsedResponse);                          // grab a float
         gnssResult.lat.dir = ' ';
         gnssResult.lon.val = strtof(parsedResponse + 1, &parsedResponse);
         gnssResult.lon.dir = ' ';

@@ -102,17 +102,21 @@ void IOP_create()
     g_lqLTEM.iop = calloc(1, sizeof(iop_t));
     ASSERT(g_lqLTEM.iop != NULL);
 
-    cBuffer_t *txBffrCtrl = calloc(1, sizeof(cBuffer_t));           // allocate space for TX buffer control struct
-    if (txBffrCtrl == NULL)
-        return;
-    char *txBffr = calloc(1, ltem__bufferSz_tx);                    // allocate space for raw buffer
-    if (txBffr == NULL)
-    {
-        free(txBffr);
-        return;
-    }
+    // TX handled by source, IOP receives pointer and size
 
-    cBuffer_t *rxBffrCtrl = calloc(1, sizeof(cBuffer_t));           // allocate space for RX buffer control struct
+    /* DEPRECAITED in 3.0.2
+    */
+    // bBuffer_t *txBffrCtrl = calloc(1, sizeof(cBuffer_t));           // allocate space for TX buffer control struct
+    // if (txBffrCtrl == NULL)
+    //     return;
+    // char *txBffr = calloc(1, ltem__bufferSz_tx);                    // allocate space for raw buffer
+    // if (txBffr == NULL)
+    // {
+    //     free(txBffr);
+    //     return;
+    // }
+
+    bBuffer_t *rxBffrCtrl = calloc(1, sizeof(bBuffer_t));           // allocate space for RX buffer control struct
     if (rxBffrCtrl == NULL)
         return;
     char *rxBffr = calloc(1, ltem__bufferSz_rx);                    // allocate space for raw buffer
@@ -121,9 +125,7 @@ void IOP_create()
         free(rxBffr);
         return;
     }
-
-    // TX handled with CALLOC of struct
-    cbffr_init(rxBffrCtrl, rxBffr, ltem__bufferSz_rx);              // initialize as a circ-buffer
+    bbffr_init(rxBffrCtrl, rxBffr, ltem__bufferSz_rx);              // initialize as a circular block buffer
     g_lqLTEM.iop->rxBffr = rxBffrCtrl;                              // add into IOP struct
 }
 
@@ -230,12 +232,24 @@ uint32_t IOP_getRxIdleDuration()
 }
 
 
+uint8_t IOP_getRxLevel()
+{
+    return SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
+}
+
+
+uint8_t IOP_getTxLevel()
+{
+    return SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
+}
+
+
 /**
  *	@brief Clear receive COMMAND/CORE response buffer.
  */
 void IOP_resetRxBuffer()
 {
-    cbffr_reset(g_lqLTEM.iop->rxBffr);
+    bbffr_reset(g_lqLTEM.iop->rxBffr);
 }
 
 
@@ -299,25 +313,8 @@ static void S_interruptCallbackISR()
         {
             uint8_t lnStatus = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
             DPRINT(PRNT_ERROR, "rxERR(%02X)-lvl=%d ", lnStatus, rxLevel);
-            DPRINT(PRNT_WARN, "bffrO=%d ", cbffr_getOccupied(g_lqLTEM.iop->rxBffr));
+            DPRINT(PRNT_WARN, "bffrO=%d ", bbffr_getOccupied(g_lqLTEM.iop->rxBffr));
             SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);                            // buffer is shot, clear to attempt recovery
-
-            // #if _DEBUG > 2
-            //     DPRINT(PRNT_YELLOW, " >FIFO Dump\r");
-            //     char fifoTop;
-            //     for (size_t i = 0; i < rxLevel; i++)
-            //     {
-            //         lnStatus = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
-            //         SC16IS7xx_read(&fifoTop, 1);
-            //         DPRINT(PRNT_YELLOW, " >%02d-%02d 0x%02X\r", i, fifoTop, lnStatus);
-            //     }
-            // #elif _DEBUG > 0
-            //     char dbg[65] = {0};
-            //     SC16IS7xx_read(dbg, 64);
-            //     SC16IS7xx_flushRxFifo();
-            // #else
-            //     ASSERT(false);                                                              // should have caught earlier, dead now.
-            // #endif
         }
 
         // RX - read data from UART to rxBuffer
@@ -329,24 +326,22 @@ static void S_interruptCallbackISR()
                 char *bAddr;
                 rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
 
-                uint16_t bWrCnt = cbffr_pushBlock(g_lqLTEM.iop->rxBffr, &bAddr, rxLevel);   // get contiguous block to write from UART
-                DPRINT(PRNT_dYELLOW, "-rx(%p:%d) -Bo=%d ", bAddr, bWrCnt, cbffr_getOccupied(g_lqLTEM.iop->rxBffr));
+                uint16_t bWrCnt = bbffr_pushBlock(g_lqLTEM.iop->rxBffr, &bAddr, rxLevel);   // get contiguous block to write from UART
+                DPRINT(PRNT_dYELLOW, "-rx(%p:%d) -Bo=%d ", bAddr, bWrCnt, bbffr_getOccupied(g_lqLTEM.iop->rxBffr));
                 SC16IS7xx_read(bAddr, bWrCnt);
-                cbffr_pushBlockFinalize(g_lqLTEM.iop->rxBffr, true);
+                bbffr_pushBlockFinalize(g_lqLTEM.iop->rxBffr, true);
 
                 if (bWrCnt < rxLevel)                                                       // pushBlock only partially emptied UART
                 {
                     rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);                   // get new rx number, push new receipts
-                    bWrCnt = cbffr_pushBlock(g_lqLTEM.iop->rxBffr, &bAddr, rxLevel);
-                    DPRINT(PRNT_dYELLOW, "-Wrx(%p:%d) -Bo=%d ", bAddr, bWrCnt, cbffr_getOccupied(g_lqLTEM.iop->rxBffr));
+                    bWrCnt = bbffr_pushBlock(g_lqLTEM.iop->rxBffr, &bAddr, rxLevel);
+                    DPRINT(PRNT_dYELLOW, "-Wrx(%p:%d) -Bo=%d ", bAddr, bWrCnt, bbffr_getOccupied(g_lqLTEM.iop->rxBffr));
                     SC16IS7xx_read(bAddr, bWrCnt);
-                    cbffr_pushBlockFinalize(g_lqLTEM.iop->rxBffr, true);
+                    bbffr_pushBlockFinalize(g_lqLTEM.iop->rxBffr, true);
                 }
                 rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-                ASSERT(rxLevel < SC16IS7xx__FIFO_bufferSz / 4);                             // bail if UART still not empty: overflow imminent
-
+                ASSERT(rxLevel < SC16IS7xx__FIFO_bufferSz / 4);                             // bail if UART not emptying: overflow imminent
                 iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
-                rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
                 DPRINT(PRNT_WHITE, "--rxLvl=%d,iir=%02X ", rxLevel, iirVal.reg);
             }
         }
@@ -367,6 +362,10 @@ static void S_interruptCallbackISR()
                 SC16IS7xx_write(g_lqLTEM.iop->txBffr, blockSz);
                 g_lqLTEM.iop->txPending -= blockSz;
                 g_lqLTEM.iop->txBffr += blockSz;
+
+                // diag tracking of CMD/DM switch activity, possible remove in 3.0.4 or beyond
+                if (g_lqLTEM.iop->dmActive)
+                    g_lqLTEM.iop->dmTxEvents++;
             }
         }
 

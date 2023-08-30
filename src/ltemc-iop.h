@@ -90,6 +90,10 @@ void IOP_forceTx(const char *sendData, uint16_t sendSz);
  */
 uint32_t IOP_getRxIdleDuration();
 
+uint8_t IOP_getRxOccupied();
+
+uint8_t IOP_getTxPending();
+
 
 // /**
 //  *	@brief Finds a string in the last X characters of the IOP RX stream.

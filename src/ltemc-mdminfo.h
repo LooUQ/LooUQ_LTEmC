@@ -42,10 +42,17 @@ modemInfo_t *mdminfo_ltem();
 
 
 /**
+ *  @brief Test for SIM ready
+ *  @return True if SIM is inserted and available
+*/
+bool mdminfo_isSimReady();
+
+
+/**
  *  @brief Get the signal strength reported by the LTEm device at a percent
  *  @return The radio signal strength in the range of 0 to 100 (0 is no signal)
 */
-uint8_t mdmInfo_signalPercent();
+uint8_t mdminfo_signalPercent();
 
 
 /**

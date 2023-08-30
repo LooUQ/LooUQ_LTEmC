@@ -30,8 +30,14 @@
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
-#include "ltemc-internal.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <string.h>
+#include <stdlib.h>
+
 #include "ltemc-network.h"
+#include "ltemc-internal.h"
 
 extern ltemDevice_t g_lqLTEM;
 
@@ -322,10 +328,10 @@ uint8_t ntwk_getRegistrationStatus()
 /** 
  *  \brief Development/diagnostic function to retrieve visible providers from cell radio.
  */
-void ntwkPRNT_getProviders(char *providersList, uint16_t listSz)
+void ntwkDiagnostics_getProviders(char *providersList, uint16_t listSz)
 {
     /* AT+COPS=? */
-    ASSERT_W(false, "ntwk_getProviders() blocks and is SLOW!");
+    ASSERT_W(false, "ntwkDiagnostics_getProviders() blocks and is SLOW!");
 
     if (ATCMD_awaitLock(atcmd__defaultTimeout))
     {

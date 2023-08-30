@@ -39,16 +39,16 @@
 // #include <cstdlib>
 // #include <cstdbool>
 // #else
-// #include <stddef.h>
-// #include <stdint.h>
-// #include <stdbool.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 // #endif // __cplusplus
 
 #include <string.h>
 #include <stdlib.h>
 
 #include <lq-types.h>
-#include <lq-cBuffer.h>
+#include <lq-bBuffer.h>
 
 enum ltem__constants
 {
@@ -351,10 +351,12 @@ typedef struct streamCtrl_tag
  */
 typedef struct iop_tag
 {
-    volatile char* txBffr;
-    volatile uint16_t txPending;
+    volatile char* txBffr;                  /// source pointer to TX pending data
+    volatile uint16_t txPending;            /// outstanding char count for TX
+    volatile bool dmActive;                 /// interaction with BGx is now in data mode
+    volatile uint16_t dmTxEvents;           /// number of TX blocks sent during data mode
 
-    cBuffer_t *rxBffr;                      /// receive buffer
+    bBuffer_t *rxBffr;                      /// receive buffer
     char txEot;                             /// if not NULL, char to output on empty TX FIFO; clears automatically on use.
  
     volatile uint32_t lastTxAt;             /// tick count when TX send started, used for response timeout detection
@@ -398,8 +400,19 @@ typedef enum cmdParseRslt_tag
     cmdParseRslt_error = 0x80,
 } cmdParseRslt_t;
 
+
+typedef enum dmState_tag
+{
+    dmState_idle = 0,
+    dmState_enabled = 1,
+    dmState_triggered = 2,
+    dmState_handlerActive = 3
+} dmState_t;
+
+
 typedef struct dataMode_tag
 {
+    dmState_t dmState;
     uint16_t contextKey;                                /// unique identifier for data flow, could be dataContext(proto), handle(files), etc.
     char trigger[atcmd__dataModeTriggerSz];             /// char sequence that signals the transition to data mode, data mode starts at the following character
     dataRxHndlr_func dataHndlr;                         /// data handler function (TX/RX)
@@ -438,11 +451,6 @@ typedef struct atcmd_tag
     bool preambleFound;                                 /// true if parser found preamble
     char errorDetail[SET_PROPLEN(ltem__errorDetailSz)]; /// BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
     int32_t retValue;                                   /// optional signed int value extracted from response
-
-    // streamCtrl_t* streamCtrl;
-    // char streamPrefix[PROPLEN(atcmd__streamPrefixSz)];  /// char sequence prefixing steam data, triggers switch to registered data handler streamRxHndlr()
-    // appRcvProto_func applDataCB;
-
     dataMode_t dataMode;                                /// controls for automatic data mode servicing - both TX (out) and RX (in). Std functions or extensions supported.
 } atcmd_t;
 

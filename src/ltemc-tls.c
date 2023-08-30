@@ -65,6 +65,20 @@ bool tls_configure(uint8_t dataCntxt, tlsVersion_t version, tlsCipher_t cipherSu
 }
 
 
+/** 
+ *  @brief Configure a TLS/SSL control block with current settings
+ */
+void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel, bool sniEnabled)
+{
+    memset(tlsCtrl, 0, sizeof(tlsCtrl_t));
+   
+    tlsCtrl->version = version;
+    tlsCtrl->cipherSuite = cipherSuite;
+    tlsCtrl->certExpirationCheck = certExpirationCheck;
+    tlsCtrl->securityLevel = securityLevel;
+    tlsCtrl->sniEnabled = sniEnabled;
+}
+
 
 tlsOptions_t tlsGetOptions(uint8_t dataCntxt)
 {
@@ -83,11 +97,11 @@ tlsOptions_t tlsGetOptions(uint8_t dataCntxt)
 }
 
 
-resultCode_t tls_configSni(dataCntxt_t cntxt, bool setting)
+resultCode_t tls_enableSni(dataCntxt_t dataCntxt, bool enableSNI)
 {
     resultCode_t rslt = resultCode__internalError;
 
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"sni\",%d,%d", cntxt, setting))    // get SSL\TLS version
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"sni\",%d,%d", dataCntxt, enableSNI))              // set SNI for TLS
     {   
         if (atcmd_awaitResult() == resultCode__success)
         {
@@ -97,4 +111,42 @@ resultCode_t tls_configSni(dataCntxt_t cntxt, bool setting)
         atcmd_close();
     }
     return rslt;
+}
+
+
+/** 
+ *  @brief Apply settings from a TLS/SSL control to a data context.
+ */
+bool tls_applySettings(dataCntxt_t dataCntxt, tlsCtrl_t* tlsCtrl)
+{
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, tlsCtrl->version))                    // set SSL/TLS version
+    {
+        if (atcmd_awaitResult() != resultCode__success)                                                     // return on failure, continue on success
+            return false;
+    }
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", dataCntxt, tlsCtrl->cipherSuite))             // set cipher suite
+    {
+        if (atcmd_awaitResult() != resultCode__success)                                                     // return on failure, continue on success
+            return false;
+    }
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", dataCntxt, tlsCtrl->certExpirationCheck))   // set certificate expiration check
+    {
+        if (atcmd_awaitResult() != resultCode__success)                                                     // return on failure, continue on success
+            return false;
+    }
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"seclevel\",%d,%d", dataCntxt, tlsCtrl->securityLevel))                // set security level, aka what is checked
+    {
+        if (atcmd_awaitResult() != resultCode__success)                                                     // return on failure, continue on success
+            return false;
+    }
+
+    if (atcmd_tryInvoke("AT+QSSLCFG=\"sni\",%d,%d", dataCntxt, tlsCtrl->sniEnabled))                         // set security level, aka what is checked
+    {
+        if (atcmd_awaitResult() != resultCode__success)                                                     // return on failure, continue on success
+            return false;
+    }
+
+
+    return true;
+
 }

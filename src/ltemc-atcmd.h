@@ -23,26 +23,26 @@
  
 ***************************************************************************** */
 
-
 #ifndef __LTEMC_ATCMD_H__
 #define __LTEMC_ATCMD_H__
 
-#include "ltemc-types.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// /**
-//  *	@brief Sets options for BGx AT command control (atcmd). 
-//  *  @param timeoutMS [in] Number of milliseconds the action can take. Use system default ACTION_TIMEOUTms or your value.
-//  *  @param cmdResponseParser [in] Custom command response parser to signal result is complete. NULL for std parser.
-//  */
-// void atcmd_setOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser);
+
+// #include <stdint.h>
+// #include <stdbool.h>
+// #include <stddef.h>
+// #include <string.h>
+// #include <stdlib.h>
+
+//#include "ltemc-types.h"
 
 
 /**
- *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
- *  @param releaseLock [in] If false, clears ATCMD internal state, but leaves the command lock state unchanged
+ *	@brief Resets atCmd struct (BGx AT command structure) and optionally releases lock.
+ *  @param [in] releaseLock If false, clears ATCMD internal state, but leaves the command lock state unchanged
  */
 void atcmd_reset(bool releaseLock);
 
@@ -50,29 +50,30 @@ void atcmd_reset(bool releaseLock);
 /**
  * @brief Configure atcmd automatic datamode processing
  * 
- * @param contextKey 
- * @param trigger 
- * @param dataHndlr 
- * @param dataLoc 
- * @param dataSz 
- * @param applRecvDataCB 
- * @param skipParser True to skip response parser after successful datamode processing
+ * @param [in] contextKey Data context this data mode process configuration applies to
+ * @param [in] trigger Character string that prefixes wait for data
+ * @param [in] dataHndlr Handler function that services the data transfer 
+ * @param [in] dataLoc Pointer to the data to be sent
+ * @param [in] dataSz Size of the data block (opperates in transparent data mode, no EOT char/phrase)
+ * @param [in] applRecvDataCB Handler function to receive/parse incoming data 
+ * @param [in] skipParser If true, skip response parser after successful data mode send processing
  */
 void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* txDataLoc, uint16_t txDataSz, appRcvProto_func applRecvDataCB, bool skipParser);
 
-/**
- * @brief Set the TX end-of-transmission (EOT) signally character
- * @details The EOT character is automatically sent by the IOP module when the TX side of the UART goes idle. Cleared automatically on send.
- * 
- * @param eotChar 
- */
-void atcmd_configDataModeEot(uint8_t eotChar);
+
+// /**
+//  * @brief Set the TX end-of-transmission (EOT) signally character
+//  * @details The EOT character is automatically sent by the IOP module when the TX side of the UART goes idle. Cleared automatically on send.
+//  * 
+//  * @param eotChar 
+//  */
+// void atcmd_setDataModeEot(uint8_t eotChar);
 
 
 /**
  *	@brief Invokes a BGx AT command using default option values (automatic locking).
  *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
- *  @param [in] variadic "..."  parameter list to integrate into the cmdStrTemplate.
+ *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
  *  @return True if action was invoked, false if not
  */
 bool atcmd_tryInvoke(const char *cmdTemplate, ...);
@@ -80,8 +81,8 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...);
 
 /**
  *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
- *	@param cmdStrTemplate [in] The command string to send to the BG96 module.
- *  @param ... [in] Variadic parameter list to integrate into the cmdStrTemplate.
+ *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
+ *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
  */
 void atcmd_invokeReuseLock(const char *cmdTemplate, ...);
 
@@ -90,17 +91,6 @@ void atcmd_invokeReuseLock(const char *cmdTemplate, ...);
  *	@brief Closes (completes) a BGx AT command structure and frees action resource (release action lock).
  */
 void atcmd_close();
-
-
-// /**
-//  *	@brief Performs blind send data transfer to device.
-//  *  @details ASSERTS atcmd lock; does not change lock state.
-//  *           This is a blocking function (no copy), returns when send count = 0.
-//  *           Intended to send blocks of text in middle of a command stream.
-//  *  @param data [in] Pointer to the block of character data to send
-//  *  @param dataSz [in] The size of the data block
-//  */
-// void atcmd_sendCmdData(const char *data, uint16_t dataSz);
 
 
 /**
@@ -198,13 +188,8 @@ void atcmd_exitDataMode();
 void atcmd_exitTransparentMode();
 
 
-// /**
-//  *	@brief Protocols register for URC callbacks
-//  */
-// void ATCMD_registerStream(streamPeer_t streamIndx, iopStreamCtrl_t *streamCtrl);
-
-
-/*-----------------------------------------------------------------------------------------------*/
+/* Response Parsers
+ * --------------------------------------------------------------------------------------------- */
 
 /**
  *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
@@ -250,8 +235,8 @@ resultCode_t atcmd_txDataHndlrRaw();
  */
 resultCode_t atcmd_stdRxDataHndlr();
 
+
 #ifdef __cplusplus
 }
 #endif
-
 #endif  // !__LTEMC_ATCMD_H__

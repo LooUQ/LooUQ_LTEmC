@@ -1,5 +1,5 @@
 /** ****************************************************************************
-  \file 
+  \file
   @brief Public API get modem information
   \author Greg Terrell, LooUQ Incorporated
 
@@ -23,13 +23,12 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
- 
+
 ***************************************************************************** */
 
-
-#define SRCFILE "MDM"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-//#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define SRCFILE "MDM" // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+// #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+// #define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -37,23 +36,19 @@
 
 extern ltemDevice_t g_lqLTEM;
 
-
-#define MIN(x, y) (((x)<(y)) ? (x):(y))
-#define MAX(x, y) (((x)>(y)) ? (x):(y))
-
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
 
 // private local declarations
 static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
-
 
 /* Public functions
  * --------------------------------------------------------------------------------------------- */
 #pragma region public functions
 
-
 /**
  *  @brief Get the LTEm1 static device identification/provisioning information.
-*/
+ */
 modemInfo_t *mdminfo_ltem()
 {
     if (ATCMD_awaitLock(atcmd__defaultTimeout))
@@ -72,7 +67,7 @@ modemInfo_t *mdminfo_ltem()
             atcmd_invokeReuseLock("AT+QGMR");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                char * eol;
+                char *eol;
                 if ((eol = strstr(atcmd_getResponse(), "\r\n")) != NULL)
                 {
                     uint8_t sz = eol - atcmd_getResponse();
@@ -86,7 +81,7 @@ modemInfo_t *mdminfo_ltem()
             atcmd_invokeReuseLock("ATI");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                char * eol;
+                char *eol;
                 if ((eol = strstr(atcmd_getResponse(), "\r\nRevision")) != NULL)
                 {
                     uint8_t sz = eol - atcmd_getResponse();
@@ -107,13 +102,30 @@ modemInfo_t *mdminfo_ltem()
         }
         atcmd_close();
     }
-    return (modemInfo_t*)(g_lqLTEM.modemInfo);
+    return (modemInfo_t *)(g_lqLTEM.modemInfo);
+}
+
+/**
+ *  @brief Test for SIM ready
+ */
+bool mdminfo_isSimReady()
+{
+    bool cpinState = false;
+    if (atcmd_tryInvoke("AT+CPIN?"))
+    {
+        if (atcmd_awaitResult() == resultCode__success)
+        {
+            cpinState = strstr(atcmd_getResponse(), "+CPIN: READY") != NULL;
+        }
+        atcmd_close();
+    }
+    return strlen(g_lqLTEM.modemInfo->iccid) > 0 && cpinState;
 }
 
 
 /**
  *  @brief Get the signal strenght as raw value returned from BGx.
-*/
+ */
 uint8_t mdminfo_signalRaw()
 {
     uint8_t signal = 99;
@@ -135,10 +147,9 @@ uint8_t mdminfo_signalRaw()
     return signal;
 }
 
-
 /**
  *  @brief Get the signal strength reported by the LTEm device at a percent
-*/
+ */
 uint8_t mdmInfo_signalPercent()
 {
     double csq;
@@ -150,10 +161,9 @@ uint8_t mdmInfo_signalPercent()
     return signal;
 }
 
-
 /**
  *  @brief Get the signal strenght as RSSI (db).
-*/
+ */
 int16_t mdminfo_signalRSSI()
 {
     const int8_t rssiBase = -113;
@@ -163,13 +173,12 @@ int16_t mdminfo_signalRSSI()
     return (signalPercent == 0) ? rssiBase : (signalPercent * 0.01 * rssiRange) + rssiBase;
 }
 
-
-/** 
- *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone) 
+/**
+ *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone)
  * */
 uint8_t mdminfo_signalBars(uint8_t displayBarCount)
 {
-    const int8_t barOffset = 20;                                // adjust point for full-bar percent (20 = full bar count at 80%)
+    const int8_t barOffset = 20; // adjust point for full-bar percent (20 = full bar count at 80%)
 
     uint8_t barSpan = 100 / displayBarCount;
     uint8_t signalPercent = MIN(mdmInfo_signalPercent() + barOffset, 100);
@@ -178,19 +187,15 @@ uint8_t mdminfo_signalBars(uint8_t displayBarCount)
 
 #pragma endregion
 
-
-
 #pragma region private static functions
 /* --------------------------------------------------------------------------------------------- */
 
-
 /**
- *	@brief Action response parser for iccid value request. 
+ *	@brief Action response parser for iccid value request.
  */
 static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem)
 {
     return atcmd_stdResponseParser("+ICCID: ", true, "", 0, 0, "\r\n\r\nOK\r\n", 20);
 }
-
 
 #pragma endregion

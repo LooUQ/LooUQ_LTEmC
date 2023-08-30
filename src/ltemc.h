@@ -161,6 +161,7 @@ void ltem_stop();
  */
 void ltem_reset(bool hardReset);
 
+
 /**
  *	@brief Get the LTEmC software version.
  *  \return Version as a const char pointer.
@@ -169,10 +170,22 @@ const char *ltem_getSwVersion();
 
 
 /**
+ *	@brief Get the LTEmC software version.
+ *  \return Version as a const char pointer.
+ */
+const char *ltem_getModuleType();
+
+
+/**
  *	@brief Reads the hardware status and internal application ready field to return device ready state
  *  \return DeviceState: 0=power off, 1=power on, 2=appl ready
  */
 deviceState_t ltem_getDeviceState();
+
+/**
+ *	@brief Test for responsive BGx.
+ */
+bool ltem_ping();
 
 
 /**

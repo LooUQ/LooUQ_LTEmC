@@ -329,6 +329,15 @@ const char *ltem_getSwVersion()
 
 
 /**
+ *	@brief Get the LTEmC software version.
+ */
+const char *ltem_getModuleType()
+{
+    return g_lqLTEM.modemInfo->mfgmodel;
+}
+
+
+/**
  *	@brief Performs a HW reset of LTEm1 and optionally executes start sequence.
  */
 deviceState_t ltem_getDeviceState()
@@ -343,14 +352,29 @@ deviceState_t ltem_getDeviceState()
 
 
 /**
+ *	@brief Test for responsive BGx.
+ */
+bool ltem_ping()
+{
+    resultCode_t rslt;
+    if (atcmd_tryInvoke("AT"))
+    {
+        rslt = atcmd_awaitResult();
+        return rslt != resultCode__timeout;
+    }
+    return false;
+}
+
+
+/**
  *	@brief Background work task runner. To be called in application Loop() periodically.
  */
 void ltem_eventMgr()
 {
     /* look for a new incoming URC 
      */
-    int16_t urcPossible = cbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);       // look for prefix char in URC
-    if (CBFFR_NOTFOUND(urcPossible))
+    int16_t urcPossible = bbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);       // look for prefix char in URC
+    if (BBFFR_NOTFOUND(urcPossible))
     {
         return;
     }
@@ -375,7 +399,9 @@ void ltem_eventMgr()
 
 void ltem_addStream(streamCtrl_t *streamCtrl)
 {
-    ASSERT(ltem_getStreamFromCntxt(streamCtrl->dataCntxt, 0) == NULL);          // assert that a stream for context has not previously been added to streams table
+    streamCtrl_t* prev = ltem_getStreamFromCntxt(streamCtrl->dataCntxt, 0);
+    if (prev != NULL)
+        return;
 
     for (size_t i = 0; i < ltem__streamCnt; i++)
     {
@@ -504,7 +530,7 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
  */
 void S__ltemUrcHandler()                                                     
 {
-    cBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
+    bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
     char parseBffr[30];
 
     // bool isQuectel = cbffr_find(rxBffr, "+Q", 0, 0, false) != CBFFR_NOFIND;

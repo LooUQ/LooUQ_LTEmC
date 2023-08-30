@@ -23,30 +23,43 @@
  
 ***************************************************************************** */
 
-
 #ifndef __LTEMC_GNSS_H__
 #define __LTEMC_GNSS_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+// /** 
+//  *  \brief Enum describing the output format for location data.
+// */
+// typedef enum gnssFormat_tag
+// {
+//     gnss_format_dms = 0,            ///< Output as degrees, minutes; default resolution. Format: ddmm.mmmm N/S,dddmm.mmmm E/W
+//     gnss_format_dmsPrecise = 1,     ///< Output as degrees, minutes; precise. Format: ddmm.mmmmmm N/S,dddmm.mmmmmm E/W
+//     gnss_format_dcmDegrees = 2      ///< Output as decimal latitude, longitude. Format: (-)dd.ddddd,(-)ddd.ddddd
+// } gnssFormat_t;
+
 
 /** 
- *  \brief Enum describing the output format for location data.
+ *  \brief RF Priority map for BG95/BG77 modules.
 */
-typedef enum
+typedef enum gnssRfPriority_tag
 {
-    gnss_format_dms = 0,            ///< Output as degrees, minutes; default resolution. Format: ddmm.mmmm N/S,dddmm.mmmm E/W
-    gnss_format_dmsPrecise = 1,     ///< Output as degrees, minutes; precise. Format: ddmm.mmmmmm N/S,dddmm.mmmmmm E/W
-    gnss_format_dcmDegrees = 2      ///< Output as decimal latitude, longitude. Format: (-)dd.ddddd,(-)ddd.ddddd
-} gnss_format_t;
+    gnssRfPriority_gnss = 0,
+    gnssRfPriority_wwan = 1
+} gnssRfPriority_t;
 
 
 /** 
  *  \brief Struct containing both the location value (latitude or longitude) and a char indicating direction (char only for DMS formats).
 */
-typedef struct gnss_latlon_tag
+typedef struct gnssLatLon_tag
 {
     double val;                     ///< The decimal number indicating the value for the lat/lon
     char dir;                       ///< Char indicating direction, values are N/S (lat) or E/W (lon). Optional based on format.
-} gnss_latlon_t;
+} gnssLatLon_t;
 
 
 /** 
@@ -55,8 +68,8 @@ typedef struct gnss_latlon_tag
 typedef struct gnssLocation_tag
 {
     char utc[11];           ///< Universal time value when fixing position.
-    gnss_latlon_t lat;      ///< Latitude value as a struct gnss_latlon_tag (Quoted from GPGGA sentence).
-    gnss_latlon_t lon;      ///< Longitude value as a struct gnss_latlon_tag (Quoted from GPGGA sentence).
+    gnssLatLon_t lat;       ///< Latitude value as a gnssLatLon_t struct (Quoted from GPGGA sentence).
+    gnssLatLon_t lon;       ///< Longitude value as a gnssLatLon_t struct (Quoted from GPGGA sentence).
     double hdop;            ///< Horizontal precision: 0.5-99.9 (Quoted from GPGGA sentence).
     double altitude;        ///< The altitude of the antenna away from the sea level (unit: m), accurate to one decimal place (Quoted from GPGGA sentence).
     uint16_t fixType;       ///< GNSS positioning mode (Quoted from GNGSA/GPGSA sentence). Values: 2=2D positioning. 3=3D positioning
@@ -68,10 +81,6 @@ typedef struct gnssLocation_tag
     uint16_t statusCode;    ///< Result code indicating get location status. 200 = success, otherwise error condition.
 } gnssLocation_t;
 
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /**
  *	@brief Turn GNSS/GPS subsystem on. 
@@ -86,6 +95,14 @@ resultCode_t gnss_on();          // AT+QGPS=1
  */
 resultCode_t gnss_off();
 
+
+/**
+ *	@brief Set RF priority on BG95/BG77 modules. 
+ *  @return Result code representing status of operation, OK = 200.
+ */
+resultCode_t gnss_setRfPriority(gnssRfPriority_t priority);
+
+
 /**
  *	@brief Query BGx for current location/positioning information. 
  *  @return GNSS location struct, see gnss.h for details.
@@ -96,5 +113,4 @@ gnssLocation_t gnss_getLocation();
 #ifdef __cplusplus
 }
 #endif
-
 #endif  // !__LTEMC_GNSS_H__

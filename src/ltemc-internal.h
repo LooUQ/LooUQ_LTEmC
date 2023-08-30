@@ -44,7 +44,7 @@
 
 #include "ltemc.h"
 #include <lq-str.h>                         /// most LTEmC modules use LooUQ string functions
-#include <lq-cBuffer.h>
+#include <lq-bBuffer.h>
 
 #include "ltemc-quectel-bg.h"
 #include "ltemc-nxp-sc16is.h"

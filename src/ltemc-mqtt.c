@@ -1,5 +1,5 @@
 /** ****************************************************************************
-  \file 
+  \file
   \brief Public API providing MQTT/MQTTS support
   \author Greg Terrell, LooUQ Incorporated
 
@@ -21,12 +21,12 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
- 
+
 ***************************************************************************** */
 
-#define SRCFILE "MQT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define SRCFILE "MQT"            // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define ENABLE_DIAGPRINT         // expand DIAGPRINT into debug output
+#define ENABLE_DIAGPRINT_VERBOSE // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -35,13 +35,11 @@
 
 extern ltemDevice_t g_lqLTEM;
 
-
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define ASCII_CtrlZ_STR "\x1A"
 #define ASCII_ESC_STR "\x1B"
 #define ASCII_DblQuote_CHAR '"'
-
 
 enum
 {
@@ -51,47 +49,43 @@ enum
 // #define MQTT_ACTION_CMD_SZ 81
 // #define MQTT_CONNECT_CMD_SZ 300
 
-
 /* Local Function Declarations
  ----------------------------------------------------------------------------------------------- */
 
-static uint8_t S__findtopicIndx(mqttCtrl_t* mqttCntl, mqttTopicCtrl_t* topicCtrl);
-static resultCode_t S__notifyServerTopicChange(mqttCtrl_t* mqttCtrl, mqttTopicCtrl_t* topicCtrl, bool subscribe);
+static uint8_t S__findtopicIndx(mqttCtrl_t *mqttCntl, mqttTopicCtrl_t *topicCtrl);
+static resultCode_t S__notifyServerTopicChange(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl, bool subscribe);
 static void S__mqttUrcHandler();
 
-//static cmdParseRslt_t S__mqttOpenStatusParser();
+// static cmdParseRslt_t S__mqttOpenStatusParser();
 static cmdParseRslt_t S__mqttOpenCompleteParser();
 static cmdParseRslt_t S__mqttConnectCompleteParser();
 static cmdParseRslt_t S__mqttConnectStatusParser();
 static cmdParseRslt_t S__mqttSubscribeCompleteParser();
 static cmdParseRslt_t S__mqttPublishCompleteParser();
 
-
 /* public mqtt functions
  * --------------------------------------------------------------------------------------------- */
 #pragma region public functions
 
-
 /**
  *  @brief Initialize a MQTT protocol control structure.
-*/
+ */
 void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt)
 {
-    ASSERT(dataCntxt < dataCntxt__cnt);                         // valid streams index
-    ASSERT(g_lqLTEM.streams[dataCntxt] == 0);                   // context not already in use
+    ASSERT(dataCntxt < dataCntxt__cnt);       // valid streams index
+    ASSERT(g_lqLTEM.streams[dataCntxt] == 0); // context not already in use
 
     memset(mqttCtrl, 0, sizeof(mqttCtrl_t));
 
     mqttCtrl->streamType = streamType_MQTT;
-    mqttCtrl->urcEvntHndlr = S__mqttUrcHandler;                 // for MQTT, URC handler performs all necessary functions
-    mqttCtrl->dataRxHndlr = NULL;                               // marshalls data from buffer to app done by URC handler
+    mqttCtrl->urcEvntHndlr = S__mqttUrcHandler; // for MQTT, URC handler performs all necessary functions
+    mqttCtrl->dataRxHndlr = NULL;               // marshalls data from buffer to app done by URC handler
 }
-
 
 /**
  *  @brief Initialize a MQTT topic subscription control structure.
-*/
-void mqtt_initTopicControl(mqttTopicCtrl_t* topicCtrl, const char* topic, uint8_t qos, mqttAppRecv_func appTopicRecvCB)
+ */
+void mqtt_initTopicControl(mqttTopicCtrl_t *topicCtrl, const char *topic, uint8_t qos, mqttAppRecv_func appTopicRecvCB)
 {
     memset(topicCtrl, 0, sizeof(mqttTopicCtrl_t));
 
@@ -115,8 +109,8 @@ void mqtt_initTopicControl(mqttTopicCtrl_t* topicCtrl, const char* topic, uint8_
 
 /**
  *  @brief Set the remote server connection values.
-*/
-void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t mqttVersion, const char *clientId, const char *username, const char *password)
+ */
+void mqtt_setConnection_D(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t mqttVersion, const char *deviceId, const char *userId, const char *password)
 {
     ASSERT(mqttCtrl != NULL);
 
@@ -125,8 +119,31 @@ void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t host
     mqttCtrl->useTls = useTls;
     mqttCtrl->mqttVersion = mqttVersion;
 
-    strncpy(mqttCtrl->clientId, clientId, mqtt__clientIdSz);
-    strncpy(mqttCtrl->username, username, mqtt__userNameSz);
+    strncpy(mqttCtrl->clientId, deviceId, mqtt__clientIdSz);
+    strncpy(mqttCtrl->username, userId, mqtt__userNameSz);
+    strncpy(mqttCtrl->password, password, mqtt__userPasswordSz);
+}
+
+
+/**
+ *  @brief Set the remote server connection values.
+*/
+void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, tlsCtrl_t* tlsCtrl, mqttVersion_t mqttVersion, const char *deviceId, const char *userId, const char *password)
+{
+    ASSERT(mqttCtrl != NULL);
+
+    strcpy(mqttCtrl->hostUrl, hostUrl);
+    mqttCtrl->hostPort = hostPort;
+    mqttCtrl->mqttVersion = mqttVersion;
+    if (tlsCtrl != NULL)
+    {
+        mqttCtrl->useTls = true;
+        mqttCtrl->tlsCtrl = tlsCtrl;
+        tls_applySettings(mqttCtrl->dataCntxt, tlsCtrl);
+    }
+
+    strncpy(mqttCtrl->clientId, deviceId, mqtt__clientIdSz);
+    strncpy(mqttCtrl->username, userId, mqtt__userNameSz);
     strncpy(mqttCtrl->password, password, mqtt__userPasswordSz);
 }
 
@@ -134,7 +151,7 @@ void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t host
 /**
  *  @brief Open a remote MQTT server IP connection for use.
  *  @details Preferred way for user app to connect to server is via mqtt_start() or mqtt_reset()
-*/
+ */
 resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
 {
     // AT+QSSLCFG="sslversion",5,3
@@ -144,7 +161,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
 
     atcmdResult_t rslt;
 
-    if (mqttCtrl->state >= mqttState_open)                      // already open or connected
+    if (mqttCtrl->state >= mqttState_open) // already open or connected
         return resultCode__success;
     // if (mqttCtrl->state != mqttState_closed)                    // not in a closed state, (most) mqtt setting changes require closed connection
     //     return resultCode__preConditionFailed;
@@ -168,76 +185,71 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
     // TYPICAL: AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
     if (atcmd_tryInvoke("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, mqttCtrl->hostUrl, mqttCtrl->hostPort))
     {
-        resultCode_t rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(45), S__mqttOpenCompleteParser);
+        resultCode_t rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(30), S__mqttOpenCompleteParser);
         DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
 
         if (rslt == resultCode__success && atcmd_getValue() == 0)
         {
             mqttCtrl->state = mqttState_open;
-            // g_lqLTEM.atcmd->mqttMap |= 0x01 << mqttCtrl->dataCntxt;
-            // g_lqLTEM.atcmd->streamPeers[mqttCtrl->dataCntxt] = mqttCtrl;
-            // LTEM_registerDoWorker(S__mqttDoWork);                                // register background recv worker
             return resultCode__success;
         }
         else
         {
             switch (atcmd_getValue())
             {
-                case -1:
-                case 1:
-                    return resultCode__badRequest;
-                case 2:
-                    return resultCode__conflict;
-                case 4:
-                    return resultCode__notFound;
-                default:
-                    return resultCode__gtwyTimeout;
+            case -1:
+            case 1:
+                return resultCode__badRequest;
+            case 2:
+                return resultCode__conflict;
+            case 4:
+                return resultCode__notFound;
+            default:
+                return resultCode__gtwyTimeout;
             }
         }
     }
     return resultCode__internalError;
 }
 
-
 /**
  *  @brief Connect (authenticate) to a MQTT server.
  *  @details Preferred way for user app to connect to server is via mqtt_start() or mqtt_reset()
-*/
+ */
 resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
 {
     resultCode_t rslt;
     if (mqttCtrl->state == mqttState_connected)
         return resultCode__success;
 
-    atcmd_tryInvoke("AT+QMTCFG=\"session\",%d,%d", mqttCtrl->dataCntxt, (uint8_t)cleanSession);     // set option to clear session history on connect
+    atcmd_tryInvoke("AT+QMTCFG=\"session\",%d,%d", mqttCtrl->dataCntxt, (uint8_t)cleanSession); // set option to clear session history on connect
     if (atcmd_awaitResult() != resultCode__success)
         return resultCode__internalError;
 
     atcmd_tryInvoke("AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->dataCntxt, mqttCtrl->clientId, mqttCtrl->username, mqttCtrl->password);
-    rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), S__mqttConnectCompleteParser);     // in autolock mode, so this will release lock
+    rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), S__mqttConnectCompleteParser); // in autolock mode, so this will release lock
     DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
 
-    if (rslt == resultCode__success)                                    // COMMAND executed, outcome of CONNECTION may not be a success
+    if (rslt == resultCode__success) // COMMAND executed, outcome of CONNECTION may not be a success
     {
         switch (atcmd_getValue())
         {
-            case 0:
-                return resultCode__success;
-            case 1:
-                return resultCode__methodNotAllowed;                    // invalid protocol version 
-            case 2:               
-            case 4:
-            case 5:
-                return resultCode__unauthorized;                        // bad user ID or password
-            case 3:
-                return resultCode__unavailable;                         // server unavailable
-            default:
-                return resultCode__internalError;
+        case 0:
+            return resultCode__success;
+        case 1:
+            return resultCode__methodNotAllowed; // invalid protocol version
+        case 2:
+        case 4:
+        case 5:
+            return resultCode__unauthorized; // bad user ID or password
+        case 3:
+            return resultCode__unavailable; // server unavailable
+        default:
+            return resultCode__internalError;
         }
     }
-    return resultCode__badRequest;                                      // command rejected by BGx
+    return resultCode__badRequest; // command rejected by BGx
 }
-
 
 /**
  *  @brief Open and connect to a remote MQTT server.
@@ -248,7 +260,7 @@ resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession)
 
     do
     {
-        ltem_addStream(mqttCtrl);                                       // register stream for background receive operations (URC)
+        ltem_addStream(mqttCtrl); // register stream for background receive operations (URC)
 
         rslt = mqtt_open(mqttCtrl);
         if (rslt != resultCode__success)
@@ -282,11 +294,10 @@ resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession)
     return rslt;
 }
 
-
 /**
  *  @brief Open and connect to a remote MQTT server.
  */
-resultCode_t mqtt_subscribeTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtrl)
+resultCode_t mqtt_subscribeTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
 {
     uint8_t topicIndx = S__findtopicIndx(mqttCtrl, topicCtrl);
     if (topicIndx != 255)
@@ -297,7 +308,7 @@ resultCode_t mqtt_subscribeTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtr
     {
         return resultCode__preConditionFailed;
     }
-    
+
     if (mqttCtrl->state == mqttState_connected)
     {
         S__notifyServerTopicChange(mqttCtrl, mqttCtrl->topics[topicIndx], true);
@@ -305,11 +316,10 @@ resultCode_t mqtt_subscribeTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtr
     return resultCode__conflict;
 }
 
-
 /**
  *  @brief Unsubscribe from a topic on the MQTT server.
  */
-resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtrl)
+resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
 {
     uint8_t topicIndx = S__findtopicIndx(mqttCtrl, topicCtrl);
     if (topicIndx != 255)
@@ -327,7 +337,6 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtrl)
     }
     return resultCode__conflict;
 }
-
 
 // /**
 //  *  @brief Publish an extended message to server.
@@ -354,7 +363,7 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtrl)
 //     if (atcmd_tryInvoke("AT+QMTPUBEX=%d,%d,%d,0,\"%s\",\"%s\"", mqttCtrl->dataCntxt, msgId, qos, topic, encodedMsg))
 //     {
 //         rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(timeoutSeconds), NULL);
-//         if (rslt != resultCode__success)                                        
+//         if (rslt != resultCode__success)
 //         {
 //             DPRINT(PRNT_YELLOW, "MQTT-PUB ERROR: rslt=%d(%d)\r", rslt, atcmd_getValue());
 //         }
@@ -363,45 +372,42 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t* topicCtrl)
 //     return rslt;
 // }
 
-
-/** 
+/**
  *  @brief Publish a message to server.
-*/
+ */
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint16_t messageSz, uint8_t timeoutSec)
 {
-    ASSERT(messageSz <= 4096);                                                                                  // max msg length PUB=4096 (PUBEX=560)
-    
-    resultCode_t rslt = resultCode__conflict;                                                                   // assume lock not obtainable, conflict
+    ASSERT(messageSz <= 4096); // max msg length PUB=4096 (PUBEX=560)
+
+    resultCode_t rslt = resultCode__conflict; // assume lock not obtainable, conflict
     uint32_t timeoutMS = (timeoutSec == 0) ? mqtt__publishTimeout : PERIOD_FROM_SECONDS(timeoutSec);
 
-        mqttCtrl->sentMsgId++;                                                                                  // keep sequence going regardless of MQTT QOS
-        uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId;                                         // msgId not sent with QOS == 0, otherwise sent
-        // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
+    mqttCtrl->sentMsgId++;                                          // keep sequence going regardless of MQTT QOS
+    uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId; // msgId not sent with QOS == 0, otherwise sent
+    // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
 
-        atcmd_configDataMode(mqttCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, false); // send message with dataMode
+    atcmd_configDataMode(mqttCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, false); // send message with dataMode
 
-        if (atcmd_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
+    if (atcmd_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
+    {
+        rslt = atcmd_awaitResultWithOptions(timeoutMS, S__mqttPublishCompleteParser);
+        if (rslt == resultCode__success)
         {
-            rslt = atcmd_awaitResultWithOptions(timeoutMS, S__mqttPublishCompleteParser);
-            if (rslt == resultCode__success)                                        
-            {
-                atcmd_close();
-                DPRINT(PRNT_dGREEN, "MQTT-PUB Success: rslt=%d\r", rslt);
-                return rslt;
-            }
+            atcmd_close();
+            DPRINT(PRNT_dGREEN, "MQTT-PUB Success: rslt=%d\r", rslt);
         }
-        return resultCode__conflict;
+    }
+    return rslt;
 }
-
 
 /**
  *  @brief Disconnect and close a connection to a MQTT server
-*/
+ */
 void mqtt_close(mqttCtrl_t *mqttCtrl)
 {
-    /* not fully documented how Quectel intended to use close/disconnect, LTEmC uses AT+QMTCLOSE which appears to work for both open (NC) and connected states
-    */
-    if (mqttCtrl->state >= mqttState_open)                                                      // LTEmC uses CLOSE
+    /* not fully documented how Quectel intended to use close/disconnect, LTEmC uses AT+QMTCLOSE
+     */
+    if (mqttCtrl->state >= mqttState_open) // LTEmC uses CLOSE
     {
         if (atcmd_tryInvoke("AT+QMTCLOSE=%d", mqttCtrl->dataCntxt))
             atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), NULL);
@@ -409,25 +415,23 @@ void mqtt_close(mqttCtrl_t *mqttCtrl)
     mqttCtrl->state == mqttState_closed;
 }
 
-
 /**
  *  @brief Reset and attempt to reestablish a server connection.
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
  *  @param resetModem [in] True if modem should be reset prior to reestablishing MQTT connection.
-*/
+ */
 void mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem)
 {
     SC16IS7xx_flushTx(' ', 1548);
     mqtt_close(mqttCtrl);
 
     // more intrusive MQTT reset, BGx high-level protocols when faulted can fail to recover with less intrusive reset efforts
-    if (resetModem)                                     
+    if (resetModem)
     {
         ltem_start(resetAction_swReset);
     }
     mqtt_start(mqttCtrl, true);
 }
-
 
 void mqtt_flush(mqttCtrl_t *mqttCtrl)
 {
@@ -435,20 +439,17 @@ void mqtt_flush(mqttCtrl_t *mqttCtrl)
     {
         /* code */
     }
-    
 }
-
 
 /**
  *  @brief Return current MQTT connection state.
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
  *  @return A mqttState_t value indicating the state of the MQTT connection.
-*/
+ */
 mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl)
 {
     return mqttCtrl->state;
 }
-
 
 /**
  *  @brief Query the status of the MQTT connection state.
@@ -460,7 +461,7 @@ mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl)
 
     /* BGx modules will not respond over serial to AT+QMTOPEN? (command works fine over USB, Quectel denies this)
      * AT+QMTCONN? returns a state == 1 (MQTT is initializing) when MQTT in an open, not connected condition
-    */
+     */
 
     resultCode_t rslt;
     if (atcmd_tryInvoke("AT+QMTCONN?"))
@@ -472,18 +473,21 @@ mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl)
             {
                 switch (atcmd_getValue())
                 {
-                    case 1:
-                        mqttCtrl->state = mqttState_open;
-                        break;
-                    case 3:
-                        mqttCtrl->state = mqttState_connected;
-                        break;
-                    case 0:
-                        mqttCtrl->state = mqttState_closed;
-                        break;
-                    default:
-                        mqttCtrl->state = mqttState_pending;
-                        break;
+                case 1:
+                    mqttCtrl->state = mqttState_open;
+                    break;
+                case 2:
+                    mqttCtrl->state = mqttState_connecting;
+                    break;
+                case 3:
+                    mqttCtrl->state = mqttState_connected;
+                    break;
+                case 4:
+                    mqttCtrl->state = mqttState_disconnecting;
+                    break;
+                default:
+                    mqttCtrl->state = mqttState_closed; // 0 or unknown
+                    break;
                 }
             }
             else
@@ -493,42 +497,37 @@ mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl)
     return mqttCtrl->state;
 }
 
-
 /**
  *  @brief Get the last outgoing message ID.
-*/
+ */
 uint16_t mqtt_getSentMsgId(mqttCtrl_t *mqttCtrl)
 {
     return mqttCtrl->sentMsgId;
 }
 
-
 /**
  *  @brief Get the last incoming message ID.
-*/
+ */
 uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl)
 {
     return mqttCtrl->recvMsgId;
 }
 
-
 /**
  *  @brief Get the last incoming message ID.
-*/
+ */
 uint16_t mqtt_getErrCode(mqttCtrl_t *mqttCtrl)
 {
     return mqttCtrl->errCode;
 }
 
-
-#pragma endregion   // public API
+#pragma endregion // public API
 
 /* private mqtt functions
  * --------------------------------------------------------------------------------------------- */
 #pragma region private functions
 
-
-static uint8_t S__findtopicIndx(mqttCtrl_t* mqttCntl, mqttTopicCtrl_t* topicCtrl)
+static uint8_t S__findtopicIndx(mqttCtrl_t *mqttCntl, mqttTopicCtrl_t *topicCtrl)
 {
     uint8_t emptySlot = UINT8_MAX;
 
@@ -549,8 +548,7 @@ static uint8_t S__findtopicIndx(mqttCtrl_t* mqttCntl, mqttTopicCtrl_t* topicCtrl
     return emptySlot;
 }
 
-
-static resultCode_t S__notifyServerTopicChange(mqttCtrl_t* mqttCtrl, mqttTopicCtrl_t* topicCtrl, bool subscribe)
+static resultCode_t S__notifyServerTopicChange(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl, bool subscribe)
 {
     char topicName[mqtt__topic_nameSz + 1];
     strcpy(topicName, topicCtrl->topicName);
@@ -576,10 +574,78 @@ static resultCode_t S__notifyServerTopicChange(mqttCtrl_t* mqttCtrl, mqttTopicCt
     return resultCode__internalError;
 }
 
+bool mqtt_recover(mqttCtrl_t *mqtt)
+{
+    resultCode_t rslt;
+    providerInfo_t *provider = NULL;
+    uint8_t signal = 0;
+    mqttState_t mqttState = mqttState_closed;
+
+    bool pingRslt = ltem_ping();
+    DPRINT(PRNT_dMAGENTA, "  BGx Ping: %d\r\n", pingRslt);
+    if (pingRslt)
+    {
+        provider = ntwk_awaitProvider(0);
+        signal = mdminfo_signalRaw();
+
+        DPRINT(PRNT_dMAGENTA, "    Signal: %d\r\n", signal);
+        if (signal == 99)
+        {
+            DPRINT(PRNT_WARN, "No LTE signal.\r\n");
+            return false; // no carrier provider present
+        }
+        if (strlen(provider->name) > 0)
+        {
+            DPRINT(PRNT_dMAGENTA, "  Provider: %s using %s (%s)\r\n", provider->name, provider->iotMode, provider->networks[0].ipAddress);
+            // DPRINT(PRNT_dMAGENTA, "  TX-CBFFR: %d\r\n", g_lqLTEM.iop->txPending);
+            // DPRINT(PRNT_dMAGENTA, "TX=%d, RX=%d\r\n", IOP_getTxLevel(), IOP_getRxLevel());
+        }
+        else
+            DPRINT(PRNT_WARN, "  Provider: NONE\r\n");
+    }
+
+    mqttState = mqtt_fetchStatus(mqtt);
+    DPRINT(PRNT_dMAGENTA, "MQTT State: %d\r\n", mqttState);
+
+    if (strlen(provider->name) == 0)
+        return false;
+
+    // if (mqttState == mqttState_connecting)
+    // {
+    //     mqtt_close(mqtt);
+    // }
+
+    if (mqttState == mqttState_closed)
+    {
+        if (mqtt_start(mqtt, true) == resultCode__success)
+        {
+            DPRINT(PRNT_GREEN, "MQTT successfully restarted.\r\n");
+            return true;
+        }
+        DPRINT(PRNT_WARN, "Unable to restart MQTT.\r\n");
+    }
+
+    // if (mqttState > mqttState_PENDING)
+    // {
+    //     mqtt_close(mqtt);
+    //     uint16_t timeout = PERIOD_FROM_SECONDS(30);
+    //     uint32_t startAction = pMillis();
+    //     while (mqtt_fetchStatus(mqtt) != mqttState_closed)
+    //     {
+    //         if (ELAPSED(startAction, timeout))
+    //         {
+    //             DPRINT(PRNT_WARN, "Timeout waiting for MQTT to close.\r\n");
+    //             return false;
+    //         }
+    //         pDelay(1000); // yield
+    //     }
+    // }
+    return false;
+}
 
 static void S__mqttUrcHandler()
 {
-    cBuffer_t* rxBffr = g_lqLTEM.iop->rxBffr;                                               // for convenience
+    bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr; // for convenience
 
     /*
     +QMTRECV: <tcpconnectID>,<msgID>,"<topic>","<payload>"
@@ -587,29 +653,29 @@ static void S__mqttUrcHandler()
     +QMTSTAT: <tcpconnectID>,<err_code>
     */
 
-    if (CBFFR_NOTFOUND(cbffr_find(rxBffr, "+QMT", 0, 0, false)) ||                          // not a MQTT URC
-        cbffr_getOccupied(rxBffr) < 20)                                                     // -or- not sufficient chars to parse URC header
+    if (BBFFR_NOTFOUND(bbffr_find(rxBffr, "+QMT", 0, 0, false)) || // not a MQTT URC
+        bbffr_getOccupied(rxBffr) < 20)                            // -or- not sufficient chars to parse URC header
     {
-        return;                                                     
+        return;
     }
 
     char workBffr[512] = {0};
-    char* workPtr = workBffr;
+    char *workPtr = workBffr;
     uint8_t dataCntxt;
 
     /* MQTT Receive Message
      * -------------------------------------------------------------------------------------
      */
-    if (CBFFR_FOUND(cbffr_find(rxBffr, "+QMTRECV:", 0, 0, true)))                           // if recv, move tail to start of header
+    if (BBFFR_FOUND(bbffr_find(rxBffr, "+QMTRECV:", 0, 0, true))) // if recv, move tail to start of header
     {
         // separator: "topic","message"           ,"            search offset from URC prefix
-        uint16_t findIndx = cbffr_find(rxBffr, "\",\"", sizeof("+QMTRECV: "), 2, false);        
-        if (CBFFR_NOTFOUND(findIndx))
+        uint16_t findIndx = bbffr_find(rxBffr, "\",\"", sizeof("+QMTRECV: "), 2, false);
+        if (BBFFR_NOTFOUND(findIndx))
         {
             return;
         }
         ASSERT(findIndx < sizeof(workBffr));
-        cbffr_pop(rxBffr, workBffr, findIndx + 3);                                          // rxBffr->tail now points to message, operate on header in workBffr
+        bbffr_pop(rxBffr, workBffr, findIndx + 3); // rxBffr->tail now points to message, operate on header in workBffr
 
         workPtr += sizeof("+QMTRECV: ") - 1;
         dataCntxt = strtol(workPtr, &workPtr, 10);
@@ -617,33 +683,33 @@ static void S__mqttUrcHandler()
         uint16_t msgId = strtol(workPtr, &workPtr, 10);
 
         // find topic in ctrl, to get callback func
-        streamType_t* ctrlPtr = ltem_getStreamFromCntxt(dataCntxt, streamType_MQTT);
+        streamType_t *ctrlPtr = ltem_getStreamFromCntxt(dataCntxt, streamType_MQTT);
         ASSERT(ctrlPtr != NULL);
-        mqttCtrl_t* mqttCtrl = (mqttCtrl_t*)ctrlPtr;
+        mqttCtrl_t *mqttCtrl = (mqttCtrl_t *)ctrlPtr;
 
-        mqttTopicCtrl_t* topicCtrl;
+        mqttTopicCtrl_t *topicCtrl;
         uint16_t topicLen;
         workPtr += 2;
         bool topicFound = false;
         for (size_t i = 0; i < mqtt__topicsCnt; i++)
         {
-            if (mqttCtrl->topics[i]->wildcard)                                              // wildcard: compare length of registered topic name (suffix prev removed)
+            if (mqttCtrl->topics[i]->wildcard) // wildcard: compare length of registered topic name (suffix prev removed)
             {
                 topicLen = strlen(mqttCtrl->topics[i]->topicName);
             }
-            else                                                                            // no wildcard: compare length of received topic name (full name)
+            else // no wildcard: compare length of received topic name (full name)
             {
                 uint16_t bffrLen = workBffr + sizeof(workBffr) - workPtr;
-                topicLen = memchr(workPtr, '\"', bffrLen) - (void*)workPtr;
+                topicLen = memchr(workPtr, '\"', bffrLen) - (void *)workPtr;
             }
-            if (memcmp(mqttCtrl->topics[i]->topicName, workPtr, topicLen) == 0)             // found topic control
+            if (memcmp(mqttCtrl->topics[i]->topicName, workPtr, topicLen) == 0) // found topic control
             {
                 topicFound = true;
                 topicCtrl = mqttCtrl->topics[i];
                 break;
             }
         }
-        ASSERT(topicFound);                                                                 // assert that we can find topic that we told server to send us
+        ASSERT(topicFound); // assert that we can find topic that we told server to send us
 
         // forward topic
         DPRINT(PRNT_dCYAN, "mqttUrcHndlr() topic ptr=%p blkSz=%d \r", workPtr, topicLen);
@@ -654,50 +720,49 @@ static void S__mqttUrcHandler()
         uint16_t extensionLen = strlen(workPtr);
         if (extensionLen > 0)
         {
-            extensionLen -= 3;                                                              // remove topic(w/extension) and message body delimiter
+            extensionLen -= 3; // remove topic(w/extension) and message body delimiter
             DPRINT(PRNT_dCYAN, "mqttUrcHndlr() topicExt ptr=%p blkSz=%d \r", workPtr, extensionLen);
             ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_topicExt, workPtr, extensionLen, false);
         }
 
         bool eomFound = false;
-        char* streamPtr;
-        uint16_t reqstBlockSz = cbffr_getCapacity(rxBffr) / 4;
+        char *streamPtr;
+        uint16_t reqstBlockSz = bbffr_getCapacity(rxBffr) / 4;
         do
         {
-            uint16_t blockSz = cbffr_popBlock(rxBffr, &streamPtr, reqstBlockSz);
+            uint16_t blockSz = bbffr_popBlock(rxBffr, &streamPtr, reqstBlockSz);
             eomFound = lq_strnstr(streamPtr, "\"\r\n", blockSz) != NULL;
-            blockSz -= (eomFound) ? 3 : 0;                                                  // adjust blockSz to not include in app content
+            blockSz -= (eomFound) ? 3 : 0; // adjust blockSz to not include in app content
 
             DPRINT(PRNT_dCYAN, "mqttUrcHndlr() msgBody ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, eomFound);
 
             // signal new receive data available to host application
             ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_msgBody, streamPtr, blockSz, eomFound);
 
-            cbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                             // commit POP
+            bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true); // commit POP
         } while (!eomFound);
     }
 
     /* MQTT Status Change
      * ------------------------------------------------------------------------------------- */
-    else if (CBFFR_FOUND(cbffr_find(rxBffr, "+QMTSTAT", 0, 20, true)))                      // MQTT connection closed
+    else if (BBFFR_FOUND(bbffr_find(rxBffr, "+QMTSTAT", 0, 20, true))) // MQTT connection closed
     {
-        uint16_t eopUrl = cbffr_find(rxBffr, "\r\n", 0, 0, false);
-        if (CBFFR_FOUND(eopUrl))
+        uint16_t eopUrl = bbffr_find(rxBffr, "\r\n", 0, 0, false);
+        if (BBFFR_FOUND(eopUrl))
         {
-            cbffr_pop(rxBffr, workBffr, eopUrl);
+            bbffr_pop(rxBffr, workBffr, eopUrl);
             workPtr = lq_strnstr(workBffr, "+QMSTAT", sizeof(workBffr)) + 9;
 
             uint8_t cntxt = strtol(workPtr, &workPtr, 10);
             workPtr++;
 
-            streamCtrl_t* streamCtrl = ltem_getStreamFromCntxt(cntxt, streamType_MQTT);
+            streamCtrl_t *streamCtrl = ltem_getStreamFromCntxt(cntxt, streamType_MQTT);
             ASSERT(streamCtrl != NULL);
-            ((mqttCtrl_t*)streamCtrl)->errCode = strtol(workPtr, NULL, 10);
-            ((mqttCtrl_t*)streamCtrl)->state = mqttState_closed;
+            ((mqttCtrl_t *)streamCtrl)->errCode = strtol(workPtr, NULL, 10);
+            ((mqttCtrl_t *)streamCtrl)->state = mqttState_closed;
         }
     }
 }
-
 
 #pragma endregion
 
@@ -705,69 +770,62 @@ static void S__mqttUrcHandler()
  * --------------------------------------------------------------------------------------------- */
 #pragma region MQTT ATCMD Parsers
 
-
 /**
  *	@brief [private] MQTT open connection response parser.
  *  @return LTEmC parse result
  */
-static cmdParseRslt_t S__mqttOpenCompleteParser() 
+static cmdParseRslt_t S__mqttOpenCompleteParser()
 {
     cmdParseRslt_t parserRslt = atcmd_stdResponseParser("+QMTOPEN: ", true, ",", 0, 2, "", 0);
     return parserRslt;
 }
 
-
 /**
  *	@brief [private] MQTT connect to server response parser.
  *  @return LTEmC parse result
  */
-static cmdParseRslt_t S__mqttConnectCompleteParser() 
+static cmdParseRslt_t S__mqttConnectCompleteParser()
 {
     // return ATCMD_testResponseTrace();
     return atcmd_stdResponseParser("+QMTCONN: ", true, ",", 0, 3, "\r\n", 0);
 }
 
-
 /**
  *	@brief [private] MQTT connect to server response parser.
  *  @return LTEmC parse result
  */
-static cmdParseRslt_t S__mqttConnectStatusParser() 
+static cmdParseRslt_t S__mqttConnectStatusParser()
 {
     // BGx +QMTCONN Returns status: 1 = connecting, 3 = connected. Service parser returns 200 + status.
     // A simple "OK" response indicates no connection
     return atcmd_stdResponseParser("+QMTCONN: ", false, ",", 0, 2, "OK\r\n", 0);
 }
 
-
 /**
  *	@brief [private] MQTT subscribe to topic response parser.
  *  @return LTEmC parse result
  */
-static cmdParseRslt_t S__mqttSubscribeCompleteParser() 
+static cmdParseRslt_t S__mqttSubscribeCompleteParser()
 {
     return atcmd_stdResponseParser("+QMTSUB: ", true, ",", 0, 4, "\r\n", 0);
 }
 
-
 /**
  *	@brief [private] MQTT publish message to topic response parser.
  *  @return LTEmC parse result
  */
-static cmdParseRslt_t S__mqttPublishCompleteParser() 
+static cmdParseRslt_t S__mqttPublishCompleteParser()
 {
     return atcmd_stdResponseParser("+QMTPUB: ", true, ",", 0, 2, "", 0);
 }
 
-
 /**
  *	@brief [private] MQTT publish message to topic response parser.
  *  @return LTEmC parse result
  */
-static cmdParseRslt_t S__mqttCloseCompleteParser() 
+static cmdParseRslt_t S__mqttCloseCompleteParser()
 {
     return atcmd_stdResponseParser("OK\r\n\r\n+QMTCLOSE: ", true, ",", 0, 2, "", 0);
 }
-
 
 #pragma endregion

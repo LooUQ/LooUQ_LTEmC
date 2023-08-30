@@ -123,7 +123,7 @@ uint8_t ntwk_getRegistrationStatus();
 
 
 // /**
-//  *	@brief Set network operator.
+//  *  @brief Set network operator.
 //  *  @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
 
 //  *  @param [in] mode Action to be performed, set/clear/set default.
@@ -134,6 +134,13 @@ uint8_t ntwk_getRegistrationStatus();
 // uint8_t ntwk_setOperator(uint8_t mode, uint8_t format, const char* ntwkOperator);
 
 
+/**
+ *	@brief Check network ready condition.
+ *  @return True, if network is fully established and ready for data transmission.
+ */
+bool ntwk_isReady();
+
+
 /** 
  *  @brief Development/diagnostic function to retrieve visible providers from radio.
  *  @warning This command can take MINUTES to respond! It is generally considered a command used solely for diagnostics.
@@ -141,7 +148,7 @@ uint8_t ntwk_getRegistrationStatus();
  *  @param [out] operatorList  Pointer to char buffer to return operator list information retrieved from BGx.
  *  @param [in] listSz Length of provided buffer.
  */
-void ntwkDIAG_getProviders(char *operatorList, uint16_t listSz);
+void ntwkDiagnostics_getProviders(char *operatorList, uint16_t listSz);
 
 
 #ifdef __cplusplus
