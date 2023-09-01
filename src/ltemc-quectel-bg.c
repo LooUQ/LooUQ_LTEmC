@@ -250,14 +250,5 @@ bool QBG_setOptions()
 // }
 
 
-/**
- *	@brief Initializes the BGx module.
- */
-const char *QBG_getModuleType()
-{
-    return g_lqLTEM.moduleType;
-}
-
-
 #pragma endregion
 

@@ -97,36 +97,6 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCB, appEvntN
  */
 void ltem_destroy();
 
-/**
- *  @brief Configure RAT searching sequence
- *  @details Example: scanSequence = "020301" represents: search LTE-M1, then LTE-NB1, then GSM
- *  @param [in] scanSequence Character string specifying the RAT scanning order; 00=Automatic[LTE-M1|LTE-NB1|GSM],01=GSM,02=LTE-M1,03=LTE-NB1
-*/
-void ltem_setProviderScanSeq(const char *sequence);
-
-
-/** 
- *  @brief Configure RAT(s) allowed to be searched
- *  @param [in] scanMode Enum specifying what cell network to scan; 0=Automatic,1=GSM only,3=LTE only
-*/
-void ltem_setProviderScanMode(ntwkScanMode_t mode);
-
-
-/** 
- *  @brief Configure the network category to be searched under LTE RAT.
- *  @param [in] iotMode Enum specifying the LTE LPWAN protocol(s) to scan; 0=LTE M1,1=LTE NB1,2=LTE M1 and NB1
- */
-void ltem_setIotMode(ntwkIotMode_t mode);
-
-
-/**
- *	@brief Build default data context configuration for modem to use on startup.
- *  @param [in] cntxtId The context ID to operate on. Typically 0 or 1
- *  @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
- *  @param [in] apn The APN name if required by network carrier.
- */
-resultCode_t ltem_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn);
-
 
 /**
  *	@brief Set radio priority. 
@@ -160,6 +130,21 @@ void ltem_stop();
  *	@brief Performs a reset of LTEm.
  */
 void ltem_reset(bool hardReset);
+
+
+/**
+ *	@brief Set RF priority on BG95/BG77 modules. 
+ *  @return Result code representing status of operation, OK = 200.
+ */
+resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t setPriority);
+
+
+/**
+ *	@brief Get RF priority state on BG95/BG77 modules. 
+ *  @return Result code representing status of operation, OK = 200.
+ */
+ltemRfPriorityState_t ltem_getRfPriority();
+
 
 
 /**

@@ -124,82 +124,6 @@ void ltem_destroy()
 }
 
 
-
-/**
- *  \brief Configure RAT searching sequence
-*/
-void ltem_setProviderScanSeq(const char* scanSequence)
-{
-    /*AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
-    */
-    if (strlen(scanSequence) > 0)
-    {
-        strcpy(g_lqLTEM.modemSettings->scanSequence, scanSequence);
-        if (ltem_getDeviceState() == deviceState_appReady)
-        {
-            atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence);
-            atcmd_awaitResult();
-        }
-    }
-}
-
-
-/** 
- *  \brief Configure RAT(s) allowed to be searched.
-*/
-void ltem_setProviderScanMode(ntwkScanMode_t scanMode)
-{
-    /* AT+QCFG="nwscanmode"[,<scanmode>[,<effect>]]
-    */
-    g_lqLTEM.modemSettings->scanMode = scanMode; 
-    if (ltem_getDeviceState() == deviceState_appReady)
-    {
-        atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode);
-        atcmd_awaitResult();
-    }
-}
-
-
-/** 
- *  \brief Configure the network category to be searched under LTE RAT.
- */
-void ltem_setIotMode(ntwkIotMode_t iotMode)
-{
-    /* AT+QCFG="iotopmode",<mode>
-    */
-    g_lqLTEM.modemSettings->iotMode = iotMode; 
-    if (ltem_getDeviceState() == deviceState_appReady)
-    {
-        atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode);
-        atcmd_awaitResult();
-    }
-}
-
-
-/**
- *	\brief Build default data context configuration for modem to use on startup.
- */
-resultCode_t ltem_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn)
-{
-    return ntwk_configPdpNetwork(pdpContextId, protoType, apn);
-}
-
-/**
- *	@brief Set radio priority. 
- *  @return Result code representing status of operation, OK = 200.
- */
-resultCode_t ltem_setRadioPriority(radioPriority_t radioPriority)
-{
-    if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d"))              // only checking for trailing OK here
-    {
-        return atcmd_awaitResult();
-    }
-    return resultCode__conflict;
-}
-
-
-
-
 /**
  *	@brief Start the modem.
  */
@@ -250,7 +174,7 @@ void S__initLTEmDevice(bool ltemReset)
     ASSERT(QBG_isPowerOn());
     ASSERT(SC16IS7xx_isAvailable());
 
-    SC16IS7xx_start();                                              // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
+    SC16IS7xx_start();                                                  // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
     if (ltemReset)
     {
         if (IOP_awaitAppReady())
@@ -262,20 +186,20 @@ void S__initLTEmDevice(bool ltemReset)
             if (g_lqLTEM.deviceState == deviceState_powerOn)
             {
                 DPRINT(PRNT_WARN, "AppRdy timeout\r\n");
-                g_lqLTEM.deviceState = deviceState_appReady;        // missed it somehow
+                g_lqLTEM.deviceState = deviceState_appReady;            // missed it somehow
             }
         }
     }
     else
     {
-        g_lqLTEM.deviceState = deviceState_appReady;                // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
+        g_lqLTEM.deviceState = deviceState_appReady;                    // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
         DPRINT(PRNT_INFO, "LTEm ON (AppRdy)\r\n");
     }
 
-    SC16IS7xx_enableIrqMode();                                      // enable IRQ generation on SPI-UART bridge (IRQ mode)
+    SC16IS7xx_enableIrqMode();                                          // enable IRQ generation on SPI-UART bridge (IRQ mode)
     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): nxp in irdmode");
 
-    IOP_attachIrq();                                                // attach I/O processor ISR to IRQ
+    IOP_attachIrq();                                                    // attach I/O processor ISR to IRQ
     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): irq attached");
 
     if (!QBG_setOptions())
@@ -286,14 +210,14 @@ void S__initLTEmDevice(bool ltemReset)
     else
         DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): bgx options set");
 
-    NTWK_initRatOptions();                                          // initialize BGx Radio Access Technology (RAT) options
-    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
+    // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
+    // DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
 
-    NTWK_applyPpdNetworkConfig();                                   // configures default PDP context for likely autostart with provider attach
+    ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured");
 
-    ntwk_awaitProvider(2);                                          // attempt to warm-up provider/PDP briefly. If longer duration required, leave that to application
-    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up");
+    ntwk_awaitProvider(2);                                              // attempt to warm-up provider/PDP briefly. 
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up");     // If longer duration required, leave that to application
 }
 
 
@@ -320,9 +244,50 @@ void ltem_reset(bool hardReset)
 
 
 /**
+ *	@brief Set RF priority on BG95/BG77 modules. 
+ *  @return Result code representing status of operation, OK = 200.
+ */
+resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t priority)
+{
+    if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
+        lq_strnstr(ltem_getModuleType(), "BG77", 40))
+    {
+        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d", priority))
+        {
+            return atcmd_awaitResult();
+        }
+        return resultCode__conflict;
+    }
+    return resultCode__preConditionFailed;
+}
+
+
+/**
+ *	@brief Set RF priority on BG95/BG77 modules. 
+ *  @return Result code representing status of operation, OK = 200.
+ */
+uint8_t ltem_getRfPriority()
+{
+    if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
+        lq_strnstr(ltem_getModuleType(), "BG77", 40))
+    {
+        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
+        {
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                return atcmd_getValue();
+            }
+        }
+        return 99;
+    }
+    return 99;
+}
+
+
+/**
  *	@brief Get the LTEmC software version.
  */
-const char *ltem_getSwVersion()
+const char* ltem_getSwVersion()
 {
     return LTEmC_VERSION;
 }
@@ -331,9 +296,13 @@ const char *ltem_getSwVersion()
 /**
  *	@brief Get the LTEmC software version.
  */
-const char *ltem_getModuleType()
+const char* ltem_getModuleType()
 {
-    return g_lqLTEM.modemInfo->mfgmodel;
+    if (strlen(g_lqLTEM.modemInfo->model) == 0)
+    {
+        mdminfo_ltem();
+    }
+    return g_lqLTEM.modemInfo->model;
 }
 
 

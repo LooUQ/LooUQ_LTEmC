@@ -41,17 +41,6 @@ extern "C" {
 //     gnss_format_dcmDegrees = 2      ///< Output as decimal latitude, longitude. Format: (-)dd.ddddd,(-)ddd.ddddd
 // } gnssFormat_t;
 
-
-/** 
- *  \brief RF Priority map for BG95/BG77 modules.
-*/
-typedef enum gnssRfPriority_tag
-{
-    gnssRfPriority_gnss = 0,
-    gnssRfPriority_wwan = 1
-} gnssRfPriority_t;
-
-
 /** 
  *  \brief Struct containing both the location value (latitude or longitude) and a char indicating direction (char only for DMS formats).
 */
@@ -94,13 +83,6 @@ resultCode_t gnss_on();          // AT+QGPS=1
  *  @return Result code representing status of operation, OK = 200.
  */
 resultCode_t gnss_off();
-
-
-/**
- *	@brief Set RF priority on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
- */
-resultCode_t gnss_setRfPriority(gnssRfPriority_t priority);
 
 
 /**

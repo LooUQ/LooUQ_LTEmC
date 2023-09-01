@@ -50,6 +50,37 @@ void ntwk_create();
 
 
 /**
+ *  @brief Configure RAT searching sequence
+ *  @details Example: scanSequence = "020301" represents: search LTE-M1, then LTE-NB1, then GSM
+ *  @param [in] scanSequence Character string specifying the RAT scanning order; 00=Automatic[LTE-M1|LTE-NB1|GSM],01=GSM,02=LTE-M1,03=LTE-NB1
+*/
+void ntwk_setProviderScanSeq(const char *sequence);
+
+
+/** 
+ *  @brief Configure RAT(s) allowed to be searched
+ *  @param [in] scanMode Enum specifying what cell network to scan; 0=Automatic,1=GSM only,3=LTE only
+*/
+void ntwk_setProviderScanMode(ntwkScanMode_t mode);
+
+
+/** 
+ *  @brief Configure the network category to be searched under LTE RAT.
+ *  @param [in] iotMode Enum specifying the LTE LPWAN protocol(s) to scan; 0=LTE M1,1=LTE NB1,2=LTE M1 and NB1
+ */
+void ntwk_setIotMode(ntwkIotMode_t mode);
+
+
+/**
+ *	@brief Build default data context configuration for modem to use on startup.
+ *  @param [in] cntxtId The context ID to operate on. Typically 0 or 1
+ *  @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
+ *  @param [in] apn The APN name if required by network carrier.
+ */
+resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn);
+
+
+/**
  *	@brief Configure PDP Context.
  *  @param [in] cntxtId The context ID to operate on. Typically 0 or 1
  *  @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).

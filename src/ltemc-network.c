@@ -69,13 +69,77 @@ void ntwk_create()
 
 
 /**
+ *	\brief Build default data context configuration for modem to use on startup.
+ */
+resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn)
+{
+    return ntwk_configPdpNetwork(pdpContextId, protoType, apn);
+}
+
+
+/**
+ *  \brief Configure RAT searching sequence
+*/
+void ntwk_setProviderScanSeq(const char* scanSequence)
+{
+    /*AT+QCFG="nwscanseq"[,<scanseq>[,effect]]
+    */
+    if (strlen(scanSequence) > 0)
+    {
+        strcpy(g_lqLTEM.modemSettings->scanSequence, scanSequence);
+        if (ltem_getDeviceState() == deviceState_appReady)
+        {
+            atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence);
+            atcmd_awaitResult();
+        }
+    }
+}
+
+
+/** 
+ *  \brief Configure RAT(s) allowed to be searched.
+*/
+void ntwk_setProviderScanMode(ntwkScanMode_t scanMode)
+{
+   /* AT+QCFG="nwscanmode"[,<scanmode>[,<effect>]]
+    */
+   if (strstr(ltem_getModuleType(), "BG9") != NULL)                         // BG96, BG95 only
+   {
+        g_lqLTEM.modemSettings->scanMode = scanMode; 
+        if (ltem_getDeviceState() == deviceState_appReady)
+        {
+            atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode);
+            atcmd_awaitResult();
+        }
+   }
+}
+
+
+/** 
+ *  \brief Configure the network category to be searched under LTE RAT.
+ */
+void ntwk_setIotMode(ntwkIotMode_t iotMode)
+{
+    /* AT+QCFG="iotopmode",<mode>
+    */
+    g_lqLTEM.modemSettings->iotMode = iotMode; 
+    if (ltem_getDeviceState() == deviceState_appReady)
+    {
+        atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode);
+        atcmd_awaitResult();
+    }
+}
+
+
+
+/**
  *	\brief Initialize BGx Radio Access Technology (RAT) options.
  */
-void NTWK_initRatOptions()
+void ntwk_setRatOptions()
 {
-    ltem_setProviderScanSeq(g_lqLTEM.modemSettings->scanSequence);
-    ltem_setProviderScanMode(g_lqLTEM.modemSettings->scanMode);
-    ltem_setIotMode(g_lqLTEM.modemSettings->iotMode);
+    ntwk_setProviderScanSeq(g_lqLTEM.modemSettings->scanSequence);
+    ntwk_setProviderScanMode(g_lqLTEM.modemSettings->scanMode);
+    ntwk_setIotMode(g_lqLTEM.modemSettings->iotMode);
 }
 
 
@@ -121,7 +185,7 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
 /**
  *	\brief Apply the default PDP context configuration settings to BGx.
  */
-void NTWK_applyPpdNetworkConfig()
+void ntwk_applyPpdNetworkConfig()
 {
     resultCode_t rslt;
     if(strlen(g_lqLTEM.modemSettings->pdpNtwkConfig) > 0 && atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))

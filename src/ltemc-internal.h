@@ -103,7 +103,6 @@ typedef struct ltemDevice_tag
     bool cancellationRequest;                   /// For RTOS implementations, token to request cancellation of long running task/action
     deviceState_t deviceState;                  /// Device state of the BGx module
     appEvntNotify_func appEvntNotifyCB;         /// Event notification callback to parent application
-    char moduleType[ltem__moduleTypeSz];        /// c-str indicating module type. BG96, BG95-M3, BG77, etc. (so far)
 
     platformSpi_t* platformSpi;
     //void *spi;                                  /// SPI device (methods signatures compatible with Arduino)

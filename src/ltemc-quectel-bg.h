@@ -99,13 +99,6 @@ bool QBG_setOptions();
 bool QBG_clearDataState();
 
 
-/**
- *	@brief Initializes the BGx module.
- *  @return C-string representation of the module name (ex: BG96, BG95)
- */
-const char *QBG_getModuleType();
-
-
 #ifdef __cplusplus
 }
 #endif // !__cplusplus

@@ -168,9 +168,9 @@ typedef enum ntwkScanMode_tag
 */
 typedef enum ntwkIotMode_tag
 {
-    ntwkIotMode_m1 = 0U,                /// CAT-M1 only mode: BGx is filtering visible networks and only considering CAT-M1 connections.
-    ntwkIotMode_nb1 = 1U,               /// NB-IOT only mode: BGx is filtering visible networks and only considering NB-IOT connections.
-    ntwkIotMode_m1nb1 = 2U              /// The BGx will connect to either a CAT-M1 or NB-IOT network.
+    ntwkIotMode_M1 = 0U,                // CAT-M1 only mode: BGx is filtering visible networks and only considering CAT-M1 connections.
+    ntwkIotMode_NB = 1U,                // NB-IOT only mode: BGx is filtering visible networks and only considering NB-IOT connections.
+    ntwkIotMode_M1NB = 2U               // The BGx will connect to either a CAT-M1 or NB-IOT network.
 } ntwkIotMode_t;
 
 
@@ -186,11 +186,13 @@ enum ntwk
     ntwk__ipAddressSz = 40,
     ntwk__pdpNtwkConfigSz = 60,
 
+    ntwk__scanSeqSz = 12,
     ntwk__imeiSz = 15,
     ntwk__iccidSz = 20,
 
-    ntwk__dvcFwVerSz = 40,
-    ntwk__dvcMfgSz = 40
+    ntwk__dvcMfgSz = 18,
+    ntwk__dvcModelSz = 18,
+    ntwk__dvcFwVerSz = 20,
 };
 
 // // BGx representation
@@ -232,14 +234,37 @@ typedef enum pdpCntxtAuthMethods_tag
 
 
 /** 
+ *  \brief RF Priority map for BG95/BG77 modules.
+*/
+typedef enum ltemRfPrioritySet_tag
+{
+    ltemRfPrioritySet_gnss = 0,
+    ltemRfPrioritySet_wwan = 1
+} ltemRfPrioritySet_t;
+
+
+/** 
+ *  \brief RF Priority map for BG95/BG77 modules.
+*/
+typedef enum ltemRfPriorityState_tag
+{
+ltemRfPriorityState_unloaded = 0,           // WWAN/GNSS in unloaded state
+ltemRfPriorityState_wwanPending = 1,        // WWAN in pending state
+ltemRfPriorityState_gnssPending = 2,        // GNSS in pending state
+ltemRfPriorityState_wwanLoaded = 3,         // WWAN in loaded state
+ltemRfPriorityState_gnssLoaded = 4          // GNSS in loaded state
+} ltemRfPriorityState_t;
+
+
+/** 
  *  \brief Struct holding cellular and radio settings.
 */
 typedef struct modemSettings_tag
 {
-    char scanSequence[12];
+    char scanSequence[PROPSZ(ntwk__scanSeqSz)];
     ntwkScanMode_t scanMode;
     ntwkIotMode_t iotMode;
-    char pdpNtwkConfig[ntwk__pdpNtwkConfigSz]; /// Invoke ready default context config
+    char pdpNtwkConfig[ntwk__pdpNtwkConfigSz];  // Invoke ready default context config
 } modemSettings_t;
 
 
@@ -248,11 +273,12 @@ typedef struct modemSettings_tag
 */
 typedef struct modemInfo_tag
 {
-	char imei[ntwk__imeiSz + 1];            /// IMEI (15 digits) International Mobile Equipment Identity or IEEE UI (aka MAC, EUI-48 or EUI-64).
-	char iccid[ntwk__iccidSz + 1];          /// ICCID (20 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
-	char mfgmodel[ntwk__dvcMfgSz + 1];      /// The device model number
-	char fwver[ntwk__dvcFwVerSz + 1];       /// Firmware version of the device
-    char swver[ltem__swVerSz + 1];          /// software driver version
+	char imei[PROPSZ(ntwk__imeiSz)];            // IMEI (15 digits) International Mobile Equipment Identity or IEEE UI (aka MAC, EUI-48 or EUI-64).
+	char iccid[PROPSZ(ntwk__iccidSz)];          // ICCID (20 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
+    char mfg[PROPSZ(ntwk__dvcMfgSz)];           // Device manufacturer name
+	char model[PROPSZ(ntwk__dvcModelSz)];       // Device model number
+	char fwver[PROPSZ(ntwk__dvcFwVerSz)];       // Firmware version of the device
+    char swver[PROPSZ(ltem__swVerSz)];          // software driver version
 } modemInfo_t;
 
 

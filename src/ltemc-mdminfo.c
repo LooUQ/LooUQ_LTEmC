@@ -76,19 +76,24 @@ modemInfo_t *mdminfo_ltem()
             }
         }
 
-        if (g_lqLTEM.modemInfo->mfgmodel[0] == 0)
+        if (g_lqLTEM.modemInfo->mfg[0] == 0)
         {
             atcmd_invokeReuseLock("ATI");
             if (atcmd_awaitResult() == resultCode__success)
             {
-                char *eol;
-                if ((eol = strstr(atcmd_getResponse(), "\r\nRevision")) != NULL)
-                {
-                    uint8_t sz = eol - atcmd_getResponse();
-                    memcpy(g_lqLTEM.modemInfo->mfgmodel, atcmd_getResponse(), MIN(sz, ntwk__dvcMfgSz));
-                    *(strchr(g_lqLTEM.modemInfo->mfgmodel, '\r')) = ':';
-                    *(strchr(g_lqLTEM.modemInfo->mfgmodel, '\n')) = ' ';
-                }
+                char* response = atcmd_getResponse();
+                char* eol = strchr(response, '\r');
+                memcpy(g_lqLTEM.modemInfo->mfg, response, eol - response);
+
+                response = eol + 2;
+                eol = strchr(response, '\r');
+                memcpy(g_lqLTEM.modemInfo->model, response, eol - response);
+
+                response = eol + 2;
+                eol = strchr(response, ':');
+                response = eol + 2;
+                eol = strchr(response, '\r');
+                memcpy(g_lqLTEM.modemInfo->fwver, response, eol - response);
             }
         }
 

@@ -84,41 +84,20 @@ resultCode_t gnss_off()
 
 
 /**
- *	@brief Set RF priority on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
- */
-resultCode_t gnss_setRfPriority(gnssRfPriority_t priority)
-{
-    if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
-        lq_strnstr(ltem_getModuleType(), "BG77", 40))
-    {
-        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d,0", priority))
-        {
-            return atcmd_awaitResult();
-        }
-        return resultCode__conflict;
-    }
-    return resultCode__preConditionFailed;
-}
-
-
-/**
  *	@brief Query BGx for current location/positioning information. 
  */
 gnssLocation_t gnss_getLocation()
 {
     char tokenBuf[12] = {0};
-    gnssLocation_t gnssResult;
+    gnssLocation_t gnssResult = {0};
+    gnssResult.statusCode = resultCode__internalError;
 
     //atcmd_t *gnssCmd = atcmd_build("AT+QGPSLOC=2", GNSS_CMD_RESULTBUF_SZ, 500, gnssLocCompleteParser);
     // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08  + \r\nOK\r\n
 
-    if (ATCMD_awaitLock(atcmd__defaultTimeout))
+    if (atcmd_tryInvoke("AT+QGPSLOC=2"))
     {
-        atcmd_invokeReuseLock("AT+QGPSLOC=2");
-        resultCode_t rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, gnssLocCompleteParser);
-
-        memset(&gnssResult, 0, sizeof(gnssLocation_t));
+        resultCode_t rslt = atcmd_awaitResultWithOptions(2000, gnssLocCompleteParser);
         gnssResult.statusCode = (rslt == 516) ? resultCode__gone : rslt;                    // translate "No fix" to gone
         if (rslt != resultCode__success)
             return gnssResult;                                                              // return on failure, continue to parse on success
@@ -146,6 +125,7 @@ gnssLocation_t gnss_getLocation()
             strncpy(gnssResult.date, tokenBuf, 7);
 
         gnssResult.nsat = strtol(parsedResponse, &parsedResponse, 10);
+        gnssResult.statusCode = resultCode__success;
         atcmd_close();
 
         DPRINT_V(PRNT_WARN, "getLocation(): parse completed\r\n");
@@ -167,7 +147,7 @@ gnssLocation_t gnss_getLocation()
 static cmdParseRslt_t gnssLocCompleteParser(const char *response, char **endptr)
 {
     //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr
-    cmdParseRslt_t parseRslt = atcmd_stdResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, "", 0);
+    cmdParseRslt_t parseRslt = atcmd_stdResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, "OK\r\n", 0);
     DPRINT(PRNT_DEFAULT, "gnssParser(): result=%d\r\n", parseRslt);
     return parseRslt;
 }
