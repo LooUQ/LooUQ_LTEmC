@@ -133,6 +133,12 @@ void ltem_reset(bool hardReset);
 
 
 /**
+ *	@brief Test for responsive BGx.
+ */
+bool ltem_ping();
+
+
+/**
  *	@brief Set RF priority on BG95/BG77 modules. 
  *  @return Result code representing status of operation, OK = 200.
  */
@@ -146,19 +152,26 @@ resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t setPriority);
 ltemRfPriorityState_t ltem_getRfPriority();
 
 
+/**
+ *	@brief Get the current UTC date and time.
+ *  @param [out] dateTime Pointer to a character array (length >= 20 chars) to be updated with current UTC date/time 
+ *  @details Formatted as: 23/09/01,13:48:55
+ */
+void ltem_getDateTimeUtc(char *dateTime);
+
 
 /**
  *	@brief Get the LTEmC software version.
  *  \return Version as a const char pointer.
  */
-const char *ltem_getSwVersion();
+const char* ltem_getSwVersion();
 
 
 /**
  *	@brief Get the LTEmC software version.
  *  \return Version as a const char pointer.
  */
-const char *ltem_getModuleType();
+const char* ltem_getModuleType();
 
 
 /**
@@ -166,11 +179,6 @@ const char *ltem_getModuleType();
  *  \return DeviceState: 0=power off, 1=power on, 2=appl ready
  */
 deviceState_t ltem_getDeviceState();
-
-/**
- *	@brief Test for responsive BGx.
- */
-bool ltem_ping();
 
 
 /**

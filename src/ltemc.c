@@ -266,7 +266,7 @@ resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t priority)
  *	@brief Set RF priority on BG95/BG77 modules. 
  *  @return Result code representing status of operation, OK = 200.
  */
-uint8_t ltem_getRfPriority()
+ltemRfPriorityState_t ltem_getRfPriority()
 {
     if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
         lq_strnstr(ltem_getModuleType(), "BG77", 40))
@@ -281,6 +281,34 @@ uint8_t ltem_getRfPriority()
         return 99;
     }
     return 99;
+}
+
+
+/**
+ *	@brief Get the LTEmC software version.
+ */
+void ltem_getDateTimeUtc(char *dateTime)
+{
+    char* ts;
+    uint8_t len;
+
+    if (dateTime != NULL && atcmd_tryInvoke("AT+CCLK?"))
+    {
+        if (atcmd_awaitResult() == resultCode__success)
+        {
+            if ((ts = memchr(atcmd_getResponse(), '"', 12)) != NULL)       // allowance for preceeding EOL
+            {
+                ts++;
+                char* stop = memchr(ts, '-', 20);                          // strip UTC offset, safe stop in trailer somewhere
+                if (stop != NULL)
+                {
+                    memcpy(dateTime, ts, (stop - ts));
+                    return;
+                }
+            }
+        }
+    }
+    *dateTime = NULL;
 }
 
 
