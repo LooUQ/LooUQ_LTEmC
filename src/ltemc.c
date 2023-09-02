@@ -291,24 +291,28 @@ void ltem_getDateTimeUtc(char *dateTime)
 {
     char* ts;
     uint8_t len;
+    *dateTime = '\0';                                                       // dateTime is empty c-string now
 
     if (dateTime != NULL && atcmd_tryInvoke("AT+CCLK?"))
     {
         if (atcmd_awaitResult() == resultCode__success)
         {
-            if ((ts = memchr(atcmd_getResponse(), '"', 12)) != NULL)       // allowance for preceeding EOL
+            if ((ts = memchr(atcmd_getResponse(), '"', 12)) != NULL)        // allowance for preceeding EOL
             {
                 ts++;
-                char* stop = memchr(ts, '-', 20);                          // strip UTC offset, safe stop in trailer somewhere
-                if (stop != NULL)
+                if (*ts != '8')                                             // test for not initialized date/time, starts with 80 (aka 1980)
                 {
-                    memcpy(dateTime, ts, (stop - ts));
-                    return;
+                    char* stop = memchr(ts, '-', 20);                       // strip UTC offset, safe stop in trailer somewhere
+                    if (stop != NULL)                                       // found expected - delimeter before TZ offset
+                    {
+                        *stop = '\0';
+                        strcpy(dateTime, ts);                               // safe strcpy to dateTime
+                        return;
+                    }
                 }
             }
         }
     }
-    *dateTime = NULL;
 }
 
 
