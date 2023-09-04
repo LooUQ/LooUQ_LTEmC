@@ -29,7 +29,7 @@
 // char rawBuffer[220] = {0};                                  // raw buffer managed by rxBffr control
 
 // test controls
-cBuffer_t* rxBffrPtr;                                       // convenience pointer var
+bBuffer_t* rxBffrPtr;                                       // convenience pointer var
 char hostBffr1[255];                                        // display buffer to receive received info from LTEmC
 char hostBffr2[255];                                        // display buffer to receive received info from LTEmC
 
@@ -69,7 +69,7 @@ void setup()
     pDelay(500);
     DPRINT(PRNT_DEFAULT, "ATE0 response:");
     DPRINT(PRNT_INFO, "%s\r\n", rxBffrPtr->tail);
-    cbffr_reset(rxBffrPtr);                                     // discard response
+    bbffr_reset(rxBffrPtr);                                     // discard response
 
     lastCycle = cycle_interval;
 }
@@ -92,7 +92,7 @@ void loop()
         IOP_startTx(cmd, strlen(cmd));                                      // start send and wait for complete (ISR handles transfers out until complete)
         pDelay(1000);                                                        // give BGx some time to respond, interrupt will fire and fill rx buffer
 
-        uint16_t occupiedCnt = cbffr_getOccupied(rxBffrPtr);                // move to variable for break conditional
+        uint16_t occupiedCnt = bbffr_getOccupied(rxBffrPtr);                // move to variable for break conditional
         DPRINT(PRNT_GREEN, "Got %d chars of %d expected\r\n", occupiedCnt, expectedCnt);
         ASSERT(occupiedCnt == expectedCnt, "Buffer occupied not as expected");
 
@@ -106,7 +106,7 @@ void loop()
             DPRINT(PRNT_GREEN, "\r\rUsing POP\r\n");
             memset(hostBffr1, 0, sizeof(hostBffr1));                            // make it easy for str functions, PRINTF, and human eyes
 
-            cbffr_pop(rxBffrPtr, hostBffr1, sizeof(hostBffr1));                 // move everything in rxBffr to hostBffr
+            bbffr_pop(rxBffrPtr, hostBffr1, sizeof(hostBffr1));                 // move everything in rxBffr to hostBffr
             DPRINT(PRNT_CYAN, "Resp(%d chars): %s\r\n", strlen(hostBffr1), hostBffr1);
         }
         else
@@ -114,22 +114,22 @@ void loop()
             DPRINT(PRNT_GREEN, "\r\rUsing POP BLOCK\r\n");                   // I know this is testing two things at once... sorry
             memset(hostBffr2, 0, sizeof(hostBffr2));                            // make it easy for str functions, PRINTF, and human eyes
 
-            blockSz1 = cbffr_popBlock(rxBffrPtr, &copyFrom, expectedCnt);       // move everything in rxBffr to hostBffr
+            blockSz1 = bbffr_popBlock(rxBffrPtr, &copyFrom, expectedCnt);       // move everything in rxBffr to hostBffr
             memcpy(hostBffr2, copyFrom, blockSz1);
-            cbffr_popBlockFinalize(rxBffrPtr, true);
+            bbffr_popBlockFinalize(rxBffrPtr, true);
 
-            blockSz2 = cbffr_popBlock(rxBffrPtr, &copyFrom, expectedCnt);
+            blockSz2 = bbffr_popBlock(rxBffrPtr, &copyFrom, expectedCnt);
             ASSERT(blockSz1 + blockSz2 == expectedCnt, "Total cBffr blocks not expected");
             if (blockSz2 > 0)
             {
                 memcpy(hostBffr2 + blockSz1, copyFrom, blockSz2);
-                cbffr_popBlockFinalize(rxBffrPtr, true);
+                bbffr_popBlockFinalize(rxBffrPtr, true);
             }
             DPRINT(PRNT_GREEN, "Blocks: 1=%d, 2=%d\r\n", blockSz1, blockSz2);
 
             DPRINT(PRNT_CYAN, "Resp(%d chars): %s\r\n", strlen(hostBffr2), hostBffr2);
         }
-        occupiedCnt = cbffr_getOccupied(rxBffrPtr);                             // move to variable for break conditional
+        occupiedCnt = bbffr_getOccupied(rxBffrPtr);                             // move to variable for break conditional
         DPRINT(PRNT_GREEN, "rxBffr has %d chars now.\r\n", occupiedCnt);
 
         if (loopCnt > 1)

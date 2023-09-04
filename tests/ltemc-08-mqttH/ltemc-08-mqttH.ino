@@ -23,22 +23,31 @@
 #define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
 #define STRCMP(n, h)  (strcmp(n, h) == 0)
 
-
-/* You will need to set the values for the MQTT_* defines to match your HiveMQ account environment
- *
- * SERVER, TOPIC, DEVICEID, USERID and PASSWORD values below are for example and MUST be changed.
- * 
- * - TOPIC can be your entire enterprise or a whatever grouping is appropriate. 
- * - DEVICEID should be unique to each IoT device communicating with HiveMQ.
- * - USERID and PASSWORD are the account details you established when setting up your HiveMQ account.
-*/
-#define MQTT_SERVER "<long-hex-string>.s2.eu.hivemq.cloud"
+// LooUQ HiveMQ
+#define MQTT_SERVER "5e1f31d52a144f1bb4b2bcb1b56ab5c8.s2.eu.hivemq.cloud"
 #define MQTT_PORT 8883
 #define MQTT_DATACONTEXT (dataCntxt_t)0
-#define MQTT_TOPIC "hmq-demo"
-#define MQTT_DEVICEID "hmq-1"
-#define MQTT_USERID "<yourUserID>"
-#define MQTT_PASSWORD "<yourPassword>"
+#define MQTT_TOPIC "bms"
+#define MQTT_DEVICEID "bms-1"
+#define MQTT_USERID "loouq"
+#define MQTT_PASSWORD "RjAGYn7NH5bj"
+
+
+// /* You will need to set the values for the MQTT_* defines to match your HiveMQ account environment
+//  *
+//  * SERVER, TOPIC, DEVICEID, USERID and PASSWORD values below are for example and MUST be changed.
+//  * 
+//  * - TOPIC can be your entire enterprise or a whatever grouping is appropriate. 
+//  * - DEVICEID should be unique to each IoT device communicating with HiveMQ.
+//  * - USERID and PASSWORD are the account details you established when setting up your HiveMQ account.
+// */
+// #define MQTT_SERVER "<long-hex-string>.s2.eu.hivemq.cloud"
+// #define MQTT_PORT 8883
+// #define MQTT_DATACONTEXT (dataCntxt_t)0
+// #define MQTT_TOPIC "hmq-demo"
+// #define MQTT_DEVICEID "hmq-1"
+// #define MQTT_USERID "<yourUserID>"
+// #define MQTT_PASSWORD "<yourPassword>"
 
 // LTEmC Includes
 #include <ltemc.h>
@@ -58,11 +67,12 @@ uint32_t lastCycle;
 #define MQTT_MESSAGE_SZ 1547
 
 // LTEm variables
+tlsCtrl_t tlsCtrl;                      // SSL/TLS settings
 mqttCtrl_t mqttCtrl;                    // MQTT control, data to manage MQTT server connection
 // mqttTopicCtrl_t topicCtrl;
 // char mqttTopic[200];                 // application buffer to craft TX MQTT topic, if topic changes per message (like Azure IoTHub)
 // char mqttTopicProp[200];             // required for IoTHub topic template
-char mqttMsg[MQTT_MESSAGE_SZ];      // application buffer to craft TX MQTT publish content (body)
+char mqttMsg[MQTT_MESSAGE_SZ];          // application buffer to craft TX MQTT publish content (body)
 resultCode_t rslt;
 uint16_t msgSz = 0;
 
@@ -73,10 +83,10 @@ void setup()
         Serial.begin(115200);
         delay(5000);                // just give it some time
     #endif
-    DPRINT(PRNT_DEFAULT,"\n\n*** LTEmC Test: ltemc-08-mqtt started ***\n\n");
+    DPRINT(PRNT_DEFAULT,"\n\n*** LTEmC Test: ltemc-08-mqttH started ***\n\n");
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);
-    ltem_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
+    ntwk_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
     ltem_start(resetAction_swReset);
     DPRINT(PRNT_DEFAULT, "-----------------------\r\n");
 
@@ -91,14 +101,18 @@ void setup()
     /* Basic connectivity established, moving on to MQTT setup with HiveMQ
      * HiveMQ requires TLS, MQTT version 3.11, and SNI enabled
      * ----------------------------------------------------------------------------------------- */
-    tls_configure(dataCntxt_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
-    tls_configSni(dataCntxt_0, true);
+    // tls_configure(dataCntxt_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    // tls_configSni(dataCntxt_0, true);
 
+    tls_initControl(&tlsCtrl, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default, true);
     mqtt_initControl(&mqttCtrl, MQTT_DATACONTEXT);
     // mqtt_initTopicControl(&topicCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1, mqttRecvCB);
     // mqtt_subscribeTopic(&mqttCtrl, &topicCtrl);
-    mqtt_setConnection(&mqttCtrl, MQTT_SERVER, MQTT_PORT, true, mqttVersion_311, MQTT_DEVICEID, MQTT_USERID, MQTT_PASSWORD);
+    mqtt_setConnection(&mqttCtrl, MQTT_SERVER, MQTT_PORT, &tlsCtrl, mqttVersion_311, MQTT_DEVICEID, MQTT_USERID, MQTT_PASSWORD);
+
+    DPRINT(PRNT_INFO, "MQTT Initialized\r\n");
     mqtt_start(&mqttCtrl, true);
+    DPRINT(PRNT_INFO, "MQTT Started\r\n");
 
     // prepare for running loop
     randomSeed(analogRead(0));

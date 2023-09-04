@@ -245,7 +245,6 @@ void ltem_reset(bool hardReset)
 
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
  */
 resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t priority)
 {
@@ -263,8 +262,7 @@ resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t priority)
 
 
 /**
- *	@brief Set RF priority on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
+ *	@brief Get RF priority on BG95/BG77 modules. 
  */
 ltemRfPriorityState_t ltem_getRfPriority()
 {
@@ -400,7 +398,9 @@ void ltem_eventMgr()
 
 void ltem_addStream(streamCtrl_t *streamCtrl)
 {
-    streamCtrl_t* prev = ltem_getStreamFromCntxt(streamCtrl->dataCntxt, 0);
+    DPRINT_V(PRNT_INFO, "Registering Stream\r\n");
+    streamCtrl_t* prev = ltem_getStreamFromCntxt(streamCtrl->dataCntxt, streamType__ANY);
+
     if (prev != NULL)
         return;
 
@@ -433,7 +433,7 @@ streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType)
 {
     for (size_t i = 0; i < ltem__streamCnt; i++)
     {
-        if (g_lqLTEM.streams[i]->dataCntxt == context)
+        if (g_lqLTEM.streams[i] != NULL && g_lqLTEM.streams[i]->dataCntxt == context)
         {
             if (streamType == streamType__ANY)
             {

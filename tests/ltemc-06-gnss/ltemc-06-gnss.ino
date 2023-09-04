@@ -62,11 +62,11 @@ uint32_t secondsToFix = 0;
 
 
 void setup() {
-    #ifdef SERIAL_DBG
+    #ifdef DIAGPRINT_SERIAL
         Serial.begin(115200);
         delay(5000);                // just give it some time
     #endif
-    DPRINT(PRNT_DEFAULT,"\n\n*** ltemc-05-modeminfo started ***\n\n");
+    DPRINT(PRNT_DEFAULT,"\n\n*** ltemc-05-gnss started ***\n\n");
     //lqDiag_setNotifyCallback(applEvntNotify);                     // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);               // create LTEmC modem, no yield req'd for testing
@@ -82,7 +82,7 @@ void setup() {
     if (rslt == 504)
         DPRINT(PRNT_WARN, "GNSS was already on\r\n", rslt);
 
-    ltem_setRadioPriority(radioPriority_gnss);
+    ltem_setRfPriority(ltemRfPrioritySet_gnss);
 
     lastCycle = cycle_interval;
     fixWaitStart = pMillis();

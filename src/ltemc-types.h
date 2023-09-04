@@ -142,14 +142,14 @@ typedef void (*powerSaveCallback_func)(uint8_t newPowerSaveState);
 #define NTWK_PROVIDER_RAT_NB "03"
 
 
-/** 
- *  \brief Enum describing the priority for radio receive.
-*/
-typedef enum radioPriority_tag
-{
-    radioPriority_gnss = 0,
-    radioPriority_wwan = 1,
-} radioPriority_t;
+// /** 
+//  *  \brief Enum describing the priority for radio receive.
+// */
+// typedef enum radioPriority_tag
+// {
+//     radioPriority_gnss = 0,
+//     radioPriority_wwan = 1,
+// } radioPriority_t;
 
 
 /** 
@@ -299,8 +299,8 @@ typedef struct networkInfo_tag
 */
 typedef struct providerInfo_tag
 {
-	char name[ntwk__providerNameSz];                /// Provider name, some carriers may report as 6-digit numeric carrier ID.
-	char iotMode[ntwk__iotModeNameSz];              /// Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
+	char name[PROPSZ(ntwk__providerNameSz)];        /// Provider name, some carriers may report as 6-digit numeric carrier ID.
+	char iotMode[PROPSZ(ntwk__iotModeNameSz)];      /// Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
     uint8_t defaultContext;
     uint8_t networkCnt;                             /// The number of networks in networks[]
     networkInfo_t networks[ntwk__pdpContextCnt];    /// Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).

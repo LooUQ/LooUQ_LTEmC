@@ -61,7 +61,7 @@ modemInfo_t *modemInfo;
 
 void setup() 
 {
-    #ifdef SERIAL_DBG
+    #ifdef DIAGPRINT_SERIAL
         Serial.begin(115200);
         delay(5000);                // just give it some time
     #endif
@@ -88,7 +88,7 @@ void loop()
         DPRINT(PRNT_CYAN, "IMEI = %s \r\n", modemInfo->imei);
         DPRINT(PRNT_CYAN, "ICCID = %s \r\n", modemInfo->iccid);
         DPRINT(PRNT_CYAN, "Firmware = %s \r\n", modemInfo->fwver);
-        DPRINT(PRNT_CYAN, "Mfg/Model = %s \r\n", modemInfo->mfgmodel);
+        DPRINT(PRNT_CYAN, "Mfg/Model = %s \r\n", modemInfo->model);
 
         DPRINT(PRNT_INFO, "\rRSSI = %d dBm \r\n",mdminfo_signalRSSI());
         DPRINT(0,"\r\nLoop=%d \r\n", loopCnt);

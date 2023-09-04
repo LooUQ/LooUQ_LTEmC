@@ -27,7 +27,7 @@
 
 
 // test controls
-cBuffer_t* rxBffrPtr;
+bBuffer_t* rxBffrPtr;
 
 uint16_t loopCnt = 0;
 uint16_t cycle_interval = 2000;

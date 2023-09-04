@@ -272,7 +272,7 @@ resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession);
  *  @param [in] mqttCtrl MQTT type stream control to operate on.
  *  @return A resultCode_t value indicating the success or type of failure.
 */
-resultCode_t mqtt__open(mqttCtrl_t *mqttCtrl);
+resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl);
 
 
 /**
@@ -281,7 +281,7 @@ resultCode_t mqtt__open(mqttCtrl_t *mqttCtrl);
  *  @param cleanSession [in] True if connection should be flushed of prior msgs to start
  *  @return A resultCode_t value indicating the success or type of failure.
 */
-resultCode_t mqtt__connect(mqttCtrl_t *mqttCtrl, bool cleanSession);
+resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession);
 
 
 

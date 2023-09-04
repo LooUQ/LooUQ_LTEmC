@@ -201,7 +201,7 @@ void ntwk_applyPpdNetworkConfig()
 /**
  *   \brief Wait for a network provider name and network mode. Can be cancelled in threaded env via g_lqLTEM->cancellationRequest.
 */
-providerInfo_t *ntwk_awaitProvider(uint16_t waitSec)
+providerInfo_t* ntwk_awaitProvider(uint16_t waitSec)
 {
     ASSERT(g_lqLTEM.providerInfo != NULL);         // ASSERT g_lqLTEM.providerInfo has been initialized
 

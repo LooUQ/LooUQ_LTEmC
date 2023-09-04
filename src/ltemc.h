@@ -103,7 +103,14 @@ void ltem_destroy();
  *  @param [in] radioPriority The priority consumer for the radio receive path.
  *  @return Result code representing status of operation, OK = 200.
  */
-resultCode_t ltem_setRadioPriority(radioPriority_t radioPriority);
+resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t radioPriority);
+
+
+/**
+ *	@brief Set RF priority on BG95/BG77 modules. 
+ *  @return Result code representing status of operation, OK = 200.
+ */
+ltemRfPriorityState_t ltem_getRfPriority();
 
 
 /**

@@ -26,7 +26,7 @@
 
 #define SRCFILE "MQT"            // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT         // expand DIAGPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE // expand DIAGPRINT and DIAGPRINT_V into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -82,6 +82,7 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt)
     mqttCtrl->dataRxHndlr = NULL;               // marshalls data from buffer to app done by URC handler
 }
 
+
 /**
  *  @brief Initialize a MQTT topic subscription control structure.
  */
@@ -107,22 +108,22 @@ void mqtt_initTopicControl(mqttTopicCtrl_t *topicCtrl, const char *topic, uint8_
 }
 
 
-/**
- *  @brief Set the remote server connection values.
- */
-void mqtt_setConnection_D(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t mqttVersion, const char *deviceId, const char *userId, const char *password)
-{
-    ASSERT(mqttCtrl != NULL);
+// /**
+//  *  @brief Set the remote server connection values.
+//  */
+// void mqtt_setConnection_D(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t mqttVersion, const char *deviceId, const char *userId, const char *password)
+// {
+//     ASSERT(mqttCtrl != NULL);
 
-    strcpy(mqttCtrl->hostUrl, hostUrl);
-    mqttCtrl->hostPort = hostPort;
-    mqttCtrl->useTls = useTls;
-    mqttCtrl->mqttVersion = mqttVersion;
+//     strcpy(mqttCtrl->hostUrl, hostUrl);
+//     mqttCtrl->hostPort = hostPort;
+//     mqttCtrl->useTls = useTls;
+//     mqttCtrl->mqttVersion = mqttVersion;
 
-    strncpy(mqttCtrl->clientId, deviceId, mqtt__clientIdSz);
-    strncpy(mqttCtrl->username, userId, mqtt__userNameSz);
-    strncpy(mqttCtrl->password, password, mqtt__userPasswordSz);
-}
+//     strncpy(mqttCtrl->clientId, deviceId, mqtt__clientIdSz);
+//     strncpy(mqttCtrl->username, userId, mqtt__userNameSz);
+//     strncpy(mqttCtrl->password, password, mqtt__userPasswordSz);
+// }
 
 
 /**
@@ -141,10 +142,58 @@ void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t host
         mqttCtrl->tlsCtrl = tlsCtrl;
         tls_applySettings(mqttCtrl->dataCntxt, tlsCtrl);
     }
-
     strncpy(mqttCtrl->clientId, deviceId, mqtt__clientIdSz);
     strncpy(mqttCtrl->username, userId, mqtt__userNameSz);
     strncpy(mqttCtrl->password, password, mqtt__userPasswordSz);
+}
+
+
+/**
+ *  @brief Open and connect to a remote MQTT server.
+ */
+resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession)
+{
+    resultCode_t rslt;
+    DPRINT_V(PRNT_INFO, "MQTT Starting\r\n");
+    pDelay(1000);
+
+    do
+    {
+        ltem_addStream(mqttCtrl); // register stream for background receive operations (URC)
+        DPRINT_V(PRNT_INFO, "MQTT stream registered\r\n");
+
+        rslt = mqtt_open(mqttCtrl);
+        if (rslt != resultCode__success)
+        {
+            DPRINT(PRNT_WARN, "Open fail status=%d\r\n", rslt);
+            break;
+        }
+        DPRINT_V(PRNT_INFO, "MQTT Opened\r\n");
+
+        rslt = mqtt_connect(mqttCtrl, true);
+        if (rslt != resultCode__success)
+        {
+            DPRINT(PRNT_WARN, "Connect fail status=%d\r\n", rslt);
+            break;
+        }
+        DPRINT_V(PRNT_INFO, "MQTT Connected\r\n");
+
+        for (size_t i = 0; i < mqtt__topicsCnt; i++)
+        {
+            if (mqttCtrl->topics[i] != NULL)
+            {
+                rslt = S__notifyServerTopicChange(mqttCtrl, mqttCtrl->topics[i], true);
+                if (rslt != resultCode__success)
+                {
+                    return rslt;
+                }
+                break;
+            }
+        }
+        DPRINT_V(PRNT_GREEN, "MQTT Started\r\n");
+    } while (false);
+
+    return rslt;
 }
 
 
@@ -254,49 +303,6 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
 /**
  *  @brief Open and connect to a remote MQTT server.
  */
-resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession)
-{
-    resultCode_t rslt;
-
-    do
-    {
-        ltem_addStream(mqttCtrl); // register stream for background receive operations (URC)
-
-        rslt = mqtt_open(mqttCtrl);
-        if (rslt != resultCode__success)
-        {
-            DPRINT(PRNT_WARN, "Open fail status=%d\r", rslt);
-            break;
-        }
-
-        rslt = mqtt_connect(mqttCtrl, true);
-        if (rslt != resultCode__success)
-        {
-            DPRINT(PRNT_WARN, "Connect fail status=%d\r", rslt);
-            break;
-        }
-
-        for (size_t i = 0; i < mqtt__topicsCnt; i++)
-        {
-            if (mqttCtrl->topics[i] != NULL)
-            {
-                rslt = S__notifyServerTopicChange(mqttCtrl, mqttCtrl->topics[i], true);
-                if (rslt != resultCode__success)
-                {
-                    return rslt;
-                }
-                break;
-            }
-        }
-        DPRINT(PRNT_GREEN, "MQTT Started\r");
-    } while (false);
-
-    return rslt;
-}
-
-/**
- *  @brief Open and connect to a remote MQTT server.
- */
 resultCode_t mqtt_subscribeTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
 {
     uint8_t topicIndx = S__findtopicIndx(mqttCtrl, topicCtrl);
@@ -365,7 +371,7 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
 //         rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(timeoutSeconds), NULL);
 //         if (rslt != resultCode__success)
 //         {
-//             DPRINT(PRNT_YELLOW, "MQTT-PUB ERROR: rslt=%d(%d)\r", rslt, atcmd_getValue());
+//             DPRINT(PRNT_YELLOW, "MQTT-PUB ERROR: rslt=%d(%d)\r\n", rslt, atcmd_getValue());
 //         }
 //     }
 //     atcmd_close();
@@ -394,7 +400,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
         if (rslt == resultCode__success)
         {
             atcmd_close();
-            DPRINT(PRNT_dGREEN, "MQTT-PUB Success: rslt=%d\r", rslt);
+            DPRINT(PRNT_dGREEN, "MQTT-PUB Success: rslt=%d\r\n", rslt);
         }
     }
     return rslt;
@@ -712,7 +718,7 @@ static void S__mqttUrcHandler()
         ASSERT(topicFound); // assert that we can find topic that we told server to send us
 
         // forward topic
-        DPRINT(PRNT_dCYAN, "mqttUrcHndlr() topic ptr=%p blkSz=%d \r", workPtr, topicLen);
+        DPRINT(PRNT_dCYAN, "mqttUrcHndlr() topic ptr=%p blkSz=%d \r\n", workPtr, topicLen);
         ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_topic, workPtr, topicLen, false);
 
         // forward topic extension
@@ -721,7 +727,7 @@ static void S__mqttUrcHandler()
         if (extensionLen > 0)
         {
             extensionLen -= 3; // remove topic(w/extension) and message body delimiter
-            DPRINT(PRNT_dCYAN, "mqttUrcHndlr() topicExt ptr=%p blkSz=%d \r", workPtr, extensionLen);
+            DPRINT(PRNT_dCYAN, "mqttUrcHndlr() topicExt ptr=%p blkSz=%d \r\n", workPtr, extensionLen);
             ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_topicExt, workPtr, extensionLen, false);
         }
 
@@ -734,7 +740,7 @@ static void S__mqttUrcHandler()
             eomFound = lq_strnstr(streamPtr, "\"\r\n", blockSz) != NULL;
             blockSz -= (eomFound) ? 3 : 0; // adjust blockSz to not include in app content
 
-            DPRINT(PRNT_dCYAN, "mqttUrcHndlr() msgBody ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, eomFound);
+            DPRINT(PRNT_dCYAN, "mqttUrcHndlr() msgBody ptr=%p blkSz=%d isFinal=%d\r\n", streamPtr, blockSz, eomFound);
 
             // signal new receive data available to host application
             ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_msgBody, streamPtr, blockSz, eomFound);
