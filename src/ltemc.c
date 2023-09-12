@@ -283,7 +283,7 @@ ltemRfPriorityState_t ltem_getRfPriority()
 
 
 /**
- *	@brief Get the LTEmC software version.
+ *	@brief Get the current UTC date and time.
  */
 void ltem_getDateTimeUtc(char *dateTime)
 {
