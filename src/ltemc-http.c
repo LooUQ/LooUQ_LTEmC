@@ -47,6 +47,7 @@ static uint16_t S__parseResponseForHttpStatus(httpCtrl_t *httpCtrl, const char *
 static uint16_t S__setUrl(const char *host, const char *relative);
 static cmdParseRslt_t S__httpGetStatusParser();
 static cmdParseRslt_t S__httpPostStatusParser();
+static cmdParseRslt_t S__httpReadFileStatusParser();
 static resultCode_t S__httpRxHndlr();
 
 
@@ -74,7 +75,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func
     httpCtrl->pageCancellation = false;
     httpCtrl->useTls = false;
     httpCtrl->timeoutSec = http__defaultTimeoutBGxSec;
-    httpCtrl->defaultBlockSz = cbffr_getCapacity(g_lqLTEM.iop->rxBffr) / 4;
+    httpCtrl->defaultBlockSz = bbffr_getCapacity(g_lqLTEM.iop->rxBffr) / 4;
     httpCtrl->cstmHdrs = NULL;
     httpCtrl->cstmHdrsSz = 0;
     httpCtrl->httpStatus = 0xFFFF;
@@ -275,7 +276,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
             snprintf(cstmRequest, sizeof(cstmRequest), "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrs);
             DPRINT(PRNT_dMAGENTA, "CustomRqst:\r%s\r", cstmRequest);
 
-            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, cstmRequest, strlen(cstmRequest), NULL, false);
+            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, cstmRequest, strlen(cstmRequest), NULL, true);
             atcmd_invokeReuseLock("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, strlen(cstmRequest));
         }
         else
@@ -373,7 +374,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
         uint16_t httpRequestLen = postDataSz;                                                           // requestLen starts with postDataSz
         httpRequestLen += (httpCtrl->cstmHdrsSz > 0) ? (httpCtrl->cstmHdrsSz + 2) : 0;                  // add the custom headers + 2 char for EOL after hdrs
 
-        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, postData, postDataSz, NULL, false);
+        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, postData, postDataSz, NULL, true);
 
         if (httpCtrl->cstmHdrsSz)
         {
@@ -433,9 +434,26 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
 
     if (atcmd_tryInvoke("AT+QHTTPREAD=%d", httpCtrl->timeoutSec))
     {
-        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", S__httpRxHndlr, NULL, 0, httpCtrl->appRecvDataCB, true);
+        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", S__httpRxHndlr, NULL, 0, httpCtrl->appRecvDataCB, false);
         // atcmd_setStreamControl("CONNECT", (streamCtrl_t*)httpCtrl);
         return atcmd_awaitResult();                                             // dataHandler will be invoked by atcmd module and return a resultCode
+    }
+    return resultCode__conflict;
+}
+
+
+uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
+{
+    // AT+QHTTPREADFILE="230921T1218_ota.bin",30
+
+    resultCode_t rslt;
+
+    if (httpCtrl->requestState != httpState_requestComplete)
+        return resultCode__preConditionFailed;                                  // readPage() only valid after a completed GET\POST
+    
+    if (atcmd_tryInvoke("AT+QHTTPREADFILE=\"%s\",%d", filename, httpCtrl->timeoutSec))
+    {
+        return atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpReadFileStatusParser);
     }
     return resultCode__conflict;
 }
@@ -465,28 +483,30 @@ static resultCode_t S__setUrl(const char *host, const char *relative)
     char url[240] = {0};
     
     strcpy(url, host);
-    if (strlen(relative) > 0)
+    if (strlen(relative) > 0)                                                                   // need to concat relative/query
     {
-        char hostSuffix = host[strlen(url) - 1];                                                // being flexible on host suffix and relative prefix when joining 
-        if (hostSuffix != '/' &&                                                                // need to supply '/' to join
-            relative[0] != '/')                      
-        {
-            strcat(url, "/");
-            strcat(url, relative);
-        }
-        else if (hostSuffix == '/' &&                                                           // both have '/', need to trim to join
-            relative[0] == '/')                      
-        {
-            strcat(url, relative + 1);                                                          // skip 1st char '/' 
-        }
-        else
-        {
-            strcat(url, relative);                                                              // host suffix is not '/' and relative prefix is '/'
-        }
+        strcat(url, relative);
+
+        // char hostSuffix = host[strlen(url) - 1];                                                // being flexible on host suffix and relative prefix when joining 
+        // if (hostSuffix != '/' &&                                                                // need to supply '/' to join
+        //     relative[0] != '/')                      
+        // {
+        //     strcat(url, "/");
+        //     strcat(url, relative);
+        // }
+        // else if (hostSuffix == '/' &&                                                           // both have '/', need to trim to join
+        //     relative[0] == '/')                      
+        // {
+        //     strcat(url, relative + 1);                                                          // skip 1st char '/' 
+        // }
+        // else
+        // {
+        //     strcat(url, relative);                                                              // host suffix is not '/' and relative prefix is '/'
+        // }
     }
     DPRINT(PRNT_dMAGENTA, "URL(%d)=\"%s\" \r", strlen(url), url);
     
-    atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, url, strlen(url), NULL, true);     // setup for URL dataMode transfer 
+    atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, url, strlen(url), NULL, false);        // setup for URL dataMode transfer 
     atcmd_invokeReuseLock("AT+QHTTPURL=%d,5", strlen(url));
     rslt = atcmd_awaitResult();
     return rslt;
@@ -524,40 +544,40 @@ static resultCode_t S__httpRxHndlr()
     httpCtrl_t *httpCtrl = (httpCtrl_t*)ltem_getStreamFromCntxt(g_lqLTEM.atcmd->dataMode.contextKey, streamType_HTTP);
     ASSERT(httpCtrl != NULL);                                                                           // ASSERT data mode and stream context are consistent
 
-    uint8_t popCnt = cbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
-    if (CBFFR_NOTFOUND(popCnt))
+    uint8_t popCnt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
+    if (BBFFR_NOTFOUND(popCnt))
     {
         return resultCode__internalError;
     }
     
-    cbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                               // pop CONNECT phrase for parsing data length
+    bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                               // pop CONNECT phrase for parsing data length
     DPRINT(PRNT_CYAN, "httpPageRcvr() stream started\r");
 
     memset(wrkBffr, 0, sizeof(wrkBffr));                                                                // need clean wrkBffr for trailer parsing
     uint32_t readStart = pMillis();
     do
     {
-        uint16_t occupiedCnt = cbffr_getOccupied(g_lqLTEM.iop->rxBffr);
+        uint16_t occupiedCnt = bbffr_getOccupied(g_lqLTEM.iop->rxBffr);
         bool readTimeout = pMillis() - readStart > httpCtrl->timeoutSec;
-        uint16_t trailerIndx = cbffr_find(g_lqLTEM.iop->rxBffr, "\r\nOK\r\n\r\n", 0, 0, false);
+        uint16_t trailerIndx = bbffr_find(g_lqLTEM.iop->rxBffr, "\r\nOK\r\n\r\n", 0, 0, false);
         uint16_t reqstBlockSz = MIN(trailerIndx, httpCtrl->defaultBlockSz);
 
-        if (cbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= reqstBlockSz)                                        // sufficient read content ready
+        if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= reqstBlockSz)                                        // sufficient read content ready
         {
             char* streamPtr;
-            uint16_t blockSz = cbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, reqstBlockSz);              // get address from rxBffr
-            DPRINT(PRNT_CYAN, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, CBFFR_FOUND(trailerIndx));
+            uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, reqstBlockSz);              // get address from rxBffr
+            DPRINT(PRNT_CYAN, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, BBFFR_FOUND(trailerIndx));
 
             // forward to application
-            ((httpRecv_func)(*httpCtrl->appRecvDataCB))(httpCtrl->dataCntxt, streamPtr, blockSz, CBFFR_FOUND(trailerIndx));
-            cbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                             // commit POP
+            ((httpRecv_func)(*httpCtrl->appRecvDataCB))(httpCtrl->dataCntxt, streamPtr, blockSz, BBFFR_FOUND(trailerIndx));
+            bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                             // commit POP
         }
 
-        if (CBFFR_FOUND(trailerIndx))
+        if (BBFFR_FOUND(trailerIndx))
         {
             // parse trailer for status 
             uint8_t offset = strlen(wrkBffr);
-            cbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr + offset, sizeof(wrkBffr) - offset);
+            bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr + offset, sizeof(wrkBffr) - offset);
 
             if (strchr(wrkBffr, '\n'))                                                                      // wait for final /r/n in wrkBffr
             {
@@ -593,10 +613,18 @@ static cmdParseRslt_t S__httpGetStatusParser()
     return atcmd_stdResponseParser("+QHTTPGET: ", true, ",", 0, 1, "\r\n", 0);
 }
 
+
 static cmdParseRslt_t S__httpPostStatusParser() 
 {
     // +QHTTPPOST: <err>[,<httprspcode>[,<content_length>]] 
     return atcmd_stdResponseParser("+QHTTPPOST: ", true, ",", 0, 1, "\r\n", 0);
+}
+
+
+static cmdParseRslt_t S__httpReadFileStatusParser() 
+{
+    // +QHTTPPOST: <err>[,<httprspcode>[,<content_length>]] 
+    return atcmd_stdResponseParser("+QHTTPREADFILE: ", true, ",", 0, 1, "\r\n", 0);
 }
 
 #pragma endregion

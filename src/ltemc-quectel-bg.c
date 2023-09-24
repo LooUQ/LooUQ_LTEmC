@@ -110,6 +110,19 @@ void QBG_powerOn()
         pDelay(100);                                                    // allow background tasks to operate
     }
     g_lqLTEM.deviceState = deviceState_powerOn;
+
+    // if (IOP_awaitAppReady())
+    // {
+    //     DPRINT(PRNT_INFO, "AppRdy recv'd\r\n");
+    // }
+    // else
+    // {
+    //     if (g_lqLTEM.deviceState == deviceState_powerOn)
+    //     {
+    //         DPRINT(PRNT_WARN, "AppRdy timeout\r\n");
+    //         g_lqLTEM.deviceState = deviceState_error;                   // missed it somehow
+    //     }
+    // }
     DPRINT(PRNT_DEFAULT, "DONE\r");
 }
 
@@ -156,10 +169,6 @@ void QBG_reset(resetAction_t resetAction)
 
     if (resetAction == resetAction_swReset && QBG_isPowerOn())
     {
-        SC16IS7xx_sendBreak();                                              // test for do no harm
-        // atcmd_exitTextMode();                                            // clear possible text mode (hung MQTT publish, etc.)
-        // atcmd_sendCmdData("AT\r", 3, "");                                // clear cmd state
-
         char cmdData[] = "AT+CFUN=1,1\r";                                   // DMA SPI DMA may not tolerate Flash source
         IOP_startTx(cmdData, sizeof(cmdData));                              // soft-reset command: performs a module internal HW reset and cold-start
 

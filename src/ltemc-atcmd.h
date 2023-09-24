@@ -56,7 +56,7 @@ void atcmd_reset(bool releaseLock);
  * @param [in] dataLoc Pointer to the data to be sent
  * @param [in] dataSz Size of the data block (opperates in transparent data mode, no EOT char/phrase)
  * @param [in] applRecvDataCB Handler function to receive/parse incoming data 
- * @param [in] skipParser If true, skip response parser after successful data mode send processing
+ * @param [in] runParser If true, registered command response parser is invoked after successful data mode processing
  */
 void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* txDataLoc, uint16_t txDataSz, appRcvProto_func applRecvDataCB, bool skipParser);
 

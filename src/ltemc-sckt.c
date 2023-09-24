@@ -202,7 +202,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
     resultCode_t rslt;
 
-    atcmd_configDataMode(scktCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, data, dataSz, NULL, true);
+    atcmd_configDataMode(scktCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, data, dataSz, NULL, false);
     atcmd_configDataModeEot(0x1A);
 
     if (atcmd_tryInvoke("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz))
@@ -226,19 +226,19 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 
 //     while (pMillis() - startTime < g_lqLTEM.atcmd->timeout)
 //     {
-//         if (BBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "SEND OK", 0, 0, true)))
+//         if (BBFFR_FOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "SEND OK", 0, 0, true)))
 //         {
-//             cbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND OK") + 1);
+//             bbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND OK") + 1);
 //             return resultCode__success;
 //         }
-//         else if(BBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "SEND FAIL", 0, 0, true)))
+//         else if(BBFFR_FOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "SEND FAIL", 0, 0, true)))
 //         {
-//             cbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND FAIL") + 1);
+//             bbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND FAIL") + 1);
 //             return resultCode__tooManyRequests;
 //         }
-//         else if(BBFFR_FOUND(cbffr_find(g_lqLTEM.iop->rxBffr, "ERROR", 0, 0, true)))
+//         else if(BBFFR_FOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "ERROR", 0, 0, true)))
 //         {
-//             cbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND FAIL") + 1);
+//             bbffr_skipTail(g_lqLTEM.iop->rxBffr, sizeof("SEND FAIL") + 1);
 //             return resultCode__internalError;
 //         }
 
@@ -275,13 +275,13 @@ static void S__scktUrcHndlr()
     bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
 
     // not a socket URC or insufficient chars to parse URC header
-    if (cbffr_find(rxBffr, "\"pdpdeact\"", 0, 0, false) >= 0)           // +QIURC: "pdpdeact" handled at higher level, +QIURC overlaps with UDP/TCP
+    if (bbffr_find(rxBffr, "\"pdpdeact\"", 0, 0, false) >= 0)           // +QIURC: "pdpdeact" handled at higher level, +QIURC overlaps with UDP/TCP
     {
         return;
     }
 
-    bool isUdpTcp = BBFFR_FOUND(cbffr_find(rxBffr, "+QIURC", 0, 0, false));
-    bool isSslTls = BBFFR_FOUND(cbffr_find(rxBffr, "+QSSLURC", 0, 0, false));
+    bool isUdpTcp = BBFFR_FOUND(bbffr_find(rxBffr, "+QIURC", 0, 0, false));
+    bool isSslTls = BBFFR_FOUND(bbffr_find(rxBffr, "+QSSLURC", 0, 0, false));
     if (!isUdpTcp && !isSslTls)
     {
         return;
@@ -293,20 +293,20 @@ static void S__scktUrcHndlr()
     char workBffr[80] = {0};
     char *workPtr = workBffr;
 
-    int16_t nextIndx = cbffr_find(rxBffr, "+QIURC", 0, 0, true);            // advance bffr-tail ptr to starting point
+    int16_t nextIndx = bbffr_find(rxBffr, "+QIURC", 0, 0, true);            // advance bffr-tail ptr to starting point
     if (isUdpTcp) 
     {
-        cbffr_skip(rxBffr, 9);                                              // UDP/TCP: + QIURC: "
+        bbffr_skip(rxBffr, 9);                                              // UDP/TCP: + QIURC: "
     }
     else 
     {
-        cbffr_skip(rxBffr, 11);                                             // SSL/TLS: +QSSLURC: "
+        bbffr_skip(rxBffr, 11);                                             // SSL/TLS: +QSSLURC: "
     }
-    uint16_t eolIndx = cbffr_find(rxBffr, "\r\n", 0, 30, false);
+    uint16_t eolIndx = bbffr_find(rxBffr, "\r\n", 0, 30, false);
     if (BBFFR_FOUND(eolIndx))                                               // got full line, work on URC
     {
-        cbffr_skipTail(rxBffr, 9);                                          // ignore prefix
-        cbffr_pop(rxBffr, workBffr, eolIndx - 9);
+        bbffr_skipTail(rxBffr, 9);                                          // ignore prefix
+        bbffr_pop(rxBffr, workBffr, eolIndx - 9);
     }
     else
     {
@@ -333,15 +333,15 @@ static void S__scktUrcHndlr()
         uint16_t irdRemain = 0;
         do
         {
-            uint16_t irdRqstSz = cbffr_getVacant(g_lqLTEM.iop->rxBffr) / 2;     // request up to half of available buffer space
+            uint16_t irdRqstSz = bbffr_getVacant(g_lqLTEM.iop->rxBffr) / 2;     // request up to half of available buffer space
             if (isUdpTcp)
             {
-                atcmd_configDataMode(scktCtrl->dataCntxt, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, true);
+                atcmd_configDataMode(scktCtrl->dataCntxt, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
                 atcmd_tryInvoke("AT+QIRD=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             else
             {
-                atcmd_configDataMode(scktCtrl->dataCntxt, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, true);
+                atcmd_configDataMode(scktCtrl->dataCntxt, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
                 atcmd_tryInvoke("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             atcmd_awaitResult();
@@ -383,13 +383,13 @@ static resultCode_t S__scktRxHndlr()
     scktCtrl_t *scktCtrl = (scktCtrl_t*)streamCtrl;
     
     pDelay(1);                                                                                                  // ugly, but creating loop to wait 500uS seems silly
-    uint8_t popCnt = cbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
+    uint8_t popCnt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
     if (BBFFR_NOTFOUND(popCnt))
     {
         return resultCode__internalError;
     }
     
-    cbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                                       // pop preamble phrase to parse data length
+    bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                                       // pop preamble phrase to parse data length
     wrkPtr = memchr(wrkBffr, ':', popCnt) + 2;
     uint16_t irdSz = strtol(wrkPtr, NULL, 10);
     g_lqLTEM.atcmd->retValue = irdSz;
@@ -402,26 +402,26 @@ static resultCode_t S__scktRxHndlr()
         uint16_t bffrCnt;
         do                                                                                                      // wait for buffer to recv IRD data
         {
-            bffrCnt = cbffr_getOccupied(g_lqLTEM.iop->rxBffr);
+            bffrCnt = bbffr_getOccupied(g_lqLTEM.iop->rxBffr);
             ASSERT_NOTSTALLED(readTimeout, sckt__readTimeoutMs);
         } while (bffrCnt < sckt__irdRequestPageSz);
         
         char* streamPtr;
-        uint16_t blockSz = cbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, irdSz);                             // get data ptr from rxBffr
+        uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, irdSz);                             // get data ptr from rxBffr
         DPRINT(PRNT_CYAN, "scktRxHndlr() ptr=%p, blkSz=%d, availSz=%d\r", streamPtr, blockSz, irdSz);
 
         irdSz -= blockSz;
         ((scktAppRecv_func)(*scktCtrl->appRecvDataCB))(scktCtrl->dataCntxt, streamPtr, blockSz, irdSz == 0);    // forward to application
-        cbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                     // commit POP
+        bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                     // commit POP
 
         if (irdSz == 0)                                                                                         // done with data
         {
-            while (cbffr_getOccupied(g_lqLTEM.iop->rxBffr) < sckt__readTrailerSz)
+            while (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) < sckt__readTrailerSz)
             {
                 pDelay(1);                                                                                      // yield
                 ASSERT_NOTSTALLED(readTimeout, sckt__readTimeoutMs);
             }
-            cbffr_skipTail(g_lqLTEM.iop->rxBffr, sckt__readTrailerSz);
+            bbffr_skipTail(g_lqLTEM.iop->rxBffr, sckt__readTrailerSz);
         }
     }
     return resultCode__success;

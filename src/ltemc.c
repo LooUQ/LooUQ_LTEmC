@@ -38,6 +38,7 @@
  * --------------------------------------------------------------------------------------------- */
 ltemDevice_t g_lqLTEM;
 
+#define APPRDY_TIMEOUT 8000
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
@@ -59,9 +60,9 @@ const char* const qbg_initCmds[] =
 int8_t qbg_initCmdsCnt = sizeof(qbg_initCmds)/sizeof(const char* const);            
 
 
-/* Static Function Declarations
+/* Static Local Function Declarations
 ------------------------------------------------------------------------------------------------ */
-void S__initLTEmDevice(bool ltemReset);
+bool S__initLTEmDevice();
 
 
 #pragma region Public Functions
@@ -127,7 +128,7 @@ void ltem_destroy()
 /**
  *	@brief Start the modem.
  */
-void ltem_start(resetAction_t resetAction)
+bool ltem_start(resetAction_t resetAction)
 {
   	// on Arduino compatible, ensure pin is in default "logical" state prior to opening
 	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
@@ -162,53 +163,49 @@ void ltem_start(resetAction_t resetAction)
     {
        QBG_powerOn();                                                       // turn on BGx
     }
-    S__initLTEmDevice(ltemReset);
-}
 
+    SC16IS7xx_start();                                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
+    DPRINT_V(PRNT_CYAN, "UART started");
+    SC16IS7xx_enableIrqMode();                                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
+    DPRINT_V(PRNT_CYAN, "UART set to IRQ mode");
+    IOP_attachIrq();                                                        // attach I/O processor ISR to IRQ
+    DPRINT_V(PRNT_CYAN, "UART IRQ attached");
 
-/**
- *	@brief Static internal BGx initialization logic shared between start and reset
- */
-void S__initLTEmDevice(bool ltemReset)
-{
-    ASSERT(QBG_isPowerOn());
-    ASSERT(SC16IS7xx_isAvailable());
+    IOP_interruptCallbackISR();                                             // force ISR to run once to sync IRQ 
 
-    SC16IS7xx_start();                                                  // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
-    if (ltemReset)
+    uint32_t startAppRdy = pMillis();                                       // wait for BGx to signal internal ready
+    while (bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, true))
     {
-        if (IOP_awaitAppReady())
-        {
-            DPRINT(PRNT_INFO, "AppRdy recv'd\r\n");
-        }
-        else
-        {
-            if (g_lqLTEM.deviceState == deviceState_powerOn)
-            {
-                DPRINT(PRNT_WARN, "AppRdy timeout\r\n");
-                g_lqLTEM.deviceState = deviceState_appReady;            // missed it somehow
-            }
-        }
-    }
-    else
-    {
-        g_lqLTEM.deviceState = deviceState_appReady;                    // assume device state = appReady, APP RDY sent in 1st ~10 seconds of BGx running
-        DPRINT(PRNT_INFO, "LTEm ON (AppRdy)\r\n");
-    }
+        // pDelay(500);
+        // SC16IS7xx_IIR iirVal;
+        // uint8_t rxLevel;
+        // char rxData[65] = {0};
+        // iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
+        // DPRINT(PRNT_CYAN, "iirVal=%d\r\n", iirVal.reg);
 
-    SC16IS7xx_enableIrqMode();                                          // enable IRQ generation on SPI-UART bridge (IRQ mode)
-    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): nxp in irdmode");
+        // rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
+        // DPRINT(PRNT_CYAN, "rxLevel=%d\r\n", rxLevel);
 
-    IOP_attachIrq();                                                    // attach I/O processor ISR to IRQ
-    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): irq attached");
+        // // SC16IS7xx_read(rxData, rxLevel);
+        // // DPRINT(PRNT_CYAN, "rxData=%s\r\n", rxData);
+
+        if (IS_ELAPSED(startAppRdy, APPRDY_TIMEOUT))
+            return false;
+    }
+    DPRINT_V(PRNT_dCYAN, "AppRdy recv'd=%dms\r\n", pMillis() - startAppRdy);
+    bbffr_reset(g_lqLTEM.iop->rxBffr);
+
+    // if (!IOP_awaitAppReady())
+    //     return;
+    // S__initLTEmDevice();
 
     if (!QBG_setOptions())
     {
-        ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault"); // send notification, maybe app can recover
+        ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");     // send notification, maybe app can recover
         DPRINT(PRNT_DEFAULT, "\r");
     }
     else
-        DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): bgx options set");
+        DPRINT_V(PRNT_CYAN, "BGx options set");
 
     // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
     // DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
@@ -218,7 +215,43 @@ void S__initLTEmDevice(bool ltemReset)
 
     ntwk_awaitProvider(2);                                              // attempt to warm-up provider/PDP briefly. 
     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up");     // If longer duration required, leave that to application
+
+    return true;
 }
+
+
+// /**
+//  *	@brief Static internal BGx initialization logic shared between start and reset
+//  */
+// bool S__initLTEmDevice()
+// {
+//     ASSERT(QBG_isPowerOn());
+//     ASSERT(SC16IS7xx_isAvailable());
+
+//     SC16IS7xx_start();                                                  // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
+
+//     if (g_lqLTEM.deviceState != deviceState_appReady)
+//         return false;
+
+//     if (!QBG_setOptions())
+//     {
+//         ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault"); // send notification, maybe app can recover
+//         DPRINT(PRNT_DEFAULT, "\r");
+//     }
+//     else
+//         DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): bgx options set");
+
+//     // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
+//     // DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
+
+//     ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
+//     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured");
+
+//     ntwk_awaitProvider(2);                                              // attempt to warm-up provider/PDP briefly. 
+//     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up");     // If longer duration required, leave that to application
+
+//     return true;
+// }
 
 
 /**
@@ -236,10 +269,24 @@ void ltem_stop()
 /**
  *	@brief Performs a reset of LTEm.
  */
-void ltem_reset(bool hardReset)
+bool ltem_reset(bool hardReset)
 {
-    QBG_reset(hardReset);                                           // reset module, indirectly SPI/UART (CFUNC or reset pin)
-    S__initLTEmDevice(false);
+    resetAction_t resetAction = hardReset ? resetAction_hwReset : resetAction_swReset;
+    return ltem_start(resetAction);
+}
+
+
+/**
+ *	@brief Turn modem power OFF
+ */
+void ltem_powerOff()
+{
+    QBG_powerOff();  
+}
+
+
+void ltem_enterPcm()
+{
 }
 
 

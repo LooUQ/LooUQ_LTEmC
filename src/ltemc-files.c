@@ -46,7 +46,6 @@ static cmdParseRslt_t S__writeStatusParser();
 static resultCode_t S__filesRxHndlr();
 
 
-
 /**
  *	@brief Set the data callback function for filedata.
  */
@@ -266,24 +265,35 @@ resultCode_t file_closeAll()
 }
 
 
-resultCode_t file_read(uint16_t fileHandle, uint16_t readSz)
+resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz)
 {
-    resultCode_t rslt = resultCode__success;
     ASSERT(g_lqLTEM.fileCtrl->appRecvDataCB);                                   // assert that there is a app func registered to receive read data
+    ASSERT(bbffr_getCapacity(g_lqLTEM.iop->rxBffr) > (requestSz + 128));        // ensure ample space in buffer for I/O
 
+    atcmd_configDataMode(0, "CONNECT", S__filesRxHndlr, NULL, 0, g_lqLTEM.fileCtrl->appRecvDataCB, false);
+
+    DPRINT(PRNT_CYAN, "Read file=1, reqst=%d\r\n", requestSz);
+
+    bool invoked = false;
     if (readSz > 0)
-        rslt = atcmd_tryInvoke("AT+QFREAD=%d,%d", fileHandle, readSz);
+        invoked = atcmd_tryInvoke("AT+QFREAD=%d,%d", fileHandle, requestSz);
     else
-        rslt = atcmd_tryInvoke("AT+QFREAD=%d", fileHandle);
+        invoked = atcmd_tryInvoke("AT+QFREAD=%d", fileHandle);
 
-    if (rslt)
+    if (!invoked)
+        return resultCode__conflict;
+
+    resultCode_t rslt = atcmd_awaitResultWithOptions(2000, NULL);               // dataHandler will be invoked by atcmd module and return a resultCode
+    if (rslt == resultCode__success)
     {
-        atcmd_configDataMode(0, "CONNECT", S__filesRxHndlr, NULL, 0, g_lqLTEM.fileCtrl->appRecvDataCB, true);
-        // atcmd_setStreamControl("CONNECT", g_lqLTEM.fileCtrl);
         g_lqLTEM.fileCtrl->handle = fileHandle;
-        return atcmd_awaitResult() == resultCode__success;                     // dataHandler will be invoked by atcmd module and return a resultCode
+        *readSz = (uint32_t)atcmd_getValue();
+        if (*readSz < requestSz)
+            rslt = resultCode__noContent;                                       // content exhausted    
     }
-    return resultCode__conflict;
+    else 
+        *readSz = 0;
+    return rslt;
 }
 
 
@@ -369,11 +379,43 @@ resultCode_t file_truncate(uint16_t fileHandle)
  */
 resultCode_t file_delete(const char* filename)
 {
-    if (atcmd_tryInvoke("AT+QFDEL=%s", filename))
+    if (atcmd_tryInvoke("AT+QFDEL=\"%s\"", filename))
     {
         return atcmd_awaitResult();
     }
     return resultCode__conflict;
+}
+
+
+void file_getTsFilename(char* tsFilename, uint8_t fnSize, const char* suffix)
+{
+    char* timestamp[30] = {0};
+    char* srcPtr = timestamp;
+    char* destPtr = tsFilename;
+
+    ltem_getDateTimeUtc(timestamp);
+    memset(tsFilename, 0, fnSize);
+
+    memcpy(destPtr, srcPtr, 2);                                             // get year
+    srcPtr += 3;
+    destPtr += 2;
+    memcpy(destPtr, srcPtr, 2);                                             // get month
+    srcPtr += 3;
+    destPtr += 2;
+    memcpy(destPtr, srcPtr, 2);                                             // get day
+    strcat(destPtr, "T");
+    srcPtr += 3;
+    destPtr += 3;
+    memcpy(destPtr, srcPtr, 2);                                             // get hour
+    srcPtr += 3;
+    destPtr += 2;
+    memcpy(destPtr, srcPtr, 2);                                             // get minute
+    srcPtr += 3;
+    destPtr += 2;
+    memcpy(destPtr, srcPtr, 2);                                             // get second
+
+    if (strlen(suffix) > 0)                                                 // add suffix, if provided by caller
+        strcat(destPtr,suffix);
 }
 
 
@@ -398,52 +440,52 @@ static cmdParseRslt_t S__writeStatusParser()
 /**
  * @brief File stream RX data handler, marshalls incoming data from RX buffer to app (application).
  * 
- * @return resultCode_t 
+ * @return number of bytes read 
  */
 static resultCode_t S__filesRxHndlr()
 {
-    char wrkBffr[32];
+    char wrkBffr[32] = {0};
     
-    uint8_t popCnt = cbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
-    if (CBFFR_NOTFOUND(popCnt))
+    uint8_t popCnt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
+    if (BBFFR_NOTFOUND(popCnt))
     {
-        return resultCode__internalError;
+        return resultCode__notFound;
     }
     
-    cbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                               // pop CONNECT phrase for parsing data length
+    bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                                               // pop CONNECT phrase w/ EOL to parse data length
     uint16_t readSz = strtol(wrkBffr + 8, NULL, 10);
-    uint16_t streamSz = readSz + file__readTrailerSz;
+    uint16_t availableSz = readSz;
+    g_lqLTEM.atcmd->retValue = 0;
+    DPRINT_V(PRNT_CYAN, "S__filesRxHndlr() fHandle=%d available=%d\r", g_lqLTEM.fileCtrl->handle, availableSz);
 
-    DPRINT(PRNT_CYAN, "filesDataRcvr() fHandle=%d sz=%d\r", g_lqLTEM.fileCtrl->handle, streamSz);
-    while (streamSz > 0)
+    uint32_t readTimeout = pMillis();
+    uint16_t occupiedCnt;
+    do
     {
-        uint32_t readTimeout = pMillis();
-        uint16_t occupiedCnt;
-        do
+        occupiedCnt = bbffr_getOccupied(g_lqLTEM.iop->rxBffr);
+        if (pMillis() - readTimeout > g_lqLTEM.atcmd->timeout)
         {
-            occupiedCnt = cbffr_getOccupied(g_lqLTEM.iop->rxBffr);
-            if (pMillis() - readTimeout > file__readTimeoutMs)
-            {
-                return resultCode__timeout;
-            }
-        } while (occupiedCnt == 0);
-        
-        if (readSz > 0)                                                                                         // read content, forward to app
-        {
-            char* streamPtr;
-            uint16_t blockSz = cbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readSz);                        // get address from rxBffr
-            DPRINT(PRNT_CYAN, "filesRxHndlr() ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
-            ((fileReceiver_func)(*g_lqLTEM.fileCtrl->appRecvDataCB))(g_lqLTEM.fileCtrl->handle, streamPtr, blockSz);                  // forward to application
-            cbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                 // commit POP
-            readSz -= blockSz;
-            streamSz -= blockSz;
+            g_lqLTEM.atcmd->retValue = 0;
+            DPRINT(PRNT_WARN, "S__filesRxHndlr bffr timeout: %d rcvd\r\n", occupiedCnt);
+            return resultCode__timeout;                                                                             // return no receive
         }
+    } while (occupiedCnt < readSz + file__readTrailerSz);
+    
+    do                                                                                                              // depending on buffer wrap may take 2 ops
+    {
+        char* streamPtr;
+        uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readSz);                                // get address from rxBffr
+        DPRINT_V(PRNT_CYAN, "S__filesRxHndlr() ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
+        ((fileReceiver_func)(*g_lqLTEM.fileCtrl->appRecvDataCB))(g_lqLTEM.fileCtrl->handle, streamPtr, blockSz);    // forward to application
+        bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                         // commit POP
+        readSz -= blockSz;
+    } while (readSz > 0);
 
-        if (cbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= file__readTrailerSz)                                     // cleanup, remove trailer
-        {
-            cbffr_skipTail(g_lqLTEM.iop->rxBffr, file__readTrailerSz);
-        }
+    if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= file__readTrailerSz)                                             // cleanup, remove trailer
+    {
+        bbffr_skipTail(g_lqLTEM.iop->rxBffr, file__readTrailerSz);
     }
+    g_lqLTEM.atcmd->retValue = availableSz;
     return resultCode__success;
 }
 

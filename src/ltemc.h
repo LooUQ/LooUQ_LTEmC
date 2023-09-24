@@ -117,7 +117,7 @@ ltemRfPriorityState_t ltem_getRfPriority();
  *	@brief Power on and start the modem
  *  @param resetIfPoweredOn [in] Perform a software reset on the modem, if found in a powered on state
  */
-void ltem_start(resetAction_t resetAction);
+bool ltem_start(resetAction_t resetAction);
 
 
 /**
@@ -136,17 +136,26 @@ void ltem_stop();
 /**
  *	@brief Performs a reset of LTEm.
  */
-void ltem_reset(bool hardReset);
+bool ltem_reset(bool hardReset);
+
+
+/**
+ *	@brief Turn modem power on/off.
+ *	@param [in] powerState New state for modem: true is on, false is off.
+ */
+void ltem_setPowerState(bool powerState);
 
 
 /**
  *	@brief Test for responsive BGx.
+ *  @return True if modem is ready and responsive.
  */
 bool ltem_ping();
 
 
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
+ *	@param [in] setPriority New radio priority.
  *  @return Result code representing status of operation, OK = 200.
  */
 resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t setPriority);

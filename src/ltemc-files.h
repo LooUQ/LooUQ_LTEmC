@@ -45,8 +45,7 @@ enum file
     file__dataOffset_open = 9,          /// +QFOPEN: "filename",<handle>,<mode>
     file__handleSearchMax = 20,
     file__dataOffset_pos = 13,          /// +QFPOSITION: 
-    file__readTrailerSz = 6,
-    file__readTimeoutMs = 100
+    file__readTrailerSz = 6
 };
 
 
@@ -198,8 +197,7 @@ resultCode_t file_closeAll();
  *	@param [in] fileHandle - Numeric handle for the file to close.
  *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
  */
-resultCode_t file_read(uint16_t fileHandle, uint16_t readSz);
-
+resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz);
 
 /**
  *	@brief Closes the file. 
@@ -240,11 +238,19 @@ resultCode_t file_truncate(uint16_t fileHandle);
 
 /**
  *	@brief Delete a file from the file system.
- *	@param fileName [in] - "*" or filename to delete. Wildcard with filename is not allowed.
+ *	@param [in] fileName "*" or filename to delete. Wildcard with filename is not allowed.
  *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
  */
 resultCode_t file_delete(const char* fileName);
 
+/**
+ * @brief Create a timestamp based filename, with optional suffix/extension
+ * 
+ * @param [in] tsFilename char-array for filename 
+ * @param [in] fnSize size of filename char array, array will be initialized to /0
+ * @param [in] suffix Optional suffix to add to timestamp section of filename
+ */
+void file_getTsFilename(char* tsFilename, uint8_t fnSize, const char* suffix);
 
 
 /* future */

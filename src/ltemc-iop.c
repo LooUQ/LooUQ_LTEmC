@@ -80,7 +80,7 @@ extern ltemDevice_t g_lqLTEM;
 #pragma region Private Static Function Declarations
 /* ------------------------------------------------------------------------------------------------ */
 
-static void S_interruptCallbackISR();
+// static void IOP_interruptCallbackISR();
 static inline uint8_t S_convertCharToContextId(const char cntxtChar);
 
 #pragma endregion // Header
@@ -102,19 +102,7 @@ void IOP_create()
     g_lqLTEM.iop = calloc(1, sizeof(iop_t));
     ASSERT(g_lqLTEM.iop != NULL);
 
-    // TX handled by source, IOP receives pointer and size
-
-    /* DEPRECAITED in 3.0.2
-    */
-    // bBuffer_t *txBffrCtrl = calloc(1, sizeof(cBuffer_t));           // allocate space for TX buffer control struct
-    // if (txBffrCtrl == NULL)
-    //     return;
-    // char *txBffr = calloc(1, ltem__bufferSz_tx);                    // allocate space for raw buffer
-    // if (txBffr == NULL)
-    // {
-    //     free(txBffr);
-    //     return;
-    // }
+    // TX buffering handled by source, IOP receives pointer and size
 
     bBuffer_t *rxBffrCtrl = calloc(1, sizeof(bBuffer_t));           // allocate space for RX buffer control struct
     if (rxBffrCtrl == NULL)
@@ -135,10 +123,10 @@ void IOP_create()
  */
 void IOP_attachIrq()
 {
-    g_lqLTEM.iop->txBffr = NULL;
+    g_lqLTEM.iop->txSrc = NULL;
     g_lqLTEM.iop->txPending = 0;
     spi_usingInterrupt(g_lqLTEM.platformSpi, g_lqLTEM.pinConfig.irqPin);
-    platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, S_interruptCallbackISR);
+    platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, IOP_interruptCallbackISR);
     SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);            // ensure FIFO state is empty, UART will not refire interrupt if pending
 }
 
@@ -152,42 +140,42 @@ void IOP_detachIrq()
 }
 
 
-/**
- *	@brief Verify LTEm firmware has started and is ready for driver operations.
- */
-bool IOP_awaitAppReady()
-{
-    char buf[120] = {0};
-    char *head = &buf;
-    uint8_t rxLevel = 0;
-    uint32_t waitStart = pMillis();
+// /**
+//  *	@brief Verify LTEm firmware has started and is ready for driver operations.
+//  */
+// bool IOP_awaitAppReady()
+// {
+//     char buf[120] = {0};
+//     char *head = &buf;
+//     uint8_t rxLevel = 0;
+//     uint32_t waitStart = pMillis();
 
-    while (pMillis() - waitStart < QBG_APPREADY_MILLISMAX)                  // typical wait: 700-1450 mS
-    {
-        rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-        if (rxLevel > 0)
-        {
-            if (((head - buf) + rxLevel) < 120)
-            {
-                SC16IS7xx_read(head, rxLevel);
-                for (size_t i = 0; i < rxLevel; i++)                        // innoculate any prefixing NULL
-                {
-                    head[i] = (head[i] == '\0') ? '~' : head[i];
-                }
-                head += rxLevel;
-                if (strstr(buf, "APP RDY"))
-                {
-                    DPRINT(PRNT_WHITE, "AppRdy @ %lums\r", pMillis() - waitStart);
-                    g_lqLTEM.deviceState = deviceState_appReady;
-                    return true;
-                }
-            }
-        }
-        pYield();                                                           // give application time for non-comm startup activities or watchdog
-    }
-    DPRINT(PRNT_WARN, "AppRdy Fault: ");
-    return false;
-}
+//     while (pMillis() - waitStart < QBG_APPREADY_MILLISMAX)                  // typical wait: 700-1450 mS
+//     {
+//         rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
+//         if (rxLevel > 0)
+//         {
+//             if (((head - buf) + rxLevel) < 120)
+//             {
+//                 SC16IS7xx_read(head, rxLevel);
+//                 for (size_t i = 0; i < rxLevel; i++)                        // innoculate any prefixing NULL
+//                 {
+//                     head[i] = (head[i] == '\0') ? '~' : head[i];
+//                 }
+//                 head += rxLevel;
+//                 if (strstr(buf, "APP RDY"))
+//                 {
+//                     DPRINT(PRNT_WHITE, "AppRdy @ %lums\r", pMillis() - waitStart);
+//                     g_lqLTEM.deviceState = deviceState_appReady;
+//                     return true;
+//                 }
+//             }
+//         }
+//         pYield();                                                           // give application time for non-comm startup activities or watchdog
+//     }
+//     DPRINT(PRNT_WARN, "AppRdy Fault: ");
+//     return false;
+// }
 
 
 /**
@@ -200,11 +188,11 @@ void IOP_startTx(const char *sendData, uint16_t sendSz)
     uint8_t txLevel = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);       // check TX buffer status for flow, empty buffer is TX idle
     if (txLevel == SC16IS7xx__FIFO_bufferSz)
     {
-        g_lqLTEM.iop->txBffr = sendData;
+        g_lqLTEM.iop->txSrc = sendData;
         g_lqLTEM.iop->txPending = sendSz;
 
         uint8_t immediateSz = MIN(g_lqLTEM.iop->txPending, SC16IS7xx__FIFO_bufferSz);
-        g_lqLTEM.iop->txBffr += immediateSz;
+        g_lqLTEM.iop->txSrc += immediateSz;
         g_lqLTEM.iop->txPending -= immediateSz;
         SC16IS7xx_write(sendData, immediateSz);
     }
@@ -273,7 +261,7 @@ static inline uint8_t S_convertCharToContextId(const char cntxtChar)
 /**
  *	@brief ISR for NXP UART interrupt events, the NXP UART performs all serial I/O with BGx.
  */
-static void S_interruptCallbackISR()
+void IOP_interruptCallbackISR()
 {
     /* ----------------------------------------------------------------------------------------------------------------
      * NOTE: The IIR, TXLVL and RXLVL are read seemingly redundantly, this is required to ensure NXP SC16IS741
@@ -354,18 +342,14 @@ static void S_interruptCallbackISR()
             if (g_lqLTEM.iop->txPending > 0)
             {
                 ASSERT(g_lqLTEM.iop->txPending < UINT16_MAX);
-                ASSERT(g_lqLTEM.iop->txBffr != NULL);
+                ASSERT(g_lqLTEM.iop->txSrc != NULL);
 
                 txLevel = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
 
                 uint8_t blockSz = MIN(g_lqLTEM.iop->txPending, txLevel);                        // send what bridge buffer allows
-                SC16IS7xx_write(g_lqLTEM.iop->txBffr, blockSz);
+                SC16IS7xx_write(g_lqLTEM.iop->txSrc, blockSz);
                 g_lqLTEM.iop->txPending -= blockSz;
-                g_lqLTEM.iop->txBffr += blockSz;
-
-                // diag tracking of CMD/DM switch activity, possible remove in 3.0.4 or beyond
-                if (g_lqLTEM.iop->dmActive)
-                    g_lqLTEM.iop->dmTxEvents++;
+                g_lqLTEM.iop->txSrc += blockSz;
             }
         }
 

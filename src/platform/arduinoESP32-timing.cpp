@@ -21,9 +21,10 @@ uint32_t pMillis()
 
 void pYield()
 {
-    yield();                            // allow for platform yield processing (ex: Arduino scheduler, ESPx, etc.)
     if (platform_yieldCB_func)          // allow for device application yield processing
         platform_yieldCB_func();
+    else
+        vTaskDelay(1);                  // ESP32: give core to next task
 }
 
 

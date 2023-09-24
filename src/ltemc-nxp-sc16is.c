@@ -119,18 +119,21 @@ void SC16IS7xx_enableIrqMode()
     ierSetting.THR_EMPTY_INT_EN = 1;
     ierSetting.RECEIVE_LINE_STAT_INT_EN = 1;
     SC16IS7xx_writeReg(SC16IS7xx_IER_regAddr, ierSetting.reg);
+
+    // flush RX buffer, RX must be previously empty to fire on new recv
+    SC16IS7xx_writeReg(SC16IS7xx_FCR_regAddr, SC16IS7xx__FCR_IOP_RX_FLUSH);
 }
 
 /**
- *	@brief Read interrupt enable register, check IER for IRQ enabled (register is cleared at reset)
+ *	@brief Write/read UART scratchpad register
  */
 bool SC16IS7xx_isAvailable()
 {
     uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
     SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, wrVal);
     return SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr) == wrVal;
-    // return SC16IS7xx_readReg(SC16IS7xx_IER_regAddr) == 0x07;
 }
+
 
 #pragma endregion
 /* ----------------------------------------------------------------------------------------------------------------- */

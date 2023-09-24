@@ -59,10 +59,10 @@ void IOP_attachIrq();
 void IOP_detachIrq();
 
 
-/**
- *	@brief Verify LTEm firmware has started and is ready for driver operations.
- */
-bool IOP_awaitAppReady();
+// /**
+//  *	@brief Verify LTEm firmware has started and is ready for driver operations.
+//  */
+// bool IOP_awaitAppReady();
 
 
 /**
@@ -151,6 +151,8 @@ void IOP_resetCoreRxBuffer();
 // IOP Internal 
 //void IOP_rxParseForEvents();            // atcmd dependency
 
+// ISR (accessible to ltemc_ module)
+void IOP_interruptCallbackISR();
 
 #ifdef __cplusplus
 }

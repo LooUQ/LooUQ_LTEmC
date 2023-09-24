@@ -73,7 +73,7 @@ enum streams__constants
     streams__maxContextProtocols = 5,
     streams__typeCodeSz = 4,
     streams__urcPrefixesSz = 60,
-    host__urlSz = 100
+    host__urlSz = 192
 };
 
 
@@ -101,7 +101,8 @@ typedef enum deviceState_tag
 {
     deviceState_powerOff = 0,        /// BGx is powered off, in this state all components on the LTEm1 are powered down.
     deviceState_powerOn = 1,         /// BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
-    deviceState_appReady = 2         /// BGx is powered ON and ready for application/services.
+    deviceState_appReady = 2,        /// BGx is powered ON and ready for application/services.
+    deviceState_error = 99           /// BGx is powered ON and ready for application/services.
 } deviceState_t;
 
 
@@ -377,7 +378,7 @@ typedef struct streamCtrl_tag
  */
 typedef struct iop_tag
 {
-    volatile char* txBffr;                  /// source pointer to TX pending data
+    volatile char* txSrc;                   /// source pointer to TX pending data
     volatile uint16_t txPending;            /// outstanding char count for TX
     volatile bool dmActive;                 /// interaction with BGx is now in data mode
     volatile uint16_t dmTxEvents;           /// number of TX blocks sent during data mode
@@ -431,8 +432,7 @@ typedef enum dmState_tag
 {
     dmState_idle = 0,
     dmState_enabled = 1,
-    dmState_triggered = 2,
-    dmState_handlerActive = 3
+    dmState_active = 2
 } dmState_t;
 
 
@@ -444,7 +444,7 @@ typedef struct dataMode_tag
     dataRxHndlr_func dataHndlr;                         /// data handler function (TX/RX)
     char* txDataLoc;                                    /// location of data buffer (TX only)
     uint16_t txDataSz;                                  /// size of TX data or RX request
-    bool skipParser;                                    /// true = no invoke of response parser after successul datamode, error always skips parser
+    bool runParserAfterDataMode;                        /// true = invoke AT response parser after successful datamode. Data mode error always skips parser
     appRcvProto_func applRecvDataCB;                    /// callback into app for received data delivery
 } dataMode_t;
 

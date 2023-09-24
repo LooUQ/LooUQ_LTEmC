@@ -42,9 +42,9 @@ enum http__constants
     http__returnResponseHeaders = 1, 
     http__useDefaultTimeout = 0,
     http__defaultTimeoutBGxSec = 60,
-    http__urlHostSz = 128,
     http__rqstTypeSz = 5,                           /// GET or POST
     http__customHdrSmallWarning = 40
+    // http__urlHostSz                              // see ltemc-types for stream host size
     // http__reqdResponseSz = 22                    /// BGx HTTP(S) Application Note
 };
 
@@ -198,6 +198,17 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
  *  @return HTTP status of read.
  */
 uint16_t http_readPage(httpCtrl_t *httpCtrl);
+
+
+/**
+ *	@brief Retrieves page results from a previous GET or POST.
+
+ *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ *  @param [in] filename C-string containing the name of the file to create from page content.
+ *  @return HTTP status of read.
+ */
+uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename);
+
 
 /**
  *	@brief Cancels a http_readPage flow if the remaining contents are not needed.
