@@ -52,8 +52,8 @@
 
 enum ltem__constants
 {
-    ltem__bufferSz_rx = 2000,
-    ltem__bufferSz_tx = 1000,
+    ltem__bufferSz_rx = 2048,
+    // ltem__bufferSz_tx = 1000,
 
     ltem__swVerSz = 12,
     ltem__errorDetailSz = 18,
@@ -132,6 +132,9 @@ typedef enum dataCntxt_tag
 
 typedef void (*doWork_func)();                                           // module background worker
 typedef void (*powerSaveCallback_func)(uint8_t newPowerSaveState);
+
+// typedef void (*eventNotifCallback_func)(uint8_t notifCode, const char *message);
+
 
 
 /* Modem/Provider/Network Type Definitions

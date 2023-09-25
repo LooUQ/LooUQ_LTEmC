@@ -27,7 +27,7 @@
 #ifndef __LTEMC_H__
 #define __LTEMC_H__
 
-#define LTEmC_VERSION "3.0.1"
+#define LTEmC_VERSION "3.1.0"
 
 // #undef __cplusplus
 
@@ -68,11 +68,11 @@
 // #include "ltemc-gpio.h"                         /// use of BGx module GPIO expansion functionality
 
 
-/* LTEmC uses 2 global buffers: the IOP transmit buffer and the ATCMD cmd\core buffer.
- * These are sized in the ltemc-iop.h and ltemc-atcmd.h header files respectively.
- * LooUQ set defaults sizes are:
- *      IOP__txBufferSize = 1800
- *      ATCMD__commandBufferSz = 256
+/* LTEmC uses a global RX command response/data buffer.
+ * The default for this buffer is 2KB (ltem__bufferSz_rx = 2048, in the ltemc-types.h)
+ *
+ * The TX side has no dedicated buffer, the application will use whatever buffer 
+ * it uses to compose the content to send, passing a pointer to LTEmC.
  */
 /* ----------------------------------------------------------------------------------- */
 
@@ -80,9 +80,6 @@
 extern "C"
 {
 #endif // __cplusplus
-
-
-// typedef void (*eventNotifCallback_func)(uint8_t notifCode, const char *message);
 
 /**
  *	@brief Initialize the LTEm1 modem.
@@ -188,6 +185,50 @@ const char* ltem_getSwVersion();
  *  \return Version as a const char pointer.
  */
 const char* ltem_getModuleType();
+
+
+/**
+ *  @brief Get the LTEm static device identification/provisioning information.
+ *  @return LTEm (modem) information struct, see mdminfo.h for details.
+*/
+modemInfo_t *ltem_getModemInfo();
+
+
+/**
+ *  @brief Test for SIM ready
+ *  @return True if SIM is inserted and available
+*/
+bool ltem_isSimReady();
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device at a percent
+ *  @return The radio signal strength in the range of 0 to 100 (0 is no signal)
+*/
+uint8_t ltem_signalPercent();
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device as RSSI reported
+ *  @return The radio signal strength in the range of -51dBm to -113dBm (-999 is no signal)
+*/
+int16_t ltem_signalRSSI();
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device as RSSI reported
+ *  @return The raw radio signal level reported by BGx
+*/
+uint8_t ltem_signalRaw();
+
+
+/** 
+ *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone) 
+ *  @return The radio signal strength factored into a count of bars for UI display
+ * */
+uint8_t ltem_signalBars(uint8_t displayBarCount);
+
+
 
 
 /**
