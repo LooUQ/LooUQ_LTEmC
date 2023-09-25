@@ -1,6 +1,6 @@
 /** ****************************************************************************
   \file 
-  \brief Public API type definitions for consumption of LTEmC services.
+  @brief Public API type definitions for consumption of LTEmC services.
   \author Greg Terrell, LooUQ Incorporated
 
   \loouq
@@ -59,8 +59,8 @@ enum ltem__constants
     ltem__errorDetailSz = 18,
     ltem__moduleTypeSz = 8,
 
-    ltem__streamCnt = 4,            /// 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
-    //ltem__urcHandlersCnt = 4        /// max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
+    ltem__streamCnt = 4,            // 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
+    //ltem__urcHandlersCnt = 4        // max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
 };
 
 
@@ -95,14 +95,14 @@ typedef struct ltemPinConfig_tag
 
 
 /** 
- *  \brief Enum describing the current device/module state
+ *  @brief Enum describing the current device/module state
  */
 typedef enum deviceState_tag
 {
-    deviceState_powerOff = 0,        /// BGx is powered off, in this state all components on the LTEm1 are powered down.
-    deviceState_powerOn = 1,         /// BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
-    deviceState_appReady = 2,        /// BGx is powered ON and ready for application/services.
-    deviceState_error = 99           /// BGx is powered ON and ready for application/services.
+    deviceState_powerOff = 0,        // BGx is powered off, in this state all components on the LTEm1 are powered down.
+    deviceState_powerOn = 1,         // BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
+    deviceState_appReady = 2,        // BGx is powered ON and ready for application/services.
+    deviceState_error = 99           // BGx is powered ON and ready for application/services.
 } deviceState_t;
 
 
@@ -137,14 +137,14 @@ typedef void (*powerSaveCallback_func)(uint8_t newPowerSaveState);
 /* Modem/Provider/Network Type Definitions
  * ------------------------------------------------------------------------------------------------------------------------------*/
 
-#define NTWK_PROVIDER_RAT_AUTO "00"     /// M1 (eMTC) >> NB-IoT >> GSM
+#define NTWK_PROVIDER_RAT_AUTO "00"     // M1 (eMTC) >> NB-IoT >> GSM
 #define NTWK_PROVIDER_RAT_GSM "01"
 #define NTWK_PROVIDER_RAT_M1 "02"
 #define NTWK_PROVIDER_RAT_NB "03"
 
 
 // /** 
-//  *  \brief Enum describing the priority for radio receive.
+//  *  @brief Enum describing the priority for radio receive.
 // */
 // typedef enum radioPriority_tag
 // {
@@ -154,18 +154,18 @@ typedef void (*powerSaveCallback_func)(uint8_t newPowerSaveState);
 
 
 /** 
- *  \brief Enum describing the mode the BGx module is using to look for available networks (carriers).
+ *  @brief Enum describing the mode the BGx module is using to look for available networks (carriers).
 */
 typedef enum ntwkScanMode_tag
 {
-    ntwkScanMode_auto = 0U,             /// BGx is considering either GSM or LTE carrier connections.
-    ntwkScanMode_gsmonly = 1U,          /// GSM only mode: BGx is filtering visible networks and only considering connections to GSM endpoints.
-    ntwkScanMode_lteonly = 3U           /// LTE only mode: BGx is filtering visible networks and only considering connections to LTE endpoints.
+    ntwkScanMode_auto = 0U,             // BGx is considering either GSM or LTE carrier connections.
+    ntwkScanMode_gsmonly = 1U,          // GSM only mode: BGx is filtering visible networks and only considering connections to GSM endpoints.
+    ntwkScanMode_lteonly = 3U           // LTE only mode: BGx is filtering visible networks and only considering connections to LTE endpoints.
 } ntwkScanMode_t;
 
 
 /** 
- *  \brief Enum describing the available options for an IoT protocol when connecting to the network.
+ *  @brief Enum describing the available options for an IoT protocol when connecting to the network.
 */
 typedef enum ntwkIotMode_tag
 {
@@ -176,7 +176,7 @@ typedef enum ntwkIotMode_tag
 
 
 /** 
- *  \brief Typed numeric constants for network subsystem.
+ *  @brief Typed numeric constants for network subsystem.
 */
 enum ntwk
 {
@@ -214,12 +214,12 @@ typedef enum pdpProtocol_tag
 
 
 // /** 
-//  *  \brief Enum of the two available PDP contexts for BGx provided by network carriers.
+//  *  @brief Enum of the two available PDP contexts for BGx provided by network carriers.
 // */
 // typedef enum pdpProtocolType_tag
 // {
-//     pdpProtocolType_IPV4 = 1,      /// IP v4, 32-bit address (ex: 192.168.37.52)
-//     pdpProtocolType_IPV6 = 2,      /// IP v6, 128-bit address (ex: 2001:0db8:0000:0000:0000:8a2e:0370:7334)
+//     pdpProtocolType_IPV4 = 1,      // IP v4, 32-bit address (ex: 192.168.37.52)
+//     pdpProtocolType_IPV6 = 2,      // IP v6, 128-bit address (ex: 2001:0db8:0000:0000:0000:8a2e:0370:7334)
 //     pdpProtocolType_IPV4V6 = 3,
 //     pdpProtocolType_PPP = 9
 // } pdpProtocolType_t;
@@ -235,7 +235,7 @@ typedef enum pdpCntxtAuthMethods_tag
 
 
 /** 
- *  \brief RF Priority map for BG95/BG77 modules.
+ *  @brief RF Priority map for BG95/BG77 modules.
 */
 typedef enum ltemRfPrioritySet_tag
 {
@@ -245,7 +245,7 @@ typedef enum ltemRfPrioritySet_tag
 
 
 /** 
- *  \brief RF Priority map for BG95/BG77 modules.
+ *  @brief RF Priority map for BG95/BG77 modules.
 */
 typedef enum ltemRfPriorityState_tag
 {
@@ -258,7 +258,7 @@ ltemRfPriorityState_gnssLoaded = 4          // GNSS in loaded state
 
 
 /** 
- *  \brief Struct holding cellular and radio settings.
+ *  @brief Struct holding cellular and radio settings.
 */
 typedef struct modemSettings_tag
 {
@@ -270,7 +270,7 @@ typedef struct modemSettings_tag
 
 
 /** 
- *  \brief Struct holding information about the physical BGx module.
+ *  @brief Struct holding information about the physical BGx module.
 */
 typedef struct modemInfo_tag
 {
@@ -284,27 +284,27 @@ typedef struct modemInfo_tag
 
 
 /** 
- *  \brief Struct representing the state of active PDP contexts (aka: APN or data context).
+ *  @brief Struct representing the state of active PDP contexts (aka: APN or data context).
 */
 typedef struct networkInfo_tag
 {
     bool isActive;
-    uint8_t pdpContextId;                           /// context ID recognized by the carrier (valid are 1 to 16)
-    pdpProtocol_t pdpProtocol;                      /// IPv4, IPv6, etc.
-	char ipAddress[ntwk__ipAddressSz];              /// The IP address obtained from the carrier for this context. The IP address of the modem.
+    uint8_t pdpContextId;                           // context ID recognized by the carrier (valid are 1 to 16)
+    pdpProtocol_t pdpProtocol;                      // IPv4, IPv6, etc.
+	char ipAddress[ntwk__ipAddressSz];              // The IP address obtained from the carrier for this context. The IP address of the modem.
 } networkInfo_t;
 
 
 /** 
- *  \brief Struct respresenting an ACTIVE network carrier/operator.
+ *  @brief Struct respresenting an ACTIVE network carrier/operator.
 */
 typedef struct providerInfo_tag
 {
-	char name[PROPSZ(ntwk__providerNameSz)];        /// Provider name, some carriers may report as 6-digit numeric carrier ID.
-	char iotMode[PROPSZ(ntwk__iotModeNameSz)];      /// Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
+	char name[PROPSZ(ntwk__providerNameSz)];        // Provider name, some carriers may report as 6-digit numeric carrier ID.
+	char iotMode[PROPSZ(ntwk__iotModeNameSz)];      // Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
     uint8_t defaultContext;
-    uint8_t networkCnt;                             /// The number of networks in networks[]
-    networkInfo_t networks[ntwk__pdpContextCnt];    /// Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
+    uint8_t networkCnt;                             // The number of networks in networks[]
+    networkInfo_t networks[ntwk__pdpContextCnt];    // Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
 } providerInfo_t;
 
 
@@ -314,7 +314,7 @@ typedef struct providerInfo_tag
  * ------------------------------------------------------------------------------------------------------------------------------*/
 
 /**
- *	\brief Typed numeric Input/Output Processor subsystem contants.
+ *	@brief Typed numeric Input/Output Processor subsystem contants.
  */
 enum IOP__Constants
 {
@@ -359,10 +359,10 @@ typedef void (*appRcvProto_func)();                 // prototype func() for stre
 
 typedef struct streamCtrl_tag
 {
-    char streamType;                                /// stream type
-    dataCntxt_t dataCntxt;                          /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;                   /// function to handle data streaming, initiated by eventMgr() or atcmd module
-    urcEvntHndlr_func urcHndlr;                     /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    char streamType;                                // stream type
+    dataCntxt_t dataCntxt;                          // integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataRxHndlr_func dataRxHndlr;                   // function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcHndlr;                     // function to handle data streaming, initiated by eventMgr() or atcmd module
 } streamCtrl_t;
 
 
@@ -370,7 +370,7 @@ typedef struct streamCtrl_tag
  * ============================================================================================= */
 
 /** 
- *  \brief Struct for the IOP subsystem state. During initialization a pointer to this structure is reference in g_ltem1.
+ *  @brief Struct for the IOP subsystem state. During initialization a pointer to this structure is reference in g_ltem1.
  * 
  *  Each of the protocols (sockets, MQTT, HTTP) have unique behaviors: sockets receive asynchronous alerts but the data
  *  receive process is fully synchronous, HTTP is synchronous on receive tied to page read, MQTT is fully asynchronous 
@@ -378,16 +378,16 @@ typedef struct streamCtrl_tag
  */
 typedef struct iop_tag
 {
-    volatile char* txSrc;                   /// source pointer to TX pending data
-    volatile uint16_t txPending;            /// outstanding char count for TX
-    volatile bool dmActive;                 /// interaction with BGx is now in data mode
-    volatile uint16_t dmTxEvents;           /// number of TX blocks sent during data mode
+    volatile char* txSrc;                   // source pointer to TX pending data
+    volatile uint16_t txPending;            // outstanding char count for TX
+    volatile bool dmActive;                 // interaction with BGx is now in data mode
+    volatile uint16_t dmTxEvents;           // number of TX blocks sent during data mode
 
-    bBuffer_t *rxBffr;                      /// receive buffer
-    char txEot;                             /// if not NULL, char to output on empty TX FIFO; clears automatically on use.
+    bBuffer_t *rxBffr;                      // receive buffer
+    char txEot;                             // if not NULL, char to output on empty TX FIFO; clears automatically on use.
  
-    volatile uint32_t lastTxAt;             /// tick count when TX send started, used for response timeout detection
-    volatile uint32_t lastRxAt;             /// tick count when RX buffer fill level was known to have change
+    volatile uint32_t lastTxAt;             // tick count when TX send started, used for response timeout detection
+    volatile uint32_t lastRxAt;             // tick count when RX buffer fill level was known to have change
 } iop_t;
 
 
@@ -395,7 +395,7 @@ typedef struct iop_tag
  * ------------------------------------------------------------------------------------------------------------------------------*/
 
 /** 
- *  \brief Typed constants for AT-CMD module.
+ *  @brief Typed constants for AT-CMD module.
 */
 enum atcmd__constants
 {
@@ -413,7 +413,7 @@ enum atcmd__constants
 
 
 /** 
- *  \brief AT command response parser result codes.
+ *  @brief AT command response parser result codes.
 */
 typedef enum cmdParseRslt_tag
 {
@@ -438,57 +438,61 @@ typedef enum dmState_tag
 
 typedef struct dataMode_tag
 {
-    dmState_t dmState;
-    uint16_t contextKey;                                /// unique identifier for data flow, could be dataContext(proto), handle(files), etc.
-    char trigger[atcmd__dataModeTriggerSz];             /// char sequence that signals the transition to data mode, data mode starts at the following character
-    dataRxHndlr_func dataHndlr;                         /// data handler function (TX/RX)
-    char* txDataLoc;                                    /// location of data buffer (TX only)
-    uint16_t txDataSz;                                  /// size of TX data or RX request
-    bool runParserAfterDataMode;                        /// true = invoke AT response parser after successful datamode. Data mode error always skips parser
-    appRcvProto_func applRecvDataCB;                    /// callback into app for received data delivery
+    dmState_t dmState;                                  // Datamode state
+    uint16_t contextKey;                                // unique identifier for data flow, could be dataContext(proto), handle(files), etc.
+    char trigger[atcmd__dataModeTriggerSz];             // char sequence that signals the transition to data mode, data mode starts at the following character
+    dataRxHndlr_func dataHndlr;                         // data handler function (TX/RX)
+    char* txDataLoc;                                    // location of data buffer (TX only)
+    uint16_t txDataSz;                                  // size of TX data or RX request
+    bool runParserAfterDataMode;                        // true = invoke AT response parser after successful datamode. Data mode error always skips parser
+    appRcvProto_func applRecvDataCB;                    // callback into app for received data delivery
+    uint16_t flowOffset;                                // Count of previously processed bytes in the current DM flow
 } dataMode_t;
 
 
-typedef cmdParseRslt_t (*cmdResponseParser_func)();                             // AT response parser template
+/** 
+ *  @brief Structure to control invocation and management of an AT command with the BGx module.
+*/
+typedef cmdParseRslt_t (*cmdResponseParser_func)();     // AT response parser template
 
 
 /** 
- *  \brief Structure to control invocation and management of an AT command with the BGx module.
+ *  @brief Structure to control invocation and management of an AT command with the BGx module.
 */
 typedef struct atcmd_tag
 {
-    char cmdStr[atcmd__cmdBufferSz];                    /// AT command string to be passed to the BGx module.
+    char cmdStr[atcmd__cmdBufferSz];                    // AT command string to be passed to the BGx module.
 
-    // temporary                                        /// waiting on fix to SPI TX overright
+    // temporary                                        // waiting on fix to SPI TX overright
     char CMDMIRROR[atcmd__cmdBufferSz];
 
-    uint32_t timeout;                                   /// Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
-    bool isOpenLocked;                                  /// True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
-    bool autoLock;                                      /// last invoke was auto and should be closed automatically on complete
-    uint32_t invokedAt;                                 /// Tick value at the command invocation, used for timeout detection.
+    uint32_t timeout;                                   // Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
+    bool isOpenLocked;                                  // True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
+    bool autoLock;                                      // last invoke was auto and should be closed automatically on complete
+    uint32_t invokedAt;                                 // Tick value at the command invocation, used for timeout detection.
     
-    char rawResponse[atcmd__respBufferSz + 1];          /// response buffer, allows for post cmd execution review of received text (0-filled).
-    char* response;                                     /// PTR variable section of response.
+    char rawResponse[atcmd__respBufferSz + 1];          // response buffer, allows for post cmd execution review of received text (0-filled).
+    char* response;                                     // PTR variable section of response.
 
-    uint32_t execDuration;                              /// duration of command's execution in milliseconds
-    resultCode_t resultCode;                            /// consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
-    cmdResponseParser_func responseParserFunc;          /// parser function to analyze AT cmd response and optionally extract value
-    cmdParseRslt_t parserResult;                        /// last parser invoke result returned
-    bool preambleFound;                                 /// true if parser found preamble
-    char errorDetail[SET_PROPLEN(ltem__errorDetailSz)]; /// BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
-    int32_t retValue;                                   /// optional signed int value extracted from response
-    dataMode_t dataMode;                                /// controls for automatic data mode servicing - both TX (out) and RX (in). Std functions or extensions supported.
+    uint32_t execDuration;                              // duration of command's execution in milliseconds
+    resultCode_t resultCode;                            // consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
+    cmdResponseParser_func responseParserFunc;          // parser function to analyze AT cmd response and optionally extract value
+    cmdParseRslt_t parserResult;                        // last parser invoke result returned
+    bool preambleFound;                                 // true if parser found preamble
+    char errorDetail[SET_PROPLEN(ltem__errorDetailSz)]; // BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
+    int32_t retValue;                                   // optional signed int value extracted from response
+    dataMode_t dataMode;                                // controls for automatic data mode servicing - both TX (out) and RX (in). Std functions or extensions supported.
 } atcmd_t;
 
 
 /** 
- *  \brief Result structure returned from a action request (await or get).
+ *  @brief Result structure returned from a action request (await or get).
 */
 typedef struct atcmdResult_tag
 {
-    resultCode_t statusCode;                    /// The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
-    char *response;                             /// The char c-string containing the full response from the BGx.
-    uint16_t responseCode;                      /// Numeric response value from many "status" action parsers (suffixed with _rc)
+    resultCode_t statusCode;                    // The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
+    char *response;                             // The char c-string containing the full response from the BGx.
+    uint16_t responseCode;                      // Numeric response value from many "status" action parsers (suffixed with _rc)
 } atcmdResult_t;
 
 

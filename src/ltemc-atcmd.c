@@ -404,7 +404,7 @@ static resultCode_t S__readResult()
                 g_lqLTEM.iop->dmTxEvents = 0;
 
                 resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)();
-                DPRINT(PRNT_MAGENTA, "DataHandler rslt=%d\r\n", dataRslt);
+                DPRINT(PRNT_MAGENTA, "DM-handler rslt=%d\r\n", dataRslt);
                 if (dataRslt == resultCode__success)
                 {
                     g_lqLTEM.atcmd->parserResult = cmdParseRslt_success;

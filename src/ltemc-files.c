@@ -479,6 +479,7 @@ static resultCode_t S__filesRxHndlr()
         ((fileReceiver_func)(*g_lqLTEM.fileCtrl->appRecvDataCB))(g_lqLTEM.fileCtrl->handle, streamPtr, blockSz);    // forward to application
         bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                         // commit POP
         readSz -= blockSz;
+        g_lqLTEM.atcmd->dataMode.pageOffset += blockSz;                                                             // allow for file receiver to reassemble full read
     } while (readSz > 0);
 
     if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= file__readTrailerSz)                                             // cleanup, remove trailer
