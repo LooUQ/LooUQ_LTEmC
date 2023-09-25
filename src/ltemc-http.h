@@ -42,10 +42,10 @@ enum http__constants
     http__returnResponseHeaders = 1, 
     http__useDefaultTimeout = 0,
     http__defaultTimeoutBGxSec = 60,
-    http__rqstTypeSz = 5,                           /// GET or POST
+    http__rqstTypeSz = 5,                           // GET or POST
     http__customHdrSmallWarning = 40
     // http__urlHostSz                              // see ltemc-types for stream host size
-    // http__reqdResponseSz = 22                    /// BGx HTTP(S) Application Note
+    // http__reqdResponseSz = 22                    // BGx HTTP(S) Application Note
 };
 
 
@@ -85,29 +85,29 @@ typedef enum httpState_tag
 
 typedef struct httpCtrl_tag
 {
-    char streamType;                            /// stream type
-    dataCntxt_t dataCntxt;                      /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
-    urcEvntHndlr_func urcEvntHndlr;             /// function to determine if "potential" URC event is for an open stream and perform reqd actions
+    char streamType;                            // stream type
+    dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataRxHndlr_func dataRxHndlr;               // function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcEvntHndlr;             // function to determine if "potential" URC event is for an open stream and perform reqd actions
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
-    appRcvProto_func appRecvDataCB;             /// callback into host application with data (cast from generic func* to stream specific function)
-    bool useTls;                                /// flag indicating SSL/TLS applied to stream
-    char hostUrl[host__urlSz];                  /// URL or IP address of host
-    uint16_t hostPort;                          /// IP port number host is listening on (allows for 65535/0)
-    bool returnResponseHdrs;                    /// if set true, response headers are included in the returned response
-    char *cstmHdrs;                             /// custom header content, optional buffer provided by application
-    uint16_t cstmHdrsSz;                        /// size of custom header buffer
-    char requestType[http__rqstTypeSz];         /// type of current/last request: 'G'=GET, 'P'=POST
-    httpState_t requestState;                   /// current state machine variable for HTTP request
-    uint16_t bgxError;                          /// BGx sprecific error code returned from GET/POST
-    uint16_t httpStatus;                        /// set to 0 during a request, initialized to 0xFFFF before any request
-    uint32_t pageSize;                          /// if provided in page response, the page size 
-    uint32_t pageRemaining;                     /// set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
-    uint8_t timeoutSec;                         /// default timeout for GET/POST/read requests (BGx is 60 secs)
-    uint16_t defaultBlockSz;                    /// default size of block (in of bytes) to transfer to app from page read (page read spans blocks)
-    bool pageCancellation;                      /// set to abandon further page loading
+    appRcvProto_func appRecvDataCB;             // callback into host application with data (cast from generic func* to stream specific function)
+    bool useTls;                                // flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];                  // URL or IP address of host
+    uint16_t hostPort;                          // IP port number host is listening on (allows for 65535/0)
+    bool returnResponseHdrs;                    // if set true, response headers are included in the returned response
+    char *cstmHdrs;                             // custom header content, optional buffer provided by application
+    uint16_t cstmHdrsSz;                        // size of custom header buffer
+    char requestType[http__rqstTypeSz];         // type of current/last request: 'G'=GET, 'P'=POST
+    httpState_t requestState;                   // current state machine variable for HTTP request
+    uint16_t bgxError;                          // BGx sprecific error code returned from GET/POST
+    uint16_t httpStatus;                        // set to 0 during a request, initialized to 0xFFFF before any request
+    uint32_t pageSize;                          // if provided in page response, the page size 
+    uint32_t pageRemaining;                     // set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
+    uint8_t timeoutSec;                         // default timeout for GET/POST/read requests (BGx is 60 secs)
+    uint16_t defaultBlockSz;                    // default size of block (in of bytes) to transfer to app from page read (page read spans blocks)
+    bool pageCancellation;                      // set to abandon further page loading
 } httpCtrl_t;
 
 
