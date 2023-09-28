@@ -35,9 +35,10 @@
 
 enum file
 {
+    file_fileContext = 0,
     file__filenameSz = 81,
     file__timeoutMS = 800,              /// file system command default timeout (milliseconds)
-    file__fileListMaxCnt = 32,
+    file__fileListMaxCnt = 16,
     file__openFileItemSz = 28,
     file__openFileMaxCnt = 10,
     

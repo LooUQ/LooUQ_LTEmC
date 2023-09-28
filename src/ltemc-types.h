@@ -439,9 +439,17 @@ typedef enum dmState_tag
 } dmState_t;
 
 
+typedef enum dmMode_tag
+{
+    dmMode_forwarder = 0,
+    dmMode_parser = 1
+} dmMode_t;
+
+
 typedef struct dataMode_tag
 {
-    dmState_t dmState;                                  // Datamode state
+    dmState_t dmState;                                  // dataMode processing state
+    dmMode_t dmMode;                                    // dataMode processing mode
     uint16_t contextKey;                                // unique identifier for data flow, could be dataContext(proto), handle(files), etc.
     char trigger[atcmd__dataModeTriggerSz];             // char sequence that signals the transition to data mode, data mode starts at the following character
     dataRxHndlr_func dataHndlr;                         // data handler function (TX/RX)
@@ -449,7 +457,6 @@ typedef struct dataMode_tag
     uint16_t txDataSz;                                  // size of TX data or RX request
     bool runParserAfterDataMode;                        // true = invoke AT response parser after successful datamode. Data mode error always skips parser
     appRcvProto_func applRecvDataCB;                    // callback into app for received data delivery
-    uint16_t flowOffset;                                // Count of previously processed bytes in the current DM flow
 } dataMode_t;
 
 
@@ -466,8 +473,8 @@ typedef struct atcmd_tag
 {
     char cmdStr[atcmd__cmdBufferSz];                    // AT command string to be passed to the BGx module.
 
-    // temporary                                        // waiting on fix to SPI TX overright
-    char CMDMIRROR[atcmd__cmdBufferSz];
+    // temporary ?                                      // waiting on fix to SPI TX overright
+    char cmdHistory[atcmd__cmdBufferSz];
 
     uint32_t timeout;                                   // Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
     bool isOpenLocked;                                  // True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.

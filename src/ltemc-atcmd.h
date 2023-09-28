@@ -58,8 +58,18 @@ void atcmd_reset(bool releaseLock);
  * @param [in] applRecvDataCB Handler function to receive/parse incoming data 
  * @param [in] runParser If true, registered command response parser is invoked after successful data mode processing
  */
-void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* txDataLoc, uint16_t txDataSz, appRcvProto_func applRecvDataCB, bool skipParser);
+void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool skipParser);
 
+
+/**
+ * @brief Configure atcmd automatic datamode processing with custom parser to format response
+ * 
+ * @param [in] contextKey Data context this data mode process configuration applies to
+ * @param [in] trigger Character string that prefixes wait for data
+ * @param [in] dataHndlr Handler function that services the data transfer 
+ * @param [in] dataLoc Pointer to the data to be sent
+ */
+void atcmd_configDataParser(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* dataLoc);
 
 // /**
 //  * @brief Set the TX end-of-transmission (EOT) signally character

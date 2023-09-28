@@ -39,6 +39,7 @@
 #define STATUS_LOW_PULLDOWN
 
 #ifdef HOST_FEATHER_UXPLOR_L
+#define LTEM_PINS 1
 const ltemPinConfig_t ltem_pinConfig =
 {
     spiIndx : 0,
@@ -57,6 +58,7 @@ const ltemPinConfig_t ltem_pinConfig =
 #endif
 
 #ifdef HOST_FEATHER_UXPLOR
+#define LTEM_PINS 1
 const ltemPinConfig_t ltem_pinConfig =
 {
     spiIndx : 0,
@@ -76,6 +78,7 @@ const ltemPinConfig_t ltem_pinConfig =
 
 
 #ifdef HOST_FEATHER_LTEM3F
+#define LTEM_PINS 1
 const ltemPinConfig_t ltem_pinConfig =
 {
     spiIndx : 0,
@@ -95,6 +98,7 @@ const ltemPinConfig_t ltem_pinConfig =
 #endif
 
 #ifdef HOST_FEATHER_BASIC
+#define LTEM_PINS 1
 const ltemPinConfig_t ltem_pinConfig =
 {
     spiIndx : 0,
@@ -113,6 +117,7 @@ const ltemPinConfig_t ltem_pinConfig =
 #endif
 
 #ifdef HOST_RASPI_UXPLOR
+#define LTEM_PINS 1
 const ltemPinConfig_t ltem_pinConfig = 
 {
     spiIndx : -1,
@@ -130,6 +135,7 @@ const ltemPinConfig_t ltem_pinConfig =
 #endif
 
 #ifdef HOST_ESP32_DEVMOD_BMS
+#define LTEM_PINS 1
 const ltemPinConfig_t ltem_pinConfig = 
 {
     spiIndx : -1,
@@ -146,7 +152,26 @@ const ltemPinConfig_t ltem_pinConfig =
 };
 #endif
 
+#ifdef HOST_ESP32_DEVMOD_BMS2
+#define LTEM_PINS 1
+const ltemPinConfig_t ltem_pinConfig = 
+{
+    spiIndx : -1,
+    spiCsPin : 8,
+    spiClkPin : 16,
+    spiMisoPin : 17,
+    spiMosiPin : 18,
+	irqPin : 3,
+	statusPin : 47,
+	powerkeyPin : 45,
+	resetPin : 0,
+	ringUrcPin : 0,
+    wakePin : 48
+};
+#endif
+
 #ifdef HOST_LOOUQ_REMOTENODE
+#define LTEM_PINS 1
 const ltemPinConfig_t ltem_pinConfig =
 {
     spiIndx : 1,

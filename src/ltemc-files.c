@@ -42,8 +42,9 @@ extern ltemDevice_t g_lqLTEM;
 
 /* Local Static Functions
 ------------------------------------------------------------------------------------------------------------------------- */
-static cmdParseRslt_t S__writeStatusParser();
+static resultCode_t S__filelistHndlr();
 static resultCode_t S__filesRxHndlr();
+static cmdParseRslt_t S__writeStatusParser();
 
 
 /**
@@ -105,7 +106,6 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
 
 resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
 {
-
     resultCode_t rslt;
     do
     {
@@ -115,10 +115,16 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
             break;
         }
 
+        //+QFLST: "230925T143135_ota.bin",278848
+        //char flResponse[file__fileListMaxCnt * 40];
+        memset(fileList, 0, sizeof(fileListResult_t));
+        // atcmd_configDataMode(file_fileContext, "+QFLST", S__filelistHndlr, flResponse, sizeof(flResponse), NULL, false);
+
+        atcmd_configDataParser(file_fileContext, "+QFLST", S__filelistHndlr, fileList->files);
+
         if (strlen(filename) == 0)
         {
             fileList->namePattern[0] = '*';
-            fileList->namePattern[1] = '\0';
             atcmd_invokeReuseLock("AT+QFLST");
         }
         else
@@ -126,7 +132,7 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
             strncpy(fileList->namePattern, filename, MIN(strlen(filename), file__filenameSz));
             atcmd_invokeReuseLock("AT+QFLST=\"%s\"", fileList->namePattern);
         }
-        rslt = atcmd_awaitResult();
+        rslt = atcmd_awaitResultWithOptions(2000, NULL);
         if (rslt != resultCode__success)
             break;
 
@@ -272,7 +278,7 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
 
     atcmd_configDataMode(0, "CONNECT", S__filesRxHndlr, NULL, 0, g_lqLTEM.fileCtrl->appRecvDataCB, false);
 
-    DPRINT(PRNT_CYAN, "Read file=1, reqst=%d\r\n", requestSz);
+    DPRINT(PRNT_CYAN, "Read (begin) reqstSz=%d\r\n", requestSz);
 
     bool invoked = false;
     if (readSz > 0)
@@ -438,9 +444,20 @@ static cmdParseRslt_t S__writeStatusParser()
 
 
 /**
+ * @brief Filelist output stream data handler, handles parsing response into fileListResponse_t.
+ * 
+ * @return result code of operation.
+ */
+static resultCode_t S__filelistHndlr()
+{
+
+}
+
+
+/**
  * @brief File stream RX data handler, marshalls incoming data from RX buffer to app (application).
  * 
- * @return number of bytes read 
+ * @return result code of operation. 
  */
 static resultCode_t S__filesRxHndlr()
 {

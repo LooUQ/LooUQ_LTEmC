@@ -83,8 +83,8 @@ void atcmd_reset(bool releaseLock)
  */
 void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_func rxDataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
 {
-    ASSERT(strlen(trigger) > 0); // verify 3rd party setup (stream)
-    ASSERT(rxDataHndlr != NULL); //
+    ASSERT(strlen(trigger) > 0);
+    ASSERT(rxDataHndlr != NULL);
 
     memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
 
@@ -96,6 +96,25 @@ void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_
     g_lqLTEM.atcmd->dataMode.txDataSz = dataSz;
     g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
     g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = runParser;
+}
+
+
+void atcmd_configDataParser(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* dataLoc)
+{
+    ASSERT(strlen(trigger) > 0);
+    ASSERT(rxDataHndlr != NULL);
+
+    memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
+
+    g_lqLTEM.atcmd->dataMode.dmState = dmState_enabled;
+    g_lqLTEM.atcmd->dataMode.dmMode = dmMode_parser;
+    g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
+    memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
+    g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
+    g_lqLTEM.atcmd->dataMode.txDataLoc = dataLoc;
+    g_lqLTEM.atcmd->dataMode.txDataSz = 0;
+    g_lqLTEM.atcmd->dataMode.applRecvDataCB = NULL;
+    g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = false;
 }
 
 
@@ -129,7 +148,7 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
     g_lqLTEM.atcmd->invokedAt = pMillis();
 
     // TEMPORARY
-    memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+    memcpy(g_lqLTEM.atcmd->cmdHistory, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
 
     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
     return true;
@@ -154,10 +173,8 @@ void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
     strcat(g_lqLTEM.atcmd->cmdStr, "\r");
 
     g_lqLTEM.atcmd->invokedAt = pMillis();
-
-    // TEMPORARY
-    memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, atcmd__cmdBufferSz);
-
+    // archive to separate property 
+    memcpy(g_lqLTEM.atcmd->cmdHistory, g_lqLTEM.atcmd->cmdStr, atcmd__cmdBufferSz);
     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
 }
 
