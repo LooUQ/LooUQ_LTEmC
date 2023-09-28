@@ -53,7 +53,6 @@
 
 #include "ltemc-platform.h"                     /// platform abstractions (arduino, etc.)
 #include "ltemc-atcmd.h"                        /// command processor interface
-#include "ltemc-mdminfo.h"                      /// modem information
 #include "ltemc-network.h"                      /// cellular provider and packet network 
 
 

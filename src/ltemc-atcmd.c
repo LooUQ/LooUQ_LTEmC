@@ -81,7 +81,7 @@ void atcmd_reset(bool releaseLock)
 /**
  *	@brief Setup automatic data mode switch/servicing.
  */
-void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_func rxDataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
+void atcmd_configDataForwarder(uint16_t contextKey, const char *trigger, dataRxHndlr_func rxDataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
 {
     ASSERT(strlen(trigger) > 0);
     ASSERT(rxDataHndlr != NULL);
@@ -89,11 +89,12 @@ void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_
     memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
 
     g_lqLTEM.atcmd->dataMode.dmState = dmState_enabled;
+    g_lqLTEM.atcmd->dataMode.dmMode = dmMode_forwarder;
     g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
     g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
-    g_lqLTEM.atcmd->dataMode.txDataLoc = dataLoc;
-    g_lqLTEM.atcmd->dataMode.txDataSz = dataSz;
+    g_lqLTEM.atcmd->dataMode.dataLoc = dataLoc;
+    g_lqLTEM.atcmd->dataMode.dataSz = dataSz;
     g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
     g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = runParser;
 }
@@ -111,8 +112,8 @@ void atcmd_configDataParser(uint16_t contextKey, const char* trigger, dataRxHndl
     g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
     g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
-    g_lqLTEM.atcmd->dataMode.txDataLoc = dataLoc;
-    g_lqLTEM.atcmd->dataMode.txDataSz = 0;
+    g_lqLTEM.atcmd->dataMode.dataLoc = dataLoc;
+    g_lqLTEM.atcmd->dataMode.dataSz = 0;
     g_lqLTEM.atcmd->dataMode.applRecvDataCB = NULL;
     g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = false;
 }
@@ -414,13 +415,13 @@ static resultCode_t S__readResult()
         if (g_lqLTEM.atcmd->dataMode.dataHndlr != NULL)
         {
             // looking for streamPrefix phrase
-            if (BBFFR_FOUND(bbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true)))
+            if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true)))
             {
                 g_lqLTEM.atcmd->dataMode.dmState = dmState_active;
                 g_lqLTEM.iop->dmActive = true;
                 g_lqLTEM.iop->dmTxEvents = 0;
 
-                resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)();
+                resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)(g_lqLTEM.atcmd->dataMode.dataLoc);
                 DPRINT(PRNT_MAGENTA, "DM-handler rslt=%d\r\n", dataRslt);
                 if (dataRslt == resultCode__success)
                 {
@@ -530,7 +531,7 @@ cmdParseRslt_t ATCMD_okResponseParser()
  */
 resultCode_t atcmd_stdTxDataHndlr()
 {
-    IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz);
+    IOP_startTx(g_lqLTEM.atcmd->dataMode.dataLoc, g_lqLTEM.atcmd->dataMode.dataSz);
 
     g_lqLTEM.atcmd->dataMode.dmState = dmState_active;
 
@@ -538,7 +539,7 @@ resultCode_t atcmd_stdTxDataHndlr()
     while (pMillis() - startTime < g_lqLTEM.atcmd->timeout)
     {
         uint16_t trlrIndx = bbffr_find(g_lqLTEM.iop->rxBffr, "OK", 0, 0, true);
-        if (BBFFR_FOUND(trlrIndx))
+        if (BBFFR_ISFOUND(trlrIndx))
         {
             bbffr_skipTail(g_lqLTEM.iop->rxBffr, OK_COMPLETED_LENGTH);          // OK + line-end
             return resultCode__success;

@@ -355,10 +355,9 @@ typedef enum streamType_tag
 
 
 // function prototypes
-typedef resultCode_t (*urcEvntHndlr_func)();        // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
-typedef resultCode_t (*dataRxHndlr_func)();         // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
-typedef void (*appRcvProto_func)();                 // prototype func() for stream recvData callback
-
+typedef resultCode_t (*urcEvntHndlr_func)();                    // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
+typedef resultCode_t (*dataRxHndlr_func)(void* destObject);     // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
+typedef void (*appRcvProto_func)();                             // prototype func() for stream recvData callback
 
 typedef struct streamCtrl_tag
 {
@@ -453,10 +452,11 @@ typedef struct dataMode_tag
     uint16_t contextKey;                                // unique identifier for data flow, could be dataContext(proto), handle(files), etc.
     char trigger[atcmd__dataModeTriggerSz];             // char sequence that signals the transition to data mode, data mode starts at the following character
     dataRxHndlr_func dataHndlr;                         // data handler function (TX/RX)
-    char* txDataLoc;                                    // location of data buffer (TX only)
-    uint16_t txDataSz;                                  // size of TX data or RX request
+    char* dataLoc;                                      // pointer to dataObject (buffer)
+    uint16_t dataSz;                                    // dataObject (buffer)
     bool runParserAfterDataMode;                        // true = invoke AT response parser after successful datamode. Data mode error always skips parser
     appRcvProto_func applRecvDataCB;                    // callback into app for received data delivery
+    uint16_t flowOffset;                                // count of previously process bytes in the dataMode flow
 } dataMode_t;
 
 

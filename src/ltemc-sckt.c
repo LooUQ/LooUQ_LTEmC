@@ -384,7 +384,7 @@ static resultCode_t S__scktRxHndlr()
     
     pDelay(1);                                                                                                  // ugly, but creating loop to wait 500uS seems silly
     uint8_t popCnt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
-    if (BBFFR_NOTFOUND(popCnt))
+    if (BBFFR_ISNOTFOUND(popCnt))
     {
         return resultCode__internalError;
     }

@@ -659,8 +659,8 @@ static void S__mqttUrcHandler()
     +QMTSTAT: <tcpconnectID>,<err_code>
     */
 
-    if (BBFFR_NOTFOUND(bbffr_find(rxBffr, "+QMT", 0, 0, false)) || // not a MQTT URC
-        bbffr_getOccupied(rxBffr) < 20)                            // -or- not sufficient chars to parse URC header
+    if (BBFFR_ISNOTFOUND(bbffr_find(rxBffr, "+QMT", 0, 0, false)) ||            // not a MQTT URC
+        bbffr_getOccupied(rxBffr) < 20)                                         // -or- not sufficient chars to parse URC header
     {
         return;
     }
@@ -672,16 +672,16 @@ static void S__mqttUrcHandler()
     /* MQTT Receive Message
      * -------------------------------------------------------------------------------------
      */
-    if (BBFFR_FOUND(bbffr_find(rxBffr, "+QMTRECV:", 0, 0, true))) // if recv, move tail to start of header
+    if (BBFFR_FOUND(bbffr_find(rxBffr, "+QMTRECV:", 0, 0, true)))               // if recv, move tail to start of header
     {
         // separator: "topic","message"           ,"            search offset from URC prefix
         uint16_t findIndx = bbffr_find(rxBffr, "\",\"", sizeof("+QMTRECV: "), 2, false);
-        if (BBFFR_NOTFOUND(findIndx))
+        if (BBFFR_ISNOTFOUND(findIndx))
         {
             return;
         }
         ASSERT(findIndx < sizeof(workBffr));
-        bbffr_pop(rxBffr, workBffr, findIndx + 3); // rxBffr->tail now points to message, operate on header in workBffr
+        bbffr_pop(rxBffr, workBffr, findIndx + 3);                              // rxBffr->tail now points to message, operate on header in workBffr
 
         workPtr += sizeof("+QMTRECV: ") - 1;
         dataCntxt = strtol(workPtr, &workPtr, 10);

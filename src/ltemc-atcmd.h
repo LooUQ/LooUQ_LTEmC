@@ -58,7 +58,7 @@ void atcmd_reset(bool releaseLock);
  * @param [in] applRecvDataCB Handler function to receive/parse incoming data 
  * @param [in] runParser If true, registered command response parser is invoked after successful data mode processing
  */
-void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool skipParser);
+void atcmd_configDataForwarder(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool skipParser);
 
 
 /**
@@ -243,7 +243,7 @@ resultCode_t atcmd_txDataHndlrRaw();
 /**
  *	@brief Stardard RX (in) data handler used by dataMode.
  */
-resultCode_t atcmd_stdRxDataHndlr();
+resultCode_t atcmd_stdRxDataHndlr(void* dataObject);
 
 
 #ifdef __cplusplus

@@ -571,8 +571,7 @@ void ltem_eventMgr()
 {
     /* look for a new incoming URC 
      */
-    int16_t urcPossible = bbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);       // look for prefix char in URC
-    if (BBFFR_NOTFOUND(urcPossible))
+    if (BBFFR_ISNOTFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false)))         // look for URC prefix char in buffer
     {
         return;
     }
@@ -580,11 +579,11 @@ void ltem_eventMgr()
     for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
     {
         resultCode_t serviceRslt;
-        if (g_lqLTEM.streams[i] != NULL &&  g_lqLTEM.streams[i]->urcHndlr != NULL)  // URC event handler in this stream, offer the data to the handler
+        if (g_lqLTEM.streams[i] != NULL &&  g_lqLTEM.streams[i]->urcHndlr != NULL)  // Stream active w/ URC event handler, invoke handler
         {
             serviceRslt = g_lqLTEM.streams[i]->urcHndlr();
         }
-        if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
+        if (serviceRslt == resultCode__cancelled)                                   // handler didn't serviced, continue looking
         {
             continue;
         }
@@ -730,29 +729,29 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
  */
 void S__ltemUrcHandler()                                                     
 {
-    bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
     char parseBffr[30];
+    bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
 
-    // bool isQuectel = cbffr_find(rxBffr, "+Q", 0, 0, false) != CBFFR_NOFIND;
-    // bool isCCITT = cbffr_find(rxBffr, "+C", 0, 0, false) != CBFFR_NOFIND;
+    bool isQuectel = BBFFR_ISFOUND(cbffr_find(rxBffr, "+Q", 0, 0, false));
+    bool isCCITT = BBFFR_ISFOUND(cbffr_find(rxBffr, "+C", 0, 0, false));
 
-    /* LTEm System URCs Handled Here
+    /* LTEm System URCs that are handled here
      *
      * +QIURC: "pdpdeact",<contextID>
     */
 
     /* PDP (packet network) deactivation/close
      ------------------------------------------------------------------------------------------- */
-    // if (cbffr_find(rxBffr, "+QIURC: \"pdpdeact\"", 0, 0, true) >= 0)
-    // {
-    //     for (size_t i = 0; i < dataCntxt__cnt; i++)
-    //     {
-    //         if (g_lqLTEM.streams[i].dataCloseCB)
-    //         {
-    //             g_lqLTEM.streams[i].dataCloseCB(i);
-    //         }
-    //     }
-    // }
+    if (cbffr_find(rxBffr, "+QIURC: \"pdpdeact\"", 0, 0, true) >= 0)
+    {
+        for (size_t i = 0; i < dataCntxt__cnt; i++)
+        {
+            if (g_lqLTEM.streams[i] != NULL)
+            {
+                g_lqLTEM.streams[i]->urcHndlr(true);
+            }
+        }
+    }
  
 }
 
