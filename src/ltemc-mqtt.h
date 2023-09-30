@@ -39,13 +39,13 @@ enum mqtt__constants
     mqtt__notUsingTls = 0,
     mqtt__publishTimeout = 15000,
 
-    mqtt__messageSz = 1548,                                             /// Maximum message size for BGx family (BG96, BG95, BG77)
+    mqtt__messageSz = 1548,                                             // Maximum message size for BGx family (BG96, BG95, BG77)
     mqtt__topicsCnt = 4,
     mqtt__topic_offset = 24,
-    mqtt__topic_nameSz = 90,                                            /// Azure IoTHub typically 50-70 chars
-    mqtt__topic_propsSz = 320,                                          /// typically 250-300 bytes
-    mqtt__topicSz = (mqtt__topic_nameSz + mqtt__topic_propsSz),         /// Total topic size (name+props) for buffer sizing
-    mqtt__topic_publishCmdOvrhdSz = 27,                                 /// when publishing, number of extra chars in outgoing buffer added to AT cmd
+    mqtt__topic_nameSz = 90,                                            // Azure IoTHub typically 50-70 chars
+    mqtt__topic_propsSz = 320,                                          // typically 250-300 bytes
+    mqtt__topicSz = (mqtt__topic_nameSz + mqtt__topic_propsSz),         // Total topic size (name+props) for buffer sizing
+    mqtt__topic_publishCmdOvrhdSz = 27,                                 // when publishing, number of extra chars in outgoing buffer added to AT cmd
 
     mqtt__topic_publishCmdSz = (mqtt__topic_nameSz + mqtt__topic_propsSz + mqtt__topic_publishCmdOvrhdSz),
 
@@ -53,9 +53,9 @@ enum mqtt__constants
     */
     mqtt__propertiesCnt = 12,
 
-    mqtt__clientIdSz = 20,
-    mqtt__userNameSz = 100,
-    mqtt__userPasswordSz = 200
+    mqtt__clientIdSz = 30,
+    mqtt__userNameSz = 93,
+    mqtt__userPasswordSz = 192
 };
 
 
@@ -77,9 +77,9 @@ Azure IoTHub cloud to device
 */
 typedef enum mqttResult_tag
 {
-    mqttResult_success = 0,         /// Sucessful publish.
-    mqttResult_retransmission = 1,  /// Publish Sucessful, with retransmission.
-    mqttResult_failed = 2           /// Publish failed.
+    mqttResult_success = 0,         // Sucessful publish.
+    mqttResult_retransmission = 1,  // Publish Sucessful, with retransmission.
+    mqttResult_failed = 2           // Publish failed.
 } mqttResult_t;
 
 
@@ -88,8 +88,8 @@ typedef enum mqttResult_tag
 */
 typedef enum mqttVersion_tag
 {
-    mqttVersion_3 = 3,              /// Set behavior to MQTT version 3.0
-    mqttVersion_311 = 4             /// Set behavior to MQTT version 3.1.1, Note: this is not MQTT 4.0
+    mqttVersion_3 = 3,              // Set behavior to MQTT version 3.0
+    mqttVersion_311 = 4             // Set behavior to MQTT version 3.1.1, Note: this is not MQTT 4.0
 } mqttVersion_t;
 
 
@@ -98,10 +98,10 @@ typedef enum mqttVersion_tag
 */
 typedef enum mqttQos_tag
 {
-    mqttQos_0 = 0,                  /// QOS 0: At most once (aka send and forget)
-    mqttQos_1 = 1,                  /// QOS 1: At least once
-    mqttQos_2 = 2,                  /// QOS 2: Exactly once
-    mqttQos_maxAzure = 1            /// MS Azure IoTHub max QOS (setting to QOS2 will force disconnect)
+    mqttQos_0 = 0,                  // QOS 0: At most once (aka send and forget)
+    mqttQos_1 = 1,                  // QOS 1: At least once
+    mqttQos_2 = 2,                  // QOS 2: Exactly once
+    mqttQos_maxAzure = 1            // MS Azure IoTHub max QOS (setting to QOS2 will force disconnect)
 } mqttQos_t;
 
 
@@ -110,8 +110,8 @@ typedef enum mqttQos_tag
 // */
 // typedef enum mqttSession_tag
 // {
-//     mqttSession_preserve = 0,       /// Preserve message that arrive previous to session and deliver to application.
-//     mqttSession_cleanStart = 1,     /// Clear out any previously received messages and start session "clean".
+//     mqttSession_preserve = 0,       // Preserve message that arrive previous to session and deliver to application.
+//     mqttSession_cleanStart = 1,     // Clear out any previously received messages and start session "clean".
 // } mqttSession_t;
 
 
@@ -120,15 +120,15 @@ typedef enum mqttQos_tag
 */
 typedef enum mqttState_tag
 {
-    mqttState_closed = 0,           /// MQTT is idle, not active
-    mqttState_open = 1,             /// MQTT is open, open but not connected
-    mqttState_connected = 2,        /// MQTT is connected, in session with server
+    mqttState_closed = 0,           // MQTT is idle, not active
+    mqttState_open = 1,             // MQTT is open, open but not connected
+    mqttState_connected = 2,        // MQTT is connected, in session with server
 
     // BGx MQTT stack can hang in any of the next 3 states, only known recovery is soft-restart module
     mqttState_PENDING = 100,        ///
-    mqttState_initializing = 101,   /// After connect cmd, MQTT is attempting connect
-    mqttState_connecting = 102,     /// After connect cmd, MQTT is attempting connect
-    mqttState_disconnecting = 104   /// After disconnect/close cmd
+    mqttState_initializing = 101,   // After connect cmd, MQTT is attempting connect
+    mqttState_connecting = 102,     // After connect cmd, MQTT is attempting connect
+    mqttState_disconnecting = 104   // After disconnect/close cmd
 } mqttState_t;
 
 
@@ -137,8 +137,8 @@ typedef enum mqttState_tag
 // */
 // typedef struct mqttTopicSub_tag
 // {
-//     char topicName[mqtt__topic_nameSz];     /// Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
-//     char wildcard;                          /// Set to '#' if multilevel wildcard specified when subscribing to topic.
+//     char topicName[mqtt__topic_nameSz];     // Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
+//     char wildcard;                          // Set to '#' if multilevel wildcard specified when subscribing to topic.
 // } mqttTopicSub_t;
 // typedef enum mqttRecvState_tag
 // {
@@ -161,10 +161,10 @@ typedef enum mqttMsgSegment_tag
 */
 typedef struct mqttTopicCtrl_tag
 {
-    char topicName[PROPSZ(mqtt__topic_nameSz)];    /// Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
-    char wildcard;                                  /// Set to '#' if multilevel wildcard specified when subscribing to topic.
+    char topicName[PROPSZ(mqtt__topic_nameSz)];    // Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
+    char wildcard;                                  // Set to '#' if multilevel wildcard specified when subscribing to topic.
     uint8_t Qos;
-    appRcvProto_func appRecvDataCB;                 /// callback into host application with data (cast from generic func* to stream specific function)
+    appRcvProto_func appRecvDataCB;                 // callback into host application with data (cast from generic func* to stream specific function)
 } mqttTopicCtrl_t;
 
 
@@ -173,25 +173,25 @@ typedef struct mqttTopicCtrl_tag
 */
 typedef struct mqttCtrl_tag
 {
-    char streamType;                            /// stream type
-    dataCntxt_t dataCntxt;                      /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
-    urcEvntHndlr_func urcEvntHndlr;             /// function to determine if "potential" URC event is for an open stream and perform reqd actions
+    char streamType;                            // stream type
+    dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataRxHndlr_func dataRxHndlr;               // function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcEvntHndlr;             // function to determine if "potential" URC event is for an open stream and perform reqd actions
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
-    mqttState_t state;                          /// Current state of the MQTT protocol services on device.
-    bool useTls;                                /// flag indicating SSL/TLS applied to stream
-    tlsCtrl_t* tlsCtrl;                         /// NULL for no TLS/SSL, otherwise a TLS control with settings
-    char hostUrl[host__urlSz];                  /// URL or IP address of host
-    uint16_t hostPort;                          /// IP port number host is listening on (allows for 65535/0)
-    mqttTopicCtrl_t* topics[mqtt__topicsCnt];   /// array of topic controls, provides for independent app receive functions per topic
-    char clientId[PROPSZ(mqtt__clientIdSz)];   /// for auto-restart
+    mqttState_t state;                          // Current state of the MQTT protocol services on device.
+    bool useTls;                                // flag indicating SSL/TLS applied to stream
+    tlsCtrl_t* tlsCtrl;                         // NULL for no TLS/SSL, otherwise a TLS control with settings
+    char hostUrl[host__urlSz];                  // URL or IP address of host
+    uint16_t hostPort;                          // IP port number host is listening on (allows for 65535/0)
+    mqttTopicCtrl_t* topics[mqtt__topicsCnt];   // array of topic controls, provides for independent app receive functions per topic
+    char clientId[PROPSZ(mqtt__clientIdSz)];   // for auto-restart
     char username[PROPSZ(mqtt__userNameSz)];
     char password[PROPSZ(mqtt__userPasswordSz)];
     mqttVersion_t mqttVersion;
-    uint16_t sentMsgId;                             /// MQTT TX message ID for QOS, automatically incremented, rolls at max value.
-    uint16_t recvMsgId;                             /// last received message identifier
+    uint16_t sentMsgId;                             // MQTT TX message ID for QOS, automatically incremented, rolls at max value.
+    uint16_t recvMsgId;                             // last received message identifier
     uint8_t errCode;
 } mqttCtrl_t;
 
