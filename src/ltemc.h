@@ -55,7 +55,7 @@
 
 #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
 #include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
-#include <lqdiag.h>                             /// PRINTDBG and ASSERT diagnostic data collection
+#include <lqdiag.h>                             /// DPRINT and ASSERT diagnostic data collection
 
 #include "ltemc-platform.h"                     /// platform abstractions (arduino, etc.)
 #include "ltemc-atcmd.h"                        /// command processor interface
@@ -93,33 +93,19 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCB, appEvntN
 
 /**
  *	@brief Power on and start the modem
- *  @param resetIfPoweredOn [in] Perform a software reset on the modem, if found in a powered on state
+ *  @param [in] resetAction Action to perform if LTEm is found already on, if LTEm is off it is powered on.
  */
 bool ltem_start(resetAction_t resetAction);
-
-
-// /**
-//  *	@brief Performs a software restart of LTEm1.
-//  *  @param coldStart [in] Set to true if the LTEm is being hard started, from a reset/power ON
-//  */
-// void ltem_initDevice(bool coldStart);
 
 
 /**
  *	@brief Performs a reset of LTEm.
  */
-bool ltem_reset(bool hardReset);
+bool ltem_reset(bool forcePowerCycle);
 
 
 /**
- *	@brief Turn modem power on/off.
- *	@param [in] powerState New state for modem: true is on, false is off.
- */
-void ltem_setPowerState(bool powerState);
-
-
-/**
- *	@brief Powers off the modem without destroying instance and configuration. Power modem back on with ltem_restart()
+ *	@brief Powers off the modem without destroying instance and configuration. Power modem back on with ltem_start()
  *  @note Use ltem_restart() to restore LTEm operations
  */
 void ltem_stop();
