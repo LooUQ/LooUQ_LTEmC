@@ -383,16 +383,14 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
  */
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint16_t messageSz, uint8_t timeoutSec)
 {
-    ASSERT(messageSz <= 4096); // max msg length PUB=4096 (PUBEX=560)
+    ASSERT(messageSz <= 4096);                                                                                      // max msg length PUB=4096 (PUBEX=560)
 
-    resultCode_t rslt = resultCode__conflict; // assume lock not obtainable, conflict
+    resultCode_t rslt = resultCode__conflict;                                                                       // assume lock not obtainable, conflict
     uint32_t timeoutMS = (timeoutSec == 0) ? mqtt__publishTimeout : PERIOD_FROM_SECONDS(timeoutSec);
 
-    mqttCtrl->sentMsgId++;                                          // keep sequence going regardless of MQTT QOS
-    uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId; // msgId not sent with QOS == 0, otherwise sent
-    // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
-
-    atcmd_configDataMode(mqttCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, true); // send message with dataMode
+    mqttCtrl->sentMsgId++;                                                                                          // keep sequence going regardless of MQTT QOS
+    uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId;                                                 // msgId not sent with QOS == 0, otherwise sent
+    atcmd_configDataForwarder(mqttCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, true);     // send message with dataMode
 
     if (atcmd_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
     {
@@ -672,7 +670,7 @@ static void S__mqttUrcHandler()
     /* MQTT Receive Message
      * -------------------------------------------------------------------------------------
      */
-    if (BBFFR_FOUND(bbffr_find(rxBffr, "+QMTRECV:", 0, 0, true)))               // if recv, move tail to start of header
+    if (BBFFR_ISFOUND(bbffr_find(rxBffr, "+QMTRECV:", 0, 0, true)))             // if recv, move tail to start of header
     {
         // separator: "topic","message"           ,"            search offset from URC prefix
         uint16_t findIndx = bbffr_find(rxBffr, "\",\"", sizeof("+QMTRECV: "), 2, false);
@@ -738,23 +736,23 @@ static void S__mqttUrcHandler()
         {
             uint16_t blockSz = bbffr_popBlock(rxBffr, &streamPtr, reqstBlockSz);
             eomFound = lq_strnstr(streamPtr, "\"\r\n", blockSz) != NULL;
-            blockSz -= (eomFound) ? 3 : 0; // adjust blockSz to not include in app content
+            blockSz -= (eomFound) ? 3 : 0;                                                      // adjust blockSz to not include in app content
 
             DPRINT(PRNT_dCYAN, "mqttUrcHndlr() msgBody ptr=%p blkSz=%d isFinal=%d\r\n", streamPtr, blockSz, eomFound);
 
             // signal new receive data available to host application
             ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_msgBody, streamPtr, blockSz, eomFound);
 
-            bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true); // commit POP
+            bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                 // commit POP
         } while (!eomFound);
     }
 
     /* MQTT Status Change
      * ------------------------------------------------------------------------------------- */
-    else if (BBFFR_FOUND(bbffr_find(rxBffr, "+QMTSTAT", 0, 20, true))) // MQTT connection closed
+    else if (BBFFR_ISFOUND(bbffr_find(rxBffr, "+QMTSTAT", 0, 20, true)))                        // MQTT connection closed
     {
         uint16_t eopUrl = bbffr_find(rxBffr, "\r\n", 0, 0, false);
-        if (BBFFR_FOUND(eopUrl))
+        if (BBFFR_ISFOUND(eopUrl))
         {
             bbffr_pop(rxBffr, workBffr, eopUrl);
             workPtr = lq_strnstr(workBffr, "+QMSTAT", sizeof(workBffr)) + 9;

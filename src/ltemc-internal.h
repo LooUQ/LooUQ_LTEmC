@@ -1,6 +1,6 @@
 /** ****************************************************************************
   \file 
-  \brief LTEmC INTERNAL type/enum/struct definitions
+  @brief LTEmC INTERNAL type/enum/struct definitions
   \author Greg Terrell, LooUQ Incorporated
 
   \loouq
@@ -93,26 +93,26 @@ typedef struct fileCtrl_tag
 
 
  /** 
- *  \brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
+ *  @brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
  * 
- *  Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
+ *  @note Subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
  */
 typedef struct ltemDevice_tag
 {
 	ltemPinConfig_t pinConfig;                  /// GPIO pin configuration for required GPIO and SPI interfacing
-    bool cancellationRequest;                   /// For RTOS implementations, token to request cancellation of long running task/action
+    bool hostConfigured;                        /// true once host resources (GPIO,SPI,IRQ) have been initialized
     deviceState_t deviceState;                  /// Device state of the BGx module
     appEvntNotify_func appEvntNotifyCB;         /// Event notification callback to parent application
+    bool cancellationRequest;                   /// (future) For RTOS implementations, token to request cancellation of long running task/action
 
     platformSpi_t* platformSpi;
-    //void *spi;                                  /// SPI device (methods signatures compatible with Arduino)
-    
-    iop_t *iop;                                 /// IOP subsystem controls
-    atcmd_t *atcmd;                             /// Action subsystem controls
-    modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
+    iop_t *iop;                                 /// IOP (I/O processor) subsystem controls. User should not interface with IOP
+
+    atcmd_t *atcmd;                             /// Action subsystem controls. Primary extension point for user implemented new features.
 	modemInfo_t *modemInfo;                     /// Data structure holding persistent information about application modem state
+    modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
     providerInfo_t *providerInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
-    streamCtrl_t* streams[ltem__streamCnt];     /// Data streams: protocols or file system
+    streamCtrl_t* streams[ltem__streamCnt];     /// Data streams: protocols or file system (mqtt, http, and files would be 3)
     fileCtrl_t* fileCtrl;
 
     ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
@@ -147,25 +147,25 @@ extern "C"
  * --------------------------------------------------------------------------------------------- */
 
 // /**
-//  *	\brief Checks recv buffer for command response and sets atcmd structure data with result.
+//  *	@brief Checks recv buffer for command response and sets atcmd structure data with result.
 //  */
 // resultCode_t ATCMD_readResult();
 
 /**
- *  \brief Default AT command result parser.
+ *  @brief Default AT command result parser.
 */
 cmdParseRslt_t ATCMD_okResponseParser();
 
 /**
- *  \brief Awaits exclusive access to QBG module command interface.
- *  \param timeoutMS [in] - Number of milliseconds to wait for a lock.
+ *  @brief Awaits exclusive access to QBG module command interface.
+ *  @param timeoutMS [in] - Number of milliseconds to wait for a lock.
  *  @return true if lock aquired prior to the timeout period.
 */
 bool ATCMD_awaitLock(uint16_t timeoutMS);
 
 /**
- *	\brief Returns the current atCmd lock state
- *  \return True if atcmd lock is active (command underway)
+ *	@brief Returns the current atCmd lock state
+ *  @return True if atcmd lock is active (command underway)
  */
 bool ATCMD_isLockActive();
 
@@ -173,19 +173,20 @@ bool ATCMD_isLockActive();
  * ------------------------------------------------------------------------- */
 
 /**
- *	\brief Base parser looking for a simple prompt string.
+ *	@brief Base parser looking for a simple prompt string.
  */
 cmdParseRslt_t ATCMD_readyPromptParser(const char *rdyPrompt);
 
 /**
- *	\brief Parser looking for BGx transmit data prompt "> "
+ *	@brief Parser looking for BGx transmit data prompt "> "
  */
 cmdParseRslt_t ATCMD_txDataPromptParser();
 
 /**
- *	\brief Parser looking for BGx CONNECT data prompt.
+ *	@brief Parser looking for BGx CONNECT data prompt.
  */
 cmdParseRslt_t ATCMD_connectPromptParser();
+
 
 #pragma endregion
 /* ------------------------------------------------------------------------------------------------
@@ -196,24 +197,20 @@ cmdParseRslt_t ATCMD_connectPromptParser();
 /* LTEmC internal, not intended for user application consumption.
  * --------------------------------------------------------------------------------------------- */
 
-
 /**
- *	\brief Initialize BGx Radio Access Technology (RAT) options.
+ *	@brief Initialize BGx Radio Access Technology (RAT) options.
  */
 void NTWK_initRatOptions();
 
 
 /**
- *	\brief Apply the default PDP context config to BGx.
+ *	@brief Apply the default PDP context config to BGx.
  */
 void NTWK_applyDefaulNetwork();
-
 
 #pragma endregion
 /* ------------------------------------------------------------------------------------------------
  * End NTWK LTEmC Internal Functions */
-
-
 
 
 /*

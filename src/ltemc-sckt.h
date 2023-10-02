@@ -84,7 +84,7 @@ typedef struct scktCtrl_tag
     */
     uint8_t pdpCntxt;
     appRcvProto_func appRecvDataCB;             /// callback into host application with data (cast from generic func* to stream specific function)
-    char hostUrl[SET_PROPLEN(sckt__urlHostSz)]; /// remote host URL/IP address
+    char hostUrl[PSZ(sckt__urlHostSz)]; /// remote host URL/IP address
     uint16_t hostPort;
     uint16_t lclPort;
     bool useTls;

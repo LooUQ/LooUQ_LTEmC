@@ -52,8 +52,13 @@
 
 enum ltem__constants
 {
+    // -- LTEM BUFFER SIZES 
+
+    atcmd__cmdBufferSz = 448,
+    atcmd__respBufferSz = 256,
     ltem__bufferSz_rx = 2048,
-    // ltem__bufferSz_tx = 1000,
+
+    // -- END BUFFERS --
 
     ltem__swVerSz = 12,
     ltem__errorDetailSz = 18,
@@ -265,7 +270,7 @@ ltemRfPriorityState_gnssLoaded = 4          // GNSS in loaded state
 */
 typedef struct modemSettings_tag
 {
-    char scanSequence[PROPSZ(ntwk__scanSeqSz)];
+    char scanSequence[PSZ(ntwk__scanSeqSz)];
     ntwkScanMode_t scanMode;
     ntwkIotMode_t iotMode;
     char pdpNtwkConfig[ntwk__pdpNtwkConfigSz];  // Invoke ready default context config
@@ -277,12 +282,12 @@ typedef struct modemSettings_tag
 */
 typedef struct modemInfo_tag
 {
-	char imei[PROPSZ(ntwk__imeiSz)];            // IMEI (15 digits) International Mobile Equipment Identity or IEEE UI (aka MAC, EUI-48 or EUI-64).
-	char iccid[PROPSZ(ntwk__iccidSz)];          // ICCID (20 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
-    char mfg[PROPSZ(ntwk__dvcMfgSz)];           // Device manufacturer name
-	char model[PROPSZ(ntwk__dvcModelSz)];       // Device model number
-	char fwver[PROPSZ(ntwk__dvcFwVerSz)];       // Firmware version of the device
-    char swver[PROPSZ(ltem__swVerSz)];          // software driver version
+	char imei[PSZ(ntwk__imeiSz)];               // IMEI (15 digits) International Mobile Equipment Identity or IEEE UI (aka MAC, EUI-48 or EUI-64).
+	char iccid[PSZ(ntwk__iccidSz)];             // ICCID (20 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
+    char mfg[PSZ(ntwk__dvcMfgSz)];              // Device manufacturer name
+	char model[PSZ(ntwk__dvcModelSz)];          // Device model number
+	char fwver[PSZ(ntwk__dvcFwVerSz)];          // Firmware version of the device
+    char swver[PSZ(ltem__swVerSz)];             // software driver version
 } modemInfo_t;
 
 
@@ -303,8 +308,8 @@ typedef struct networkInfo_tag
 */
 typedef struct providerInfo_tag
 {
-	char name[PROPSZ(ntwk__providerNameSz)];        // Provider name, some carriers may report as 6-digit numeric carrier ID.
-	char iotMode[PROPSZ(ntwk__iotModeNameSz)];      // Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
+	char name[PSZ(ntwk__providerNameSz)];           // Provider name, some carriers may report as 6-digit numeric carrier ID.
+	char iotMode[PSZ(ntwk__iotModeNameSz)];         // Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
     uint8_t defaultContext;
     uint8_t networkCnt;                             // The number of networks in networks[]
     networkInfo_t networks[ntwk__pdpContextCnt];    // Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
@@ -407,8 +412,8 @@ enum atcmd__constants
     atcmd__setLockModeManual = 0,
     atcmd__setLockModeAuto = 1,
 
-    atcmd__cmdBufferSz = 448,                       // prev=120, mqtt(Azure) connect=384, new=512 for universal cmd coverage, data mode to us dynamic TX bffr switching
-    atcmd__respBufferSz = 120,
+    // atcmd__cmdBufferSz = 448,                       // prev=120, mqtt(Azure) connect=384, new=512 for universal cmd coverage, data mode to us dynamic TX bffr switching
+    // atcmd__respBufferSz = 120,
     atcmd__streamPrefixSz = 12,                     // obsolete with universal data mode switch
     atcmd__dataModeTriggerSz = 13
 };
@@ -489,7 +494,7 @@ typedef struct atcmd_tag
     cmdResponseParser_func responseParserFunc;          // parser function to analyze AT cmd response and optionally extract value
     cmdParseRslt_t parserResult;                        // last parser invoke result returned
     bool preambleFound;                                 // true if parser found preamble
-    char errorDetail[SET_PROPLEN(ltem__errorDetailSz)]; // BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
+    char errorDetail[PSZ(ltem__errorDetailSz)];         // BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
     int32_t retValue;                                   // optional signed int value extracted from response
     dataMode_t dataMode;                                // controls for automatic data mode servicing - both TX (out) and RX (in). Std functions or extensions supported.
 } atcmd_t;

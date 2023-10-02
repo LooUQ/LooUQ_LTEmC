@@ -29,23 +29,29 @@
 
 #define LTEmC_VERSION "3.1.0"
 
-// #undef __cplusplus
 
-// #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
-// #include <lq-diagnostics.h>                     /// ASSERT and diagnostic data collection
-// #include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
-// #include "lq-platform.h"                        /// platform abstractions (arduino, etc.)
-// #include "ltemc-atcmd.h"                        /// command processor interface
-// #include "ltemc-mdminfo.h"                      /// modem information
-// #include "ltemc-network.h"                      /// cellular provider and packet network 
-// #ifdef __cplusplus
-// extern "C"
-// {
-// #endif // __cplusplus
+/* Communication Buffers
+ *
+ * LTEmC utilizes a buffers for general communications:
+ * A command composition buffer, sized in ltem_types.h with atcmd__cmdBufferSz 
+ * A command diagnostics history buffer, sized in ltem_types.h with atcmd__cmdBufferSz
+ * A command response buffer, sized in ltem_types.h with atcmd__respBufferSz
+ * A general purpose RX (receive) buffer, sized in ltem_types.h with ltem__bufferSz_rx
+ * 
+ * The RX buffer is implemented as a ring-buffer with block I/O optimized for the LTEm 
+ * modem hardware. It must be large enough to hold a complete I/O event (typical 1K block
+ * for file reads, 1.5K for MQTT, etc.). The default 2K buffer size should be considered
+ * a minimum value.
+ * 
+ * The response buffer is used to collect/parse most BGx module command responses. If a 
+ * command is going to respond with a large amount of info (aka a data transfer), the 
+ * system will utilize the AT-CMD modules dataMode where the receiver will need to 
+ * provide a data buffer. This is used with all of the stream (file, http, etc) subsystems.
+ * 
+ * If your application design requires a change in the internal buffers sizing, please
+ * consult with LooUQ. We can be reached at answers@loouq.com
+*/
 
-// Internal static buffers you may need to change for your application. Contact LooUQ for details.
-// #define IOP_RX_COREBUF_SZ 256
-// #define IOP_TX_BUFFER_SZ 1460
 
 #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
 #include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
@@ -56,29 +62,26 @@
 #include "ltemc-network.h"                      /// cellular provider and packet network 
 
 
-/* Add the following LTEmC feature sets as required for your project's main .cpp or .c file 
+/* Add the following LTEmC feature sets AS REQUIRED for your project, in your source code.
+ * LooUQ recommends that you examine the appropriate example in the LooUQ_LTEmC\test folder.
  * ----------------------------------------------------------------------------------------------- */
 // #include "ltemc-gnss.h"                         /// GNSS/GPS location services
 // #include "ltemc-sckt.h"                         /// tcp/udp socket communications
 // #include "ltemc-tls"                            /// SSL/TLS support
 // #include "ltemc-http"                           /// HTTP(S) support: GET/POST requests
 // #include "ltemc-mqtt"                           /// MQTT(S) support
-// #include "ltemc-filesys.h"                      /// use of BGx module file system functionality
-// #include "ltemc-gpio.h"                         /// use of BGx module GPIO expansion functionality
+// #include "ltemc-filesys.h"                      /// use internal flash file system
+// #include "ltemc-gpio.h"                         /// use internal GPIO expansion (LTEm3f only)
 
-
-/* LTEmC uses a global RX command response/data buffer.
- * The default for this buffer is 2KB (ltem__bufferSz_rx = 2048, in the ltemc-types.h)
- *
- * The TX side has no dedicated buffer, the application will use whatever buffer 
- * it uses to compose the content to send, passing a pointer to LTEmC.
- */
-/* ----------------------------------------------------------------------------------- */
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif // __cplusplus
+
+
+/* Create and control LTEm instance
+ * --------------------------------------------------------------------------------------------- */
 
 /**
  *	@brief Initialize the LTEm1 modem.
@@ -89,37 +92,10 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCB, appEvntN
 
 
 /**
- *	@brief Uninitialize the LTEm device structures.
- */
-void ltem_destroy();
-
-
-/**
- *	@brief Set radio priority. 
- *  @param [in] radioPriority The priority consumer for the radio receive path.
- *  @return Result code representing status of operation, OK = 200.
- */
-resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t radioPriority);
-
-
-/**
- *	@brief Set RF priority on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
- */
-ltemRfPriorityState_t ltem_getRfPriority();
-
-
-/**
  *	@brief Power on and start the modem
  *  @param resetIfPoweredOn [in] Perform a software reset on the modem, if found in a powered on state
  */
 bool ltem_start(resetAction_t resetAction);
-
-
-/**
- *	@brief Powers off the modem without destroying memory objects. Power modem back on with ltem_start()
- */
-void ltem_stop();
 
 
 // /**
@@ -143,25 +119,71 @@ void ltem_setPowerState(bool powerState);
 
 
 /**
- *	@brief Test for responsive BGx.
+ *	@brief Powers off the modem without destroying instance and configuration. Power modem back on with ltem_restart()
+ *  @note Use ltem_restart() to restore LTEm operations
+ */
+void ltem_stop();
+
+
+/**
+ *	@brief Uninitialize the LTEm device structures.
+ */
+void ltem_disconnect();
+
+
+/**
+ *	@brief Uninitialize the LTEm device structures.
+ */
+void ltem_discard();
+
+
+/* Configure LTEm/Application Integration
+ * --------------------------------------------------------------------------------------------- */
+
+/**
+ *	@brief Registers the address (void*) of your application yield callback handler.
+ *  @param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ */
+void ltem_setYieldCallback(yield_func yieldCB);
+
+
+/**
+ *	@brief Registers the address (void*) of your application event notification callback handler.
+ *  @param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ */
+void ltem_setEventNotifCallback(appEvntNotify_func eventNotifyCB);
+
+
+/**
+ *	@brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
+ *  @param notifyType [in] - Enum of broad notification categories.
+ *  @param notifyMsg [in] - Message from origination about the issue being reported.
+ */
+void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
+
+
+/* Get information about the modem, SIM or signal strength
+ * --------------------------------------------------------------------------------------------- */
+
+/**
+ *	@brief Test for responsive modem.
  *  @return True if modem is ready and responsive.
  */
 bool ltem_ping();
 
 
 /**
- *	@brief Set RF priority on BG95/BG77 modules. 
- *	@param [in] setPriority New radio priority.
- *  @return Result code representing status of operation, OK = 200.
+ *	@brief Get the LTEmC software version.
+ *  @return Version as a const char pointer.
  */
-resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t setPriority);
+const char* ltem_getModuleType();
 
 
 /**
- *	@brief Get RF priority state on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
+ *	@brief Get the LTEmC software version.
+ *  @return Version as a const char pointer.
  */
-ltemRfPriorityState_t ltem_getRfPriority();
+const char* ltem_getSwVersion();
 
 
 /**
@@ -170,20 +192,6 @@ ltemRfPriorityState_t ltem_getRfPriority();
  *  @details Formatted as: 23/09/01,13:48:55
  */
 void ltem_getDateTimeUtc(char *dateTime);
-
-
-/**
- *	@brief Get the LTEmC software version.
- *  \return Version as a const char pointer.
- */
-const char* ltem_getSwVersion();
-
-
-/**
- *	@brief Get the LTEmC software version.
- *  \return Version as a const char pointer.
- */
-const char* ltem_getModuleType();
 
 
 /**
@@ -229,19 +237,18 @@ uint8_t ltem_signalBars(uint8_t displayBarCount);
 
 
 
-
 /**
  *	@brief Reads the hardware status and internal application ready field to return device ready state
- *  \return DeviceState: 0=power off, 1=power on, 2=appl ready
+ *  @return DeviceState: 0=power off, 1=power on, 2=appl ready
  */
 deviceState_t ltem_getDeviceState();
 
 
-/**
- *	@brief Background work task runner. To be called in application Loop() periodically.
- */
-void ltem_eventMgr();
 
+/* Streams (protocols)
+ * Configure a protocol to use. Note the file stream is automatically configured and not added by
+ * user application.
+ * --------------------------------------------------------------------------------------------- */
 
 /**
  * @brief Adds a protocol stream to the LTEm streams table
@@ -272,25 +279,39 @@ streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType);
 
 
 /**
- *	@brief Registers the address (void*) of your application yield callback handler.
- *  @param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ *	@brief Background work task runner. To be called in application Loop() periodically.
+ *  @details Required for async receives: MQTT (topic subscribe), UDP/TCP/SSL/TLS sockets
  */
-void ltem_setYieldCallback(yield_func yieldCB);
+void ltem_eventMgr();
+
+
+/* Control radio multiplexing on BG95/BG77 based modems
+ * --------------------------------------------------------------------------------------------- */
+
+/**
+ *	@brief Set radio priority. 
+ *  @param [in] radioPriority The priority consumer for the radio receive path.
+ *  @return Result code representing status of operation, OK = 200.
+ */
+resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t radioPriority);
 
 
 /**
- *	@brief Registers the address (void*) of your application event notification callback handler.
- *  @param eventNotifCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ *	@brief Set RF priority on BG95/BG77 modules. 
+ *  @return Result code representing status of operation, OK = 200.
  */
-void ltem_setEventNotifCallback(appEvntNotify_func eventNotifyCB);
+ltemRfPriorityState_t ltem_getRfPriority();
 
+
+
+/* Power-saving: Control PCM and eDRX settings
+ * --------------------------------------------------------------------------------------------- */
 
 /**
- *	@brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
- *  @param notifyType [in] - Enum of broad notification categories.
- *  @param notifyMsg [in] - Message from origination about the issue being reported.
+ *	@brief Put modem in PSM mode
  */
-void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
+//void ltem_enterPsm();
+
 
 
 #pragma region LTEM internal functions

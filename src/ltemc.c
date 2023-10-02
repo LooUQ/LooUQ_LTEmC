@@ -110,7 +110,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
 /**
  *	@brief Uninitialize the LTEm device structures.
  */
-void ltem_destroy()
+void ltem_discard()
 {
 	ltem_stop(false);
 
@@ -119,10 +119,10 @@ void ltem_destroy()
 	gpio_pinClose(g_lqLTEM.pinConfig.resetPin);
 	gpio_pinClose(g_lqLTEM.pinConfig.statusPin);
 
-    ip_destroy();
+    // ip_discard();
     free(g_lqLTEM.atcmd);
-    iop_destroy();
-    spi_destroy(g_lqLTEM.platformSpi);
+    iop_discard();
+    spi_discard(g_lqLTEM.platformSpi);
 }
 
 
@@ -255,15 +255,26 @@ bool ltem_start(resetAction_t resetAction)
 // }
 
 
+
 /**
- *	@brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW.
+ *	@brief Powers off the modem without destroying instance and configuration. Power modem back on with ltem_restart()
  */
 void ltem_stop()
 {
+    QBG_powerOff();
+}
+
+
+/**
+ *	@brief Uninitialize the LTEm device structures.
+ */
+void ltem_disconnect()
+{
+    QBG_powerOff();
+
+    // don't do anything to reliquish GPIO, just stop using
     spi_stop(g_lqLTEM.platformSpi);
     IOP_stopIrq();
-    g_lqLTEM.deviceState = deviceState_powerOff;
-    QBG_powerOff();
 }
 
 
@@ -276,19 +287,6 @@ bool ltem_reset(bool hardReset)
     return ltem_start(resetAction);
 }
 
-
-/**
- *	@brief Turn modem power OFF
- */
-void ltem_powerOff()
-{
-    QBG_powerOff();  
-}
-
-
-void ltem_enterPcm()
-{
-}
 
 
 /**
