@@ -110,19 +110,6 @@ void QBG_powerOn()
         pDelay(100);                                                    // allow background tasks to operate
     }
     g_lqLTEM.deviceState = deviceState_powerOn;
-
-    // if (IOP_awaitAppReady())
-    // {
-    //     DPRINT(PRNT_INFO, "AppRdy recv'd\r\n");
-    // }
-    // else
-    // {
-    //     if (g_lqLTEM.deviceState == deviceState_powerOn)
-    //     {
-    //         DPRINT(PRNT_WARN, "AppRdy timeout\r\n");
-    //         g_lqLTEM.deviceState = deviceState_error;                   // missed it somehow
-    //     }
-    // }
     DPRINT(PRNT_DEFAULT, "DONE\r");
 }
 
@@ -208,7 +195,7 @@ void QBG_reset(resetAction_t resetAction)
     else // if (resetAction == powerReset)
     {
         QBG_powerOff();                                                     
-        pDelay(500);
+        pDelay(BGX__resetDelay);
         QBG_powerOn();
         DPRINT(PRNT_WHITE, "LTEm pwrReset\r");
     }

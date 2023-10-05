@@ -385,7 +385,7 @@ uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl);
 uint16_t mqtt_getErrCode(mqttCtrl_t *mqttCtrl);
 
 
-bool mqtt_recover(mqttCtrl_t *mqtt);
+// bool mqtt_recover(mqttCtrl_t *mqtt);
 
 
 #ifdef __cplusplus

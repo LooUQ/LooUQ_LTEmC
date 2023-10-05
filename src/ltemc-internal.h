@@ -43,7 +43,7 @@
 // #define IOP_TX_BUFFER_SZ 1460
 
 #include "ltemc.h"
-#include <lq-str.h>                         /// most LTEmC modules use LooUQ string functions
+#include <lq-str.h>                         // most LTEmC modules use LooUQ string functions
 #include <lq-bBuffer.h>
 
 #include "ltemc-quectel-bg.h"
@@ -82,12 +82,12 @@ typedef enum recvEvent_tag
 
 typedef struct fileCtrl_tag
 {
-    char streamType;                            /// stream type
+    char streamType;                            // stream type
     /*
      * NOTE: Does NOT follow exact struct field layout of the other streams, shares 1st field to validate type before casting 
      */
     uint8_t handle;
-    dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by atcmd dataMode (RX only)
+    dataRxHndlr_func dataRxHndlr;               // function to handle data streaming, initiated by atcmd dataMode (RX only)
     appRcvProto_func appRecvDataCB;
 } fileCtrl_t;
 
@@ -99,23 +99,24 @@ typedef struct fileCtrl_tag
  */
 typedef struct ltemDevice_tag
 {
-	ltemPinConfig_t pinConfig;                  /// GPIO pin configuration for required GPIO and SPI interfacing
-    bool cancellationRequest;                   /// For RTOS implementations, token to request cancellation of long running task/action
-    deviceState_t deviceState;                  /// Device state of the BGx module
-    appEvntNotify_func appEvntNotifyCB;         /// Event notification callback to parent application
+	ltemPinConfig_t pinConfig;                  // GPIO pin configuration for required GPIO and SPI interfacing
+    bool cancellationRequest;                   // For RTOS implementations, token to request cancellation of long running task/action
+    bool hostConfigured;                        // Host resources configured for LTEm use
+    deviceState_t deviceState;                  // Device state of the BGx module
+    appEvntNotify_func appEvntNotifyCB;         // Event notification callback to parent application
 
     platformSpi_t* platformSpi;
-    //void *spi;                                  /// SPI device (methods signatures compatible with Arduino)
+    //void *spi;                                  // SPI device (methods signatures compatible with Arduino)
     
-    iop_t *iop;                                 /// IOP subsystem controls
-    atcmd_t *atcmd;                             /// Action subsystem controls
-    modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
-	modemInfo_t *modemInfo;                     /// Data structure holding persistent information about application modem state
-    providerInfo_t *providerInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
-    streamCtrl_t* streams[ltem__streamCnt];     /// Data streams: protocols or file system
+    iop_t *iop;                                 // IOP subsystem controls
+    atcmd_t *atcmd;                             // Action subsystem controls
+    modemSettings_t *modemSettings;             // Settings to control radio and cellular network initialization
+	modemInfo_t *modemInfo;                     // Data structure holding persistent information about application modem state
+    providerInfo_t *providerInfo;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
+    streamCtrl_t* streams[ltem__streamCnt];     // Data streams: protocols or file system
     fileCtrl_t* fileCtrl;
 
-    ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
+    ltemMetrics_t metrics;                      // metrics for operational analysis and reporting
     uint16_t isrInvokeCnt;
 } ltemDevice_t;
 

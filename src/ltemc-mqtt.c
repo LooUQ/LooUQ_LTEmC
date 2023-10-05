@@ -580,74 +580,75 @@ static resultCode_t S__notifyServerTopicChange(mqttCtrl_t *mqttCtrl, mqttTopicCt
     return resultCode__internalError;
 }
 
-bool mqtt_recover(mqttCtrl_t *mqtt)
-{
-    resultCode_t rslt;
-    providerInfo_t *provider = NULL;
-    uint8_t signal = 0;
-    mqttState_t mqttState = mqttState_closed;
+// bool mqtt_recover(mqttCtrl_t *mqtt)
+// {
+//     resultCode_t rslt;
+//     providerInfo_t *provider = NULL;
+//     uint8_t signal = 0;
+//     mqttState_t mqttState = mqttState_closed;
 
-    bool pingRslt = ltem_ping();
-    DPRINT(PRNT_dMAGENTA, "  BGx Ping: %d\r\n", pingRslt);
-    if (pingRslt)
-    {
-        provider = ntwk_awaitProvider(0);
-        signal = mdminfo_signalRaw();
+//     bool pingRslt = ltem_ping();
+//     DPRINT(PRNT_dMAGENTA, "  BGx Ping: %d\r\n", pingRslt);
+//     if (pingRslt)
+//     {
+//         provider = ntwk_awaitProvider(0);
+//         signal = mdminfo_signalRaw();
 
-        DPRINT(PRNT_dMAGENTA, "    Signal: %d\r\n", signal);
-        if (signal == 99)
-        {
-            DPRINT(PRNT_WARN, "No LTE signal.\r\n");
-            return false; // no carrier provider present
-        }
-        if (strlen(provider->name) > 0)
-        {
-            DPRINT(PRNT_dMAGENTA, "  Provider: %s using %s (%s)\r\n", provider->name, provider->iotMode, provider->networks[0].ipAddress);
-            // DPRINT(PRNT_dMAGENTA, "  TX-CBFFR: %d\r\n", g_lqLTEM.iop->txPending);
-            // DPRINT(PRNT_dMAGENTA, "TX=%d, RX=%d\r\n", IOP_getTxLevel(), IOP_getRxLevel());
-        }
-        else
-            DPRINT(PRNT_WARN, "  Provider: NONE\r\n");
-    }
+//         DPRINT(PRNT_dMAGENTA, "    Signal: %d\r\n", signal);
+//         if (signal == 99)
+//         {
+//             DPRINT(PRNT_WARN, "No LTE signal.\r\n");
+//             return false; // no carrier provider present
+//         }
+//         if (strlen(provider->name) > 0)
+//         {
+//             DPRINT(PRNT_dMAGENTA, "  Provider: %s using %s (%s)\r\n", provider->name, provider->iotMode, provider->networks[0].ipAddress);
+//             // DPRINT(PRNT_dMAGENTA, "  TX-CBFFR: %d\r\n", g_lqLTEM.iop->txPending);
+//             // DPRINT(PRNT_dMAGENTA, "TX=%d, RX=%d\r\n", IOP_getTxLevel(), IOP_getRxLevel());
+//         }
+//         else
+//             DPRINT(PRNT_WARN, "  Provider: NONE\r\n");
+//     }
 
-    mqttState = mqtt_fetchStatus(mqtt);
-    DPRINT(PRNT_dMAGENTA, "MQTT State: %d\r\n", mqttState);
+//     mqttState = mqtt_fetchStatus(mqtt);
+//     DPRINT(PRNT_dMAGENTA, "MQTT State: %d\r\n", mqttState);
 
-    if (strlen(provider->name) == 0)
-        return false;
+//     if (strlen(provider->name) == 0)
+//         return false;
 
-    // if (mqttState == mqttState_connecting)
-    // {
-    //     mqtt_close(mqtt);
-    // }
+//     // if (mqttState == mqttState_connecting)
+//     // {
+//     //     mqtt_close(mqtt);
+//     // }
 
-    if (mqttState == mqttState_closed)
-    {
-        if (mqtt_start(mqtt, true) == resultCode__success)
-        {
-            DPRINT(PRNT_GREEN, "MQTT successfully restarted.\r\n");
-            return true;
-        }
-        DPRINT(PRNT_WARN, "Unable to restart MQTT.\r\n");
-    }
+//     if (mqttState == mqttState_closed)
+//     {
+//         if (mqtt_start(mqtt, true) == resultCode__success)
+//         {
+//             DPRINT(PRNT_GREEN, "MQTT successfully restarted.\r\n");
+//             return true;
+//         }
+//         DPRINT(PRNT_WARN, "Unable to restart MQTT.\r\n");
+//     }
 
-    // if (mqttState > mqttState_PENDING)
-    // {
-    //     mqtt_close(mqtt);
-    //     uint16_t timeout = PERIOD_FROM_SECONDS(30);
-    //     uint32_t startAction = pMillis();
-    //     while (mqtt_fetchStatus(mqtt) != mqttState_closed)
-    //     {
-    //         if (ELAPSED(startAction, timeout))
-    //         {
-    //             DPRINT(PRNT_WARN, "Timeout waiting for MQTT to close.\r\n");
-    //             return false;
-    //         }
-    //         pDelay(1000); // yield
-    //     }
-    // }
-    return false;
-}
+//     // if (mqttState > mqttState_PENDING)
+//     // {
+//     //     mqtt_close(mqtt);
+//     //     uint16_t timeout = PERIOD_FROM_SECONDS(30);
+//     //     uint32_t startAction = pMillis();
+//     //     while (mqtt_fetchStatus(mqtt) != mqttState_closed)
+//     //     {
+//     //         if (ELAPSED(startAction, timeout))
+//     //         {
+//     //             DPRINT(PRNT_WARN, "Timeout waiting for MQTT to close.\r\n");
+//     //             return false;
+//     //         }
+//     //         pDelay(1000); // yield
+//     //     }
+//     // }
+//     return false;
+// }
+
 
 static void S__mqttUrcHandler()
 {

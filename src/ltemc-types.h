@@ -382,6 +382,7 @@ typedef struct iop_tag
     volatile uint16_t txPending;            /// outstanding char count for TX
     volatile bool dmActive;                 /// interaction with BGx is now in data mode
     volatile uint16_t dmTxEvents;           /// number of TX blocks sent during data mode
+    uint8_t irqAttached;                    // GPIO port signaling IOP:ISR invoke
 
     bBuffer_t *rxBffr;                      /// receive buffer
     char txEot;                             /// if not NULL, char to output on empty TX FIFO; clears automatically on use.

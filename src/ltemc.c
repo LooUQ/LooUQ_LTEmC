@@ -130,25 +130,32 @@ void ltem_destroy()
  */
 bool ltem_start(resetAction_t resetAction)
 {
-  	// on Arduino compatible, ensure pin is in default "logical" state prior to opening
-	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
-	platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
-	platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
-	platform_writePin(g_lqLTEM.pinConfig.irqPin, gpioValue_high);
+    if (!g_lqLTEM.hostConfigured)
+    {
+        // on Arduino compatible, ensure pin is in default "logical" state prior to opening
+        platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
+        platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
+        platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
+        platform_writePin(g_lqLTEM.pinConfig.irqPin, gpioValue_high);
 
-	platform_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	platform_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
-	platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
-	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
+        platform_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+        platform_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+        platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+        platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
+        platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
+        DPRINT_V(PRNT_DEFAULT, "GPIO Configured\r\n");
 
-    spi_start(g_lqLTEM.platformSpi);                                        // start host SPI
+        spi_start(g_lqLTEM.platformSpi);                                        // start host SPI
+        DPRINT_V(PRNT_DEFAULT, "SPI Configured\r\n");
+        g_lqLTEM.hostConfigured = true;
+    }
 
-    bool ltemReset = true;
+    DPRINT(PRNT_CYAN, "LTEm reqst resetType=%d\r\n", resetAction);
+    bool ltemWasReset = true;
     if (QBG_isPowerOn())
     {
         if (resetAction == resetAction_skipIfOn)
-            ltemReset = false;
+            ltemWasReset = false;
         else
         {
             if (resetAction == resetAction_swReset)
@@ -156,6 +163,23 @@ bool ltem_start(resetAction_t resetAction)
                 if (!SC16IS7xx_isAvailable())                               // fall back to power reset if UART not available
                     resetAction = resetAction_powerReset;
             }
+            // DPRINT_V(PRNT_DEFAULT, "Ready to power off\r\n");
+            // QBG_powerOff();
+            // DPRINT_V(PRNT_DEFAULT, "Powered OFF\r\n");
+
+            // // for (size_t i = 0; i < 5; i++)
+            // // {
+            // //     DPRINT_V(PRNT_DEFAULT, ".");
+            // //     pDelay(1000);
+            // // }
+            // pDelay(1000);
+            
+            // DPRINT_V(PRNT_DEFAULT, "Ready to power on\r\n");
+            // IOP_detachIrq();
+            // QBG_powerOn();                                                       // turn on BGx
+            // DPRINT_V(PRNT_DEFAULT, "Powered ON\r\n");
+
+            IOP_detachIrq();
             QBG_reset(resetAction);                                         // do requested reset (sw, hw, pwrCycle)
         }
     }
@@ -163,13 +187,14 @@ bool ltem_start(resetAction_t resetAction)
     {
        QBG_powerOn();                                                       // turn on BGx
     }
+    DPRINT_V(PRNT_DEFAULT, "LTEm was reset=%d\r\n", ltemWasReset);
 
     SC16IS7xx_start();                                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
-    DPRINT_V(PRNT_CYAN, "UART started");
+    DPRINT_V(PRNT_CYAN, "UART started\r\n");
     SC16IS7xx_enableIrqMode();                                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
-    DPRINT_V(PRNT_CYAN, "UART set to IRQ mode");
+    DPRINT_V(PRNT_CYAN, "UART set to IRQ mode\r\n");
     IOP_attachIrq();                                                        // attach I/O processor ISR to IRQ
-    DPRINT_V(PRNT_CYAN, "UART IRQ attached");
+    DPRINT_V(PRNT_CYAN, "UART IRQ attached\r\n");
 
     IOP_interruptCallbackISR();                                             // force ISR to run once to sync IRQ 
 
@@ -205,16 +230,16 @@ bool ltem_start(resetAction_t resetAction)
         DPRINT(PRNT_DEFAULT, "\r");
     }
     else
-        DPRINT_V(PRNT_CYAN, "BGx options set");
+        DPRINT_V(PRNT_CYAN, "BGx options set\r\n");
 
     // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
     // DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
 
     ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
-    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured");
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured\r\n");
 
     ntwk_awaitProvider(2);                                              // attempt to warm-up provider/PDP briefly. 
-    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up");     // If longer duration required, leave that to application
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up\r\n");     // If longer duration required, leave that to application
 
     return true;
 }
