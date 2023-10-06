@@ -331,7 +331,7 @@ ltemRfPriorityState_t ltem_getRfPriority()
 /**
  *	@brief Get the current UTC date and time.
  */
-void ltem_getDateTimeUtc(char *dateTime)
+void ltem_getDateTimeUtc(char *dateTime, char format)
 {
     char* ts;
     uint8_t len;
@@ -346,11 +346,24 @@ void ltem_getDateTimeUtc(char *dateTime)
                 ts++;
                 if (*ts != '8')                                             // test for not initialized date/time, starts with 80 (aka 1980)
                 {
-                    char* stop = memchr(ts, '-', 20);                       // strip UTC offset, safe stop in trailer somewhere
-                    if (stop != NULL)                                       // found expected - delimeter before TZ offset
+                    char* tz = memchr(ts, '-', 20);                       // strip UTC offset, safe stop in trailer somewhere
+                    if (tz != NULL)                                       // found expected - delimeter before TZ offset
                     {
-                        *stop = '\0';
-                        strcpy(dateTime, ts);                               // safe strcpy to dateTime
+                        *tz = '\0';
+                        if (format == 'v' || format == 'V')                     // "VERBOSE" format
+                        {
+                            memcpy(dateTime, ts, 2);                            // year
+                            memcpy(dateTime + 2, ts + 3, 2);                    // month
+                            memcpy(dateTime + 4, ts + 6, 2);                    // day
+                            *(dateTime + 6) = 'T';                              // delimiter
+                            memcpy(dateTime + 7, ts + 9, 2);                    // hours
+                            memcpy(dateTime + 9, ts + 12, 2);                   // minutes
+                            memcpy(dateTime + 11, ts + 15, 3);                  // seconds + NULL
+                        }
+                        else                                                    // default format
+                        {
+                            strcpy(dateTime, ts);                               // safe c-string strcpy to dateTime
+                        }
                         return;
                     }
                 }

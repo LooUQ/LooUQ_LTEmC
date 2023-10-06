@@ -177,7 +177,7 @@ const char* ltem_getSwVersion();
  *  @param [out] dateTime Pointer to a character array (length >= 20 chars) to be updated with current UTC date/time 
  *  @details Formatted as: 23/09/01,13:48:55
  */
-void ltem_getDateTimeUtc(char *dateTime);
+void ltem_getDateTimeUtc(char *dateTime, char format);
 
 
 /**
