@@ -189,7 +189,7 @@ enum ntwk
 
     ntwk__scanSeqSz = 12,
     ntwk__imeiSz = 15,
-    ntwk__iccidSz = 20,
+    ntwk__iccidSz = 24,
 
     ntwk__dvcMfgSz = 18,
     ntwk__dvcModelSz = 18,
