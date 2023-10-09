@@ -368,40 +368,21 @@ resultCode_t file_delete(const char* filename)
 
 void file_getTsFilename(char* tsFilename, uint8_t fnSize, const char* suffix)
 {
-    char* timestamp[30] = {0};
-    char* srcPtr = timestamp;
-    char* destPtr = tsFilename;
-
-    ltem_getDateTimeUtc(timestamp);
-    memset(tsFilename, 0, fnSize);
-
-    memcpy(destPtr, srcPtr, 2);                                             // get year
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get month
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get day
-    strcat(destPtr, "T");
-    srcPtr += 3;
-    destPtr += 3;
-    memcpy(destPtr, srcPtr, 2);                                             // get hour
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get minute
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get second
-
-    if (strlen(suffix) > 0)                                                 // add suffix, if provided by caller
-        strcat(destPtr,suffix);
+    if (fnSize > (13 + strlen(suffix) + 1))                                 // need 13 for compact DateTime + suffix + NULL
+    {
+        ltem_getDateTimeUtc('c', tsFilename);                                   // get compact format
+        if (strlen(suffix) > 0)                                                 // add suffix, if provided by caller
+            strcat(tsFilename, suffix);
+        return;
+    }
+    tsFilename[0] = '\0';                                                   // return empty c-str if buffer too small
 }
 
 
 /* Possible future API methods
 */
-// fileUploadResult_t file_upload(const char* filename) {}
-// fileDownloadResult_t file_download(const char* filename) {}
+// fileUploadResult_t file_upload(const char* filename) {}                  // stream application data into file
+// fileDownloadResult_t file_download(const char* filename) {}              // stream file content to application
 
 
 #pragma Static Helpers and Response Parsers

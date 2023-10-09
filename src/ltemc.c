@@ -26,7 +26,7 @@
 
 #define SRCFILE "LTE"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -145,6 +145,7 @@ bool ltem_start(resetAction_t resetAction)
 
     spi_start(g_lqLTEM.platformSpi);                                        // start host SPI
 
+    IOP_detachIrq();                                                        // stop IRQ during reset to prevent accidental trigger
     bool ltemReset = true;
     if (QBG_isPowerOn())
     {
@@ -166,30 +167,17 @@ bool ltem_start(resetAction_t resetAction)
     }
 
     SC16IS7xx_start();                                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
-    DPRINT_V(PRNT_CYAN, "UART started");
+    DPRINT_V(PRNT_CYAN, "UART started\r\n");
     SC16IS7xx_enableIrqMode();                                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
-    DPRINT_V(PRNT_CYAN, "UART set to IRQ mode");
+    DPRINT_V(PRNT_CYAN, "UART set to IRQ mode\r\n");
     IOP_attachIrq();                                                        // attach I/O processor ISR to IRQ
-    DPRINT_V(PRNT_CYAN, "UART IRQ attached");
+    DPRINT_V(PRNT_CYAN, "UART IRQ attached\r\n");
 
-    IOP_interruptCallbackISR();                                             // force ISR to run once to sync IRQ 
 
+    DPRINT_V(PRNT_CYAN, "Waiting %dms for LTEm AppRdy\r\n", APPRDY_TIMEOUT);
     uint32_t startAppRdy = pMillis();                                       // wait for BGx to signal internal ready
     while (bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, true))
     {
-        // pDelay(500);
-        // SC16IS7xx_IIR iirVal;
-        // uint8_t rxLevel;
-        // char rxData[65] = {0};
-        // iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
-        // DPRINT(PRNT_CYAN, "iirVal=%d\r\n", iirVal.reg);
-
-        // rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-        // DPRINT(PRNT_CYAN, "rxLevel=%d\r\n", rxLevel);
-
-        // // SC16IS7xx_read(rxData, rxLevel);
-        // // DPRINT(PRNT_CYAN, "rxData=%s\r\n", rxData);
-
         if (IS_ELAPSED(startAppRdy, APPRDY_TIMEOUT))
             return false;
     }
@@ -202,58 +190,23 @@ bool ltem_start(resetAction_t resetAction)
 
     if (!QBG_setOptions())
     {
-        ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");     // send notification, maybe app can recover
+        ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault\r\n");     // send notification, maybe app can recover
         DPRINT(PRNT_DEFAULT, "\r");
     }
     else
-        DPRINT_V(PRNT_CYAN, "BGx options set");
+        DPRINT_V(PRNT_CYAN, "BGx options set\r\n");
 
     // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
-    // DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
+    // DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set\r\n");
 
-    ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
-    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured");
+    ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with operator attach
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured\r\n");
 
-    ntwk_awaitProvider(2);                                              // attempt to warm-up provider/PDP briefly. 
-    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up");     // If longer duration required, leave that to application
+    ntwk_awaitOperator(2);                                              // attempt to warm-up operator/PDP briefly. 
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): operator warmed up\r\n");     // If longer duration required, leave that to application
 
     return true;
 }
-
-
-// /**
-//  *	@brief Static internal BGx initialization logic shared between start and reset
-//  */
-// bool S__initLTEmDevice()
-// {
-//     ASSERT(QBG_isPowerOn());
-//     ASSERT(SC16IS7xx_isAvailable());
-
-//     SC16IS7xx_start();                                                  // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
-
-//     if (g_lqLTEM.deviceState != deviceState_appReady)
-//         return false;
-
-//     if (!QBG_setOptions())
-//     {
-//         ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault"); // send notification, maybe app can recover
-//         DPRINT(PRNT_DEFAULT, "\r");
-//     }
-//     else
-//         DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): bgx options set");
-
-//     // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
-//     // DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
-
-//     ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
-//     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured");
-
-//     ntwk_awaitProvider(2);                                              // attempt to warm-up provider/PDP briefly. 
-//     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up");     // If longer duration required, leave that to application
-
-//     return true;
-// }
-
 
 
 /**
@@ -331,7 +284,7 @@ ltemRfPriorityState_t ltem_getRfPriority()
 /**
  *	@brief Get the current UTC date and time.
  */
-void ltem_getDateTimeUtc(char *dateTime, char format)
+void ltem_getDateTimeUtc(char format, char *dateTime)
 {
     char* ts;
     uint8_t len;
@@ -352,6 +305,10 @@ void ltem_getDateTimeUtc(char *dateTime, char format)
                         *tz = '\0';
                         if (format == 'v' || format == 'V')                     // "VERBOSE" format
                         {
+                            strcpy(dateTime, ts);                               // safe c-string strcpy to dateTime
+                        }
+                        else                                                    // default format
+                        {
                             memcpy(dateTime, ts, 2);                            // year
                             memcpy(dateTime + 2, ts + 3, 2);                    // month
                             memcpy(dateTime + 4, ts + 6, 2);                    // day
@@ -359,10 +316,6 @@ void ltem_getDateTimeUtc(char *dateTime, char format)
                             memcpy(dateTime + 7, ts + 9, 2);                    // hours
                             memcpy(dateTime + 9, ts + 12, 2);                   // minutes
                             memcpy(dateTime + 11, ts + 15, 3);                  // seconds + NULL
-                        }
-                        else                                                    // default format
-                        {
-                            strcpy(dateTime, ts);                               // safe c-string strcpy to dateTime
                         }
                         return;
                     }

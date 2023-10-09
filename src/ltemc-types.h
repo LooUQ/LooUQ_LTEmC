@@ -184,20 +184,32 @@ typedef enum ntwkIotMode_tag
 
 
 /** 
+ *  @brief Enum describing the available options for operator selection access technology
+*/
+typedef enum ntwkOpAccessTech_tag
+{
+    ntwkOpAccessTech_gsm = 0,
+    ntwkOpAccessTech_emtc = 8,
+    ntwkOpAccessTech_nbiot = 9,
+    ntwkOpAccessTech_notspecified = 99
+} ntwkOpAccessTech_t;
+
+
+/** 
  *  @brief Typed numeric constants for network subsystem.
 */
 enum ntwk
 {
     ntwk__pdpContextCnt = 4,            // varies by carrier: Verizon=2, (Aeris)ATT=3
     ntwk__providerNameSz = 20,
-    ntwk__iotModeNameSz = 11,
+    ntwk__opAccessSz = 6,
     ntwk__pdpProtoSz = 7,
     ntwk__ipAddressSz = 40,
     ntwk__pdpNtwkConfigSz = 60,
 
     ntwk__scanSeqSz = 12,
     ntwk__imeiSz = 15,
-    ntwk__iccidSz = 20,
+    ntwk__iccidSz = 24,
 
     ntwk__dvcMfgSz = 18,
     ntwk__dvcModelSz = 18,
@@ -306,14 +318,14 @@ typedef struct networkInfo_tag
 /** 
  *  @brief Struct respresenting an ACTIVE network carrier/operator.
 */
-typedef struct providerInfo_tag
+typedef struct operatorInfo_tag
 {
 	char name[PSZ(ntwk__providerNameSz)];           // Provider name, some carriers may report as 6-digit numeric carrier ID.
-	char iotMode[PSZ(ntwk__iotModeNameSz)];         // Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
+	char opAccess[PSZ(ntwk__opAccessSz)];           // Network carrier protocol mode: eMTC, NBIoT, or GSM for BGx.
     uint8_t defaultContext;
     uint8_t networkCnt;                             // The number of networks in networks[]
     networkInfo_t networks[ntwk__pdpContextCnt];    // Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
-} providerInfo_t;
+} operatorInfo_t;
 
 
 

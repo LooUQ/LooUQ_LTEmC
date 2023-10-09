@@ -107,11 +107,12 @@ typedef struct ltemDevice_tag
 
     platformSpi_t* platformSpi;
     iop_t *iop;                                 /// IOP (I/O processor) subsystem controls. User should not interface with IOP
+    bool iopAttached;
 
     atcmd_t *atcmd;                             /// Action subsystem controls. Primary extension point for user implemented new features.
 	modemInfo_t *modemInfo;                     /// Data structure holding persistent information about application modem state
     modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
-    providerInfo_t *providerInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
+    operatorInfo_t *operatorInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
     streamCtrl_t* streams[ltem__streamCnt];     /// Data streams: protocols or file system (mqtt, http, and files would be 3)
     fileCtrl_t* fileCtrl;
 

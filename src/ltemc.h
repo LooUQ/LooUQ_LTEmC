@@ -174,10 +174,13 @@ const char* ltem_getSwVersion();
 
 /**
  *	@brief Get the current UTC date and time.
+    @param [in] format Char specifying v=verbose, or b=brief
  *  @param [out] dateTime Pointer to a character array (length >= 20 chars) to be updated with current UTC date/time 
- *  @details Formatted as: 23/09/01,13:48:55
+ * 
+ *  @details Formatted as: verbose="23/09/01,13:48:55", brief="230901T134855"
+ * 
  */
-void ltem_getDateTimeUtc(char *dateTime, char format);
+void ltem_getDateTimeUtc(char format, char *dateTime);
 
 
 /**

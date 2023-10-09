@@ -398,8 +398,10 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
         if (rslt == resultCode__success)
         {
             atcmd_close();
-            DPRINT(PRNT_dGREEN, "MQTT-PUB Success: rslt=%d\r\n", rslt);
+            DPRINT(PRNT_dGREEN, "MQTT-PUB Success\r\n");
         }
+        else
+            DPRINT(PRNT_dYELLOW, "MQTT-PUB Failed, rslt=%d\r\n", rslt);
     }
     return rslt;
 }
@@ -581,7 +583,7 @@ static resultCode_t S__notifyServerTopicChange(mqttCtrl_t *mqttCtrl, mqttTopicCt
 bool mqtt_recover(mqttCtrl_t *mqtt)
 {
     resultCode_t rslt;
-    providerInfo_t *provider = NULL;
+    operatorInfo_t *operator = NULL;
     uint8_t signal = 0;
     mqttState_t mqttState = mqttState_closed;
 
@@ -589,29 +591,29 @@ bool mqtt_recover(mqttCtrl_t *mqtt)
     DPRINT(PRNT_dMAGENTA, "  BGx Ping: %d\r\n", pingRslt);
     if (pingRslt)
     {
-        provider = ntwk_awaitProvider(0);
+        operator = ntwk_awaitOperator(0);
         signal = mdminfo_signalRaw();
 
         DPRINT(PRNT_dMAGENTA, "    Signal: %d\r\n", signal);
         if (signal == 99)
         {
             DPRINT(PRNT_WARN, "No LTE signal.\r\n");
-            return false; // no carrier provider present
+            return false; // no carrier operator present
         }
-        if (strlen(provider->name) > 0)
+        if (strlen(operator->name) > 0)
         {
-            DPRINT(PRNT_dMAGENTA, "  Provider: %s using %s (%s)\r\n", provider->name, provider->iotMode, provider->networks[0].ipAddress);
+            DPRINT(PRNT_dMAGENTA, "  operator: %s using %s (%s)\r\n", operator->name, operator->opAccess, operator->networks[0].ipAddress);
             // DPRINT(PRNT_dMAGENTA, "  TX-CBFFR: %d\r\n", g_lqLTEM.iop->txPending);
             // DPRINT(PRNT_dMAGENTA, "TX=%d, RX=%d\r\n", IOP_getTxLevel(), IOP_getRxLevel());
         }
         else
-            DPRINT(PRNT_WARN, "  Provider: NONE\r\n");
+            DPRINT(PRNT_WARN, "  operator: NONE\r\n");
     }
 
     mqttState = mqtt_fetchStatus(mqtt);
     DPRINT(PRNT_dMAGENTA, "MQTT State: %d\r\n", mqttState);
 
-    if (strlen(provider->name) == 0)
+    if (strlen(operator->name) == 0)
         return false;
 
     // if (mqttState == mqttState_connecting)

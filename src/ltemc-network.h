@@ -54,14 +54,21 @@ void ntwk_create();
  *  @details Example: scanSequence = "020301" represents: search LTE-M1, then LTE-NB1, then GSM
  *  @param [in] scanSequence Character string specifying the RAT scanning order; 00=Automatic[LTE-M1|LTE-NB1|GSM],01=GSM,02=LTE-M1,03=LTE-NB1
 */
-void ntwk_setProviderScanSeq(const char *sequence);
+void ntwk_setOperatorScanSeq(const char *sequence);
 
 
 /** 
  *  @brief Configure RAT(s) allowed to be searched
  *  @param [in] scanMode Enum specifying what cell network to scan; 0=Automatic,1=GSM only,3=LTE only
 */
-void ntwk_setProviderScanMode(ntwkScanMode_t mode);
+void ntwk_setOperatorScanMode(ntwkScanMode_t mode);
+
+
+/** 
+ *  @brief Configure prefered operator
+ *  @param [in] opGsmIdentifier Enum specifying what cell network to scan; 0=Automatic,1=GSM only,3=LTE only
+*/
+resultCode_t ntwk_setOperator(const char* opGsmIdentifier, ntwkOpAccessTech_t opAccess);
 
 
 /** 
@@ -107,14 +114,14 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
  *   @param [in] waitSec Number of seconds to wait for a network. Supply 0 for no wait.
  *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-providerInfo_t *ntwk_awaitProvider(uint16_t waitSec);
+operatorInfo_t *ntwk_awaitOperator(uint16_t waitSec);
 
 
 /**
- *	@brief Set the default/data context number for provider. Default is 1 if not overridden here.
+ *	@brief Set the default/data context number for network operator. Default is 1 if not overridden here.
  *  @param [in] defaultContext The data context to operate on. Typically 0 or 1, up to 15
  */
-void ntwk_setProviderDefaultContext(uint8_t defaultContext);
+void ntwk_setOperatorDefaultContext(uint8_t defaultContext);
 
 
 /**
@@ -128,7 +135,7 @@ void ntwk_deactivateNetwork(uint8_t contextId);
  *   @brief Get current provider information. If not connected to a provider will be an empty providerInfo struct
  *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-providerInfo_t *ntwk_getProviderInfo();
+operatorInfo_t *ntwk_getOperatorInfo();
 
 
 /**

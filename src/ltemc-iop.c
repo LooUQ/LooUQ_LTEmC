@@ -127,7 +127,10 @@ void IOP_attachIrq()
     g_lqLTEM.iop->txPending = 0;
     spi_usingInterrupt(g_lqLTEM.platformSpi, g_lqLTEM.pinConfig.irqPin);
     platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, IOP_interruptCallbackISR);
-    SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);            // ensure FIFO state is empty, UART will not refire interrupt if pending
+    g_lqLTEM.iopAttached = true;
+
+    // SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);         // ensure FIFO state is empty, UART will not refire interrupt if pending
+    IOP_interruptCallbackISR();                                     // force ISR to run once to sync IRQ 
 }
 
 
@@ -136,7 +139,11 @@ void IOP_attachIrq()
  */
 void IOP_detachIrq()
 {
-    platform_detachIsr(g_lqLTEM.pinConfig.irqPin);
+    if (g_lqLTEM.iopAttached)
+    {
+        g_lqLTEM.iopAttached = false;
+        platform_detachIsr(g_lqLTEM.pinConfig.irqPin);
+    }
 }
 
 
