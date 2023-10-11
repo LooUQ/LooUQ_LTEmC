@@ -53,8 +53,8 @@ enum mqtt__constants
     */
     mqtt__propertiesCnt = 12,
 
-    mqtt__clientIdSz = 30,
-    mqtt__userNameSz = 93,
+    mqtt__clientIdSz = 35,
+    mqtt__userNameSz = 98,
     mqtt__userPasswordSz = 192
 };
 
