@@ -26,7 +26,7 @@
 
 #define SRCFILE "LTE"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -43,6 +43,7 @@ ltemDevice_t g_lqLTEM;
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
+static void S__ltemInstanceMap();
 
 /* BGx module initialization commands (start script)
  * ---------------------------------------------------------------------------------------------
@@ -84,17 +85,24 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
         g_lqLTEM.platformSpi = spi_createFromIndex(g_lqLTEM.pinConfig.spiIndx, g_lqLTEM.pinConfig.spiCsPin);
     #endif
 
-    g_lqLTEM.modemSettings =  calloc(1, sizeof(modemSettings_t));
-    ASSERT(g_lqLTEM.modemSettings != NULL);
+    // platformSpi allocation by framework
 
-    g_lqLTEM.modemInfo = calloc(1, sizeof(modemInfo_t));
-    ASSERT(g_lqLTEM.modemInfo != NULL);
-
-    IOP_create();
+    IOP_create();                                                   // creates IOP internal controls and RX buffer
     
     g_lqLTEM.atcmd = calloc(1, sizeof(atcmd_t));
     ASSERT(g_lqLTEM.atcmd != NULL);
     atcmd_reset(true);
+
+    g_lqLTEM.modemInfo = calloc(1, sizeof(modemInfo_t));
+    ASSERT(g_lqLTEM.modemInfo != NULL);
+
+    g_lqLTEM.modemConfig =  calloc(1, sizeof(modemConfig_t));
+    ASSERT(g_lqLTEM.modemConfig != NULL);
+
+    g_lqLTEM.operatorInfo =  calloc(1, sizeof(operatorInfo_t));
+    ASSERT(g_lqLTEM.operatorInfo != NULL);
+
+    // stream allocation in x_initControl to appl variable, only a pointer here
 
     g_lqLTEM.fileCtrl = calloc(1, sizeof(fileCtrl_t));
     ASSERT(g_lqLTEM.fileCtrl != NULL);
@@ -103,6 +111,9 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
 
     g_lqLTEM.cancellationRequest = false;
     g_lqLTEM.appEvntNotifyCB = eventNotifCallback;
+
+    // available diagnostic resource, get map of g_lqLTEM struct
+    //S__ltemInstanceMap();
 }
 
 
@@ -182,6 +193,7 @@ bool ltem_start(resetAction_t resetAction)
             return false;
     }
     DPRINT_V(PRNT_dCYAN, "AppRdy recv'd=%dms\r\n", pMillis() - startAppRdy);
+    g_lqLTEM.deviceState = deviceState_appReady;
     bbffr_reset(g_lqLTEM.iop->rxBffr);
 
     // if (!IOP_awaitAppReady())
@@ -368,7 +380,7 @@ deviceState_t ltem_getDeviceState()
 bool ltem_ping()
 {
     resultCode_t rslt;
-    if (atcmd_tryInvoke("AT"))
+    if (g_lqLTEM.deviceState == deviceState_appReady && atcmd_tryInvoke("AT"))
     {
         rslt = atcmd_awaitResult();
         return rslt != resultCode__timeout;
@@ -625,7 +637,7 @@ streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType)
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
     if (g_lqLTEM.appEvntNotifyCB != NULL)                                       
-        (g_lqLTEM.appEvntNotifyCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
+        (g_lqLTEM.appEvntNotifyCB)(notifyType, notifyMsg);            // invoke app notify callback, NOTE: it may or may not return
 }
 
 
@@ -637,12 +649,14 @@ void ltem_setEventNotifCallback(appEvntNotify_func eventNotifCallback)
     g_lqLTEM.appEvntNotifyCB = eventNotifCallback;
 }
 
+
 /**
  *	@brief Registers the address (void*) of your application yield callback handler.
  */
-void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
+void ltem_setYieldCallback(yield_func yieldCallback)
 {
-    platform_yieldCB_func = yieldCallback;
+    if (g_yieldCB != NULL)
+        g_yieldCB = yieldCallback;
 }
 
 
@@ -729,5 +743,49 @@ static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem)
 }
 
 #pragma endregion
+
+
+
+
+/*
+	ltemPinConfig_t pinConfig;                  /// GPIO pin configuration for required GPIO and SPI interfacing
+    bool hostConfigured;                        /// true once host resources (GPIO,SPI,IRQ) have been initialized
+    deviceState_t deviceState;                  /// Device state of the BGx module
+    appEvntNotify_func appEvntNotifyCB;         /// Event notification callback to parent application
+    bool cancellationRequest;                   /// (future) For RTOS implementations, token to request cancellation of long running task/action
+    platformSpi_t* platformSpi;
+    iop_t *iop;                                 /// IOP (I/O processor) subsystem controls. User should not interface with IOP
+    bool iopAttached;
+    atcmd_t *atcmd;                             /// Action subsystem controls. Primary extension point for user implemented new features.
+	modemInfo_t *modemInfo;                     /// Data structure holding persistent information about application modem state
+    modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
+    operatorInfo_t *operatorInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
+    streamCtrl_t* streams[ltem__streamCnt];     /// Data streams: protocols or file system (mqtt, http, and files would be 3)
+    fileCtrl_t* fileCtrl;
+    ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
+    uint16_t isrInvokeCnt;
+*/
+static void S__ltemInstanceMap()
+{
+    DPRINT(0, "lqLTEM\t\t@=%p\r\n", &g_lqLTEM);
+    DPRINT(0, "pinCnfg\t\t@=%p\r\n", &g_lqLTEM.pinConfig);
+    DPRINT(0, "hostConf\t@=%p\r\n", &g_lqLTEM.hostConfigured);
+    DPRINT(0, "deviceState\t@=%p\r\n", &g_lqLTEM.deviceState);
+    DPRINT(0, "eventCB\t\t@=%p\t%p\r\n", &g_lqLTEM.appEvntNotifyCB, g_lqLTEM.appEvntNotifyCB);
+    DPRINT(0, "cancel\t\t@=%p\r\n", &g_lqLTEM.cancellationRequest);
+
+    DPRINT(0, "platSPI\t\t@=%p\t%p\r\n", &g_lqLTEM.platformSpi, g_lqLTEM.platformSpi);
+    DPRINT(0, "IOP\t\t@=%p\t%p\r\n", &g_lqLTEM.iop, g_lqLTEM.iop);
+    DPRINT(0, "IOPattached\t@=%p\r\n", &g_lqLTEM.iopAttached);
+    DPRINT(0, "atcmd\t\t@=%p\t%p\r\n", &g_lqLTEM.atcmd, g_lqLTEM.atcmd);
+    DPRINT(0, "modemInfo\t@=%p\t%p\r\n", &g_lqLTEM.modemInfo, g_lqLTEM.modemInfo);
+
+    DPRINT(0, "modemCnfg\t@=%p\t%p\r\n", &g_lqLTEM.modemConfig, g_lqLTEM.modemConfig);
+    DPRINT(0, "opInfo\t\t@=%p\t%p\r\n", &g_lqLTEM.operatorInfo, g_lqLTEM.operatorInfo);
+    DPRINT(0, "streams\t\t@=%p\t%p\r\n", &g_lqLTEM.streams, g_lqLTEM.streams);
+    DPRINT(0, "fileCtrl\t@=%p\t%p\r\n", &g_lqLTEM.fileCtrl, g_lqLTEM.fileCtrl);
+    DPRINT(0, "metrics\t\t@=%p\r\n", &g_lqLTEM.metrics);
+    DPRINT(0, "isrCount\t@=%p\r\n", &g_lqLTEM.isrInvokeCnt);
+}
 
 

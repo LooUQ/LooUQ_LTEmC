@@ -8,10 +8,9 @@
 
 #ifdef ARDUINO_ARCH_SAMD
 
+#include <lq-types.h>
 #include "platform-timing.h"
 #include <Arduino.h>
-
-platform_yieldCB_func_t platform_yieldCB_func;
 
 
 uint32_t pMillis()
@@ -20,11 +19,12 @@ uint32_t pMillis()
 }
 
 
+// local definition of yield function (possible to override)
+yield_func g_yieldCB = yield;       // Arduino yield() function
+
 void pYield()
 {
-    yield();                            // allow for platform yield processing (ex: Arduino scheduler, ESPx, etc.)
-    if (platform_yieldCB_func)          // allow for device application yield processing
-        platform_yieldCB_func();
+    g_yieldCB();                    // if not overridden, perform platform yield processing (ex: Arduino scheduler, ESPx, etc.)
 }
 
 

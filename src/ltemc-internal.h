@@ -32,18 +32,13 @@
 
 #define PRODUCT "LM" 
 
-// Common macro functions used across LTEmC environment
-#define PERIOD_FROM_SECONDS(period)  (period * 1000)
-#define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
-#define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
-#define STRCMP(x,y)  (strcmp(x,y) == 0)
-
 // Internal static buffers you may need to change for your application. Contact LooUQ for details.
 // #define IOP_RX_COREBUF_SZ 256
 // #define IOP_TX_BUFFER_SZ 1460
 
 #include "ltemc.h"
-#include <lq-str.h>                         /// most LTEmC modules use LooUQ string functions
+#include "ltemc-platform.h"
+#include <lq-str.h>                         // most LTEmC modules use LooUQ string functions
 #include <lq-bBuffer.h>
 
 #include "ltemc-quectel-bg.h"
@@ -82,12 +77,12 @@ typedef enum recvEvent_tag
 
 typedef struct fileCtrl_tag
 {
-    char streamType;                            /// stream type
+    char streamType;                            // stream type
     /*
      * NOTE: Does NOT follow exact struct field layout of the other streams, shares 1st field to validate type before casting 
      */
     uint8_t handle;
-    dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by atcmd dataMode (RX only)
+    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by atcmd dataMode (RX only)
     appRcvProto_func appRecvDataCB;
 } fileCtrl_t;
 
@@ -99,24 +94,24 @@ typedef struct fileCtrl_tag
  */
 typedef struct ltemDevice_tag
 {
-	ltemPinConfig_t pinConfig;                  /// GPIO pin configuration for required GPIO and SPI interfacing
-    bool hostConfigured;                        /// true once host resources (GPIO,SPI,IRQ) have been initialized
-    deviceState_t deviceState;                  /// Device state of the BGx module
-    appEvntNotify_func appEvntNotifyCB;         /// Event notification callback to parent application
-    bool cancellationRequest;                   /// (future) For RTOS implementations, token to request cancellation of long running task/action
+	ltemPinConfig_t pinConfig;                  // GPIO pin configuration for required GPIO and SPI interfacing
+    bool hostConfigured;                        // true once host resources (GPIO,SPI,IRQ) have been initialized
+    deviceState_t deviceState;                  // Device state of the BGx module
+    bool cancellationRequest;                   // (future) For RTOS implementations, token to request cancellation of long running task/action
+    yield_func yieldCB;
+    appEvntNotify_func appEvntNotifyCB;         // Event notification callback to parent application
 
     platformSpi_t* platformSpi;
-    iop_t *iop;                                 /// IOP (I/O processor) subsystem controls. User should not interface with IOP
+    iop_t *iop;                                 // IOP (I/O processor) subsystem controls. User should not interface with IOP
     bool iopAttached;
 
-    atcmd_t *atcmd;                             /// Action subsystem controls. Primary extension point for user implemented new features.
-	modemInfo_t *modemInfo;                     /// Data structure holding persistent information about application modem state
-    modemSettings_t *modemSettings;             /// Settings to control radio and cellular network initialization
-    operatorInfo_t *operatorInfo;               /// Data structure representing the cellular network provider and the networks (PDP contexts it provides)
-    streamCtrl_t* streams[ltem__streamCnt];     /// Data streams: protocols or file system (mqtt, http, and files would be 3)
-    fileCtrl_t* fileCtrl;
-
-    ltemMetrics_t metrics;                      /// metrics for operational analysis and reporting
+    atcmd_t *atcmd;                             // Action subsystem controls. Primary extension point for user implemented new features.
+	modemInfo_t *modemInfo;                     // Data structure holding persistent information about application modem state
+    modemConfig_t *modemConfig;                 // Settings to control radio and cellular network initialization
+    operatorInfo_t *operatorInfo;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
+    streamCtrl_t* streams[ltem__streamCnt];     // Data streams: protocols or file system (mqtt, http, and files would be 3)
+    fileCtrl_t* fileCtrl;                       // Control data for access to file system (singleton)
+    ltemMetrics_t metrics;                      // metrics for operational analysis and reporting
     uint16_t isrInvokeCnt;
 } ltemDevice_t;
 

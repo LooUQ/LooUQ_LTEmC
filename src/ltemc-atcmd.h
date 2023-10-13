@@ -58,7 +58,7 @@ void atcmd_reset(bool releaseLock);
  * @param [in] applRecvDataCB Handler function to receive/parse incoming data 
  * @param [in] runParser If true, registered command response parser is invoked after successful data mode processing
  */
-void atcmd_configDataForwarder(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool skipParser);
+void atcmd_configDataForwarder(uint16_t contextKey, const char* trigger, dataHndlr_func dataHndlr, char* dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool skipParser);
 
 
 /**
@@ -69,7 +69,7 @@ void atcmd_configDataForwarder(uint16_t contextKey, const char* trigger, dataRxH
  * @param [in] dataHndlr Handler function that services the data transfer 
  * @param [in] dataLoc Pointer to the data to be sent
  */
-void atcmd_configDataParser(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* dataLoc);
+void atcmd_configDataParser(uint16_t contextKey, const char* trigger, dataHndlr_func dataHndlr, char* dataLoc);
 
 // /**
 //  * @brief Set the TX end-of-transmission (EOT) signally character

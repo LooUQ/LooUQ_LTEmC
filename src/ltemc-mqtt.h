@@ -52,8 +52,8 @@ enum mqtt__constants
     /* if Azure IoTHub Note: 3-system properties, 3-properties, plus application specified properties */
     mqtt__propertiesCnt = 12,
 
-    mqtt__clientIdSz = 30,
-    mqtt__userNameSz = 93,
+    mqtt__clientIdSz = 35,
+    mqtt__userNameSz = 98,
     mqtt__userPasswordSz = 192
 };
 
@@ -174,7 +174,7 @@ typedef struct mqttCtrl_tag
 {
     char streamType;                            // stream type
     dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;               // function to handle data streaming, initiated by eventMgr() or atcmd module
+    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
     urcEvntHndlr_func urcEvntHndlr;             // function to determine if "potential" URC event is for an open stream and perform reqd actions
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 

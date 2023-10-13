@@ -5,13 +5,11 @@
 * arduinoTiming.cpp provides the translation between LTEm1 platform "C" and Arduino "C++".
 * Each platform function has a matching Arduino C++ free-function to wrap arduino functions.
 ------------------------------------------------------------------------------------------------------------------------- */
-
 #ifdef ARDUINO_ARCH_ESP32
 
 #include "platform-timing.h"
 #include <Arduino.h>
 
-platform_yieldCB_func_t platform_yieldCB_func;
 
 uint32_t pMillis()
 {
@@ -19,14 +17,18 @@ uint32_t pMillis()
 }
 
 
-void pYield()
+static void espYield()              // Since ESP pattern requires a parameter, it does not match typedef, this function wraps it to create a compatible func.
 {
-    if (platform_yieldCB_func)          // allow for device application yield processing
-        platform_yieldCB_func();
-    else
-        vTaskDelay(1);                  // ESP32: give core to next task
+    vTaskDelay(1);
 }
 
+// local definition of yield function (possible to override)
+yield_func g_yieldCB = espYield;   // ESP32 (FreeRTOS): block task (for 1 tick), then yield immediately to an unblocked task
+
+void pYield()
+{
+    g_yieldCB();                    // if not overridden, perform platform yield processing (ex: Arduino scheduler, ESPx, etc.)
+}
 
 void pDelay(uint32_t delay_ms)
 {

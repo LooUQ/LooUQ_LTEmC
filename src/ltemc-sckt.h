@@ -57,7 +57,7 @@ enum sckt__constants
     sckt__irdRequestMaxSz = 1500,
     sckt__irdRequestPageSz = sckt__irdRequestMaxSz / 2,
 
-    sckt__readTrailerSz = 6,                /// /r/nOK/r/n
+    sckt__readTrailerSz = 6,                // /r/nOK/r/n
     sckt__readTimeoutMs = 1000
 };
 
@@ -75,25 +75,25 @@ typedef enum scktState_tag
 */
 typedef struct scktCtrl_tag
 {
-    char streamType;                            /// stream type
-    dataCntxt_t dataCntxt;                      /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
-    urcEvntHndlr_func urcEvntHndlr;             /// function to determine if "potential" URC event is for an open stream and perform reqd actions
+    char streamType;                            // stream type
+    dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcEvntHndlr;             // function to determine if "potential" URC event is for an open stream and perform reqd actions
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
     uint8_t pdpCntxt;
-    appRcvProto_func appRecvDataCB;             /// callback into host application with data (cast from generic func* to stream specific function)
-    char hostUrl[PSZ(sckt__urlHostSz)]; /// remote host URL/IP address
+    appRcvProto_func appRecvDataCB;             // callback into host application with data (cast from generic func* to stream specific function)
+    char hostUrl[PSZ(sckt__urlHostSz)];         // remote host URL/IP address
     uint16_t hostPort;
     uint16_t lclPort;
     bool useTls;
     scktState_t state;
 
-    bool flushing;                              /// True if the socket was opened with cleanSession and the socket was found already open.
-    uint16_t irdPending;                        /// Char count of remaining for current IRD/SSLRECV flow. Starts at reported IRD value and counts down
-    uint32_t statsTxCnt;                        /// Number of atomic TX sends
-    uint32_t statsRxCnt;                        /// Number of atomic RX segments (URC/IRD)
+    bool flushing;                              // True if the socket was opened with cleanSession and the socket was found already open.
+    uint16_t irdPending;                        // Char count of remaining for current IRD/SSLRECV flow. Starts at reported IRD value and counts down
+    uint32_t statsTxCnt;                        // Number of atomic TX sends
+    uint32_t statsRxCnt;                        // Number of atomic RX segments (URC/IRD)
 } scktCtrl_t;
 
 

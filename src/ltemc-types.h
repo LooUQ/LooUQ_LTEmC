@@ -28,10 +28,6 @@
 #ifndef __LTEMC_TYPES_H__
 #define __LTEMC_TYPES_H__
 
-/* LTEmC is C99, this header is only referenced internally
- * https://stackoverflow.com/questions/13642827/cstdint-vs-stdint-h
-*/
-
 // TODO pull conditional, leave only std*.h
 
 // #ifdef __cplusplus
@@ -280,13 +276,13 @@ ltemRfPriorityState_gnssLoaded = 4          // GNSS in loaded state
 /** 
  *  @brief Struct holding cellular and radio settings.
 */
-typedef struct modemSettings_tag
+typedef struct modemConfig_tag
 {
     char scanSequence[PSZ(ntwk__scanSeqSz)];
     ntwkScanMode_t scanMode;
     ntwkIotMode_t iotMode;
     char pdpNtwkConfig[ntwk__pdpNtwkConfigSz];  // Invoke ready default context config
-} modemSettings_t;
+} modemConfig_t;
 
 
 /** 
@@ -308,7 +304,6 @@ typedef struct modemInfo_tag
 */
 typedef struct networkInfo_tag
 {
-    bool isActive;
     uint8_t pdpContextId;                           // context ID recognized by the carrier (valid are 1 to 16)
     pdpProtocol_t pdpProtocol;                      // IPv4, IPv6, etc.
 	char ipAddress[ntwk__ipAddressSz];              // The IP address obtained from the carrier for this context. The IP address of the modem.
@@ -373,14 +368,14 @@ typedef enum streamType_tag
 
 // function prototypes
 typedef resultCode_t (*urcEvntHndlr_func)();                    // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
-typedef resultCode_t (*dataRxHndlr_func)(void* destObject);     // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
+typedef resultCode_t (*dataHndlr_func)(void* destObject);       // data comes from TX/RX buffer, this function parses and forwards to application via appRcvProto_func
 typedef void (*appRcvProto_func)();                             // prototype func() for stream recvData callback
 
 typedef struct streamCtrl_tag
 {
     char streamType;                                // stream type
     dataCntxt_t dataCntxt;                          // integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;                   // function to handle data streaming, initiated by eventMgr() or atcmd module
+    dataHndlr_func dataRxHndlr;                     // function to handle data streaming, initiated by eventMgr() or atcmd module
     urcEvntHndlr_func urcHndlr;                     // function to handle data streaming, initiated by eventMgr() or atcmd module
 } streamCtrl_t;
 
@@ -468,7 +463,7 @@ typedef struct dataMode_tag
     dmMode_t dmMode;                                    // dataMode processing mode
     uint16_t contextKey;                                // unique identifier for data flow, could be dataContext(proto), handle(files), etc.
     char trigger[atcmd__dataModeTriggerSz];             // char sequence that signals the transition to data mode, data mode starts at the following character
-    dataRxHndlr_func dataHndlr;                         // data handler function (TX/RX)
+    dataHndlr_func dataHndlr;                           // data handler function (TX/RX)
     char* dataLoc;                                      // pointer to dataObject (buffer)
     uint16_t dataSz;                                    // dataObject (buffer)
     bool runParserAfterDataMode;                        // true = invoke AT response parser after successful datamode. Data mode error always skips parser

@@ -84,17 +84,13 @@ void ntwk_setIotMode(ntwkIotMode_t mode);
  *  @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
  *  @param [in] apn The APN name if required by network carrier.
  */
-resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn);
+void ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn);
 
 
 /**
- *	@brief Configure PDP Context.
- *  @param [in] cntxtId The context ID to operate on. Typically 0 or 1
- *  @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
- *  @param [in] apn The APN name if required by network carrier.
- *  
+ *	@brief Apply previously defined PDP Context configuration to device.
  */
-resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t protoType, const char *apn);
+void ntwk_applyPdpNetworkConfig();
 
 
 /**

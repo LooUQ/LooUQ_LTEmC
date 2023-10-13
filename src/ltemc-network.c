@@ -50,7 +50,8 @@ extern ltemDevice_t g_lqLTEM;
 // local static functions
 static cmdParseRslt_t S__contextStatusCompleteParser(void * atcmd, const char *response);
 static char *S__grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
-static void S__clearoperatorInfo();
+static void S__clearOperatorInfo();
+static bool S__isValidIpAddress(const char* ipAddr);
 
 
 /* public tcpip functions
@@ -62,7 +63,7 @@ static void S__clearoperatorInfo();
  */
 void ntwk_create()
 {
-    operatorInfo_t *operatorInfoPtr = (operatorInfo_t*)calloc(1, sizeof(operatorInfo_t));
+    operatorInfo_t* operatorInfoPtr = (operatorInfo_t*)calloc(1, sizeof(operatorInfo_t));
     ASSERT(operatorInfoPtr != NULL);
     g_lqLTEM.operatorInfo = operatorInfoPtr;
 }
@@ -71,9 +72,17 @@ void ntwk_create()
 /**
  *	\brief Build default data context configuration for modem to use on startup.
  */
-resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn)
+void ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn)
 {
-    return ntwk_configPdpNetwork(pdpContextId, protoType, apn);
+    ASSERT(g_lqLTEM.operatorInfo != NULL);                                              // ASSERT g_lqLTEM.operatorInfo has been initialized
+    ASSERT_W(protoType == pdpProtocol_IPV4, "OnlyIPV4SupportedCurrently");              // warn on not IPv4
+
+    g_lqLTEM.operatorInfo->defaultContext = pdpContextId;
+    // create self-contained PDP config command, cache for LTEm start event
+    snprintf(g_lqLTEM.modemConfig->pdpNtwkConfig, sizeof(g_lqLTEM.modemConfig->pdpNtwkConfig), "AT+QICSGP=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
+
+    // apply settings if LTEm already active
+    ntwk_applyPdpNetworkConfig();
 }
 
 
@@ -86,10 +95,9 @@ void ntwk_setOperatorScanSeq(const char* scanSequence)
     */
     if (strlen(scanSequence) > 0)
     {
-        strcpy(g_lqLTEM.modemSettings->scanSequence, scanSequence);
-        if (ltem_getDeviceState() == deviceState_appReady)
+        strcpy(g_lqLTEM.modemConfig->scanSequence, scanSequence);
+        if (atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence))
         {
-            atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence);
             atcmd_awaitResult();
         }
     }
@@ -105,10 +113,9 @@ void ntwk_setOperatorScanMode(ntwkScanMode_t scanMode)
     */
    if (strstr(ltem_getModuleType(), "BG9") != NULL)                         // BG96, BG95 only
    {
-        g_lqLTEM.modemSettings->scanMode = scanMode; 
-        if (ltem_getDeviceState() == deviceState_appReady)
+        g_lqLTEM.modemConfig->scanMode = scanMode; 
+        if (atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode))
         {
-            atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode);
             atcmd_awaitResult();
         }
    }
@@ -120,12 +127,10 @@ void ntwk_setOperatorScanMode(ntwkScanMode_t scanMode)
  */
 void ntwk_setIotMode(ntwkIotMode_t iotMode)
 {
-    /* AT+QCFG="iotopmode",<mode>
-    */
-    g_lqLTEM.modemSettings->iotMode = iotMode; 
-    if (ltem_getDeviceState() == deviceState_appReady)
+    g_lqLTEM.modemConfig->iotMode = iotMode; 
+    
+    if (atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode))
     {
-        atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode);
         atcmd_awaitResult();
     }
 }
@@ -137,19 +142,16 @@ void ntwk_setIotMode(ntwkIotMode_t iotMode)
 */
 resultCode_t ntwk_setOperator(const char* opGsmIdentifier, ntwkOpAccessTech_t opAccess)
 {
-    if (ltem_getDeviceState() == deviceState_appReady)
-    {
-        bool invokeRslt;
-        if (opAccess == ntwkOpAccessTech_notspecified)
-            invokeRslt = atcmd_tryInvoke("AT+COPS=1,2,\"%s\"", opGsmIdentifier);
-        else
-            invokeRslt = atcmd_tryInvoke("AT+COPS=1,2,\"%s\",%d", opGsmIdentifier, opAccess);
+    bool invokeRslt;
+    if (opAccess == ntwkOpAccessTech_notspecified)
+        invokeRslt = atcmd_tryInvoke("AT+COPS=1,2,\"%s\"", opGsmIdentifier);
+    else
+        invokeRslt = atcmd_tryInvoke("AT+COPS=1,2,\"%s\",%d", opGsmIdentifier, opAccess);
 
-        if (invokeRslt)
-            return atcmd_awaitResult();
-        else
-            return resultCode__conflict;
-    }
+    if (invokeRslt)
+        return atcmd_awaitResult();
+    else
+        return resultCode__conflict;
 }
 
 
@@ -159,29 +161,22 @@ resultCode_t ntwk_setOperator(const char* opGsmIdentifier, ntwkOpAccessTech_t op
  */
 void ntwk_setRatOptions()
 {
-    ntwk_setOperatorScanSeq(g_lqLTEM.modemSettings->scanSequence);
-    ntwk_setOperatorScanMode(g_lqLTEM.modemSettings->scanMode);
-    ntwk_setIotMode(g_lqLTEM.modemSettings->iotMode);
+    ntwk_setOperatorScanSeq(g_lqLTEM.modemConfig->scanSequence);
+    ntwk_setOperatorScanMode(g_lqLTEM.modemConfig->scanMode);
+    ntwk_setIotMode(g_lqLTEM.modemConfig->iotMode);
 }
 
 
-resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t protoType, const char *apn)
+void ntwk_applyPdpNetworkConfig()
 {
-    ASSERT(g_lqLTEM.operatorInfo != NULL);                                              // ASSERT g_lqLTEM.operatorInfo has been initialized
-    ASSERT_W(protoType == pdpProtocol_IPV4, "OnlyIPV4SupportedCurrently");              // warn on not IPv4
-
-    snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
-
-    resultCode_t rslt = resultCode__accepted;
-    if (g_lqLTEM.deviceState == deviceState_appReady)
+    if (strlen(g_lqLTEM.modemConfig->pdpNtwkConfig) > 0)
     {
-        if(atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+        if(atcmd_tryInvoke(g_lqLTEM.modemConfig->pdpNtwkConfig))
         {
-            rslt = atcmd_awaitResult();
+            atcmd_awaitResult();
         }
         atcmd_close();
     }
-    return rslt;
 }
 
 
@@ -193,9 +188,9 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
 {
     resultCode_t rslt;
 
-    snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,1,\"%s\",\"%s\",\"%s\",%d", pdpContextId, apn, userName, pw, authMethod);
+    snprintf(g_lqLTEM.modemConfig->pdpNtwkConfig, sizeof(g_lqLTEM.modemConfig->pdpNtwkConfig), "AT+QICSGP=%d,1,\"%s\",\"%s\",\"%s\",%d", pdpContextId, apn, userName, pw, authMethod);
 
-    if(atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+    if(atcmd_tryInvoke(g_lqLTEM.modemConfig->pdpNtwkConfig))
     {
         rslt = atcmd_awaitResult();
     }
@@ -210,7 +205,7 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
 void ntwk_applyPpdNetworkConfig()
 {
     resultCode_t rslt;
-    if(strlen(g_lqLTEM.modemSettings->pdpNtwkConfig) > 0 && atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+    if(strlen(g_lqLTEM.modemConfig->pdpNtwkConfig) > 0 && atcmd_tryInvoke(g_lqLTEM.modemConfig->pdpNtwkConfig))
     {
         rslt = atcmd_awaitResult();
         if (rslt != resultCode__success)
@@ -225,7 +220,7 @@ void ntwk_applyPpdNetworkConfig()
 */
 operatorInfo_t* ntwk_awaitOperator(uint16_t waitSec)
 {
-    ASSERT(g_lqLTEM.operatorInfo != NULL);         // ASSERT g_lqLTEM.operatorInfo has been initialized
+    ASSERT(g_lqLTEM.operatorInfo != NULL);                                  // ASSERT g_lqLTEM.operatorInfo has been initialized
 
     uint32_t startMillis, endMillis;
     startMillis = endMillis = pMillis();
@@ -233,7 +228,7 @@ operatorInfo_t* ntwk_awaitOperator(uint16_t waitSec)
 
     if (ATCMD_awaitLock(waitMs))                                            // open a reusable lock to complete multiple steps
     {
-        S__clearoperatorInfo();
+        S__clearOperatorInfo();
         do 
         {
             atcmd_invokeReuseLock("AT+COPS?");                              // get PROVIDER cellular carrier
@@ -272,14 +267,13 @@ operatorInfo_t* ntwk_awaitOperator(uint16_t waitSec)
             char *pContinue;
             uint8_t ntwkIndx = 0;
 
-            atcmd_invokeReuseLock("AT+QIACT?");
-            if (atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(20), NULL) == resultCode__success)
+            atcmd_invokeReuseLock("AT+CGACT?");
+            if (atcmd_awaitResult() == resultCode__success)
             {
-                pContinue = strstr(atcmd_getResponse(), "+QIACT: ");
+                pContinue = strstr(atcmd_getResponse(), "+CGACT: ");
                 while (pContinue != NULL && ntwkIndx < ntwk__pdpContextCnt)
                 {
                     g_lqLTEM.operatorInfo->networks[ntwkIndx].pdpContextId = strtol(pContinue + 8, &pContinue, 10);
-                    g_lqLTEM.operatorInfo->networks[ntwkIndx].isActive = *(++pContinue) == '1';
                     // only supported protocol now is IPv4, alias IP
                     g_lqLTEM.operatorInfo->networks[ntwkIndx].pdpProtocol = pdpProtocol_IPV4;
                     pContinue = strstr(pContinue, "+QIACT: ");
@@ -291,20 +285,13 @@ operatorInfo_t* ntwk_awaitOperator(uint16_t waitSec)
             // get IP addresses
             for (size_t i = 0; i <= ntwkIndx; i++)
             {
-                if (g_lqLTEM.operatorInfo->networks[i].isActive)
+                atcmd_invokeReuseLock("AT+CGPADDR=%d", g_lqLTEM.operatorInfo->networks[i].pdpContextId);
+                if (atcmd_awaitResult() == resultCode__success)
                 {
-                    atcmd_invokeReuseLock("AT+CGPADDR=%d", g_lqLTEM.operatorInfo->networks[i].pdpContextId);
-                    if (atcmd_awaitResult() == resultCode__success)
-                    {
-                        pContinue = strstr(atcmd_getResponse(), "+CGPADDR: ");
-                        pContinue = strchr(pContinue + 10, ',') + 1;
-                        char *pLineEnd = strchr(pContinue, '\r');
-                        strncpy(g_lqLTEM.operatorInfo->networks[i].ipAddress, pContinue, MIN(pLineEnd - pContinue, ntwk__ipAddressSz));
-                    }
-                }
-                else
-                {
-                    strcpy(g_lqLTEM.operatorInfo->networks[i].ipAddress, "0.0.0.0");
+                    pContinue = strstr(atcmd_getResponse(), "+CGPADDR: ");
+                    pContinue = strchr(pContinue + 10, ',') + 1;
+                    char *pLineEnd = strchr(pContinue, '\r');
+                    strncpy(g_lqLTEM.operatorInfo->networks[i].ipAddress, pContinue, MIN(pLineEnd - pContinue, ntwk__ipAddressSz));
                 }
             }
             g_lqLTEM.operatorInfo->networkCnt = ++ntwkIndx;
@@ -347,7 +334,7 @@ void ntwk_deactivateNetwork(uint8_t cntxtId)
  *   \brief Get current provider information. If not connected to a provider will be an empty operatorInfo struct
  *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-operatorInfo_t *ntwk_getoperatorInfo()
+operatorInfo_t* ntwk_getoperatorInfo()
 {
     if (strlen(g_lqLTEM.operatorInfo->name) > 0)
         return &g_lqLTEM.operatorInfo;
@@ -367,7 +354,7 @@ uint8_t ntwk_getActiveNetworkCount()
 /**
  *	\brief Get network (PDP) information
  */
-networkInfo_t *ntwk_getNetworkInfo(uint8_t pdpContextId)
+networkInfo_t* ntwk_getNetworkInfo(uint8_t pdpContextId)
 {
     for (size_t i = 0; i < g_lqLTEM.operatorInfo->networkCnt; i++)
     {
@@ -413,6 +400,22 @@ uint8_t ntwk_getRegistrationStatus()
 // }
 
 
+/**
+ *	@brief Check network ready condition.
+ */
+bool ntwk_isReady()
+{
+    for (size_t i = 0; i < g_lqLTEM.operatorInfo->networkCnt; i++)
+    {
+        if (g_lqLTEM.operatorInfo->networks[i].pdpContextId == g_lqLTEM.operatorInfo->defaultContext)
+        {
+            return S__isValidIpAddress(g_lqLTEM.operatorInfo->networks[i].ipAddress);
+        }
+    }
+    return false;
+}
+
+
 /** 
  *  \brief Development/diagnostic function to retrieve visible providers from cell radio.
  */
@@ -444,10 +447,12 @@ void ntwkDiagnostics_getProviders(char *providersList, uint16_t listSz)
 #pragma region private functions
 
 
-static void S__clearoperatorInfo()
+static void S__clearOperatorInfo()
 {
+    uint8_t dfltContext = g_lqLTEM.operatorInfo->defaultContext;                            
     memset((void*)g_lqLTEM.operatorInfo->networks, 0, g_lqLTEM.operatorInfo->networkCnt * sizeof(networkInfo_t));
     memset((void*)g_lqLTEM.operatorInfo, 0, sizeof(operatorInfo_t));
+    g_lqLTEM.operatorInfo->defaultContext = dfltContext;                                        // restore defaultContext setting
 }
 
 
@@ -486,5 +491,13 @@ static char *S__grabToken(char *source, int delimiter, char *tokenBuf, uint8_t t
     memcpy(tokenBuf, source, MIN(tokenSz, tokenBufSz-1));
     return delimAt + 1;
 }
+
+
+static bool S__isValidIpAddress(const char* ipAddr)
+{
+    DPRINT(0, "[ntwk] IP Addr is %s\r\n", ipAddr);
+    return strlen(ipAddr) >= 7 && ipAddr[0] != '0' && memchr(ipAddr, '.', 4);
+}
+
 
 #pragma endregion

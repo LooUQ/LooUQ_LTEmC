@@ -26,7 +26,7 @@
 
 #define SRCFILE "ATC"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 //#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -81,10 +81,10 @@ void atcmd_reset(bool releaseLock)
 /**
  *	@brief Setup automatic data mode switch/servicing.
  */
-void atcmd_configDataForwarder(uint16_t contextKey, const char *trigger, dataRxHndlr_func rxDataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
+void atcmd_configDataForwarder(uint16_t contextKey, const char *trigger, dataHndlr_func dataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
 {
     ASSERT(strlen(trigger) > 0);
-    ASSERT(rxDataHndlr != NULL);
+    ASSERT(dataHndlr != NULL);
 
     memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
 
@@ -92,7 +92,7 @@ void atcmd_configDataForwarder(uint16_t contextKey, const char *trigger, dataRxH
     g_lqLTEM.atcmd->dataMode.dmMode = dmMode_forwarder;
     g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
-    g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
+    g_lqLTEM.atcmd->dataMode.dataHndlr = dataHndlr;
     g_lqLTEM.atcmd->dataMode.dataLoc = dataLoc;
     g_lqLTEM.atcmd->dataMode.dataSz = dataSz;
     g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
@@ -100,7 +100,7 @@ void atcmd_configDataForwarder(uint16_t contextKey, const char *trigger, dataRxH
 }
 
 
-void atcmd_configDataParser(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, char* dataLoc)
+void atcmd_configDataParser(uint16_t contextKey, const char* trigger, dataHndlr_func dataHndlr, char* dataLoc)
 {
     ASSERT(strlen(trigger) > 0);
     ASSERT(rxDataHndlr != NULL);
@@ -111,7 +111,7 @@ void atcmd_configDataParser(uint16_t contextKey, const char* trigger, dataRxHndl
     g_lqLTEM.atcmd->dataMode.dmMode = dmMode_parser;
     g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
-    g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
+    g_lqLTEM.atcmd->dataMode.dataHndlr = dataHndlr;
     g_lqLTEM.atcmd->dataMode.dataLoc = dataLoc;
     g_lqLTEM.atcmd->dataMode.dataSz = 0;
     g_lqLTEM.atcmd->dataMode.applRecvDataCB = NULL;
@@ -130,7 +130,7 @@ void atcmd_setDataModeEot(uint8_t eotChar)
  */
 bool atcmd_tryInvoke(const char *cmdTemplate, ...)
 {
-    if (g_lqLTEM.atcmd->isOpenLocked)
+    if (g_lqLTEM.deviceState != deviceState_appReady || g_lqLTEM.atcmd->isOpenLocked)
         return false;
 
     atcmd_reset(true);                                 // clear atCmd control
@@ -186,7 +186,7 @@ void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
 void atcmd_close()
 {
     g_lqLTEM.atcmd->isOpenLocked = false;
-    g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->invokedAt;
+    g_lqLTEM.atcmd->execDuration = (g_lqLTEM.atcmd->invokedAt) ? pMillis() - g_lqLTEM.atcmd->invokedAt : 0;
 }
 
 
@@ -531,6 +531,7 @@ cmdParseRslt_t ATCMD_okResponseParser()
  */
 resultCode_t atcmd_stdTxDataHndlr()
 {
+    DPRINT_V(PRNT_dYELLOW, "[atcmd-txDH] triggered src@=%p for len=%d\r\n", g_lqLTEM.atcmd->dataMode.dataLoc, g_lqLTEM.atcmd->dataMode.dataSz);
     IOP_startTx(g_lqLTEM.atcmd->dataMode.dataLoc, g_lqLTEM.atcmd->dataMode.dataSz);
 
     g_lqLTEM.atcmd->dataMode.dmState = dmState_active;
@@ -542,6 +543,7 @@ resultCode_t atcmd_stdTxDataHndlr()
         if (BBFFR_ISFOUND(trlrIndx))
         {
             bbffr_skipTail(g_lqLTEM.iop->rxBffr, OK_COMPLETED_LENGTH);          // OK + line-end
+            DPRINT_V(PRNT_dYELLOW, "[atcmd-txDH] completed\r\n");
             return resultCode__success;
         }
         pDelay(1);
