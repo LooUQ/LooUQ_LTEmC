@@ -31,7 +31,7 @@
 
 #define SRCFILE "NXP" // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 // #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
-// #define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -169,25 +169,30 @@ void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data)
 /**
  *	@brief Reads through the SC16IS741A bridge (its RX FIFO)
  */
-void SC16IS7xx_read(void *dest, uint8_t dest_len)
+void SC16IS7xx_read(uint8_t *dest, uint8_t destLen)
 {
     union __SC16IS7xx_reg_addr_byte__ reg_addr = {0};
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
-
-    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, dest, dest_len);
+    
+    // spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, dest, destLen);
+    spi_transferBlock(g_lqLTEM.platformSpi, reg_addr.reg_address, NULL, dest, destLen);
 }
 
 /**
  *	@brief Write through the SC16IS741A bridge
  */
-void SC16IS7xx_write(const void *src, uint8_t src_len)
+void SC16IS7xx_write(const uint8_t *src, uint8_t srcLen)
 {
     union __SC16IS7xx_reg_addr_byte__ reg_addr = {0};
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 
-    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, src, src_len);
+    // DBGTRACE_LOGNUM(SRCFILE, "NXPWR", srcLen);
+    // DBGTRACE_LOGCHAR(SRCFILE, "NXPWR", src, srcLen);
+
+    // spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, src, srcLen);
+    spi_transferBlock(g_lqLTEM.platformSpi, reg_addr.reg_address, src, NULL, srcLen);
 }
 
 /**

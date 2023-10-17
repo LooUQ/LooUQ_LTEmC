@@ -82,7 +82,11 @@ void setup() {
     if (rslt == 504)
         DPRINT(PRNT_WARN, "GNSS was already on\r\n", rslt);
 
+    char tkBffr[8];
+    uint32_t rfSwStart = pMillis();
+
     ltem_setRfPriority(ltemRfPrioritySet_gnss);
+    DPRINT(PRNT_CYAN, "RF priority switch, elapsed=%d\r\n", pMillis() - rfSwStart);
 
     lastCycle = cycle_interval;
     fixWaitStart = pMillis();

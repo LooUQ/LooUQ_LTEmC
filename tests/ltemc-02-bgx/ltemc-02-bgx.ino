@@ -102,7 +102,7 @@ void loop()
 
     sendCommand(cmd);
     // wait for BG96 response in FIFO buffer
-    char response[65] = {0};
+    uint8_t response[65] = {0};
     recvResponse(response);
 
     //\r\nQuectel\r\nBG96\r\nRevision: BG96MAR02A07M1G\r\n\r\nOK\r\n", 
@@ -112,26 +112,26 @@ void loop()
     const char* validResponse = "\r\nQuectel\r\nBG";                                              // initial characters in response
     char* tailAt = NULL;
 
-    if (strstr(response, "APP RDY"))
+    if (strstr((char*)response, "APP RDY"))
     {
         DPRINT(PRNT_WARN, "Received APP RDY from LTEm.\r\n");
     }
-    if (strstr(response, "RDY"))
+    if (strstr((char*)response, "RDY"))
     {
         DPRINT(PRNT_WARN, "Received BG RDY from LTEm.\r\n");
     }
-    if (strlen(response) == 0)
+    if (strlen((char*)response) == 0)
     {
         DPRINT(PRNT_WARN, "Got no response from BGx.\r\n");
         // if (nullResponses > 2)
         //     indicateFailure("BGx is not responding to cmds... failed."); 
     }
 
-    if (strlen(response) > 40 )
+    if (strlen((char*)response) > 40 )
     {
-        if (strstr(response, validResponse))
+        if (strstr((char*)response, validResponse))
         {
-            tailAt = strstr(response, "OK\r\n");
+            tailAt = strstr((char*)response, "OK\r\n");
             if (tailAt != NULL)
                 DPRINT(PRNT_DEFAULT, "Got correctly formed response: \r\n%s", response);  
             else
@@ -195,7 +195,7 @@ void sendCommand(const char* cmd)
 
 // This functionality is normally handled in the IOP module's interrupt service routine (ISR). 
 // ISR functionality is tested in the ltemc-03-iopisr test
-void recvResponse(char *response)
+void recvResponse(uint8_t *response)
 {
     bool dataAvailable = false;
     uint8_t recvSz = 0;

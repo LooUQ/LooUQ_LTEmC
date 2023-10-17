@@ -147,9 +147,21 @@ bool atcmd_getPreambleFound();
 
 /**
  *	@brief Returns the atCmd result value
+ *  @note DEPRECATED Function will be elimated in a future release (<= 4.x), convert to using atcmd_getToken()
  *  @return If the parser was instructed to capture a value (see atcmd_stdResponseParser()) the signed integer value found
  */
 int32_t atcmd_getValue();
+
+
+/**
+ *	@brief Returns a token from the result of the last module command
+ *  @param [in] preamble Character phrase prefixing the section of the response to search
+ *  @param [in] tokenIndx The 0-based token index to return
+ *  @param [out] token Char pointer to found token (will be returned null-terminated)
+ *  @param [in] tkBffrSz Size of the application provided buffer to hold the returned token
+ *  @return Result code describing token search and extraction results (success, notFound, preConditionFailed-insufficient buffer)
+ */
+resultCode_t atcmd_getToken(uint8_t tokenIndx, char* token, uint8_t tkBffrSz);
 
 
 /**

@@ -444,7 +444,7 @@ void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data);
  *	\param dest [out] - The destination buffer
  *	\param dest_len [in] - The length of the destination buffer
  */
-void SC16IS7xx_read(void* dest, uint8_t dest_len);
+void SC16IS7xx_read(uint8_t* dest, uint8_t dest_len);
 
 
 /**
@@ -452,7 +452,7 @@ void SC16IS7xx_read(void* dest, uint8_t dest_len);
  *	\param src [in] - The source data to write
  *	\param src_len [in] - The length of the source
  */
-void SC16IS7xx_write(const void * src, uint8_t src_len);
+void SC16IS7xx_write(const uint8_t* src, uint8_t src_len);
 
 
 /**

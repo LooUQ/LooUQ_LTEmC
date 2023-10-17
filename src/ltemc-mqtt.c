@@ -26,7 +26,7 @@
 
 #define SRCFILE "MQT"            // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT         // expand DIAGPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE // expand DIAGPRINT and DIAGPRINT_V into debug output
+#define ENABLE_DIAGPRINT_VERBOSE // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -154,13 +154,13 @@ void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t host
 resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession)
 {
     resultCode_t rslt;
-    DPRINT_V(PRNT_INFO, "[mqtt-strt] Starting\r\n");
+    DPRINT_V(PRNT_INFO, "[mqtt^strt] Starting\r\n");
     pDelay(1000);
 
     do
     {
         ltem_addStream(mqttCtrl); // register stream for background receive operations (URC)
-        DPRINT_V(PRNT_INFO, "[mqtt-strt] stream registered\r\n");
+        DPRINT_V(PRNT_INFO, "[mqtt^strt] stream registered\r\n");
 
         rslt = mqtt_open(mqttCtrl);
         if (rslt != resultCode__success)
@@ -168,7 +168,7 @@ resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession)
             DPRINT(PRNT_WARN, "[mqtt-strt] Open fail status=%d\r\n", rslt);
             break;
         }
-        DPRINT_V(PRNT_INFO, "[mqtt-strt] Opened\r\n");
+        DPRINT_V(PRNT_INFO, "[mqtt^strt] Opened\r\n");
 
         rslt = mqtt_connect(mqttCtrl, true);
         if (rslt != resultCode__success)
@@ -176,7 +176,7 @@ resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession)
             DPRINT(PRNT_WARN, "[mqtt-strt] Connect fail status=%d\r\n", rslt);
             break;
         }
-        DPRINT_V(PRNT_INFO, "[mqtt-strt] Connected\r\n");
+        DPRINT_V(PRNT_INFO, "[mqtt^strt] Connected\r\n");
 
         for (size_t i = 0; i < mqtt__topicsCnt; i++)
         {
@@ -190,7 +190,7 @@ resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession)
                 break;
             }
         }
-        DPRINT_V(PRNT_GREEN, "[mqtt-strt] Started\r\n");
+        DPRINT_V(PRNT_GREEN, "[mqtt^strt] Started\r\n");
     } while (false);
 
     return rslt;
@@ -219,7 +219,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
             {
                 if (atcmd_awaitResult() != resultCode__success)
                 {
-                    DPRINT_V(PRNT_dYELLOW, "Config MQTT SSL/TLS context failed.\r\n");
+                    DPRINT_V(PRNT_dYELLOW, "[mqtt^opn] Config MQTT SSL/TLS context failed.\r\n");
                     return resultCode__preConditionFailed;
                 }
             }
@@ -229,7 +229,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
         {
             if (atcmd_awaitResult() != resultCode__success)
             {
-                DPRINT_V(PRNT_dYELLOW, "Config MQTT version failed.\r\n");
+                DPRINT_V(PRNT_dYELLOW, "[mqtt^opn] Config MQTT version failed.\r\n");
                 return resultCode__preConditionFailed;
             }
         }
@@ -237,7 +237,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
         if (atcmd_tryInvoke("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, mqttCtrl->hostUrl, mqttCtrl->hostPort))
         {
             resultCode_t rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(30), S__mqttOpenCompleteParser);
-            DPRINT_V(PRNT_dGREEN, "[mqtt-opn] resp: %s", atcmd_getRawResponse());
+            DPRINT_V(PRNT_dGREEN, "[mqtt^opn] resp: %s", atcmd_getRawResponse());
 
             if (rslt == resultCode__success && atcmd_getValue() == 0)
             {
@@ -263,10 +263,10 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
     }
     else if (mqttCtrl->state == mqttState_open || mqttCtrl->state == mqttState_connected)   // already open or connected
     {
-        DPRINT_V(PRNT_dGREEN, "[mqtt-opn] already open, state=%d\r\n", mqtt_getStatus(mqttCtrl));
+        DPRINT_V(PRNT_dGREEN, "[mqtt^opn] already open, state=%d\r\n", mqtt_getStatus(mqttCtrl));
         return resultCode__success;
     }
-    DPRINT_V(PRNT_dGREEN, "[mqtt-opn] already open, expected state=%d, actual state=%d\r\n", mqtt_getStatus(mqttCtrl), mqtt_fetchStatus(mqttCtrl));
+    DPRINT_V(PRNT_dGREEN, "[mqtt^opn] already open, expected state=%d, actual state=%d\r\n", mqtt_getStatus(mqttCtrl), mqtt_fetchStatus(mqttCtrl));
     return resultCode__preConditionFailed;                                                  // in some transitional state
 }
 
@@ -287,7 +287,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
 
         atcmd_tryInvoke("AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->dataCntxt, mqttCtrl->clientId, mqttCtrl->username, mqttCtrl->password);
         rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), S__mqttConnectCompleteParser); // in autolock mode, so this will release lock
-        DPRINT_V(PRNT_dGREEN, "[mqtt-con] resp: %s", atcmd_getRawResponse());
+        DPRINT_V(PRNT_dGREEN, "[mqtt^con] resp: %s", atcmd_getRawResponse());
 
         if (rslt == resultCode__success) // COMMAND executed, outcome of CONNECTION may not be a success
         {
@@ -397,7 +397,7 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
  */
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint16_t messageSz, uint8_t timeoutSec)
 {
-    ASSERT(messageSz <= 4096);                                                                                      // max msg length PUB=4096 (PUBEX=560)
+    ASSERT(messageSz <= 1548);
 
     resultCode_t rslt = resultCode__conflict;                                                                       // assume lock not obtainable, conflict
     uint32_t timeoutMS = (timeoutSec == 0) ? mqtt__publishTimeout : PERIOD_FROM_SECONDS(timeoutSec);
@@ -406,21 +406,26 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
     uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId;                                                 // msgId not sent with QOS == 0, otherwise sent
     atcmd_configDataForwarder(mqttCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, true);     // send message with dataMode
 
-    DPRINT_V(PRNT_INFO, "[mqtt-pub] msgId=%d, expectedSz=%d, msgLen=%d\r\n", msgId, messageSz, strlen(message));
+    DPRINT_V(PRNT_INFO, "[mqtt^pub] msgSrc=%p msgId=%d, expectedSz=%d, msgLen=%d\r\n", message, msgId, messageSz, strlen(message));
     #ifdef ENABLE_DIAGPRINT_VERBOSE
-    char chunk[101];
-    uint16_t taken = 0;
-    uint8_t grab = 0; 
-    do
+    DPRINT_V(0, "[mqtt^pub] Msg:\r\n");
+    for (size_t i = 0; i < 100; i++)
     {
-        grab = MIN(100, messageSz - taken);
-        memset(chunk, 0, 101);
-        memcpy(chunk, message + taken, 100);
-        DPRINT_V(PRNT_INFO, "[mqtt-pub]    > %s\r\n", chunk);
-        taken += grab;
-    } while (taken < messageSz);
+        void* pg = LQ_getBffrPage(message, messageSz, i);
+        if (pg == NULL)
+            break;
+        DPRINT_V(0, " %s\r\n", pg);
+    }
+    DPRINT_V(0, "\r\n");
     #endif
     
+    // DBGTRACE_CLEAR();
+    // LQ_enableDbgTrace(true);
+    // DBGTRACE_LOGNUM(SRCFILE, "MQPUB", messageSz);
+    // DBGTRACE_LOGCHAR(SRCFILE, "MQPUB", message, messageSz);
+
+    DPRINT_V(PRNT_MAGENTA, "[mqtt^pub] rfPriority=%d\r\n", ltem_getRfPriorityMode());
+
     if (atcmd_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
     {
         rslt = atcmd_awaitResultWithOptions(timeoutMS, S__mqttPublishCompleteParser);
@@ -430,9 +435,16 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
             DPRINT(PRNT_dGREEN, "[mqtt-pub] mId=%d Success\r\n", msgId);
         }
         else
+        {
             DPRINT(PRNT_dYELLOW, "[mqtt-pub] mId=%d Failed, rslt=%d\r\n", msgId, rslt);
+            DPRINT_V(0, "[mqtt^pub] resp: %s\r\n", atcmd_getRawResponse());
+        }
     }
-    mqtt_fetchStatus(mqttCtrl);
+    if (IS_NOTSUCCESS_RSLT(rslt))
+        mqtt_fetchStatus(mqttCtrl);
+
+    // LQ_enableDbgTrace(false);
+    // DBGTRACE_PRINT();
     return rslt;
 }
 

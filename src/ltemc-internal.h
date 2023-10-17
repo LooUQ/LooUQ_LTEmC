@@ -46,14 +46,48 @@
 #include "ltemc-iop.h"
 
 
+/* IO TRACE MACROS
+ * Data tracing where no debugger available and serial is too slow. Copy to trace buffer and print later as soon as feasible.
+ * ------------------------------------------------------------------------------------------------------------------------------*/
+#define DBGTRACE (2)
+#define DBGTRACE_BFFRSZ (1024)
+#define DBGTRACE_PAGESZ (100)
 
-/* ================================================================================================================================
- * LTEmC Global Structure
- *
- * LTEmC device is created as a global singleton variable
- * ==============================================================================================================================*/
+#ifdef DBGTRACE
+#define DBGTRACE_CLEAR()            do {\
+                                    memset(g_lqLTEM.traceBffr, 0, DBGTRACE_BFFRSZ); \
+                                    g_lqLTEM.tracePtr = g_lqLTEM.traceBffr;         \
+                                    } while(0)
 
+#define DBGTRACE_LOGNUM(f,t,v)      do {\
+                                    if (g_lqLTEM.traceEnabled) {                                                                                                             \
+                                    g_lqLTEM.tracePtr += snprintf(g_lqLTEM.tracePtr, (DBGTRACE_BFFRSZ - (g_lqLTEM.tracePtr - g_lqLTEM.traceBffr)), "%s,%s,%d\r\n", f, t, v); \ 
+                                    }} while(0)
 
+#define DBGTRACE_LOGCHAR(f,t,s,l)   do {\
+                                    if (g_lqLTEM.traceEnabled) {                                                                                                    \
+                                    g_lqLTEM.tracePtr += snprintf(g_lqLTEM.tracePtr, (DBGTRACE_BFFRSZ - (g_lqLTEM.tracePtr - g_lqLTEM.traceBffr)), "%s,%s,", f, t); \
+                                    memcpy(g_lqLTEM.tracePtr, s, l);                                                                                                \
+                                    memcpy(g_lqLTEM.tracePtr + l + 1, "\r\n", 1);                                                                                   \
+                                    g_lqLTEM.tracePtr += (l + 1);                                                                                                   \
+                                    }} while(0)
+
+#define DBGTRACE_PRINT()            do {\
+                                    DPRINT_V(0, "\r\n** DBG_TRACE >>\r\n");     \
+                                    for (size_t i = 0; i < 100; i++)            \
+                                    {                                           \
+                                    void* pg = LQ_getBffrPage(NULL, 0, i);      \
+                                    if (pg == NULL)                             \
+                                    break;                                      \
+                                    DPRINT_V(0, "%s\r\n", pg);}                 \
+                                    DPRINT_V(0, "<< END_TRACE\r\n");            \
+                                    } while(0)
+#else
+#define DBGTRACE_CLEAR() 
+#define DBGTRACE_LOGD(f,t,v) 
+#define DBGTRACE_LOGS(f,t,s,l) 
+#define DBGTRACE_PRINT() 
+#endif
 
 /* Metric Type Definitions
  * ------------------------------------------------------------------------------------------------------------------------------*/
@@ -87,6 +121,22 @@ typedef struct fileCtrl_tag
 } fileCtrl_t;
 
 
+/**
+ * @brief Static char arrays to simplify passing string responses back to user application.
+ */
+typedef struct ltemStatics_tag
+{
+    char reportBffr[PSZ(ltem__reportsBffrSz)];      // reused by *Rpt() functions
+    char dateTimeBffr[PSZ(ltem__dateTimeBffrSz)];   // reused by clock functions
+} ltemStatics_t;
+
+
+/* ================================================================================================================================
+ * LTEmC Global Structure
+ *
+ * LTEmC device is created as a global singleton variable
+ * ==============================================================================================================================*/
+
  /** 
  *  @brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
  * 
@@ -111,8 +161,18 @@ typedef struct ltemDevice_tag
     operatorInfo_t *operatorInfo;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
     streamCtrl_t* streams[ltem__streamCnt];     // Data streams: protocols or file system (mqtt, http, and files would be 3)
     fileCtrl_t* fileCtrl;                       // Control data for access to file system (singleton)
+    ltemStatics_t statics;
     ltemMetrics_t metrics;                      // metrics for operational analysis and reporting
     uint16_t isrInvokeCnt;
+
+    #ifdef DBGTRACE                     
+    char tracePage[DBGTRACE_PAGESZ + 1];        // buffer pager facility 
+    #if (DBGTRACE == 2)                         // full debug trace logger
+    bool traceEnabled;
+    char traceBffr[DBGTRACE_BFFRSZ];            // buffer to hold trace
+    char* tracePtr;
+    #endif
+    #endif
 } ltemDevice_t;
 
 
@@ -208,6 +268,10 @@ void NTWK_applyDefaulNetwork();
 /* ------------------------------------------------------------------------------------------------
  * End NTWK LTEmC Internal Functions */
 
+
+#ifdef DBGTRACE
+void IOP_log(const char* file, const char* tag, uint8_t len);
+#endif 
 
 /*
 ---------------------------------------------------------------------------------------------------

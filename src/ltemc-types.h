@@ -60,8 +60,10 @@ enum ltem__constants
     ltem__errorDetailSz = 18,
     ltem__moduleTypeSz = 8,
 
-    ltem__streamCnt = 4,            // 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
-    //ltem__urcHandlersCnt = 4        // max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
+    ltem__streamCnt = 4,                // 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
+
+    ltem__reportsBffrSz = 80,
+    ltem__dateTimeBffrSz = 24
 };
 
 
@@ -256,7 +258,8 @@ typedef enum pdpCntxtAuthMethods_tag
 typedef enum ltemRfPrioritySet_tag
 {
     ltemRfPrioritySet_gnss = 0,
-    ltemRfPrioritySet_wwan = 1
+    ltemRfPrioritySet_wwan = 1,
+    ltemRfPrioritySet_error = 9                 // not available, or not BG77 or BG95 module
 } ltemRfPrioritySet_t;
 
 
@@ -265,11 +268,12 @@ typedef enum ltemRfPrioritySet_tag
 */
 typedef enum ltemRfPriorityState_tag
 {
-ltemRfPriorityState_unloaded = 0,           // WWAN/GNSS in unloaded state
-ltemRfPriorityState_wwanPending = 1,        // WWAN in pending state
-ltemRfPriorityState_gnssPending = 2,        // GNSS in pending state
-ltemRfPriorityState_wwanLoaded = 3,         // WWAN in loaded state
-ltemRfPriorityState_gnssLoaded = 4          // GNSS in loaded state
+    ltemRfPriorityState_unloaded = 0,           // WWAN/GNSS in unloaded state
+    ltemRfPriorityState_wwanPending = 1,        // WWAN in pending state
+    ltemRfPriorityState_gnssPending = 2,        // GNSS in pending state
+    ltemRfPriorityState_wwanLoaded = 3,         // WWAN in loaded state
+    ltemRfPriorityState_gnssLoaded = 4,         // GNSS in loaded state
+    ltemRfPriorityState_error = 9               // not available, or not BG77 or BG95 module
 } ltemRfPriorityState_t;
 
 
@@ -400,8 +404,12 @@ typedef struct iop_tag
     bBuffer_t *rxBffr;                      // receive buffer
     char txEot;                             // if not NULL, char to output on empty TX FIFO; clears automatically on use.
  
+    // diagnostics/metrics
+    volatile uint32_t lastInvokeAt;         // tick count when TX send started, used for response timeout detection
     volatile uint32_t lastTxAt;             // tick count when TX send started, used for response timeout detection
     volatile uint32_t lastRxAt;             // tick count when RX buffer fill level was known to have change
+    volatile uint8_t lastRxType;            // buffer full or timeout
+    volatile uint8_t rxAtExit;              // RX buffer fill count at exit
 } iop_t;
 
 
@@ -484,8 +492,7 @@ typedef cmdParseRslt_t (*cmdResponseParser_func)();     // AT response parser te
 typedef struct atcmd_tag
 {
     char cmdStr[atcmd__cmdBufferSz];                    // AT command string to be passed to the BGx module.
-
-    // temporary ?                                      // waiting on fix to SPI TX overright
+    // temporary ?                                      // waiting on fix to SPI TX overwrite
     char cmdHistory[atcmd__cmdBufferSz];
 
     uint32_t timeout;                                   // Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.

@@ -25,7 +25,7 @@
 ***************************************************************************** */
 
 #define SRCFILE "ATC"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-//#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 #define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
@@ -41,6 +41,8 @@ extern ltemDevice_t g_lqLTEM;
 ------------------------------------------------------------------------------------------------- */
 static resultCode_t S__readResult();
 static void S__rxParseForUrc();
+static resultCode_t S__getToken(const char* preamble, uint8_t tokenIndx, char* token, uint8_t tkBffrSz);
+
 
 #pragma region Public Functions
 /*-----------------------------------------------------------------------------------------------*/
@@ -149,7 +151,11 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
     g_lqLTEM.atcmd->invokedAt = pMillis();
 
     // TEMPORARY
-    memcpy(g_lqLTEM.atcmd->cmdHistory, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+    //memcpy(g_lqLTEM.atcmd->cmdHistory, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+
+    // DBGTRACE_LOGNUM(SRCFILE, "INVK", strlen(g_lqLTEM.atcmd->cmdStr));
+    // DBGTRACE_LOGCHAR(SRCFILE, "INVK", g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+    // DBGTRACE_PRINT();
 
     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
     return true;
@@ -195,19 +201,19 @@ void atcmd_close()
  */
 resultCode_t atcmd_awaitResult()
 {
-    resultCode_t rslt = resultCode__unknown; // resultCode_t result;
+    resultCode_t rslt = resultCode__unknown;                                    // resultCode_t result;
     do
     {
         rslt = S__readResult();
-        if (g_lqLTEM.cancellationRequest) // test for cancellation (RTOS or IRQ)
+        if (g_lqLTEM.cancellationRequest)                                       // test for cancellation (RTOS or IRQ)
         {
             g_lqLTEM.atcmd->resultCode = resultCode__cancelled;
             break;
         }
-        pYield(); // give back control momentarily before next loop pass
+        pYield();                                                               // give back control momentarily before next loop pass
     } while (rslt == resultCode__unknown);
 
-    #if _DEBUG == 0 // debug for debris in rxBffr
+    #if _DEBUG == 0                                                             // debug for debris in rxBffr
     ASSERT_W(bbffr_getOccupied(g_lqLTEM.iop->rxBffr) == 0, "RxBffr Dirty");
     #else
     if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) > 0)
@@ -236,7 +242,7 @@ resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_
     {
         g_lqLTEM.atcmd->timeout = timeoutMS;
     }
-    if (cmdResponseParser) // caller can use atcmd__useDefaultOKCompletionParser
+    if (cmdResponseParser)                                                      // caller can use atcmd__useDefaultOKCompletionParser
         g_lqLTEM.atcmd->responseParserFunc = cmdResponseParser;
     else
         g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
@@ -285,11 +291,21 @@ char *atcmd_getResponse()
 
 
 /**
- *	@brief Returns the atCmd value response
+ *	@brief Returns the atCmd result value
+ *  @note DEPRECATED Function will be elimated in a future release (<= 4.x), convert to using atcmd_getToken()
  */
 int32_t atcmd_getValue()
 {
     return g_lqLTEM.atcmd->retValue;
+}
+
+
+/**
+ *	@brief Returns a token from the result of the last module command
+ */
+resultCode_t atcmd_getToken(uint8_t tokenIndx, char* token, uint8_t tkBffrSz)
+{
+    return S__getToken(": ", tokenIndx, token, tkBffrSz);
 }
 
 
@@ -417,12 +433,14 @@ static resultCode_t S__readResult()
             // looking for streamPrefix phrase
             if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true)))
             {
+                uint32_t dmStart = pMillis();
+                DPRINT(PRNT_MAGENTA, "[atcmd-rdRslt] DM triggered at %d\r\n", dmStart);
                 g_lqLTEM.atcmd->dataMode.dmState = dmState_active;
                 g_lqLTEM.iop->dmActive = true;
                 g_lqLTEM.iop->dmTxEvents = 0;
-
                 resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)(g_lqLTEM.atcmd->dataMode.dataLoc);
-                DPRINT(PRNT_MAGENTA, "DM-handler rslt=%d\r\n", dataRslt);
+                DPRINT(PRNT_MAGENTA, "[atcmd-rdRslt] DM elapsed=%d, rslt=%d, runPrsr=%d\r\n", (pMillis() - dmStart), dataRslt, g_lqLTEM.atcmd->dataMode.runParserAfterDataMode);
+                
                 if (dataRslt == resultCode__success)
                 {
                     g_lqLTEM.atcmd->parserResult = cmdParseRslt_success;
@@ -436,7 +454,6 @@ static resultCode_t S__readResult()
                     g_lqLTEM.atcmd->parserResult = cmdParseRslt_error;
                     g_lqLTEM.atcmd->resultCode = dataRslt;
                 }
-                DPRINT(PRNT_WHITE, "Exit dataMode rslt=%d\r", dataRslt);
                 g_lqLTEM.iop->dmActive = false;
                 memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));                   // done with dataMode settings
             }
@@ -452,8 +469,6 @@ static resultCode_t S__readResult()
             bbffr_pop(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->rawResponse + respLen, popSz);  // pop new into response buffer for parsing
 
             g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();         /* *** parse for command response *** */
-
-            DPRINT_V(PRNT_GRAY, "prsr=%d \r", g_lqLTEM.atcmd->parserResult);
         }
     }
 
@@ -532,8 +547,9 @@ cmdParseRslt_t ATCMD_okResponseParser()
 resultCode_t atcmd_stdTxDataHndlr()
 {
     DPRINT_V(PRNT_dYELLOW, "[atcmd-txDH] triggered src@=%p for len=%d\r\n", g_lqLTEM.atcmd->dataMode.dataLoc, g_lqLTEM.atcmd->dataMode.dataSz);
-    IOP_startTx(g_lqLTEM.atcmd->dataMode.dataLoc, g_lqLTEM.atcmd->dataMode.dataSz);
+    DBGTRACE_LOGNUM(SRCFILE, "dHndlr", pMillis());
 
+    IOP_startTx(g_lqLTEM.atcmd->dataMode.dataLoc, g_lqLTEM.atcmd->dataMode.dataSz);
     g_lqLTEM.atcmd->dataMode.dmState = dmState_active;
 
     uint32_t startTime = pMillis();
@@ -696,6 +712,63 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 
 #pragma region Static Function Definitions
 /*-----------------------------------------------------------------------------------------------*/
+
+/**
+ *	xbrief Returns a token from the result of the last module command
+ *  xparam [in] preamble Character phrase prefixing the section of the response to search
+ *  xparam [in] tokenIndx The 0-based token index to return
+ *  xparam [out] token Char pointer to found token (will be returned null-terminated)
+ *  xparam [in] tkBffrSz Size of the application provided buffer to hold the returned token
+ *  xreturn Result code describing token search and extraction results (success, notFound, preConditionFailed-insufficient buffer)
+ */
+static resultCode_t S__getToken(const char* preamble, uint8_t tokenIndx, char* token, uint8_t tkBffrLen)
+{
+    uint8_t preambleLen = strlen(preamble);
+    uint16_t responseLen = strlen(g_lqLTEM.atcmd->rawResponse);
+    if (responseLen <= preambleLen)                                                         // nothing between preamble and term
+        return resultCode__notFound;
+
+    char* searchPtr = g_lqLTEM.atcmd->rawResponse;                                          // need to leave atcmd internals intact
+    if (preambleLen > 0)                                                                    // adjust start of search to past preamble
+    {
+        for (size_t i = 0; i < atcmd__respBufferSz - preambleLen; i++)
+        {
+            if (memcmp(searchPtr, preamble, preambleLen) == 0)
+                break;
+            searchPtr++;
+        }
+    }
+    memset(token, '\0', tkBffrLen);
+    searchPtr += preambleLen;
+    for (size_t i = 0; i <= tokenIndx; i++)
+    {   
+        uint16_t bffrRemaining = g_lqLTEM.atcmd->rawResponse + atcmd__respBufferSz - searchPtr;
+        if (!bffrRemaining)
+            return resultCode__notFound;
+
+        const char delims[] = { ",\rO\0"};
+        char* tkEnd;
+        for (size_t d = 0; d < 4; d++)
+        {
+            tkEnd = memchr(searchPtr, delims[d], bffrRemaining);
+            if (tkEnd)
+                break;
+        }
+
+        // char* tkEnd = memchr(searchPtr, ',', bffrRemaining);
+        // tkEnd = (tkEnd) ? tkEnd : memchr(searchPtr, '\r', bffrRemaining);                   // if delimeter not found, end of token (aka delim) is 'O'=(OK), \r=(\r\n), or \0
+        // tkEnd = (tkEnd) ? tkEnd : memchr(searchPtr, 'O', bffrRemaining);
+        // tkEnd = (tkEnd) ? tkEnd : memchr(searchPtr, '\0', bffrRemaining);                   // if delimeter not found, end of token (aka delim) is 'O' (OK), \r,\n, or \0
+
+        if (i == tokenIndx && tkEnd > searchPtr)                                                // is this the token we want
+        {
+            memcpy(token, searchPtr, MIN(tkBffrLen, tkEnd - searchPtr));                        // copy, leaving room for '\0'
+            return resultCode__success;
+        }
+        searchPtr = tkEnd + 1;                                                                  // next token
+    }
+    return resultCode__internalError;
+}
 
 // /**
 //  *	@brief register a stream peer with IOP to control communications. Typically performed by protocol open.

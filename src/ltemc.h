@@ -174,13 +174,12 @@ const char* ltem_getSwVersion();
 
 /**
  *	@brief Get the current UTC date and time.
-    @param [in] format Char specifying v=verbose, or b=brief
- *  @param [out] dateTime Pointer to a character array (length >= 20 chars) to be updated with current UTC date/time 
+ *  @details Formatted as: ISO8601 or optionally verbose="2023/09/01,13:48:55"
  * 
- *  @details Formatted as: verbose="23/09/01,13:48:55", brief="230901T134855"
- * 
+ *  @param [in] format Char specifying 'v' for verbose, otherwise output is ISO
+ *  @return Char pointer to a LTEm internal date/time buffer
  */
-void ltem_getDateTimeUtc(char format, char *dateTime);
+const char* ltem_getLocalDateTime(char format);
 
 
 /**
@@ -188,6 +187,14 @@ void ltem_getDateTimeUtc(char format, char *dateTime);
  *  @return LTEm (modem) information struct, see mdminfo.h for details.
 */
 modemInfo_t *ltem_getModemInfo();
+
+
+/**
+ *	@brief Get the current local date and time.
+ *  @param [in] precise Return 15min precision offsets. This allows for time zones with 30 or 45 minutes offsets.
+ *  @return Signed integer 
+ */
+int8_t ltem_getLocalTimezoneOffset(bool precise);
 
 
 /**
@@ -289,7 +296,7 @@ resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t radioPriority);
  *	@brief Set RF priority on BG95/BG77 modules. 
  *  @return Result code representing status of operation, OK = 200.
  */
-ltemRfPriorityState_t ltem_getRfPriority();
+ltemRfPriorityState_t ltem_getRfPriorityMode();
 
 
 
@@ -306,17 +313,23 @@ ltemRfPriorityState_t ltem_getRfPriority();
 #pragma region LTEM internal functions
 /*
  ----------------------------------------------------------------------------------------------- */
-
-// uint8_t LTEM__getStreamIndx(dataCntxt_t dataCntxt);
-
-
-// /**
-//  *	@brief Function of last resort, catastrophic failure Background work task runner. To be called in application Loop() periodically.
-//  *  @param faultCode [in] - HTTP style error code.
-//  */
-// void ltem_notifyAssert(uint16_t faultCode)   __attribute__ ((noreturn));
-
 #pragma endregion
+
+
+/* Diagnostics Tools
+ LooUQ internal, exclude from doxygen
+ =============================================================================================== */
+
+/**
+ * Dynamically enable/disable I/O trace functions in IO_TRACE() macros
+ */
+void LQ_enableDbgTrace(bool enableIoTrace);
+
+/**
+ * Grab page (probably to tracing output)
+ */
+void* LQ_getBffrPage(void* srcBffr, uint16_t bffrSz, uint8_t pageNm);
+
 
 #ifdef __cplusplus
 }
