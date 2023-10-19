@@ -161,7 +161,7 @@ typedef enum mqttMsgSegment_tag
 */
 typedef struct mqttTopicCtrl_tag
 {
-    char topicName[PROPSZ(mqtt__topic_nameSz)];    // Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
+    char topicName[PSZ(mqtt__topic_nameSz)];    // Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
     char wildcard;                                  // Set to '#' if multilevel wildcard specified when subscribing to topic.
     uint8_t Qos;
     appRcvProto_func appRecvDataCB;                 // callback into host application with data (cast from generic func* to stream specific function)
@@ -186,9 +186,9 @@ typedef struct mqttCtrl_tag
     char hostUrl[host__urlSz];                  // URL or IP address of host
     uint16_t hostPort;                          // IP port number host is listening on (allows for 65535/0)
     mqttTopicCtrl_t* topics[mqtt__topicsCnt];   // array of topic controls, provides for independent app receive functions per topic
-    char clientId[PROPSZ(mqtt__clientIdSz)];   // for auto-restart
-    char username[PROPSZ(mqtt__userNameSz)];
-    char password[PROPSZ(mqtt__userPasswordSz)];
+    char clientId[PSZ(mqtt__clientIdSz)];   // for auto-restart
+    char username[PSZ(mqtt__userNameSz)];
+    char password[PSZ(mqtt__userPasswordSz)];
     mqttVersion_t mqttVersion;
     uint16_t sentMsgId;                             // MQTT TX message ID for QOS, automatically incremented, rolls at max value.
     uint16_t recvMsgId;                             // last received message identifier

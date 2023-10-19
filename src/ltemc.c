@@ -445,7 +445,7 @@ void ltem_eventMgr()
     /* look for a new incoming URC 
      */
     int16_t urcPossible = bbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);       // look for prefix char in URC
-    if (BBFFR_NOTFOUND(urcPossible))
+    if (BBFFR_ISNOTFOUND(urcPossible))
     {
         return;
     }

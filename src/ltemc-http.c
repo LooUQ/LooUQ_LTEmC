@@ -545,7 +545,7 @@ static resultCode_t S__httpRxHndlr()
     ASSERT(httpCtrl != NULL);                                                                           // ASSERT data mode and stream context are consistent
 
     uint8_t popCnt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
-    if (BBFFR_NOTFOUND(popCnt))
+    if (BBFFR_ISNOTFOUND(popCnt))
     {
         return resultCode__internalError;
     }
@@ -566,14 +566,14 @@ static resultCode_t S__httpRxHndlr()
         {
             char* streamPtr;
             uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, reqstBlockSz);              // get address from rxBffr
-            DPRINT(PRNT_CYAN, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, BBFFR_FOUND(trailerIndx));
+            DPRINT(PRNT_CYAN, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
 
             // forward to application
-            ((httpRecv_func)(*httpCtrl->appRecvDataCB))(httpCtrl->dataCntxt, streamPtr, blockSz, BBFFR_FOUND(trailerIndx));
+            ((httpRecv_func)(*httpCtrl->appRecvDataCB))(httpCtrl->dataCntxt, streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
             bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                             // commit POP
         }
 
-        if (BBFFR_FOUND(trailerIndx))
+        if (BBFFR_ISFOUND(trailerIndx))
         {
             // parse trailer for status 
             uint8_t offset = strlen(wrkBffr);

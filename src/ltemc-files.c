@@ -447,7 +447,7 @@ static resultCode_t S__filesRxHndlr()
     char wrkBffr[32] = {0};
     
     uint8_t popCnt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
-    if (BBFFR_NOTFOUND(popCnt))
+    if (BBFFR_ISNOTFOUND(popCnt))
     {
         return resultCode__notFound;
     }

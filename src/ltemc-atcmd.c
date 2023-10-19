@@ -397,7 +397,7 @@ static resultCode_t S__readResult()
         if (g_lqLTEM.atcmd->dataMode.dataHndlr != NULL)
         {
             // looking for streamPrefix phrase
-            if (BBFFR_FOUND(bbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true)))
+            if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true)))
             {
                 g_lqLTEM.atcmd->dataMode.dmState = dmState_active;
                 g_lqLTEM.iop->dmActive = true;
@@ -521,7 +521,7 @@ resultCode_t atcmd_stdTxDataHndlr()
     while (pMillis() - startTime < g_lqLTEM.atcmd->timeout)
     {
         uint16_t trlrIndx = bbffr_find(g_lqLTEM.iop->rxBffr, "OK", 0, 0, true);
-        if (BBFFR_FOUND(trlrIndx))
+        if (BBFFR_ISFOUND(trlrIndx))
         {
             bbffr_skipTail(g_lqLTEM.iop->rxBffr, OK_COMPLETED_LENGTH);          // OK + line-end
             return resultCode__success;

@@ -660,7 +660,7 @@ static void S__mqttUrcHandler()
     +QMTSTAT: <tcpconnectID>,<err_code>
     */
 
-    if (BBFFR_NOTFOUND(bbffr_find(rxBffr, "+QMT", 0, 0, false)) || // not a MQTT URC
+    if (BBFFR_ISNOTFOUND(bbffr_find(rxBffr, "+QMT", 0, 0, false)) || // not a MQTT URC
         bbffr_getOccupied(rxBffr) < 20)                            // -or- not sufficient chars to parse URC header
     {
         return;
@@ -673,11 +673,11 @@ static void S__mqttUrcHandler()
     /* MQTT Receive Message
      * -------------------------------------------------------------------------------------
      */
-    if (BBFFR_FOUND(bbffr_find(rxBffr, "+QMTRECV:", 0, 0, true))) // if recv, move tail to start of header
+    if (BBFFR_ISFOUND(bbffr_find(rxBffr, "+QMTRECV:", 0, 0, true))) // if recv, move tail to start of header
     {
         // separator: "topic","message"           ,"            search offset from URC prefix
         uint16_t findIndx = bbffr_find(rxBffr, "\",\"", sizeof("+QMTRECV: "), 2, false);
-        if (BBFFR_NOTFOUND(findIndx))
+        if (BBFFR_ISNOTFOUND(findIndx))
         {
             return;
         }
@@ -752,10 +752,10 @@ static void S__mqttUrcHandler()
 
     /* MQTT Status Change
      * ------------------------------------------------------------------------------------- */
-    else if (BBFFR_FOUND(bbffr_find(rxBffr, "+QMTSTAT", 0, 20, true))) // MQTT connection closed
+    else if (BBFFR_ISFOUND(bbffr_find(rxBffr, "+QMTSTAT", 0, 20, true))) // MQTT connection closed
     {
         uint16_t eopUrl = bbffr_find(rxBffr, "\r\n", 0, 0, false);
-        if (BBFFR_FOUND(eopUrl))
+        if (BBFFR_ISFOUND(eopUrl))
         {
             bbffr_pop(rxBffr, workBffr, eopUrl);
             workPtr = lq_strnstr(workBffr, "+QMSTAT", sizeof(workBffr)) + 9;
