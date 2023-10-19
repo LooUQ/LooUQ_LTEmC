@@ -60,7 +60,9 @@ enum ltem__constants
     ltem__moduleTypeSz = 8,
 
     ltem__streamCnt = 4,            /// 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
-    //ltem__urcHandlersCnt = 4        /// max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
+    
+    ltem__reportsBffrSz = 80,
+    ltem__dateTimeBffrSz = 24
 };
 
 
@@ -237,11 +239,12 @@ typedef enum pdpCntxtAuthMethods_tag
 /** 
  *  \brief RF Priority map for BG95/BG77 modules.
 */
-typedef enum ltemRfPrioritySet_tag
+typedef enum ltemRfPriorityMode_tag
 {
-    ltemRfPrioritySet_gnss = 0,
-    ltemRfPrioritySet_wwan = 1
-} ltemRfPrioritySet_t;
+    ltemRfPriorityMode_gnss = 0,
+    ltemRfPriorityMode_wwan = 1,
+    ltemRfPriorityMode_error = 9
+} ltemRfPriorityMode_t;
 
 
 /** 
@@ -249,11 +252,12 @@ typedef enum ltemRfPrioritySet_tag
 */
 typedef enum ltemRfPriorityState_tag
 {
-ltemRfPriorityState_unloaded = 0,           // WWAN/GNSS in unloaded state
+ltemRfPriorityState_unloaded = 0,           // WWAN/GNSS in unloaded state (or unknown)
 ltemRfPriorityState_wwanPending = 1,        // WWAN in pending state
 ltemRfPriorityState_gnssPending = 2,        // GNSS in pending state
 ltemRfPriorityState_wwanLoaded = 3,         // WWAN in loaded state
-ltemRfPriorityState_gnssLoaded = 4          // GNSS in loaded state
+ltemRfPriorityState_gnssLoaded = 4,         // GNSS in loaded state
+ltemRfPriorityState_error = 9               // GNSS in loaded state
 } ltemRfPriorityState_t;
 
 
@@ -298,14 +302,14 @@ typedef struct networkInfo_tag
 /** 
  *  \brief Struct respresenting an ACTIVE network carrier/operator.
 */
-typedef struct providerInfo_tag
+typedef struct operatorInfo_tag
 {
 	char name[PSZ(ntwk__providerNameSz)];        /// Provider name, some carriers may report as 6-digit numeric carrier ID.
 	char iotMode[PSZ(ntwk__iotModeNameSz)];      /// Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
     uint8_t defaultContext;
     uint8_t networkCnt;                             /// The number of networks in networks[]
     networkInfo_t networks[ntwk__pdpContextCnt];    /// Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
-} providerInfo_t;
+} operatorInfo_t;
 
 
 
@@ -352,17 +356,17 @@ typedef enum streamType_tag
 
 
 // function prototypes
-typedef resultCode_t (*urcEvntHndlr_func)();        // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
-typedef resultCode_t (*dataRxHndlr_func)();         // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
-typedef void (*appRcvProto_func)();                 // prototype func() for stream recvData callback
+typedef resultCode_t (*urcEvntHndlr_func)();                // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
+typedef resultCode_t (*dataHndlr_func)(void* destObject);   // data comes from TX/RX buffer, this function parses and forwards to application via appRcvProto_func
+typedef void (*appRcvProto_func)();                         // prototype func() for stream recvData callback
 
 
 typedef struct streamCtrl_tag
 {
-    char streamType;                                /// stream type
-    dataCntxt_t dataCntxt;                          /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;                   /// function to handle data streaming, initiated by eventMgr() or atcmd module
-    urcEvntHndlr_func urcHndlr;                     /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    char streamType;                                        // stream type
+    dataCntxt_t dataCntxt;                                  // integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataHndlr_func dataRxHndlr;                             // function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcHndlr;                             // function to handle data streaming, initiated by eventMgr() or atcmd module
 } streamCtrl_t;
 
 
@@ -429,6 +433,13 @@ typedef enum cmdParseRslt_tag
 } cmdParseRslt_t;
 
 
+typedef enum dmMode_tag
+{
+    dmMode_forwarder = 0,
+    dmMode_parser = 1
+} dmMode_t;
+
+
 typedef enum dmState_tag
 {
     dmState_idle = 0,
@@ -439,14 +450,16 @@ typedef enum dmState_tag
 
 typedef struct dataMode_tag
 {
-    dmState_t dmState;
-    uint16_t contextKey;                                /// unique identifier for data flow, could be dataContext(proto), handle(files), etc.
-    char trigger[atcmd__dataModeTriggerSz];             /// char sequence that signals the transition to data mode, data mode starts at the following character
-    dataRxHndlr_func dataHndlr;                         /// data handler function (TX/RX)
-    char* txDataLoc;                                    /// location of data buffer (TX only)
-    uint16_t txDataSz;                                  /// size of TX data or RX request
-    bool runParserAfterDataMode;                        /// true = invoke AT response parser after successful datamode. Data mode error always skips parser
-    appRcvProto_func applRecvDataCB;                    /// callback into app for received data delivery
+    dmState_t dmState;                                  // dataMode processing state
+    dmMode_t dmMode;                                    // dataMode processing mode
+    uint16_t contextKey;                                // unique identifier for data flow, could be dataContext(proto), handle(files), etc.
+    char trigger[atcmd__dataModeTriggerSz];             // char sequence that signals the transition to data mode, data mode starts at the following character
+    dataHndlr_func dataHndlr;                           // data handler function (TX/RX)
+    char* dataLoc;                                      // pointer to dataObject (buffer)
+    uint16_t dataSz;                                    // dataObject (buffer)
+    bool runParserAfterDataMode;                        // true = invoke AT response parser after successful datamode. Data mode error always skips parser
+    appRcvProto_func applRecvDataCB;                    // callback into app for received data delivery
+    uint16_t flowOffset;                                // count of previously process bytes in the dataMode flow
 } dataMode_t;
 
 

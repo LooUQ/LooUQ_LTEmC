@@ -78,24 +78,65 @@ void atcmd_reset(bool releaseLock)
     g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
 }
 
+// /**
+//  *	@brief Setup automatic data mode switch/servicing.
+//  */
+// void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataHndlr_func rxDataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
+// {
+//     ASSERT(strlen(trigger) > 0); // verify 3rd party setup (stream)
+//     ASSERT(rxDataHndlr != NULL); //
+
+//     memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
+
+//     g_lqLTEM.atcmd->dataMode.dmState = dmState_enabled;
+//     g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
+//     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
+//     g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
+//     g_lqLTEM.atcmd->dataMode.dataLoc = dataLoc;
+//     g_lqLTEM.atcmd->dataMode.dataSz = dataSz;
+//     g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
+//     g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = runParser;
+// }
+
+
 /**
  *	@brief Setup automatic data mode switch/servicing.
  */
-void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_func rxDataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
+void atcmd_configDataForwarder(uint16_t contextKey, const char *trigger, dataHndlr_func dataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
 {
-    ASSERT(strlen(trigger) > 0); // verify 3rd party setup (stream)
-    ASSERT(rxDataHndlr != NULL); //
+    ASSERT(strlen(trigger) > 0);
+    ASSERT(dataHndlr != NULL);
 
     memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
 
     g_lqLTEM.atcmd->dataMode.dmState = dmState_enabled;
+    g_lqLTEM.atcmd->dataMode.dmMode = dmMode_forwarder;
     g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
-    g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
-    g_lqLTEM.atcmd->dataMode.txDataLoc = dataLoc;
-    g_lqLTEM.atcmd->dataMode.txDataSz = dataSz;
+    g_lqLTEM.atcmd->dataMode.dataHndlr = dataHndlr;
+    g_lqLTEM.atcmd->dataMode.dataLoc = dataLoc;
+    g_lqLTEM.atcmd->dataMode.dataSz = dataSz;
     g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
     g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = runParser;
+}
+
+
+void atcmd_configDataParser(uint16_t contextKey, const char* trigger, dataHndlr_func dataHndlr, char* dataLoc)
+{
+    ASSERT(strlen(trigger) > 0);
+    ASSERT(rxDataHndlr != NULL);
+
+    memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
+
+    g_lqLTEM.atcmd->dataMode.dmState = dmState_enabled;
+    g_lqLTEM.atcmd->dataMode.dmMode = dmMode_parser;
+    g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
+    memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
+    g_lqLTEM.atcmd->dataMode.dataHndlr = dataHndlr;
+    g_lqLTEM.atcmd->dataMode.dataLoc = dataLoc;
+    g_lqLTEM.atcmd->dataMode.dataSz = 0;
+    g_lqLTEM.atcmd->dataMode.applRecvDataCB = NULL;
+    g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = false;
 }
 
 
@@ -403,7 +444,7 @@ static resultCode_t S__readResult()
                 g_lqLTEM.iop->dmActive = true;
                 g_lqLTEM.iop->dmTxEvents = 0;
 
-                resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)();
+                resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)(g_lqLTEM.atcmd->dataMode.dataLoc);
                 DPRINT(PRNT_MAGENTA, "DataHandler rslt=%d\r\n", dataRslt);
                 if (dataRslt == resultCode__success)
                 {
@@ -513,7 +554,7 @@ cmdParseRslt_t ATCMD_okResponseParser()
  */
 resultCode_t atcmd_stdTxDataHndlr()
 {
-    IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz);
+    IOP_startTx(g_lqLTEM.atcmd->dataMode.dataLoc, g_lqLTEM.atcmd->dataMode.dataSz);
 
     g_lqLTEM.atcmd->dataMode.dmState = dmState_active;
 

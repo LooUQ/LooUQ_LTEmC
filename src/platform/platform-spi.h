@@ -83,10 +83,27 @@ void spi_notUsingInterrupt(platformSpi_t* platformSpi, int8_t irqNumber);
 uint8_t spi_transferByte(platformSpi_t* platformSpi, uint8_t writeVal);
 uint16_t spi_transferWord(platformSpi_t* platformSpi, uint16_t writeVal);
 
-void spi_transferBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len);
+/**
+ *	@brief Transfer a buffer to/from the SPI device.
+ *	@param [in] spi The SPI device for communications.
+ *  @param [in] txBuf Pointer to buffer sourcing (transfer from)
+ *  @param [out] rxBuf Pointer to buffer receiving (transfer to)
+ *  @param [in] xferLen The number of characters to transfer.
+ */
+void spi_transferBuffer(platformSpi_t* platformSpi, const uint8_t* txBuf, uint8_t* rxBuf, uint16_t xferLen);
 
-void spi_writeBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len);
-void* spi_readBuffer(platformSpi_t* platformSpi, uint8_t addressByte, uint16_t xfer_len);
+/**
+ *	@brief Transfer a block of data to/from the SPI device.
+ *	@param [in] spi The SPI device for communications.
+ *  @param [in] addressByte Optional address byte sent before buffer, can specify specifics of the I/O being initiated.
+ *  @param [in] txBuf Pointer to buffer sourcing (transfer from)
+ *  @param [out] rxBuf Pointer to buffer receiving (transfer to)
+ *  @param [in] xferLen The number of characters to transfer.
+ */
+void spi_transferBlock(platformSpi_t* platformSpi, uint8_t addressByte, const uint8_t* txBuf, uint8_t* rxBuf, uint16_t xferLen);
+
+// void spi_writeBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len);
+// void* spi_readBuffer(platformSpi_t* platformSpi, uint8_t addressByte, uint16_t xfer_len);
 
 #ifdef __cplusplus
 }

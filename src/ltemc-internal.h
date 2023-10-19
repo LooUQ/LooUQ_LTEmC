@@ -82,14 +82,24 @@ typedef enum recvEvent_tag
 
 typedef struct fileCtrl_tag
 {
-    char streamType;                            // stream type
+    char streamType;                                // stream type
     /*
      * NOTE: Does NOT follow exact struct field layout of the other streams, shares 1st field to validate type before casting 
      */
     uint8_t handle;
-    dataRxHndlr_func dataRxHndlr;               // function to handle data streaming, initiated by atcmd dataMode (RX only)
+    dataHndlr_func dataRxHndlr;                     // function to handle data streaming, initiated by atcmd dataMode (RX only)
     appRcvProto_func appRecvDataCB;
 } fileCtrl_t;
+
+
+/**
+ * @brief Static char arrays to simplify passing string responses back to user application.
+ */
+typedef struct ltemStatics_tag
+{
+    char reportBffr[PSZ(ltem__reportsBffrSz)];      // reused by *Rpt() functions
+    char dateTimeBffr[PSZ(ltem__dateTimeBffrSz)];   // reused by clock functions
+} ltemStatics_t;
 
 
  /** 
@@ -109,14 +119,16 @@ typedef struct ltemDevice_tag
     //void *spi;                                  // SPI device (methods signatures compatible with Arduino)
     
     iop_t *iop;                                 // IOP subsystem controls
+    uint8_t iopInterrupt;                       // IOP ISR attached interrupt number 
     atcmd_t *atcmd;                             // Action subsystem controls
     modemSettings_t *modemSettings;             // Settings to control radio and cellular network initialization
 	modemInfo_t *modemInfo;                     // Data structure holding persistent information about application modem state
-    providerInfo_t *providerInfo;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
+    operatorInfo_t *operatorInfo;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
     streamCtrl_t* streams[ltem__streamCnt];     // Data streams: protocols or file system
     fileCtrl_t* fileCtrl;
 
     ltemMetrics_t metrics;                      // metrics for operational analysis and reporting
+    ltemStatics_t statics;
     uint16_t isrInvokeCnt;
 } ltemDevice_t;
 

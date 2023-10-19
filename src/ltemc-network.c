@@ -62,9 +62,9 @@ static void S__clearProviderInfo();
  */
 void ntwk_create()
 {
-    providerInfo_t *providerInfoPtr = (providerInfo_t*)calloc(1, sizeof(providerInfo_t));
+    operatorInfo_t *providerInfoPtr = (operatorInfo_t*)calloc(1, sizeof(operatorInfo_t));
     ASSERT(providerInfoPtr != NULL);
-    g_lqLTEM.providerInfo = providerInfoPtr;
+    g_lqLTEM.operatorInfo = providerInfoPtr;
 }
 
 
@@ -145,7 +145,7 @@ void ntwk_setRatOptions()
 
 resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t protoType, const char *apn)
 {
-    ASSERT(g_lqLTEM.providerInfo != NULL);                                              // ASSERT g_lqLTEM.providerInfo has been initialized
+    ASSERT(g_lqLTEM.operatorInfo != NULL);                                              // ASSERT g_lqLTEM.operatorInfo has been initialized
     ASSERT_W(protoType == pdpProtocol_IPV4, "OnlyIPV4SupportedCurrently");              // warn on not IPv4
 
     snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
@@ -201,9 +201,9 @@ void ntwk_applyPpdNetworkConfig()
 /**
  *   \brief Wait for a network provider name and network mode. Can be cancelled in threaded env via g_lqLTEM->cancellationRequest.
 */
-providerInfo_t* ntwk_awaitProvider(uint16_t waitSec)
+operatorInfo_t* ntwk_awaitOperator(uint16_t waitSec)
 {
-    ASSERT(g_lqLTEM.providerInfo != NULL);         // ASSERT g_lqLTEM.providerInfo has been initialized
+    ASSERT(g_lqLTEM.operatorInfo != NULL);         // ASSERT g_lqLTEM.operatorInfo has been initialized
 
     uint32_t startMillis, endMillis;
     startMillis = endMillis = pMillis();
@@ -221,16 +221,16 @@ providerInfo_t* ntwk_awaitProvider(uint16_t waitSec)
                 pContinue = strchr(atcmd_getResponse(), '"');
                 if (pContinue != NULL)
                 {
-                    pContinue = S__grabToken(pContinue + 1, '"', g_lqLTEM.providerInfo->name, ntwk__providerNameSz);
+                    pContinue = S__grabToken(pContinue + 1, '"', g_lqLTEM.operatorInfo->name, ntwk__providerNameSz);
 
                     uint8_t ntwkMode = (uint8_t)strtol(pContinue + 1, &pContinue, 10);
                     if (ntwkMode == 8)
-                        strcpy(g_lqLTEM.providerInfo->iotMode, "M1");
+                        strcpy(g_lqLTEM.operatorInfo->iotMode, "M1");
                     else
-                        strcpy(g_lqLTEM.providerInfo->iotMode, "NB1");
+                        strcpy(g_lqLTEM.operatorInfo->iotMode, "NB1");
                 }
             }
-            if (!STREMPTY(g_lqLTEM.providerInfo->name))
+            if (!STREMPTY(g_lqLTEM.operatorInfo->name))
                 break;
 
             pDelay(1000);                                                                   // this yields, allowing alternate execution
@@ -243,7 +243,7 @@ providerInfo_t* ntwk_awaitProvider(uint16_t waitSec)
         /* NOTE: BGx will not return response for AT+CGPADDR *OVER THE SERIAL PORT*, unless it is suffixed with the contextID
          * This is one of a handfull of commands that exhibit this behavior; AT+CGPADDR works perfectly over the USB AT port.
         */
-        if (!STREMPTY(g_lqLTEM.providerInfo->name))
+        if (!STREMPTY(g_lqLTEM.operatorInfo->name))
         {
             char *pContinue;
             uint8_t ntwkIndx = 0;
@@ -254,10 +254,10 @@ providerInfo_t* ntwk_awaitProvider(uint16_t waitSec)
                 pContinue = strstr(atcmd_getResponse(), "+QIACT: ");
                 while (pContinue != NULL && ntwkIndx < ntwk__pdpContextCnt)
                 {
-                    g_lqLTEM.providerInfo->networks[ntwkIndx].pdpContextId = strtol(pContinue + 8, &pContinue, 10);
-                    g_lqLTEM.providerInfo->networks[ntwkIndx].isActive = *(++pContinue) == '1';
+                    g_lqLTEM.operatorInfo->networks[ntwkIndx].pdpContextId = strtol(pContinue + 8, &pContinue, 10);
+                    g_lqLTEM.operatorInfo->networks[ntwkIndx].isActive = *(++pContinue) == '1';
                     // only supported protocol now is IPv4, alias IP
-                    g_lqLTEM.providerInfo->networks[ntwkIndx].pdpProtocol = pdpProtocol_IPV4;
+                    g_lqLTEM.operatorInfo->networks[ntwkIndx].pdpProtocol = pdpProtocol_IPV4;
                     pContinue = strstr(pContinue, "+QIACT: ");
                     if (pContinue == NULL)
                         break;
@@ -267,27 +267,27 @@ providerInfo_t* ntwk_awaitProvider(uint16_t waitSec)
             // get IP addresses
             for (size_t i = 0; i <= ntwkIndx; i++)
             {
-                if (g_lqLTEM.providerInfo->networks[i].isActive)
+                if (g_lqLTEM.operatorInfo->networks[i].isActive)
                 {
-                    atcmd_invokeReuseLock("AT+CGPADDR=%d", g_lqLTEM.providerInfo->networks[i].pdpContextId);
+                    atcmd_invokeReuseLock("AT+CGPADDR=%d", g_lqLTEM.operatorInfo->networks[i].pdpContextId);
                     if (atcmd_awaitResult() == resultCode__success)
                     {
                         pContinue = strstr(atcmd_getResponse(), "+CGPADDR: ");
                         pContinue = strchr(pContinue + 10, ',') + 1;
                         char *pLineEnd = strchr(pContinue, '\r');
-                        strncpy(g_lqLTEM.providerInfo->networks[i].ipAddress, pContinue, MIN(pLineEnd - pContinue, ntwk__ipAddressSz));
+                        strncpy(g_lqLTEM.operatorInfo->networks[i].ipAddress, pContinue, MIN(pLineEnd - pContinue, ntwk__ipAddressSz));
                     }
                 }
                 else
                 {
-                    strcpy(g_lqLTEM.providerInfo->networks[i].ipAddress, "0.0.0.0");
+                    strcpy(g_lqLTEM.operatorInfo->networks[i].ipAddress, "0.0.0.0");
                 }
             }
-            g_lqLTEM.providerInfo->networkCnt = ++ntwkIndx;
+            g_lqLTEM.operatorInfo->networkCnt = ++ntwkIndx;
         }
     }
     atcmd_close();
-    return g_lqLTEM.providerInfo;
+    return g_lqLTEM.operatorInfo;
 }
 
 
@@ -323,10 +323,10 @@ void ntwk_deactivateNetwork(uint8_t cntxtId)
  *   \brief Get current provider information. If not connected to a provider will be an empty providerInfo struct
  *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-providerInfo_t *ntwk_getProviderInfo()
+operatorInfo_t *ntwk_getProviderInfo()
 {
-    if (strlen(g_lqLTEM.providerInfo->name) > 0)
-        return &g_lqLTEM.providerInfo;
+    if (strlen(g_lqLTEM.operatorInfo->name) > 0)
+        return &g_lqLTEM.operatorInfo;
     return NULL;
 }
 
@@ -336,7 +336,7 @@ providerInfo_t *ntwk_getProviderInfo()
  */
 uint8_t ntwk_getActiveNetworkCount()
 {
-    return g_lqLTEM.providerInfo->networkCnt;
+    return g_lqLTEM.operatorInfo->networkCnt;
 }
 
 
@@ -345,11 +345,11 @@ uint8_t ntwk_getActiveNetworkCount()
  */
 networkInfo_t *ntwk_getNetworkInfo(uint8_t pdpContextId)
 {
-    for (size_t i = 0; i < g_lqLTEM.providerInfo->networkCnt; i++)
+    for (size_t i = 0; i < g_lqLTEM.operatorInfo->networkCnt; i++)
     {
-        if (g_lqLTEM.providerInfo->networks[i].pdpContextId == pdpContextId)
+        if (g_lqLTEM.operatorInfo->networks[i].pdpContextId == pdpContextId)
         {
-            return &g_lqLTEM.providerInfo->networks[i];
+            return &g_lqLTEM.operatorInfo->networks[i];
         }
     }
     return NULL;
@@ -422,8 +422,8 @@ void ntwkDiagnostics_getProviders(char *providersList, uint16_t listSz)
 
 static void S__clearProviderInfo()
 {
-    memset((void*)g_lqLTEM.providerInfo->networks, 0, g_lqLTEM.providerInfo->networkCnt * sizeof(networkInfo_t));
-    memset((void*)g_lqLTEM.providerInfo, 0, sizeof(providerInfo_t));
+    memset((void*)g_lqLTEM.operatorInfo->networks, 0, g_lqLTEM.operatorInfo->networkCnt * sizeof(networkInfo_t));
+    memset((void*)g_lqLTEM.operatorInfo, 0, sizeof(operatorInfo_t));
 }
 
 

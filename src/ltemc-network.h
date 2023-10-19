@@ -107,7 +107,7 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
  *   @param [in] waitSec Number of seconds to wait for a network. Supply 0 for no wait.
  *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-providerInfo_t *ntwk_awaitProvider(uint16_t waitSec);
+operatorInfo_t *ntwk_awaitOperator(uint16_t waitSec);
 
 
 /**
@@ -128,7 +128,7 @@ void ntwk_deactivateNetwork(uint8_t contextId);
  *   @brief Get current provider information. If not connected to a provider will be an empty providerInfo struct
  *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
-providerInfo_t *ntwk_getProviderInfo();
+operatorInfo_t *ntwk_getProviderInfo();
 
 
 /**

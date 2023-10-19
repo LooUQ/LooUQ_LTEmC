@@ -392,7 +392,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
     uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId; // msgId not sent with QOS == 0, otherwise sent
     // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
 
-    atcmd_configDataMode(mqttCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, true); // send message with dataMode
+    atcmd_configDataForwarder(mqttCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, true); // send message with dataMode
 
     if (atcmd_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
     {

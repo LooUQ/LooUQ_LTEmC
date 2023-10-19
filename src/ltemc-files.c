@@ -42,8 +42,9 @@ extern ltemDevice_t g_lqLTEM;
 
 /* Local Static Functions
 ------------------------------------------------------------------------------------------------------------------------- */
-static cmdParseRslt_t S__writeStatusParser();
+static resultCode_t S__filelistHndlr();
 static resultCode_t S__filesRxHndlr();
+static cmdParseRslt_t S__writeStatusParser();
 
 
 /**
@@ -105,51 +106,29 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
 
 resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
 {
-
     resultCode_t rslt;
-    do
+
+    if (!ATCMD_awaitLock(atcmd__defaultTimeout))
     {
-        if (!ATCMD_awaitLock(atcmd__defaultTimeout))
-        {
-            rslt = resultCode__conflict;                                    // failed to get lock
-            break;
-        }
+        return resultCode__conflict;                                    // failed to get lock
+    }
 
-        if (strlen(filename) == 0)
-        {
-            fileList->namePattern[0] = '*';
-            fileList->namePattern[1] = '\0';
-            atcmd_invokeReuseLock("AT+QFLST");
-        }
-        else
-        {
-            strncpy(fileList->namePattern, filename, MIN(strlen(filename), file__filenameSz));
-            atcmd_invokeReuseLock("AT+QFLST=\"%s\"", fileList->namePattern);
-        }
-        rslt = atcmd_awaitResult();
-        if (rslt != resultCode__success)
-            break;
+    //+QFLST: "230925T143135_ota.bin",278848
+    //char flResponse[file__fileListMaxCnt * 40];
+    memset(fileList, 0, sizeof(fileListResult_t));
+    atcmd_configDataParser(file__fileContext, "+QFLST", S__filelistHndlr, fileList);
 
-        // parse response >>  +QFLST: <filename>,<file_size>
-        uint8_t lineNm = 0;
-        char *workPtr = atcmd_getResponse();
-
-        for (size_t i = 0; i < file__fileListMaxCnt; i++)
-        {
-            workPtr += 9;
-            uint8_t len = strchr(workPtr, '"') - workPtr;
-            strncpy(fileList->files[i].filename, workPtr, len);
-            workPtr += len + 2;
-            fileList->files[i].fileSz = strtol(workPtr, &workPtr, 10);
-
-            workPtr += 2;
-            if (*workPtr != '+')
-            {
-                fileList->fileCnt = ++i;
-                break;
-            }
-        }
-    } while (0);
+    if (strlen(filename) == 0)
+    {
+        fileList->namePattern[0] = '*';
+        atcmd_invokeReuseLock("AT+QFLST");
+    }
+    else
+    {
+        strncpy(fileList->namePattern, filename, MIN(strlen(filename), file__filenameSz));
+        atcmd_invokeReuseLock("AT+QFLST=\"%s\"", fileList->namePattern);
+    }
+    rslt = atcmd_awaitResult();
 
     atcmd_close();
     return rslt;
@@ -270,9 +249,9 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
     ASSERT(g_lqLTEM.fileCtrl->appRecvDataCB);                                   // assert that there is a app func registered to receive read data
     ASSERT(bbffr_getCapacity(g_lqLTEM.iop->rxBffr) > (requestSz + 128));        // ensure ample space in buffer for I/O
 
-    atcmd_configDataMode(0, "CONNECT", S__filesRxHndlr, NULL, 0, g_lqLTEM.fileCtrl->appRecvDataCB, false);
+    atcmd_configDataForwarder(0, "CONNECT", S__filesRxHndlr, NULL, 0, g_lqLTEM.fileCtrl->appRecvDataCB, false);
 
-    DPRINT(PRNT_CYAN, "Read file=1, reqst=%d\r\n", requestSz);
+    DPRINT(PRNT_CYAN, "Read (begin) reqstSz=%d\r\n", requestSz);
 
     bool invoked = false;
     if (readSz > 0)
@@ -307,7 +286,7 @@ resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t wri
 
     do
     {
-        atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, writeData, writeSz, NULL, false);
+        atcmd_configDataForwarder(0, "CONNECT", atcmd_stdTxDataHndlr, writeData, writeSz, NULL, false);
         atcmd_invokeReuseLock("AT+QFWRITE=%d,%d", fileHandle, writeSz);
         rslt = atcmd_awaitResult();
         if (rslt == resultCode__success)                                                        // "CONNECT" prompt result
@@ -389,40 +368,21 @@ resultCode_t file_delete(const char* filename)
 
 void file_getTsFilename(char* tsFilename, uint8_t fnSize, const char* suffix)
 {
-    char* timestamp[30] = {0};
-    char* srcPtr = timestamp;
-    char* destPtr = tsFilename;
-
-    ltem_getDateTimeUtc(timestamp);
-    memset(tsFilename, 0, fnSize);
-
-    memcpy(destPtr, srcPtr, 2);                                             // get year
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get month
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get day
-    strcat(destPtr, "T");
-    srcPtr += 3;
-    destPtr += 3;
-    memcpy(destPtr, srcPtr, 2);                                             // get hour
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get minute
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get second
-
-    if (strlen(suffix) > 0)                                                 // add suffix, if provided by caller
-        strcat(destPtr,suffix);
+    if (fnSize > (13 + strlen(suffix) + 1))                                 // need 13 for compact DateTime + suffix + NULL
+    {
+        strcpy(tsFilename, ltem_getLocalDateTime('c'));                     // get ISO8601 compact format
+        if (strlen(suffix) > 0)                                             // add suffix, if provided by caller
+            strcat(tsFilename, suffix);
+        return;
+    }
+    tsFilename[0] = '\0';                                                   // return empty c-str if buffer too small
 }
 
 
 /* Possible future API methods
 */
-// fileUploadResult_t file_upload(const char* filename) {}
-// fileDownloadResult_t file_download(const char* filename) {}
+// fileUploadResult_t file_upload(const char* filename) {}                  // stream application data into file
+// fileDownloadResult_t file_download(const char* filename) {}              // stream file content to application
 
 
 #pragma Static Helpers and Response Parsers
@@ -430,17 +390,60 @@ void file_getTsFilename(char* tsFilename, uint8_t fnSize, const char* suffix)
  * --------------------------------------------------------------------------------------------- */
 
 
-static cmdParseRslt_t S__writeStatusParser() 
+/**
+ * @brief Filelist output stream data handler, handles parsing response into fileListResponse_t.
+ * 
+ * @return result code of operation.
+ */
+static resultCode_t S__filelistHndlr()
 {
-    // +QFWRITE: <written_length>,<total_length>
-    return atcmd_stdResponseParser("+QFWRITE: ", true, ",", 0, 1, "\r\n", 0);
+    char lineBffr[128];
+
+    // uint8_t popCnt = bbffr_find(g_lqLTEM.iop->rxBffr, ":", 0, 0, false);
+    // if (BBFFR_NOTFOUND(popCnt))
+    // {
+    //     return resultCode__notFound;
+    // }
+
+    uint32_t readTimeout = pMillis();
+    uint16_t trailerAt;
+    do
+    {
+        trailerAt = bbffr_find(g_lqLTEM.iop->rxBffr, "OK\r\n", 0, 0, false);
+        if (pMillis() - readTimeout > g_lqLTEM.atcmd->timeout)
+        {
+            g_lqLTEM.atcmd->retValue = 0;
+            uint16_t occupiedCnt = bbffr_getOccupied(g_lqLTEM.iop->rxBffr);
+            DPRINT(PRNT_WARN, "S__filesRxHndlr bffr timeout: %d rcvd\r\n", occupiedCnt);
+            return resultCode__timeout;                                                         // return no receive
+        }
+    } while (BBFFR_ISNOTFOUND(trailerAt));
+    fileListResult_t* filelist = (fileListResult_t*)g_lqLTEM.atcmd->dataMode.dataLoc;
+
+    uint8_t fileNum = 0;
+    uint8_t lineSz = bbffr_find(g_lqLTEM.iop->rxBffr, "\r\n", 0, 0, false);
+    bbffr_pop(g_lqLTEM.iop->rxBffr, lineBffr, lineSz + 2);
+
+    while (lineBffr[0] == '+')
+    {
+        char* quoteAt = memchr(&lineBffr[9], '"', sizeof(lineBffr) - 9);
+        memcpy(filelist->files[fileNum].filename, &lineBffr[9], quoteAt - &lineBffr[9]);
+        // fileItem->fileSz = atol(quoteAt + 2);
+        filelist->files[fileNum].fileSz = strtol(quoteAt + 2, NULL, 10);
+        fileNum++;
+        lineSz = bbffr_find(g_lqLTEM.iop->rxBffr, "\r\n", 0, 0, false);
+        bbffr_pop(g_lqLTEM.iop->rxBffr, lineBffr, lineSz + 2);
+    }
+
+    filelist->fileCnt = fileNum;
+    return resultCode__success;
 }
 
 
 /**
  * @brief File stream RX data handler, marshalls incoming data from RX buffer to app (application).
  * 
- * @return number of bytes read 
+ * @return result code of operation. 
  */
 static resultCode_t S__filesRxHndlr()
 {
@@ -479,6 +482,7 @@ static resultCode_t S__filesRxHndlr()
         ((fileReceiver_func)(*g_lqLTEM.fileCtrl->appRecvDataCB))(g_lqLTEM.fileCtrl->handle, streamPtr, blockSz);    // forward to application
         bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                         // commit POP
         readSz -= blockSz;
+        g_lqLTEM.atcmd->dataMode.flowOffset += blockSz;                                                             // allow for file receiver to reassemble full read
     } while (readSz > 0);
 
     if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= file__readTrailerSz)                                             // cleanup, remove trailer
@@ -487,6 +491,13 @@ static resultCode_t S__filesRxHndlr()
     }
     g_lqLTEM.atcmd->retValue = availableSz;
     return resultCode__success;
+}
+
+
+static cmdParseRslt_t S__writeStatusParser() 
+{
+    // +QFWRITE: <written_length>,<total_length>
+    return atcmd_stdResponseParser("+QFWRITE: ", true, ",", 0, 1, "\r\n", 0);
 }
 
 

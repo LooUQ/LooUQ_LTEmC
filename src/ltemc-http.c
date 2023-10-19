@@ -276,7 +276,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
             snprintf(cstmRequest, sizeof(cstmRequest), "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrs);
             DPRINT(PRNT_dMAGENTA, "CustomRqst:\r%s\r", cstmRequest);
 
-            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, cstmRequest, strlen(cstmRequest), NULL, true);
+            atcmd_configDataForwarder(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, cstmRequest, strlen(cstmRequest), NULL, true);
             atcmd_invokeReuseLock("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, strlen(cstmRequest));
         }
         else
@@ -374,7 +374,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
         uint16_t httpRequestLen = postDataSz;                                                           // requestLen starts with postDataSz
         httpRequestLen += (httpCtrl->cstmHdrsSz > 0) ? (httpCtrl->cstmHdrsSz + 2) : 0;                  // add the custom headers + 2 char for EOL after hdrs
 
-        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, postData, postDataSz, NULL, true);
+        atcmd_configDataForwarder(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, postData, postDataSz, NULL, true);
 
         if (httpCtrl->cstmHdrsSz)
         {
@@ -434,7 +434,7 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
 
     if (atcmd_tryInvoke("AT+QHTTPREAD=%d", httpCtrl->timeoutSec))
     {
-        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", S__httpRxHndlr, NULL, 0, httpCtrl->appRecvDataCB, false);
+        atcmd_configDataForwarder(httpCtrl->dataCntxt, "CONNECT", S__httpRxHndlr, NULL, 0, httpCtrl->appRecvDataCB, false);
         // atcmd_setStreamControl("CONNECT", (streamCtrl_t*)httpCtrl);
         return atcmd_awaitResult();                                             // dataHandler will be invoked by atcmd module and return a resultCode
     }
@@ -506,7 +506,7 @@ static resultCode_t S__setUrl(const char *host, const char *relative)
     }
     DPRINT(PRNT_dMAGENTA, "URL(%d)=\"%s\" \r", strlen(url), url);
     
-    atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, url, strlen(url), NULL, false);        // setup for URL dataMode transfer 
+    atcmd_configDataForwarder(0, "CONNECT", atcmd_stdTxDataHndlr, url, strlen(url), NULL, false);        // setup for URL dataMode transfer 
     atcmd_invokeReuseLock("AT+QHTTPURL=%d,5", strlen(url));
     rslt = atcmd_awaitResult();
     return rslt;

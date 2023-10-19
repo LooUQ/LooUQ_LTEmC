@@ -176,55 +176,86 @@ uint16_t spi_transferWord(platformSpi_t* platformSpi, uint16_t data)
 
 
 /**
- *	@brief Transfer a buffer to the SPI device.
- *
- *	@param spi [in] The SPI device for communications.
- *  @param addressByte [in] Optional address byte sent before buffer, can specify specifics of the I/O being initiated.
- *  @param buf [in/out] - The character pointer to the buffer to transfer to/from.
- *  @param xfer_len [in] - The number of characters to transfer.
+ *	@brief Transfer a buffer to/from the SPI device.
  */
-void spi_transferBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len)
+void spi_transferBuffer(platformSpi_t* platformSpi, const uint8_t* txBuf, uint8_t* rxBuf, uint16_t xferLen)
+{
+    digitalWrite(platformSpi->csPin, LOW);
+    ((SPIClass*)(platformSpi->spi))->beginTransaction(SPISettings(platformSpi->dataRate, (BitOrder)platformSpi->bitOrder, (uint8_t)platformSpi->dataMode));
+
+    uint16_t bffrPtr = 0;
+    for (size_t i=0; i < xferLen; i++) {
+        uint8_t tx = (txBuf != NULL) ? txBuf[i] : 0;
+        uint8_t rx = ((SPIClass*)(platformSpi->spi))->transfer(tx);
+        if (rxBuf != NULL)
+        {
+            *rxBuf = rx;
+            rxBuf++;
+        }
+    }
+    // ((SPIClass*)(platformSpi->spi))->transfer(buf, xfer_len);
+
+    digitalWrite(platformSpi->csPin, HIGH);
+    ((SPIClass*)(platformSpi->spi))->endTransaction();
+}
+
+
+/**
+ *	@brief Transfer a block of data to/from the SPI device.
+ */
+void spi_transferBlock(platformSpi_t* platformSpi, uint8_t addressByte, const uint8_t* txBuf, uint8_t* rxBuf, uint16_t xferLen)
 {
     digitalWrite(platformSpi->csPin, LOW);
     ((SPIClass*)(platformSpi->spi))->beginTransaction(SPISettings(platformSpi->dataRate, (BitOrder)platformSpi->bitOrder, (uint8_t)platformSpi->dataMode));
 
     ((SPIClass*)(platformSpi->spi))->transfer(addressByte);
-    ((SPIClass*)(platformSpi->spi))->transfer(buf, xfer_len);
 
-    digitalWrite(platformSpi->csPin, HIGH);
-    ((SPIClass*)(platformSpi->spi))->endTransaction();
-}
-
-
-void spi_writeBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len)
-{   
-    digitalWrite(platformSpi->csPin, LOW);
-    ((SPIClass*)(platformSpi->spi))->beginTransaction(SPISettings(platformSpi->dataRate, (BitOrder)platformSpi->bitOrder, (uint8_t)platformSpi->dataMode));
-
-    ((SPIClass*)(platformSpi->spi))->transfer(addressByte);
-    for (uint16_t i = 0; i < xfer_len; i++)
-    {
-        ((SPIClass*)(platformSpi->spi))->transfer(*((uint8_t*)buf + i));
+    uint16_t bffrPtr = 0;
+    for (size_t i=0; i < xferLen; i++) {
+        uint8_t tx = (txBuf != NULL) ? txBuf[i] : 0;
+        uint8_t rx = ((SPIClass*)(platformSpi->spi))->transfer(tx);
+        if (rxBuf != NULL)
+        {
+            *rxBuf = rx;
+            rxBuf++;
+        }
     }
+    // ((SPIClass*)(platformSpi->spi))->transfer(buf, xfer_len);
 
     digitalWrite(platformSpi->csPin, HIGH);
     ((SPIClass*)(platformSpi->spi))->endTransaction();
 }
 
 
-void spi_readBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len)
-{
-    digitalWrite(platformSpi->csPin, LOW);
-    ((SPIClass*)(platformSpi->spi))->beginTransaction(SPISettings(platformSpi->dataRate, (BitOrder)platformSpi->bitOrder, (uint8_t)platformSpi->dataMode));
+// void spi_writeBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len)
+// {   
+//     digitalWrite(platformSpi->csPin, LOW);
+//     ((SPIClass*)(platformSpi->spi))->beginTransaction(SPISettings(platformSpi->dataRate, (BitOrder)platformSpi->bitOrder, (uint8_t)platformSpi->dataMode));
 
-    ((SPIClass*)(platformSpi->spi))->transfer(addressByte);
-    for (uint16_t i = 0; i < xfer_len; i++)
-    {
-        *((uint8_t*)(buf + i)) = ((SPIClass*)(platformSpi->spi))->transfer(0xFF);
-    }
+//     ((SPIClass*)(platformSpi->spi))->transfer(addressByte);
+//     for (uint16_t i = 0; i < xfer_len; i++)
+//     {
+//         ((SPIClass*)(platformSpi->spi))->transfer(*((uint8_t*)buf + i));
+//     }
 
-    digitalWrite(platformSpi->csPin, HIGH);
-    ((SPIClass*)(platformSpi->spi))->endTransaction();
-}
+//     digitalWrite(platformSpi->csPin, HIGH);
+//     ((SPIClass*)(platformSpi->spi))->endTransaction();
+// }
+
+
+// void spi_readBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len)
+// {
+//     digitalWrite(platformSpi->csPin, LOW);
+//     ((SPIClass*)(platformSpi->spi))->beginTransaction(SPISettings(platformSpi->dataRate, (BitOrder)platformSpi->bitOrder, (uint8_t)platformSpi->dataMode));
+
+//     ((SPIClass*)(platformSpi->spi))->transfer(addressByte);
+//     for (uint16_t i = 0; i < xfer_len; i++)
+//     {
+//         *((uint8_t*)(buf + i)) = ((SPIClass*)(platformSpi->spi))->transfer(0xFF);
+//     }
+
+//     digitalWrite(platformSpi->csPin, HIGH);
+//     ((SPIClass*)(platformSpi->spi))->endTransaction();
+// }
 
 #endif // ifdef SAMD
