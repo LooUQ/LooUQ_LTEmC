@@ -26,7 +26,7 @@
 
 #define SRCFILE "LTE"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -88,14 +88,15 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
 
     // platformSpi allocation by framework
 
+
     IOP_create();                                                   // creates IOP internal controls and RX buffer
     
     g_lqLTEM.atcmd = calloc(1, sizeof(atcmd_t));
     ASSERT(g_lqLTEM.atcmd != NULL);
     atcmd_reset(true);
 
-    g_lqLTEM.modemInfo = calloc(1, sizeof(modemInfo_t));
-    ASSERT(g_lqLTEM.modemInfo != NULL);
+    g_lqLTEM.modemSettings = calloc(1, sizeof(modemSettings_t));
+    ASSERT(g_lqLTEM.modemSettings != NULL);
 
     g_lqLTEM.modemInfo =  calloc(1, sizeof(modemInfo_t));
     ASSERT(g_lqLTEM.modemConfig != NULL);
@@ -112,12 +113,6 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
 
     g_lqLTEM.cancellationRequest = false;
     g_lqLTEM.appEvntNotifyCB = eventNotifCallback;
-
-    // available diagnostic resource, get map of g_lqLTEM struct
-    //S__ltemInstanceMap();
-    #ifdef DBGTRACE
-    g_lqLTEM.tracePtr = g_lqLTEM.traceBffr;
-    #endif
 }
 
 
@@ -194,7 +189,7 @@ bool ltem_start(resetAction_t resetAction)
     DPRINT_V(PRNT_CYAN, "UART IRQ attached\r\n");
 
 
-    DPRINT_V(PRNT_CYAN, "Waiting %dms for LTEm AppRdy\r\n", APPRDY_TIMEOUT);
+    DPRINT_V(PRNT_CYAN, "Waiting %ds for LTEm AppRdy\r\n", APPRDY_TIMEOUT / 1000);
     uint32_t startAppRdy = pMillis();                                       // wait for BGx to signal internal ready
     while (bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, true))
     {
