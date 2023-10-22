@@ -115,11 +115,10 @@ typedef struct ltemDevice_tag
     deviceState_t deviceState;                  // Device state of the BGx module
     appEvntNotify_func appEvntNotifyCB;         // Event notification callback to parent application
 
-    platformSpi_t* platformSpi;
+    platformSpi_t* platformSpi;                 
     //void *spi;                                  // SPI device (methods signatures compatible with Arduino)
     
     iop_t *iop;                                 // IOP subsystem controls
-    uint8_t iopInterrupt;                       // IOP ISR attached interrupt number 
     atcmd_t *atcmd;                             // Action subsystem controls
     modemSettings_t *modemSettings;             // Settings to control radio and cellular network initialization
 	modemInfo_t *modemInfo;                     // Data structure holding persistent information about application modem state

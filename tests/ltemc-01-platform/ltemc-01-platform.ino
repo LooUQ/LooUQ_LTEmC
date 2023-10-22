@@ -7,7 +7,7 @@
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
 #ifdef ARDUINO_ARCH_ESP32
-    #define HOST_ESP32_DEVMOD_BMS
+    //#define HOST_ESP32_DEVMOD_BMS2
 #else
     #define HOST_FEATHER_UXPLOR_L
     // #define HOST_FEATHER_UXPLOR             
@@ -17,6 +17,26 @@
 #include <ltemc.h>
 #include <ltemc-nxp-sc16is.h>                                           // need internal references, low-level test here
 
+/* If custom board not defined in ltemcPlatform-pins.h
+ * Override by:
+ * UNCOMMENT ltem_pinConfig struct initializer below to override for a custom board
+ * Note: this needs to follow #include <ltemc.h> 
+ */
+const static ltemPinConfig_t ltem_pinConfig = 
+{
+    spiIndx : -1,
+    spiCsPin : 8,    // original: 18
+    spiClkPin : 16,  // original: 15
+    spiMisoPin : 17, // original: 16
+    spiMosiPin : 18, // original: 17
+    irqPin : 3,      // original: 8
+    statusPin : 47,
+    powerkeyPin : 45,
+    resetPin : 0,
+    ringUrcPin : 0,
+    wakePin : 48
+};
+
 #define PERIOD_FROM_SECONDS(period)  (period * 1000)
 #define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
 #define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
@@ -24,7 +44,7 @@
 
 // test controls
 uint16_t loopCnt = 0;
-uint16_t cycle_interval = 2000;
+uint16_t cycle_interval = 500;
 uint32_t lastCycle;
 
 // this test has no reference to global g_lqLTEM variable
@@ -32,8 +52,10 @@ uint32_t lastCycle;
 platformSpi_t* platformSpi; 
 
 union regBuffer { uint16_t val; struct { uint8_t msb; uint8_t lsb; }; };
-regBuffer txBuffer;
-regBuffer rxBuffer;
+regBuffer txWord;
+regBuffer rxWord;
+uint8_t txBffr[2];
+uint8_t rxBffr[2];
 uint8_t testPattern;
 
 
@@ -79,66 +101,108 @@ void setup()
 	}
     spi_start(platformSpi);
 
-    txBuffer.msb = SC16IS7xx_SPR_regAddr << 3;                                          // clear SPI and NXP-bridge
-    txBuffer.lsb = 0;
-    spi_transferWord(platformSpi, txBuffer.val);
+    txWord.msb = SC16IS7xx_SPR_regAddr << 3;                                          // clear SPI and NXP-bridge
+    txWord.lsb = 0;
+    spi_transferWord(platformSpi, txWord.val);
 
     lastCycle = cycle_interval;
 }
 
 //#define HALT_ON_FAULT
-uint16_t wFaults = 0;
-uint16_t bFaults = 0;
+uint16_t byteFaults = 0;
+uint16_t wordFaults = 0;
+uint16_t bytesFaults = 0;
 
 void loop() 
 {
     if (ELAPSED(lastCycle, cycle_interval))
     {
         loopCnt++;
-        DPRINT(0,"\n\nLoop=%d (wFaults= %d, bFaults=%d)\n", loopCnt, wFaults, bFaults);
+        DPRINT(PRNT_CYAN,"\n\nLoop=%d FAULTS: byte=%d, word=%d, bytes=%d\r\n", loopCnt, byteFaults, wordFaults, byteFaults);
         lastCycle = millis();
+
+
+        DPRINT(0, "Writing scratchpad regiser %d with transfer BYTE...", testPattern);
         testPattern = random(256);
 
-        txBuffer.msb = SC16IS7xx_SPR_regAddr << 3;
-        txBuffer.lsb = testPattern;
-        rxBuffer.msb = (SC16IS7xx_SPR_regAddr << 3) | 0x80;
+        rxWord.msb = (SC16IS7xx_SPR_regAddr << 3) | 0x80;
         // rxBuffer.lsb doesn't matter prior to read
+        uint8_t rxData;
 
-        DPRINT(0, "Writing scratchpad regiser %d with transfer WORD...", testPattern);
-        uint16_t d = spi_transferWord(platformSpi, txBuffer.val);
-        rxBuffer.val = spi_transferWord(platformSpi, rxBuffer.val);
+        spi_transferBegin(platformSpi);                                     // write scratchpad
+        txWord.msb = SC16IS7xx_SPR_regAddr << 3;
+        txWord.lsb = testPattern;
+        rxData = spi_transferByte(platformSpi, txWord.msb);
+        rxData = spi_transferByte(platformSpi, txWord.lsb);
+        spi_transferEnd(platformSpi);
 
-        if (testPattern == rxBuffer.lsb)
+        spi_transferBegin(platformSpi);                                     // read scratchpad
+        txWord.msb = (SC16IS7xx_SPR_regAddr << 3) | 0x80;                   // register addr + read data bit set
+        txWord.lsb = 0;                                                     // doesn't matter on read
+        rxData = spi_transferByte(platformSpi, txWord.msb);
+        rxData = spi_transferByte(platformSpi, txWord.lsb);
+        spi_transferEnd(platformSpi);
+
+        if (testPattern == rxData)
         {
-            DPRINT(PRNT_INFO, "Scratchpad transfer WORD success.\r\n");
+            DPRINT(PRNT_INFO, "Scratchpad transfer BYTE success.\r\n");
         }
         else
         {
-            DPRINT(PRNT_WARN, "Scratchpad transfer WORD write/read failed (expected=%d, got=%d).\r\n", testPattern, rxBuffer.lsb);
-            wFaults++;
+            DPRINT(PRNT_WARN, "Scratchpad transfer BYTE write/read failed (expected=%d, got=%d).\r\n", testPattern, rxData);
+            byteFaults++;
             #ifdef HALT_ON_FAULT
                 while(1){;}
             #endif
         }
 
-        // SPI operations are destructive to register addr; reset addr and incr pattern to differentiate
-        testPattern += 15;
-        txBuffer.msb = SC16IS7xx_SPR_regAddr << 3;
-        rxBuffer.msb = (SC16IS7xx_SPR_regAddr << 3) | 0x80;  // write: reg addr + data
-        txBuffer.lsb = testPattern;
 
-        DPRINT(0, "Writing scratchpad regiser %d with transfer BUFFER...", testPattern);
-        spi_transferBuffer(platformSpi, txBuffer.msb, &txBuffer.lsb, 1);
-        spi_transferBuffer(platformSpi, rxBuffer.msb, &rxBuffer.lsb, 1);
+        DPRINT(0, "Writing scratchpad regiser %d with transfer WORD...", testPattern);
+        testPattern = random(256);
 
-        if (rxBuffer.lsb == testPattern)
+        txWord.msb = SC16IS7xx_SPR_regAddr << 3;
+        txWord.lsb = testPattern;
+        rxWord.msb = (SC16IS7xx_SPR_regAddr << 3) | 0x80;
+        // rxBuffer.lsb doesn't matter prior to read
+
+        uint16_t d = spi_transferWord(platformSpi, txWord.val);
+        rxWord.val = spi_transferWord(platformSpi, rxWord.val);
+
+        if (testPattern == rxWord.lsb)
         {
-            DPRINT(PRNT_INFO, "Scratchpad transfer BUFFER success.\r\n");
+            DPRINT(PRNT_INFO, "Scratchpad transfer WORD success.\r\n");
         }
         else
         {
-            DPRINT(PRNT_WARN, "Scratchpad transfer BUFFER write/read failed (expected=%d, got=%d).\r\n", testPattern, rxBuffer.lsb);
-            bFaults++;
+            DPRINT(PRNT_WARN, "Scratchpad transfer WORD write/read failed (expected=%d, got=%d).\r\n", testPattern, rxWord.lsb);
+            wordFaults++;
+            #ifdef HALT_ON_FAULT
+                while(1){;}
+            #endif
+        }
+
+
+        DPRINT(0, "Writing scratchpad regiser %d with transfer BYTES (buffer)...", testPattern);
+        testPattern = random(256);
+
+        // write scratchpad
+        txBffr[0] = SC16IS7xx_SPR_regAddr << 3;
+        txBffr[1] = testPattern;
+        spi_transferBytes(platformSpi, txBffr, NULL, 2);
+
+        // read scratchpad
+        txBffr[0] = (SC16IS7xx_SPR_regAddr << 3) | 0x80;                    // write: reg addr + read bit set
+        txBffr[1] = 0;                                                      // doesn't matter on read
+        spi_transferBytes(platformSpi, txBffr, rxBffr, 2);
+
+        if (rxBffr[1] == testPattern)
+        {
+            DPRINT(PRNT_INFO, "Scratchpad transfer BYTES (buffer) success.\r\n");
+        }
+        else
+        {
+            DPRINT(PRNT_WARN, "Scratchpad transfer BYTES (buffer) write/read failed (expected=%d, got=%d).\r\n", testPattern, rxBffr[1]);
+            bytesFaults++;
             #ifdef HALT_ON_FAULT
                 while(1){;}
             #endif

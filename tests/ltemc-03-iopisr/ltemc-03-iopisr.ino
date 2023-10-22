@@ -14,24 +14,19 @@
     // #define HOST_FEATHER_LTEM3F
 #endif
 
-// #define PERIOD_FROM_SECONDS(period)  (period * 1000)
-// #define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
-// #define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
-// #define STRCMP(x,y)  (strcmp(x,y) == 0)
-
 // LTEmC Includes
-#include <ltemc-internal.h>                             // this appl performs tests on internal, non-public API components 
+#include <ltemc-internal.h>                                     // this appl performs tests on internal, non-public API components 
 #include <ltemc-iop.h>
 
 // LTEmC variables
-// cBuffer_t rxBffr;                                           // cBuffer control structure
-// cBuffer_t* rxBffrPtr = &rxBffr;                             // convenience pointer var
-// char rawBuffer[220] = {0};                                  // raw buffer managed by rxBffr control
+// cBuffer_t rxBffr;                                            // cBuffer control structure
+// cBuffer_t* rxBffrPtr = &rxBffr;                              // convenience pointer var
+// char rawBuffer[220] = {0};                                   // raw buffer managed by rxBffr control
 
 // test controls
-bBuffer_t* rxBffrPtr;                                       // convenience pointer var
-char hostBffr1[255];                                        // display buffer to receive received info from LTEmC
-char hostBffr2[255];                                        // display buffer to receive received info from LTEmC
+bBuffer_t* rxBffrPtr;                                           // convenience pointer var
+char hostBffr1[255] = {0};                                      // display buffer to receive received info from LTEmC
+char hostBffr2[255] = {0};                                      // display buffer to receive received info from LTEmC
 
 uint16_t loopCnt = 0;
 uint16_t cycle_interval = 2000;
@@ -45,6 +40,7 @@ resultCode_t rslt;
     #define ASSERT(b,s) if(!b) indicateFailure(s)
 #endif
 
+#define APPRDY_TIMEOUT 8000
 
 void setup() 
 {
@@ -57,21 +53,21 @@ void setup()
     // lqDiag_setNotifyCallback(appEvntNotify);                 // configure LTEMC ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);           // create LTEmC modem (no yield CB for testing)
-    startLTEm();                                                // test defined initialize\start, can't use ltem_start() for this test scenario
+    ltem_start(resetAction_powerReset);
 
     //(optionally) override LTEm created buffer with test instance
     // cbffr_init(rxBffrPtr, rawBuffer, sizeof(rawBuffer));
     // g_lqLTEM.iop->rxBffr = rxBffrPtr;
     rxBffrPtr = g_lqLTEM.iop->rxBffr;                           // convenience pointer
 
-    char cmd[] = "ATE0\r";
+    char cmd[] = "ATE0\r";                                      // turn off cmd echo for cleaner result parsing
     IOP_startTx(cmd, strlen(cmd));
     pDelay(500);
     DPRINT(PRNT_DEFAULT, "ATE0 response:");
     DPRINT(PRNT_INFO, "%s\r\n", rxBffrPtr->tail);
     bbffr_reset(rxBffrPtr);                                     // discard response
 
-    lastCycle = cycle_interval;
+    lastCycle = pMillis() + cycle_interval;
 }
 
 
@@ -86,14 +82,17 @@ void loop()
         // char cmd[] = "AT+GSN;+QCCID\r\n";                                // short response (expect 57 char response)
         char cmd[] = "AT+GSN;+QCCID;+GMI;+GMM\r\0";                         // long response (expect 79 char response)
         // char cmd[] = "AT+QPOWD\r\n";                                     // Is something wrong? Is is rx or tx (tx works if BG powers down)
-        uint8_t expectedCnt = 79;                                           // set dependent on cmds invoked on BGx
+        uint8_t expectedCnt = 79;                                          // set dependent on cmds invoked on BGx
 
         DPRINT(0, "Sending (%d) %s\r\n", strlen(cmd), cmd);
         IOP_startTx(cmd, strlen(cmd));                                      // start send and wait for complete (ISR handles transfers out until complete)
         pDelay(1000);                                                        // give BGx some time to respond, interrupt will fire and fill rx buffer
 
         uint16_t occupiedCnt = bbffr_getOccupied(rxBffrPtr);                // move to variable for break conditional
-        DPRINT(PRNT_GREEN, "Got %d chars of %d expected\r\n", occupiedCnt, expectedCnt);
+        if (occupiedCnt == expectedCnt)
+            DPRINT(PRNT_GREEN, "Got %d chars of %d expected\r\n", occupiedCnt, expectedCnt);
+        else
+            DPRINT(PRNT_WARN, "Got %d chars of %d expected\r\n", occupiedCnt, expectedCnt);
         ASSERT(occupiedCnt == expectedCnt, "Buffer occupied not as expected");
 
         char* copyFrom;
@@ -132,12 +131,12 @@ void loop()
         occupiedCnt = bbffr_getOccupied(rxBffrPtr);                             // move to variable for break conditional
         DPRINT(PRNT_GREEN, "rxBffr has %d chars now.\r\n", occupiedCnt);
 
-        if (loopCnt > 1)
+        if (loopCnt > 1)                                                        // skip on loop 1, only 1 buffer filled
         {
             uint16_t cmpFault = strcmp(hostBffr1, hostBffr2);
             ASSERT(cmpFault == 0, "Buffers do not compare as equal");
+            ASSERT(occupiedCnt == 0, "bBffr is empty");
         }
-        ASSERT(occupiedCnt == 0, "cBffr is empty");
 
         DPRINT(0,"Loop=%d \n\n", loopCnt);
      }
@@ -146,40 +145,6 @@ void loop()
 
 /* test helpers
 ========================================================================================================================= */
-
-void startLTEm()
-{
-    // initialize the HOST side of the LTEm interface
-	// ensure pin is in default "logical" state prior to opening
-	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
-	platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
-	platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
-
-	platform_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-	platform_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-	platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
-
-	platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
-	platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
-
-    spi_start(g_lqLTEM.platformSpi);
-
-    QBG_reset(resetAction_powerReset);                                      // force power cycle here, limited initial state conditioning
-    SC16IS7xx_start();                                                      // start (resets previously powered on) NXP SPI-UART bridge
-
-    if (g_lqLTEM.deviceState != deviceState_appReady)
-    {
-        if (IOP_awaitAppReady())
-        {
-            DPRINT(PRNT_INFO, "AppRdy recv'd\r\n");
-        }
-    }
-    else
-        DPRINT(PRNT_dYELLOW, "AppRdy assumed\r\n");
-    SC16IS7xx_enableIrqMode();
-    IOP_attachIrq();
-}
-
 
 void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {

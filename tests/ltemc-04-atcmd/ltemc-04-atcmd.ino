@@ -47,7 +47,8 @@ void setup()
     // lqDiag_setNotifyCallback(appEvntNotify);                 // configure LTEMC ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);           // create LTEmC modem
-    ltem_start(resetAction_swReset);                            // ... and start it
+    bool startRslt = ltem_start(resetAction_swReset);           // ... and start it
+    DPRINT(PRNT_INFO,"ltem_start started=%d \r\n", startRslt);
 
     lastCycle = cycle_interval;
 }

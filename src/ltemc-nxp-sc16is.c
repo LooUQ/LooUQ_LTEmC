@@ -102,11 +102,11 @@ void SC16IS7xx_enableIrqMode()
     // SC16IS7xx_writeReg(SC16IS7xx_LCR_regAddr, SC16IS7xx__LCR_REGSET_general);
     // REG_MODIFY(SC16IS7xx_MCR, SC16IS7xx_MCR_reg.TCR_TLR_EN = 1;)
 
-    // // /* reg field * 4 = trigger level, RX[7:4] / TX[3:0]
-    // //  * 0x0=disabled, 0x1=4, 0x2=8, 0x3=12, 0x4=16, 0x5=20, 0x6=24, 0x7=28, 0x8=32, 0x9=36, 0xA=40, 0xB=44, 0xC=48, 0xD=52, 0xE=56, 0xF=60
-    // // */
+    /* reg field * 4 = trigger level, RX[7:4] / TX[3:0]
+     * 0x0=disabled, 0x1=4, 0x2=8, 0x3=12, 0x4=16, 0x5=20, 0x6=24, 0x7=28, 0x8=32, 0x9=36, 0xA=40, 0xB=44, 0xC=48, 0xD=52, 0xE=56, 0xF=60
+    */
 
-    // // // turn off flow-control
+    // // turn off flow-control
     // SC16IS7xx_writeReg(SC16IS7xx_TCR_regAddr, 0xF0);
 
     // // Set TLR (trigger levels)
@@ -120,7 +120,8 @@ void SC16IS7xx_enableIrqMode()
     ierSetting.RECEIVE_LINE_STAT_INT_EN = 1;
     SC16IS7xx_writeReg(SC16IS7xx_IER_regAddr, ierSetting.reg);
 
-    // flush RX buffer, RX must be previously empty to fire on new recv
+    // flush FIFO buffers, must be previously empty to fire on new event
+    SC16IS7xx_writeReg(SC16IS7xx_FCR_regAddr, SC16IS7xx__FCR_IOP_TX_FLUSH);
     SC16IS7xx_writeReg(SC16IS7xx_FCR_regAddr, SC16IS7xx__FCR_IOP_RX_FLUSH);
 }
 
@@ -175,7 +176,12 @@ void SC16IS7xx_read(void *dest, uint8_t dest_len)
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, dest, dest_len);
+    // spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, dest, dest_len);
+
+    spi_transferBegin(g_lqLTEM.platformSpi);
+    spi_transferByte(g_lqLTEM.platformSpi, reg_addr.reg_address);                       // register address FIFO
+    spi_transferBytes(g_lqLTEM.platformSpi, NULL, dest, dest_len);                      // txData
+    spi_transferEnd(g_lqLTEM.platformSpi);
 }
 
 /**
@@ -187,7 +193,12 @@ void SC16IS7xx_write(const void *src, uint8_t src_len)
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 
-    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, src, src_len);
+    // spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, src, src_len);
+
+    spi_transferBegin(g_lqLTEM.platformSpi);
+    spi_transferByte(g_lqLTEM.platformSpi, reg_addr.reg_address);                       // register address FIFO
+    spi_transferBytes(g_lqLTEM.platformSpi, src, NULL, src_len);                        // txData
+    spi_transferEnd(g_lqLTEM.platformSpi);
 }
 
 /**

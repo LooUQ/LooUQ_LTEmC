@@ -26,7 +26,7 @@
 
 #define SRCFILE "LTE"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -149,9 +149,8 @@ bool ltem_start(resetAction_t resetAction)
     ltem_notifyApp(appEvent_info, "Starting LTEm");
     appEvntNotify_func notifCBStash = g_lqLTEM.appEvntNotifyCB;
     g_lqLTEM.appEvntNotifyCB = NULL;                                        // disable further app notification (for restart)
-    g_lqLTEM.deviceState = deviceState_powerOff;                            // starting or reseting soon
     
-  	// on Arduino compatible, ensure pin is in default "logical" state prior to opening
+  	// for some frameworks, ensure pin is in default "logical" state prior to opening
 	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
 	platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
 	platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
@@ -188,11 +187,10 @@ bool ltem_start(resetAction_t resetAction)
 
     SC16IS7xx_start();                                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
     DPRINT_V(PRNT_CYAN, "UART started\r\n");
-    SC16IS7xx_enableIrqMode();                                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
-    DPRINT_V(PRNT_CYAN, "UART set to IRQ mode\r\n");
     IOP_attachIrq();                                                        // attach I/O processor ISR to IRQ
     DPRINT_V(PRNT_CYAN, "UART IRQ attached\r\n");
-
+    SC16IS7xx_enableIrqMode();                                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
+    DPRINT_V(PRNT_CYAN, "UART set to IRQ mode\r\n");
 
     DPRINT_V(PRNT_CYAN, "Waiting %dms for LTEm AppRdy\r\n", APPRDY_TIMEOUT);
     uint32_t startAppRdy = pMillis();                                       // wait for BGx to signal internal ready
@@ -859,7 +857,6 @@ static void S__ltemInstanceMap()
 
     DPRINT(0, "platSPI\t\t@=%p\t%p\r\n", &g_lqLTEM.platformSpi, g_lqLTEM.platformSpi);
     DPRINT(0, "IOP\t\t@=%p\t%p\r\n", &g_lqLTEM.iop, g_lqLTEM.iop);
-    DPRINT(0, "IOPattached\t@=%p\r\n", &g_lqLTEM.iopInterrupt);
     DPRINT(0, "atcmd\t\t@=%p\t%p\r\n", &g_lqLTEM.atcmd, g_lqLTEM.atcmd);
     DPRINT(0, "modemInfo\t@=%p\t%p\r\n", &g_lqLTEM.modemInfo, g_lqLTEM.modemInfo);
 

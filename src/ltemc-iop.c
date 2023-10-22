@@ -77,22 +77,14 @@ extern ltemDevice_t g_lqLTEM;
 
 
 
-#pragma region Private Static Function Declarations
-/* ------------------------------------------------------------------------------------------------ */
-
-// static void IOP_interruptCallbackISR();
+/* --------------------------------------------------------------------------------------------- */
 static inline uint8_t S_convertCharToContextId(const char cntxtChar);
-
-#pragma endregion // Header
-
-
-#pragma region Public Functions
-/*-----------------------------------------------------------------------------------------------*/
-#pragma endregion // Public Functions
+// static void S__interruptCallbackISR();
 
 
 #pragma region LTEm Internal Functions
-/*-----------------------------------------------------------------------------------------------*/
+/* All IOP functions are internal to LTEmC, no public API 
+ * --------------------------------------------------------------------------------------------- */
 
 /**
  *	@brief Initialize the Input/Output Process subsystem.
@@ -129,7 +121,8 @@ void IOP_attachIrq()
 
     spi_usingInterrupt(g_lqLTEM.platformSpi, g_lqLTEM.pinConfig.irqPin);
     platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, IOP_interruptCallbackISR);
-    SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);            // ensure FIFO state is empty, UART will not refire interrupt if pending
+    // SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);         // ensure FIFO state is empty, UART will not refire interrupt if pending
+    IOP_interruptCallbackISR();                                     // force ISR to run once to sync IRQ 
 }
 
 
@@ -291,7 +284,7 @@ void IOP_interruptCallbackISR()
     {
         g_lqLTEM.isrInvokeCnt++;
         uint8_t regReads = 0;
-        while(iirVal.IRQ_nPENDING == 1 && regReads < 60)                               // wait for register, IRQ was signaled; safety limit at 60 in case of error gpio
+        while(iirVal.IRQ_nPENDING == 1 && regReads < 60)                               // wait for register, GPIO-IRQ was signaled; spin until limit waiting for register
         {
             iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
             DPRINT(PRNT_dRED, "*");

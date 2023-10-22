@@ -143,6 +143,17 @@ int32_t atcmd_getValue();
 
 
 /**
+ *	@brief Returns a token from the result of the last module command
+ *  @param [in] preamble Character phrase prefixing the section of the response to search
+ *  @param [in] tokenIndx The 0-based token index to return
+ *  @param [out] token Char pointer to found token (will be returned null-terminated)
+ *  @param [in] tkBffrSz Size of the application provided buffer to hold the returned token
+ *  @return Result code describing token search and extraction results (success, notFound, preConditionFailed-insufficient buffer)
+ */
+resultCode_t atcmd_getToken(uint8_t tokenIndx, char* token, uint8_t tkBffrSz);
+
+
+/**
  *	@brief Returns the atCmd parser result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
  *  @return The PARSER result from the last interation of the parser execution. This is generally not applicable to end-user applications.
  */

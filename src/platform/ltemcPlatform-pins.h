@@ -146,6 +146,23 @@ const ltemPinConfig_t ltem_pinConfig =
 };
 #endif
 
+#ifdef HOST_ESP32_DEVMOD_BMS2
+const static ltemPinConfig_t ltem_pinConfig =
+{
+    spiIndx : -1,
+    spiCsPin : 8,    // original: 18
+    spiClkPin : 16,  // original: 15
+    spiMisoPin : 17, // original: 16
+    spiMosiPin : 18, // original: 17
+    irqPin : 3,      // original: 8
+    statusPin : 47,
+    powerkeyPin : 45,
+    resetPin : 0,
+    ringUrcPin : 0,
+    wakePin : 48
+};
+#endif
+
 #ifdef HOST_LOOUQ_REMOTENODE
 const ltemPinConfig_t ltem_pinConfig =
 {

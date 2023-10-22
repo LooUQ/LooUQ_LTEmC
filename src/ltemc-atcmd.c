@@ -39,6 +39,7 @@ extern ltemDevice_t g_lqLTEM;
 
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------- */
+static resultCode_t S__getToken(const char* preamble, uint8_t tokenIndx, char* token, uint8_t tkBffrLen);
 static resultCode_t S__readResult();
 static void S__rxParseForUrc();
 
@@ -313,6 +314,15 @@ char *atcmd_getResponse()
 int32_t atcmd_getValue()
 {
     return g_lqLTEM.atcmd->retValue;
+}
+
+
+/**
+ *	@brief Returns a token from the result of the last module command
+ */
+resultCode_t atcmd_getToken(uint8_t tokenIndx, char* token, uint8_t tkBffrSz)
+{
+    return S__getToken(": ", tokenIndx, token, tkBffrSz);
 }
 
 
@@ -717,6 +727,65 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 
 #pragma region Static Function Definitions
 /*-----------------------------------------------------------------------------------------------*/
+
+
+/**
+ *	xbrief Returns a token from the result of the last module command
+ *  xparam [in] preamble Character phrase prefixing the section of the response to search
+ *  xparam [in] tokenIndx The 0-based token index to return
+ *  xparam [out] token Char pointer to found token (will be returned null-terminated)
+ *  xparam [in] tkBffrSz Size of the application provided buffer to hold the returned token
+ *  xreturn Result code describing token search and extraction results (success, notFound, preConditionFailed-insufficient buffer)
+ */
+static resultCode_t S__getToken(const char* preamble, uint8_t tokenIndx, char* token, uint8_t tkBffrLen)
+{
+    uint8_t preambleLen = strlen(preamble);
+    uint16_t responseLen = strlen(g_lqLTEM.atcmd->rawResponse);
+    if (responseLen <= preambleLen)                                                         // nothing between preamble and term
+        return resultCode__notFound;
+
+    char* searchPtr = g_lqLTEM.atcmd->rawResponse;                                          // need to leave atcmd internals intact
+    if (preambleLen > 0)                                                                    // adjust start of search to past preamble
+    {
+        for (size_t i = 0; i < atcmd__respBufferSz - preambleLen; i++)
+        {
+            if (memcmp(searchPtr, preamble, preambleLen) == 0)
+                break;
+            searchPtr++;
+        }
+    }
+    memset(token, '\0', tkBffrLen);
+    searchPtr += preambleLen;
+    for (size_t i = 0; i <= tokenIndx; i++)
+    {   
+        uint16_t bffrRemaining = g_lqLTEM.atcmd->rawResponse + atcmd__respBufferSz - searchPtr;
+        if (!bffrRemaining)
+            return resultCode__notFound;
+
+        const char delims[] = { ",\rO\0"};
+        char* tkEnd;
+        for (size_t d = 0; d < 4; d++)
+        {
+            tkEnd = memchr(searchPtr, delims[d], bffrRemaining);
+            if (tkEnd)
+                break;
+        }
+
+        // char* tkEnd = memchr(searchPtr, ',', bffrRemaining);
+        // tkEnd = (tkEnd) ? tkEnd : memchr(searchPtr, '\r', bffrRemaining);                   // if delimeter not found, end of token (aka delim) is 'O'=(OK), \r=(\r\n), or \0
+        // tkEnd = (tkEnd) ? tkEnd : memchr(searchPtr, 'O', bffrRemaining);
+        // tkEnd = (tkEnd) ? tkEnd : memchr(searchPtr, '\0', bffrRemaining);                   // if delimeter not found, end of token (aka delim) is 'O' (OK), \r,\n, or \0
+
+        if (i == tokenIndx && tkEnd > searchPtr)                                                // is this the token we want
+        {
+            memcpy(token, searchPtr, MIN(tkBffrLen, tkEnd - searchPtr));                        // copy, leaving room for '\0'
+            return resultCode__success;
+        }
+        searchPtr = tkEnd + 1;                                                                  // next token
+    }
+    return resultCode__internalError;
+}
+
 
 // /**
 //  *	@brief register a stream peer with IOP to control communications. Typically performed by protocol open.

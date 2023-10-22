@@ -37,6 +37,7 @@ platformSpi_t* spi_createFromPins(uint8_t clkPin, uint8_t misoPin, uint8_t mosiP
     return platformSpi;
 }
 
+
 /**
  *	@brief Start SPI facility.
  */
@@ -46,7 +47,6 @@ void spi_start(platformSpi_t* platformSpi)
     pinMode(platformSpi->csPin, OUTPUT);
     ((SPIClass*)platformSpi->spi)->begin(platformSpi->clkPin, platformSpi->misoPin, platformSpi->mosiPin, platformSpi->csPin);
 }
-
 
 
 /**
@@ -76,6 +76,27 @@ void spi_notUsingInterrupt(platformSpi_t* spi, int8_t irqNumber)
 }
 
 
+void spi_transferBegin(platformSpi_t* platformSpi)
+{
+    if (!platformSpi->transactionActive)
+    {
+        platformSpi->transactionActive = true;
+        digitalWrite(platformSpi->csPin, LOW);
+        ((SPIClass*)platformSpi->spi)->beginTransaction(SPISettings(platformSpi->dataRate, platformSpi->bitOrder, platformSpi->dataMode));
+    }
+}
+
+
+void spi_transferEnd(platformSpi_t* platformSpi)
+{
+    if (platformSpi->transactionActive)
+    {
+        digitalWrite(platformSpi->csPin, HIGH);
+        ((SPIClass*)platformSpi->spi)->endTransaction();
+        platformSpi->transactionActive = false;
+    }
+}
+
 
 /**
  *	@brief Transfer a byte to the NXP bridge.
@@ -85,16 +106,19 @@ void spi_notUsingInterrupt(platformSpi_t* spi, int8_t irqNumber)
  * 
  *  \returns A 16-bit word received during the transfer.
  */
-uint8_t spi_transferByte(platformSpi_t* platformSpi, uint8_t data)
+uint8_t spi_transferByte(platformSpi_t* platformSpi, uint8_t txData)
 {
-    digitalWrite(platformSpi->csPin, LOW);
-    ((SPIClass*)platformSpi->spi)->beginTransaction(SPISettings(platformSpi->dataRate, platformSpi->bitOrder, platformSpi->dataMode));
+    bool priorTranState = platformSpi->transactionActive;
 
-    uint8_t result = ((SPIClass*)platformSpi->spi)->transfer(data);
+    if (!priorTranState)
+        spi_transferBegin(platformSpi);
 
-    digitalWrite(platformSpi->csPin, HIGH);
-    ((SPIClass*)platformSpi->spi)->endTransaction();
-    return result;
+    uint8_t rxData = ((SPIClass*)platformSpi->spi)->transfer(txData);
+
+    if (!priorTranState)
+        spi_transferEnd(platformSpi);
+
+    return rxData;
 }
 
 
@@ -107,14 +131,16 @@ uint8_t spi_transferByte(platformSpi_t* platformSpi, uint8_t data)
  * 
  *  \returns A 16-bit word received during the transfer.
  */
-uint16_t spi_transferWord(platformSpi_t* platformSpi, uint16_t data)
+uint16_t spi_transferWord(platformSpi_t* platformSpi, uint16_t txData)
 {
     union { uint16_t val; struct { uint8_t msb; uint8_t lsb; }; } tw;
 
-    digitalWrite(platformSpi->csPin, LOW);
-    ((SPIClass*)platformSpi->spi)->beginTransaction(SPISettings(platformSpi->dataRate, platformSpi->bitOrder, platformSpi->dataMode));
+    bool priorTranState = platformSpi->transactionActive;
 
-    tw.val = data;
+    if (!priorTranState)
+        spi_transferBegin(platformSpi);
+
+    tw.val = txData;
     if (platformSpi->bitOrder == spiBitOrder_msbFirst)
     {
         tw.msb = ((SPIClass*)platformSpi->spi)->transfer(tw.msb);
@@ -125,42 +151,44 @@ uint16_t spi_transferWord(platformSpi_t* platformSpi, uint16_t data)
         tw.lsb = ((SPIClass*)platformSpi->spi)->transfer(tw.lsb);
         tw.msb = ((SPIClass*)platformSpi->spi)->transfer(tw.msb);
     }
-    digitalWrite(platformSpi->csPin, HIGH);
-    ((SPIClass*)platformSpi->spi)->endTransaction();
+
+    if (!priorTranState)
+        spi_transferEnd(platformSpi);
 
     return tw.val;
 }
 
-
 /**
- *	@brief Transfer a buffer to the SPI device.
+ *	@brief Transfer a block of bytes to/from the SPI device.
  */
-void spi_transferBuffer(platformSpi_t* platformSpi, const uint8_t* txBuf,  uint8_t* rxBuf, uint16_t xferLen)
+void spi_transferBytes(platformSpi_t* platformSpi, const uint8_t* txBuf, uint8_t* rxBuf, uint16_t xferLen)
 {
-    digitalWrite(platformSpi->csPin, LOW);
-    ((SPIClass*)platformSpi->spi)->beginTransaction(SPISettings(platformSpi->dataRate, platformSpi->bitOrder, platformSpi->dataMode));
+    bool priorTranState = platformSpi->transactionActive;
+
+    if (!priorTranState)
+        spi_transferBegin(platformSpi);
 
     ((SPIClass*)platformSpi->spi)->transferBytes(txBuf, rxBuf, xferLen);
 
-    digitalWrite(platformSpi->csPin, HIGH);
-    ((SPIClass*)platformSpi->spi)->endTransaction();
+    if (!priorTranState)
+        spi_transferEnd(platformSpi);
 }
 
 
-/**
- *	@brief Transfer a data block to the SPI device.
- */
-void spi_transferBlock(platformSpi_t* platformSpi, uint8_t addressByte, const uint8_t* txBuf,  uint8_t* rxBuf, uint16_t xferLen)
-{
-    digitalWrite(platformSpi->csPin, LOW);
-    ((SPIClass*)platformSpi->spi)->beginTransaction(SPISettings(platformSpi->dataRate, platformSpi->bitOrder, platformSpi->dataMode));
+// /**
+//  *	@brief Transfer a data block to the SPI device.
+//  */
+// void spi_transferBlock(platformSpi_t* platformSpi, uint8_t addressByte, const uint8_t* txBuf,  uint8_t* rxBuf, uint16_t xferLen)
+// {
+//     digitalWrite(platformSpi->csPin, LOW);
+//     ((SPIClass*)platformSpi->spi)->beginTransaction(SPISettings(platformSpi->dataRate, platformSpi->bitOrder, platformSpi->dataMode));
 
-    ((SPIClass*)platformSpi->spi)->transfer(addressByte);
-    ((SPIClass*)platformSpi->spi)->transferBytes(txBuf, rxBuf, xferLen);
+//     ((SPIClass*)platformSpi->spi)->transfer(addressByte);
+//     ((SPIClass*)platformSpi->spi)->transferBytes(txBuf, rxBuf, xferLen);
 
-    digitalWrite(platformSpi->csPin, HIGH);
-    ((SPIClass*)platformSpi->spi)->endTransaction();
-}
+//     digitalWrite(platformSpi->csPin, HIGH);
+//     ((SPIClass*)platformSpi->spi)->endTransaction();
+// }
 
 
 // void spi_writeBuffer(platformSpi_t* platformSpi, uint8_t addressByte, void* buf, uint16_t xfer_len)
