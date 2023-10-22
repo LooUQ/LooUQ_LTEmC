@@ -94,11 +94,11 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     ASSERT(g_lqLTEM.atcmd != NULL);
     atcmd_reset(true);
 
-    g_lqLTEM.modemInfo = calloc(1, sizeof(modemInfo_t));
-    ASSERT(g_lqLTEM.modemInfo != NULL);
+    g_lqLTEM.modemSettings = calloc(1, sizeof(modemSettings_t));
+    ASSERT(g_lqLTEM.modemSettings != NULL);
 
     g_lqLTEM.modemInfo =  calloc(1, sizeof(modemInfo_t));
-    ASSERT(g_lqLTEM.modemConfig != NULL);
+    ASSERT(g_lqLTEM.modemInfo != NULL);
 
     g_lqLTEM.operatorInfo =  calloc(1, sizeof(operatorInfo_t));
     ASSERT(g_lqLTEM.operatorInfo != NULL);
@@ -375,26 +375,41 @@ const char* ltem_getLocalDateTime(char format)
                         }
                         else                                                    // default format ISO8601
                         {
-                            memcpy(dateTime, "20", 2);                          // convert to 4 digit year (ISO8601)
+                            if (format != 'c' && format != 'C')                 // not 'c'ompact format: 4 digit year
+                                memcpy(dateTime, "20", 2);                      // convert to 4 digit year (ISO8601)
+                            dateTime += 2;
                             memcpy(dateTime, ts, 2);                            // year
-                            memcpy(dateTime + 2, ts + 3, 2);                    // month
-                            memcpy(dateTime + 4, ts + 6, 2);                    // day
-                            *(dateTime + 6) = 'T';                              // delimiter
-                            memcpy(dateTime + 7, ts + 9, 2);                    // hours
-                            memcpy(dateTime + 9, ts + 12, 2);                   // minutes
-                            memcpy(dateTime + 11, ts + 15, 3);                  // seconds + TZ delimiter
+                            dateTime += 2;
+                            memcpy(dateTime, ts + 3, 2);                        // month
+                            dateTime += 2;
+                            memcpy(dateTime, ts + 6, 2);                        // day
+                            dateTime += 2;
+                            *dateTime = 'T';                                    // delimiter
+                            dateTime += 1;
+                            memcpy(dateTime, ts + 9, 2);                        // hours
+                            dateTime += 2;
+                            memcpy(dateTime, ts + 12, 2);                       // minutes
+                            dateTime += 2;
+                            memcpy(dateTime, ts + 15, 2);                       // seconds
+                            dateTime += 2;
 
-                            uint8_t tzOffset = strtol(ts + 18, NULL, 10);       // already have sign in output
-                            uint8_t hours = tzOffset / 4;
-                            uint8_t minutes = (tzOffset % 4) * 15;
-                            snprintf(dateTime + 14, 4, "%02d%02d", hours, minutes);
+                            if (format != 'c' && format != 'C')                 // not 'c'ompact format: include time zone offset
+                            {
+                                memcpy(dateTime, ts + 17, 1);                   // TZ delimiter (value sign)
+                                dateTime += 1;
+                                uint8_t tzOffset = strtol(ts + 18, NULL, 10);   // already have sign in output
+                                uint8_t hours = tzOffset / 4;
+                                uint8_t minutes = (tzOffset % 4) * 15;
+                                snprintf(dateTime + 14, 4, "%02d%02d", hours, minutes);
+                            }
+
                         }
                     }
                 }
             }
         }
     }
-    return (const char*)dateTime;
+    return (const char*)&g_lqLTEM.statics.dateTimeBffr;
 }
 
 

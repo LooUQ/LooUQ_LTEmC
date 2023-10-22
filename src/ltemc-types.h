@@ -269,7 +269,7 @@ typedef struct modemSettings_tag
     char scanSequence[PSZ(ntwk__scanSeqSz)];
     ntwkScanMode_t scanMode;
     ntwkIotMode_t iotMode;
-    char pdpNtwkConfig[ntwk__pdpNtwkConfigSz];  // Invoke ready default context config
+    char pdpNtwkConfig[PSZ(ntwk__pdpNtwkConfigSz)];     // Invoke ready default context config
 } modemSettings_t;
 
 
@@ -278,12 +278,12 @@ typedef struct modemSettings_tag
 */
 typedef struct modemInfo_tag
 {
-	char imei[PSZ(ntwk__imeiSz)];            // IMEI (15 digits) International Mobile Equipment Identity or IEEE UI (aka MAC, EUI-48 or EUI-64).
-	char iccid[PSZ(ntwk__iccidSz)];          // ICCID (20 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
-    char mfg[PSZ(ntwk__dvcMfgSz)];           // Device manufacturer name
-	char model[PSZ(ntwk__dvcModelSz)];       // Device model number
-	char fwver[PSZ(ntwk__dvcFwVerSz)];       // Firmware version of the device
-    char swver[PSZ(ltem__swVerSz)];          // software driver version
+	char imei[PSZ(ntwk__imeiSz)];                       // IMEI (15 digits) International Mobile Equipment Identity or IEEE UI (aka MAC, EUI-48 or EUI-64).
+	char iccid[PSZ(ntwk__iccidSz)];                     // ICCID (20 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
+    char mfg[PSZ(ntwk__dvcMfgSz)];                      // Device manufacturer name
+	char model[PSZ(ntwk__dvcModelSz)];                  // Device model number
+	char fwver[PSZ(ntwk__dvcFwVerSz)];                  // Firmware version of the device
+    char swver[PSZ(ltem__swVerSz)];                     // software driver version
 } modemInfo_t;
 
 
