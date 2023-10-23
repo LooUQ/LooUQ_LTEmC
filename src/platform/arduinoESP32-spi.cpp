@@ -80,6 +80,7 @@ void spi_transferBegin(platformSpi_t* platformSpi)
 {
     if (!platformSpi->transactionActive)
     {
+        //Serial.printf("\r\nspi_transferBegin(): dr=%d, bo=%d, dm=%d\r\n", platformSpi->dataRate, platformSpi->bitOrder, platformSpi->dataMode);
         platformSpi->transactionActive = true;
         digitalWrite(platformSpi->csPin, LOW);
         ((SPIClass*)platformSpi->spi)->beginTransaction(SPISettings(platformSpi->dataRate, platformSpi->bitOrder, platformSpi->dataMode));
@@ -91,6 +92,7 @@ void spi_transferEnd(platformSpi_t* platformSpi)
 {
     if (platformSpi->transactionActive)
     {
+        //Serial.printf("spi_transferEnd()\r\n");
         digitalWrite(platformSpi->csPin, HIGH);
         ((SPIClass*)platformSpi->spi)->endTransaction();
         platformSpi->transactionActive = false;
@@ -109,11 +111,12 @@ void spi_transferEnd(platformSpi_t* platformSpi)
 uint8_t spi_transferByte(platformSpi_t* platformSpi, uint8_t txData)
 {
     bool priorTranState = platformSpi->transactionActive;
-
     if (!priorTranState)
         spi_transferBegin(platformSpi);
 
+    //Serial.printf("spi_transferByte(): tx=%02x, ", txData);
     uint8_t rxData = ((SPIClass*)platformSpi->spi)->transfer(txData);
+    //Serial.printf("rx=%02X\r\n", rxData);
 
     if (!priorTranState)
         spi_transferEnd(platformSpi);
@@ -124,21 +127,23 @@ uint8_t spi_transferByte(platformSpi_t* platformSpi, uint8_t txData)
 
 
 /**
- *	@brief Transfer a word (16-bits) to the NXP bridge.
+ *	@brief Transfer a word (16-bits) to/from SPI.
  *
- *	@param spi [in] - The SPI device for communications.
- *  @param data [in/out] - The word to transfer to the NXP bridge.
+ *	@param [in] platformSpi The SPI device for communications.
+ *  @param [in] txData The word to transfer to the NXP bridge.
  * 
- *  \returns A 16-bit word received during the transfer.
+ *  @returns A 16-bit word received.
  */
 uint16_t spi_transferWord(platformSpi_t* platformSpi, uint16_t txData)
 {
     union { uint16_t val; struct { uint8_t msb; uint8_t lsb; }; } tw;
 
     bool priorTranState = platformSpi->transactionActive;
-
     if (!priorTranState)
         spi_transferBegin(platformSpi);
+
+
+    //Serial.printf("spi_transferWord(): tx=%04x, ", txData);
 
     tw.val = txData;
     if (platformSpi->bitOrder == spiBitOrder_msbFirst)
@@ -152,11 +157,14 @@ uint16_t spi_transferWord(platformSpi_t* platformSpi, uint16_t txData)
         tw.msb = ((SPIClass*)platformSpi->spi)->transfer(tw.msb);
     }
 
+    //Serial.printf("rx=%04X\r\n", tw.val);
+
     if (!priorTranState)
         spi_transferEnd(platformSpi);
 
     return tw.val;
 }
+
 
 /**
  *	@brief Transfer a block of bytes to/from the SPI device.
@@ -164,7 +172,6 @@ uint16_t spi_transferWord(platformSpi_t* platformSpi, uint16_t txData)
 void spi_transferBytes(platformSpi_t* platformSpi, const uint8_t* txBuf, uint8_t* rxBuf, uint16_t xferLen)
 {
     bool priorTranState = platformSpi->transactionActive;
-
     if (!priorTranState)
         spi_transferBegin(platformSpi);
 

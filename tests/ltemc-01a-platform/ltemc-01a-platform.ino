@@ -7,7 +7,7 @@
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
 #ifdef ARDUINO_ARCH_ESP32
-    //#define HOST_ESP32_DEVMOD_BMS2
+    #define HOST_ESP32_DEVMOD_BMS2
 #else
     #define HOST_FEATHER_UXPLOR_L
     // #define HOST_FEATHER_UXPLOR             
@@ -17,35 +17,11 @@
 #include <ltemc.h>
 #include <ltemc-nxp-sc16is.h>                                           // need internal references, low-level test here
 
-/* If custom board not defined in ltemcPlatform-pins.h
- * Override by:
- * UNCOMMENT ltem_pinConfig struct initializer below to override for a custom board
- * Note: this needs to follow #include <ltemc.h> 
- */
-const static ltemPinConfig_t ltem_pinConfig = 
-{
-    spiIndx : -1,
-    spiCsPin : 8,    // original: 18
-    spiClkPin : 16,  // original: 15
-    spiMisoPin : 17, // original: 16
-    spiMosiPin : 18, // original: 17
-    irqPin : 3,      // original: 8
-    statusPin : 47,
-    powerkeyPin : 45,
-    resetPin : 0,
-    ringUrcPin : 0,
-    wakePin : 48
-};
-
-#define PERIOD_FROM_SECONDS(period)  (period * 1000)
-#define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
-#define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
-#define STRCMP(n, h)  (strcmp(n, h) == 0)
-
 // test controls
 uint16_t loopCnt = 0;
-uint16_t cycle_interval = 500;
+uint16_t cycle_interval = 5000;
 uint32_t lastCycle;
+uint8_t testPattern;
 
 // this test has no reference to global g_lqLTEM variable
 // so we need a surrogate a pointer here to test locally 
@@ -56,7 +32,6 @@ regBuffer txWord;
 regBuffer rxWord;
 uint8_t txBffr[2];
 uint8_t rxBffr[2];
-uint8_t testPattern;
 
 
 void setup() 
@@ -66,26 +41,17 @@ void setup()
         delay(5000);                // just give it some time
     #endif
     DPRINT(PRNT_RED, "LTEmC - Test #1: Platform I/O and SPI\r\n");
-    DPRINT(PRNT_DEFAULT, "LED pin = %i \r\n", LED_BUILTIN);           // could have used 0 as color code, rather than enum dbgColor__none
     randomSeed(analogRead(7));
 
-	platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
-	platform_writePin(ltem_pinConfig.resetPin, gpioValue_low);
-	platform_writePin(ltem_pinConfig.spiCsPin, gpioValue_high);
-    
-	platform_openPin(ltem_pinConfig.powerkeyPin, gpioMode_output);
-	platform_openPin(ltem_pinConfig.statusPin, gpioMode_input);
+    initIO();
 
     DPRINT(PRNT_DEFAULT, "Modem status(%i) = %i \r\n", ltem_pinConfig.statusPin, platform_readPin(ltem_pinConfig.statusPin));
-
     powerModemOn();
     DPRINT(PRNT_DEFAULT, "   ON Status = %i \r\n", platform_readPin(ltem_pinConfig.statusPin));
     pDelay(500);
-
     powerModemOff();
     DPRINT(PRNT_DEFAULT, "  OFF Status = %i \r\n", platform_readPin(ltem_pinConfig.statusPin));
     pDelay(500);
-
     DPRINT(PRNT_INFO, "Turn modem on for SPI tests\r\n");
     powerModemOn();
 
@@ -97,7 +63,7 @@ void setup()
 
 	if (platformSpi == NULL)
 	{
-        DPRINT(PRNT_WARN, "SPI setup failed.\r\n");
+        DPRINT(PRNT_WARN, "SPI create failed.\r\n");
 	}
     spi_start(platformSpi);
 
@@ -115,15 +81,15 @@ uint16_t bytesFaults = 0;
 
 void loop() 
 {
-    if (ELAPSED(lastCycle, cycle_interval))
+    if (IS_ELAPSED(lastCycle, cycle_interval))
     {
         loopCnt++;
-        DPRINT(PRNT_CYAN,"\n\nLoop=%d FAULTS: byte=%d, word=%d, bytes=%d\r\n", loopCnt, byteFaults, wordFaults, byteFaults);
+        DPRINT(PRNT_CYAN,"\n\n* Loop=%d FAULTS: byte=%d, word=%d, bytes=%d\r\n", loopCnt, byteFaults, wordFaults, bytesFaults);
         lastCycle = millis();
 
 
-        DPRINT(0, "Writing scratchpad regiser %d with transfer BYTE...", testPattern);
         testPattern = random(256);
+        DPRINT(0, "  Writing %02X to scratchpad register with transfer BYTE...", testPattern);
 
         rxWord.msb = (SC16IS7xx_SPR_regAddr << 3) | 0x80;
         // rxBuffer.lsb doesn't matter prior to read
@@ -157,8 +123,8 @@ void loop()
         }
 
 
-        DPRINT(0, "Writing scratchpad regiser %d with transfer WORD...", testPattern);
         testPattern = random(256);
+        DPRINT(0, "  Writing %02X to scratchpad register with transfer WORD...", testPattern);
 
         txWord.msb = SC16IS7xx_SPR_regAddr << 3;
         txWord.lsb = testPattern;
@@ -182,8 +148,8 @@ void loop()
         }
 
 
-        DPRINT(0, "Writing scratchpad regiser %d with transfer BYTES (buffer)...", testPattern);
         testPattern = random(256);
+        DPRINT(0, "  Writing %02X to scratchpad register with transfer BYTES (buffer)...", testPattern);
 
         // write scratchpad
         txBffr[0] = SC16IS7xx_SPR_regAddr << 3;
@@ -207,7 +173,7 @@ void loop()
                 while(1){;}
             #endif
         }
-     }
+    }
 }
 
 
@@ -254,3 +220,44 @@ void powerModemOff()
 		DPRINT(0, "LTEm is already powered off.\r\n");
 	}
 }
+
+
+void initIO()
+{
+    /* Create a custom pin config if porting to a new device
+     */
+    // const static ltemPinConfig_t ltem_pinConfig =
+    // {
+    //     spiIndx : -1,
+    //     spiCsPin : 8,    // original: 18
+    //     spiClkPin : 16,  // original: 15
+    //     spiMisoPin : 17, // original: 16
+    //     spiMosiPin : 18, // original: 17
+    //     irqPin : 3,      // original: 8
+    //     statusPin : 47,
+    //     powerkeyPin : 45,
+    //     resetPin : 0,
+    //     ringUrcPin : 0,
+    //     wakePin : 48
+    // };
+
+	// on Arduino, ensure pin is in default "logical" state prior to opening
+	platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
+	platform_writePin(ltem_pinConfig.resetPin, gpioValue_low);
+	platform_writePin(ltem_pinConfig.spiCsPin, gpioValue_high);
+
+	platform_openPin(ltem_pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+	platform_openPin(ltem_pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+	platform_openPin(ltem_pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+	platform_openPin(ltem_pinConfig.statusPin, gpioMode_input);
+	platform_openPin(ltem_pinConfig.irqPin, gpioMode_inputPullUp);
+
+    // SPI bus
+    #if defined(ARDUINO_ARCH_ESP32)
+    platformSpi = spi_createFromPins(ltem_pinConfig.spiClkPin, ltem_pinConfig.spiMisoPin, ltem_pinConfig.spiMosiPin, ltem_pinConfig.spiCsPin);
+    #else
+    platformSpi = spi_createFromIndex(ltem_pinConfig.spiIndx, ltem_pinConfig.spiCsPin);
+    #endif
+    spi_start(platformSpi);
+}
+

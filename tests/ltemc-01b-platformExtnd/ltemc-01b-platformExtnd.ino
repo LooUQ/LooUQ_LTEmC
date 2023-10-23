@@ -24,13 +24,6 @@ uint16_t cycle_interval = 3000;
 uint32_t lastCycle;
 uint8_t testPattern;
 
-//#define HALT_ON_FAULT
-uint16_t byteFaults = 0;
-uint16_t wordFaults = 0;
-uint16_t bytesFaults = 0;
-uint16_t registerFaults = 0;
-
-
 // test needs access to modem instance
 extern ltemDevice_t g_lqLTEM;
 
@@ -60,7 +53,7 @@ void setup()
     }
     powerModemOff();
     pDelay(500);
-    DPRINT(PRNT_INFO, "Turning modem back on for IO tests\r\n");
+    DPRINT(PRNT_INFO, "Turning modem back on for SPI tests\r\n");
     powerModemOn();
 
     spi_start(g_lqLTEM.platformSpi);
@@ -70,74 +63,48 @@ void setup()
     txWord.lsb = SC16IS7xx__SW_resetMask;
     spi_transferWord(g_lqLTEM.platformSpi, txWord.val);
 
-    uartTests();
-
-    if (!byteFaults && !wordFaults && !bytesFaults && !registerFaults )         // if basic SPI functional to/from SPI-UART
-    {
-        SC16IS7xx_start();                                                      // initialize SPI-UART for communications with BGx
-    }
     lastCycle = cycle_interval;
 }
 
+//#define HALT_ON_FAULT
+uint16_t byteFaults = 0;
+uint16_t wordFaults = 0;
+uint16_t bytesFaults = 0;
+uint16_t nxpFaults = 0;
 
 void loop() 
 {
     if (IS_ELAPSED(lastCycle, cycle_interval))
     {
         loopCnt++;
-        // DPRINT(PRNT_CYAN,"\n\nLoop=%d FAULTS: byte=%d, word=%d, bytes=%d\r\n", loopCnt, byteFaults, wordFaults, bytesFaults);
+        DPRINT(PRNT_CYAN,"\n\nLoop=%d FAULTS: byte=%d, word=%d, bytes=%d\r\n", loopCnt, byteFaults, wordFaults, bytesFaults);
         lastCycle = millis();
 
-        /* BG96 test pattern: get IMEI
-        *  AT+GSN\r\r
-        *  <IMEI value (20 char)>\r\r
-        *  OK\r
-        */
+        spiDirectTest();
 
-        // BGx Test
+        testPattern = random(256);
+        DPRINT(0, "  Writing %02X to scratchpad register with SC16IS7xx I/O...", testPattern);
 
-        uint8_t regValue = 0;
-        // char cmd[] = "GSN\r\0";                          // less than one SPI-UART buffer (test for slow servicing)
-        char cmd[] = "ATI\r\0";                             // returns a 
-        // char cmd[] = "AT+QPOWD=0\r\0";                   // if others fail, but this powers down modem, RX failing
-        DPRINT(PRNT_DEFAULT, "Invoking cmd: %s \r\n", cmd);
+        SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, testPattern);
+        uint8_t sprValue = SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr);
 
-        sendCommand(cmd);                                   // send command and wait ~400ms for BGx response in FIFO buffer
-
-        
-        char response[240] = {0};                           // new buffer every loop
-        recvResponse(response);
-
-        //\r\nQuectel\r\nBG96\r\nRevision: BG96MAR02A07M1G\r\n\r\nOK\r\n", 
-        //ATI\r\r\nQuectel\r\nBG77\r\nRevision: BG77LAR02A04\r\n\r\nOK\r\n"
-        // test response v. expected 
-
-        const char* validResponse = "\r\nQuectel\r\nBG";                                              // initial characters in response
-
-        if (strlen(response) == 0)
+        if (testPattern == sprValue)
         {
-            DPRINT(PRNT_WARN, "Got no response from BGx.\r\n");
+            DPRINT(PRNT_INFO, "Scratchpad register I/O success.\r\n");
         }
-        if (strstr(response, "APP RDY"))
+        else
         {
-            DPRINT(PRNT_WARN, "Received APP RDY from LTEm.\r\n");
+            DPRINT(PRNT_WARN, "Scratchpad register I/O write/read failed (expected=%d, got=%d).\r\n", testPattern, sprValue);
+            byteFaults++;
+            #ifdef HALT_ON_FAULT
+                while(1){;}
+            #endif
         }
-        else if (strlen(response) > 40 )
-        {
-            if (strstr(response, validResponse) && strstr(response, "OK\r\n"))
-            {
-                DPRINT(PRNT_DEFAULT, "Got correctly formed response: \r\n%s", response);  
-            }
-            else
-                indicateFailure("Unexpected device information returned on cmd test... failed."); 
-        }
-        DPRINT(PRNT_DEFAULT,"Loop=%d \n\n", loopCnt);
-    }
+     }
 }
 
 
-#pragma region helpers
-/* =========================================================================================================================
+/*
 ========================================================================================================================= */
 
 void powerModemOn()
@@ -228,7 +195,7 @@ void configIO()
 }
 
 
-void uartTests()
+void spiDirectTest()
 {
     testPattern = random(256);
     DPRINT(0, "  Writing %02X to scratchpad register with transfer BYTE...", testPattern);
@@ -264,7 +231,7 @@ void uartTests()
         #endif
     }
 
-    /* ----------------------------------------------------------------------------------------- */
+
     testPattern = random(256);
     DPRINT(0, "  Writing %02X to scratchpad register with transfer WORD...", testPattern);
 
@@ -289,7 +256,7 @@ void uartTests()
         #endif
     }
 
-    /* ----------------------------------------------------------------------------------------- */
+
     testPattern = random(256);
     DPRINT(0, "  Writing %02X to scratchpad register with transfer BYTES (buffer)...", testPattern);
 
@@ -315,103 +282,4 @@ void uartTests()
             while(1){;}
         #endif
     }
-
-    /* ----------------------------------------------------------------------------------------- */
-    testPattern = random(256);
-    DPRINT(0, "  Writing %02X to scratchpad register with SC16IS7xx I/O...", testPattern);
-
-    SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, testPattern);
-    uint8_t sprValue = SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr);
-
-    if (testPattern == sprValue)
-    {
-        DPRINT(PRNT_INFO, "Scratchpad register I/O success.\r\n");
-    }
-    else
-    {
-        DPRINT(PRNT_WARN, "Scratchpad register I/O write/read failed (expected=%d, got=%d).\r\n", testPattern, sprValue);
-        registerFaults++;
-        #ifdef HALT_ON_FAULT
-            while(1){;}
-        #endif
-    }
 }
-
-
-#define ASCII_CR 13U
-
-// This functionality is normally handled in the IOP module. 
-// ISR functionality is tested in the ltemc-03-iopisr test
-void sendCommand(const char* cmd)
-{
-    size_t sendSz = strlen(cmd);
-
-    //SC16IS7xx_write(cmd, strlen(cmd));                        // normally you are going to use buffered writes like here
-
-    for (size_t i = 0; i < sendSz; i++)
-    {
-        SC16IS7xx_writeReg(SC16IS7xx_FIFO_regAddr, cmd[i]);     // without a small delay the register is not moved to FIFO before next byte\char
-        pDelay(1);                                              // this is NOT the typical write cycle
-    }
-    pDelay(300);                                                // max response time per-Quectel specs, for this test we will wait
-}
-
-
-// "Polled" I\O, ensuring SPI-UART and serial lines to BGx are functioning
-// This functionality is normally handled in the IOP module's interrupt service routine (ISR). 
-// ISR functionality is tested in the ltemc-03-iopisr test
-void recvResponse(char *response)
-{
-    uint8_t recvSz = 0;
-    uint16_t recvdLen = 0;
-
-    uint32_t waitStart = pMillis();
-    do
-    {
-        uint8_t lsrValue = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
-        if (lsrValue & SC16IS7xx__LSR_RHR_dataReady)
-        {
-            recvSz = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-            SC16IS7xx_read(response + recvdLen, recvSz);
-            recvdLen += recvSz;
-
-            if (strstr(response, "OK\r\n"));
-                return;
-        }
-
-        /* code */
-    } while (IS_ELAPSED(waitStart, SEC_TO_MS(1)));
-}
-
-
-void indicateFailure(const char* failureMsg)
-{
-	DPRINT(PRNT_ERROR, "\r\n** %s \r\n", failureMsg);
-    DPRINT(PRNT_ERROR, "** Test Assertion Failed. \r\n");
-
-    int halt = 1;
-    DPRINT(PRNT_ERROR, "** Halting Execution \r\n");
-    while (halt)
-    {
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        delay(1000);
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        delay(100);
-    }
-}
-
-
-void _ping(const char *msg)
-{
-    Serial.println(msg);
-    vTaskDelay(10);
-}
-
-
-void _stop(const char *msg)
-{
-    Serial.println(msg);
-    while(1){};
-}
-
-#pragma endregion

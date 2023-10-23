@@ -122,7 +122,7 @@ void IOP_attachIrq()
     spi_usingInterrupt(g_lqLTEM.platformSpi, g_lqLTEM.pinConfig.irqPin);
     platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, IOP_interruptCallbackISR);
     // SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);         // ensure FIFO state is empty, UART will not refire interrupt if pending
-    IOP_interruptCallbackISR();                                     // force ISR to run once to sync IRQ 
+    // IOP_interruptCallbackISR();                                     // force ISR to run once to sync IRQ 
 }
 
 

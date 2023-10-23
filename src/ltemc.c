@@ -121,7 +121,6 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
 }
 
 
-
 /**
  *	@brief Uninitialize the LTEm device structures.
  */
@@ -146,6 +145,138 @@ void ltem_discard()
  */
 bool ltem_start(resetAction_t resetAction)
 {
+    /* LTEmC 3.0.3 No-GNSS
+    -----------------------------------------------------------------------------------------------
+    */
+    if (!g_lqLTEM.hostConfigured)
+    {
+        // on Arduino compatible, ensure pin is in default "logical" state prior to opening
+        platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
+        platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
+        platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
+        platform_writePin(g_lqLTEM.pinConfig.irqPin, gpioValue_high);
+
+        platform_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
+        platform_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
+        platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
+        platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
+        platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
+        DPRINT_V(PRNT_DEFAULT, "GPIO Configured\r\n");
+
+        spi_start(g_lqLTEM.platformSpi);                                        // start host SPI
+        DPRINT_V(PRNT_DEFAULT, "SPI Configured\r\n");
+        g_lqLTEM.hostConfigured = true;
+    }
+
+    DPRINT(PRNT_CYAN, "LTEm reqst resetType=%d\r\n", resetAction);
+    bool ltemWasReset = true;
+    if (QBG_isPowerOn())
+    {
+        if (resetAction == resetAction_skipIfOn)
+            ltemWasReset = false;
+        else
+        {
+            if (resetAction == resetAction_swReset)
+            {
+                if (!SC16IS7xx_isAvailable())                               // fall back to power reset if UART not available
+                    resetAction = resetAction_powerReset;
+            }
+            // DPRINT_V(PRNT_DEFAULT, "Ready to power off\r\n");
+            // QBG_powerOff();
+            // DPRINT_V(PRNT_DEFAULT, "Powered OFF\r\n");
+
+            // // for (size_t i = 0; i < 5; i++)
+            // // {
+            // //     DPRINT_V(PRNT_DEFAULT, ".");
+            // //     pDelay(1000);
+            // // }
+            // pDelay(1000);
+            
+            // DPRINT_V(PRNT_DEFAULT, "Ready to power on\r\n");
+            // IOP_detachIrq();
+            // QBG_powerOn();                                                       // turn on BGx
+            // DPRINT_V(PRNT_DEFAULT, "Powered ON\r\n");
+
+            IOP_detachIrq();
+            QBG_reset(resetAction);                                         // do requested reset (sw, hw, pwrCycle)
+        }
+    }
+    else 
+    {
+       QBG_powerOn();                                                       // turn on BGx
+    }
+    DPRINT_V(PRNT_DEFAULT, "LTEm was reset=%d\r\n", ltemWasReset);
+
+    SC16IS7xx_start();                                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
+    DPRINT_V(PRNT_CYAN, "UART started\r\n");
+    SC16IS7xx_enableIrqMode();                                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
+    DPRINT_V(PRNT_CYAN, "UART set to IRQ mode\r\n");
+    IOP_attachIrq();                                                        // attach I/O processor ISR to IRQ
+    DPRINT_V(PRNT_CYAN, "UART IRQ attached\r\n");
+
+    uint8_t irqState = platform_readPin(g_lqLTEM.pinConfig.irqPin);
+    DPRINT_V(PRNT_CYAN, "IRQ State is %d\r\n", irqState);
+    DPRINT_V(PRNT_CYAN, "IRQ Pending is %d\r\n", !(bool)irqState);
+    if (!(bool)irqState)
+        IOP_interruptCallbackISR();                                             // force ISR to run once to sync IRQ 
+    DPRINT_V(PRNT_CYAN, "Primed ISR\r\n");
+
+    uint32_t startAppRdy = pMillis();                                       // wait for BGx to signal internal ready
+    while (bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, true))
+    {
+        // pDelay(500);
+        // SC16IS7xx_IIR iirVal;
+        // uint8_t rxLevel;
+        // char rxData[65] = {0};
+        // iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
+        // DPRINT(PRNT_CYAN, "iirVal=%d\r\n", iirVal.reg);
+
+        // rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
+        // DPRINT(PRNT_CYAN, "rxLevel=%d\r\n", rxLevel);
+
+        // // SC16IS7xx_read(rxData, rxLevel);
+        // // DPRINT(PRNT_CYAN, "rxData=%s\r\n", rxData);
+
+        if (IS_ELAPSED(startAppRdy, APPRDY_TIMEOUT))
+            return false;
+    }
+    DPRINT_V(PRNT_dCYAN, "AppRdy recv'd=%dms\r\n", pMillis() - startAppRdy);
+    bbffr_reset(g_lqLTEM.iop->rxBffr);
+
+    // if (!IOP_awaitAppReady())
+    //     return;
+    // S__initLTEmDevice();
+
+    if (!QBG_setOptions())
+    {
+        ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");     // send notification, maybe app can recover
+        DPRINT(PRNT_DEFAULT, "\r");
+    }
+    else
+        DPRINT_V(PRNT_CYAN, "BGx options set\r\n");
+
+    // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
+    // DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
+
+    ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured\r\n");
+
+    ntwk_awaitOperator(2);
+    // ntwk_awaitProvider(2);                                              // attempt to warm-up provider/PDP briefly. 
+    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up\r\n");     // If longer duration required, leave that to application
+
+    return true;
+
+    /* END : LTEmC 3.0.3 No-GNSS start()
+    -----------------------------------------------------------------------------------------------
+    */
+
+
+
+
+    /* 3.0.3-to-3.1.0
+    -----------------------------------------------------------------------------------------------
+
     ltem_notifyApp(appEvent_info, "Starting LTEm");
     appEvntNotify_func notifCBStash = g_lqLTEM.appEvntNotifyCB;
     g_lqLTEM.appEvntNotifyCB = NULL;                                        // disable further app notification (for restart)
@@ -225,6 +356,10 @@ bool ltem_start(resetAction_t resetAction)
     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): operator warmed up\r\n");     // If longer duration required, leave that to application
 
     return true;
+
+    END 3.0.3-to-3.1.0 
+    -----------------------------------------------------------------------------------------------
+    */
 }
 
 
