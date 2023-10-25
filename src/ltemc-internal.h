@@ -91,8 +91,18 @@ typedef struct fileCtrl_tag
     appRcvProto_func appRecvDataCB;
 } fileCtrl_t;
 
+/**
+ * @brief Static char arrays to simplify passing string responses back to user application.
+ */
+typedef struct ltemStatics_tag
+{
+    char reportBffr[PSZ(ltem__reportsBffrSz)];      // reused by *Rpt() functions
+    char dateTimeBffr[PSZ(ltem__dateTimeBffrSz)];   // reused by clock functions
+} ltemStatics_t;
 
- /** 
+
+
+/** 
  *  \brief Struct representing the LTEmC model. The struct behind the g_ltem1 global variable with all driver controls.
  * 
  *  Most subsystems are linked to this struct with pointers to allow for better abstraction and optional subsystems
@@ -112,12 +122,12 @@ typedef struct ltemDevice_tag
     atcmd_t *atcmd;                             // Action subsystem controls
     modemSettings_t *modemSettings;             // Settings to control radio and cellular network initialization
 	modemInfo_t *modemInfo;                     // Data structure holding persistent information about application modem state
-    operatorInfo_t *ntwkOperator;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
+    ntwkOperator_t *ntwkOperator;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
     streamCtrl_t* streams[ltem__streamCnt];     // Data streams: protocols or file system
     fileCtrl_t* fileCtrl;
 
     ltemMetrics_t metrics;                      // metrics for operational analysis and reporting
-    uint16_t isrInvokeCnt;
+    ltemStatics_t statics;
 } ltemDevice_t;
 
 

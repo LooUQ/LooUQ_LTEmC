@@ -473,7 +473,7 @@ static resultCode_t S__readResult()
 
             if (ltem_getDeviceState() != deviceState_appReady)                      // if action timed-out, verify not a device wide failure
                 ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not AppReady");
-            else if (!SC16IS7xx_isAvailable())
+            else if (!SC16IS7xx_ping())
                 ltem_notifyApp(appEvent_fault_softLogic, "LTEm SPI Fault");         // UART bridge SPI not initialized correctly, IRQ not enabled
 
             return resultCode__timeout;

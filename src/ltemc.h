@@ -102,14 +102,21 @@ void ltem_destroy();
  *  @param [in] radioPriority The priority consumer for the radio receive path.
  *  @return Result code representing status of operation, OK = 200.
  */
-resultCode_t ltem_setRfPriorityMode(ltemRfPrioritySet_t radioPriority);
+resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t priorityMode);
 
 
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
+ *  @return Current RF priority mode
  */
-ltemRfPriorityState_t ltem_getRfPriorityMode();
+ltemRfPriorityMode_t ltem_getRfPriorityMode();
+
+
+/**
+ *	@brief Set RF priority on BG95/BG77 modules. 
+ *  @return Current RF priority state
+ */
+ltemRfPriorityState_t ltem_getRfPriorityState();
 
 
 /**
@@ -176,12 +183,24 @@ ltemRfPriorityMode_t ltem_getRfPriorityMode();
 ltemRfPriorityState_t ltem_getRfPriorityState();
 
 
+// /**
+//  *	@brief Get the current UTC date and time.
+//  *  @param [out] dateTime Pointer to a character array (length >= 20 chars) to be updated with current UTC date/time 
+//  *  @details Formatted as: 23/09/01,13:48:55
+//  */
+// void ltem_getDateTimeUtc(char *dateTime);
+
 /**
- *	@brief Get the current UTC date and time.
- *  @param [out] dateTime Pointer to a character array (length >= 20 chars) to be updated with current UTC date/time 
- *  @details Formatted as: 23/09/01,13:48:55
+ *	@brief Get the current local date and time.
  */
-void ltem_getDateTimeUtc(char *dateTime);
+const char* ltem_getLocalDateTime(char format);
+
+
+/**
+ *	@brief Get local time zone offset.
+ */
+int8_t ltem_getLocalTimezoneOffset(bool precise);
+
 
 /**
  *  @brief Get the LTEm1 static device identification/provisioning information.

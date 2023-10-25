@@ -61,6 +61,9 @@ enum ltem__constants
 
     ltem__streamCnt = 4,            /// 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
     //ltem__urcHandlersCnt = 4        /// max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
+
+    ltem__reportsBffrSz = 80,
+    ltem__dateTimeBffrSz = 24
 };
 
 
@@ -181,7 +184,7 @@ typedef enum ntwkIotMode_tag
 enum ntwk
 {
     ntwk__pdpContextCnt = 4,            // varies by carrier: Verizon=2, (Aeris)ATT=3
-    ntwk__providerNameSz = 20,
+    ntwk__operatorNameSz = 20,
     ntwk__iotModeNameSz = 11,
     ntwk__pdpProtoSz = 7,
     ntwk__ipAddressSz = 40,
@@ -287,26 +290,26 @@ typedef struct modemInfo_tag
 /** 
  *  \brief Struct representing the state of active PDP contexts (aka: APN or data context).
 */
-typedef struct ntwkOperator_tag
+typedef struct networkInfo_tag
 {
     bool isActive;
     uint8_t pdpContextId;                           /// context ID recognized by the carrier (valid are 1 to 16)
     pdpProtocol_t pdpProtocol;                      /// IPv4, IPv6, etc.
 	char ipAddress[ntwk__ipAddressSz];              /// The IP address obtained from the carrier for this context. The IP address of the modem.
-} networkOperator_t;
+} networkInfo_t;
 
 
 /** 
  *  \brief Struct respresenting an ACTIVE network carrier/operator.
 */
-typedef struct operatorInfo_tag
+typedef struct ntwkOperator_tag
 {
-	char name[PSZ(ntwk__providerNameSz)];        /// Provider name, some carriers may report as 6-digit numeric carrier ID.
+	char name[PSZ(ntwk__operatorNameSz)];        /// Provider name, some carriers may report as 6-digit numeric carrier ID.
 	char iotMode[PSZ(ntwk__iotModeNameSz)];      /// Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
     uint8_t defaultContext;
     uint8_t networkCnt;                             /// The number of networks in networks[]
     networkInfo_t networks[ntwk__pdpContextCnt];    /// Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
-} operatorInfo_t;
+} ntwkOperator_t;
 
 
 
@@ -388,6 +391,7 @@ typedef struct iop_tag
     bBuffer_t *rxBffr;                      /// receive buffer
     char txEot;                             /// if not NULL, char to output on empty TX FIFO; clears automatically on use.
  
+    volatile uint32_t isrInvokeCnt;         // number of times the ISR function has been invoked
     volatile uint32_t lastTxAt;             /// tick count when TX send started, used for response timeout detection
     volatile uint32_t lastRxAt;             /// tick count when RX buffer fill level was known to have change
 } iop_t;

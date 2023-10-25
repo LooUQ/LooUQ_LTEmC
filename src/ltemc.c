@@ -62,7 +62,9 @@ int8_t qbg_initCmdsCnt = sizeof(qbg_initCmds)/sizeof(const char* const);
 
 /* Static Local Function Declarations
 ------------------------------------------------------------------------------------------------ */
-static bool S__initLTEmDevice();
+// static bool S__initLTEmDevice();
+static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
+
 
 
 #pragma region Public Functions
@@ -88,6 +90,9 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
 
     g_lqLTEM.modemInfo = calloc(1, sizeof(modemInfo_t));
     ASSERT(g_lqLTEM.modemInfo != NULL);
+
+    g_lqLTEM.ntwkOperator =  calloc(1, sizeof(ntwkOperator_t));
+    ASSERT(g_lqLTEM.operatorInfo != NULL);
 
     IOP_create();
     
@@ -160,7 +165,7 @@ bool ltem_start(resetAction_t resetAction)
         {
             if (resetAction == resetAction_swReset)
             {
-                if (!SC16IS7xx_isAvailable())                               // fall back to power reset if UART not available
+                if (!SC16IS7xx_ping())                                          // fall back to power reset if UART not available
                     resetAction = resetAction_powerReset;
             }
             // DPRINT_V(PRNT_DEFAULT, "Ready to power off\r\n");
@@ -233,13 +238,13 @@ bool ltem_start(resetAction_t resetAction)
         DPRINT_V(PRNT_CYAN, "BGx options set\r\n");
 
     // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
-    // DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
+    // DPRINT_V(PRNT_CYAN, "ltem_start(): rat options set");
 
     ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
-    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured\r\n");
+    DPRINT_V(PRNT_CYAN, "ltem_start(): pdp ntwk configured\r\n");
 
-    ntwk_awaitProvider(2);                                              // attempt to warm-up provider/PDP briefly. 
-    DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up\r\n");     // If longer duration required, leave that to application
+    ntwk_awaitOperator(2);                                              // attempt to warm-up provider/PDP briefly. 
+    DPRINT_V(PRNT_CYAN, "ltem_start(): provider warmed up\r\n");        // If longer duration required, leave that to application
 
     return true;
 }
@@ -333,7 +338,7 @@ ltemRfPriorityMode_t ltem_getRfPriorityMode()
             }
         }
     }
-    return ltemRfPriorityState_error;
+    return ltemRfPriorityState_unloaded;
 }
 
 
@@ -353,7 +358,7 @@ resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t priority)
                 char tkn[5] = {'\0'};
                 while (tkn[0] != tkState)
                 {
-                    if (ltem_getRfPriorityMode() == ltemRfPriorityMode_error)
+                    if (ltem_getRfPriorityMode() == ltemRfPriorityMode_none)
                         return resultCode__timeout;
                     atcmd_getToken(2, tkn, sizeof(tkn));
                 }
@@ -700,7 +705,7 @@ const char* ltem_getModuleType()
 {
     if (strlen(g_lqLTEM.modemInfo->model) == 0)
     {
-        mdminfo_ltem();
+        ltem_getModemInfo();
     }
     return g_lqLTEM.modemInfo->model;
 }

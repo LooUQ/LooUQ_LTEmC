@@ -127,11 +127,30 @@ void SC16IS7xx_enableIrqMode()
 /**
  *	@brief Write/read UART scratchpad register
  */
-bool SC16IS7xx_isPing()
+bool SC16IS7xx_ping()
 {
     uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
     SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, wrVal);
     return SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr) == wrVal;
+}
+
+
+/**
+ *	@brief Ping UART for a limited period of time until SPI sync'd between host and UART.
+ */
+bool SC16IS7xx_awaitReady()
+{
+    for (size_t i = 0; i < AWAIT_READY_TRIES; i++)
+    {
+        if (SC16IS7xx_ping())
+        {
+            SC16IS7xx_resetUART();
+            return true;
+        }
+        pDelay(10);
+        DPRINT(0, "_awaitReady() try: %d\r\n", i + 2);
+    }
+    return false;
 }
 
 

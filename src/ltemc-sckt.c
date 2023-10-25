@@ -101,7 +101,7 @@ void sckt_setConnection(scktCtrl_t *scktCtrl, uint8_t pdpCntxt, const char *host
  */
 resultCode_t sckt_open(scktCtrl_t *scktCtrl, bool cleanSession)
 {
-    uint8_t pdpCntxt = (scktCtrl->pdpCntxt == 0) ? g_lqLTEM.providerInfo->defaultContext : scktCtrl->pdpCntxt;
+    uint8_t pdpCntxt = (scktCtrl->pdpCntxt == 0) ? g_lqLTEM.ntwkOperator->defaultContext : scktCtrl->pdpCntxt;
     resultCode_t rslt;
 
     if (scktCtrl->streamType == 'U')                    // protocol == UDP

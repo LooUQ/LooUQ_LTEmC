@@ -50,6 +50,7 @@ typedef union    \
     uint8_t reg; \
 } SC16IS7xx_##REG_NAME;
 
+#define AWAIT_READY_TRIES 5
 
 #pragma region structures
 
@@ -419,45 +420,53 @@ void SC16IS7xx_enableIrqMode();
 
 /**
  *	@brief Perform simple write/read using SC16IS741A scratchpad register. Used to test SPI communications.
+ *  @return True if SC16IS7xx device responded.
  */
 bool SC16IS7xx_ping();
 
 
 /**
+ *	@brief Ping UART for a limited period of time until SPI sync'd between host and UART.
+ *  @return True if SC16IS7xx device responded.
+ */
+bool SC16IS7xx_awaitReady();
+
+
+/**
  *	@brief Read from a SC16IS741A bridge register
- *	\param reg_addr [in] - The register address
- *  \return reg_data - Byte of data read from register
+ *	@param [in] reg_addr The register address
+ *  @return reg_data - Byte of data read from register
  */
 uint8_t SC16IS7xx_readReg(uint8_t reg_addr);
 
 
 /**
  *	@brief Write to a SC16IS741A bridge register
- *	\param reg_addr [in] - The register address
- *	\param reg_data [in] - Pointer to the data to write to the register
+ *	@param reg_addr [in] - The register address
+ *	@param reg_data [in] - Pointer to the data to write to the register
  */
 void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data);
 
 
 /**
  *	@brief Reads through the SC16IS741A bridge (its RX FIFO)
- *	\param dest [out] - The destination buffer
- *	\param dest_len [in] - The length of the destination buffer
+ *	@param dest [out] - The destination buffer
+ *	@param dest_len [in] - The length of the destination buffer
  */
 void SC16IS7xx_read(void* dest, uint8_t dest_len);
 
 
 /**
  *	@brief Write through the SC16IS741A bridge
- *	\param src [in] - The source data to write
- *	\param src_len [in] - The length of the source
+ *	@param src [in] - The source data to write
+ *	@param src_len [in] - The length of the source
  */
 void SC16IS7xx_write(const void * src, uint8_t src_len);
 
 
 /**
  *	@brief Clear FIFO contents
- *  \param resetAction [in] - What to reset TX, RX or both
+ *  @param resetAction [in] - What to reset TX, RX or both
  */
 void SC16IS7xx_resetFifo(sc16IS7xx_FifoResetAction_t resetAction);
 

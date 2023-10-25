@@ -289,7 +289,7 @@ void IOP_interruptCallbackISR()
     iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
     do
     {
-        g_lqLTEM.isrInvokeCnt++;
+        g_lqLTEM.iop->isrInvokeCnt;
         uint8_t regReads = 0;
         while(iirVal.IRQ_nPENDING == 1 && regReads < 60)                               // wait for register, IRQ was signaled; safety limit at 60 in case of error gpio
         {
