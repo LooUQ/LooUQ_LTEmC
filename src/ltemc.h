@@ -53,7 +53,6 @@
 
 #include "ltemc-platform.h"                     /// platform abstractions (arduino, etc.)
 #include "ltemc-atcmd.h"                        /// command processor interface
-#include "ltemc-mdminfo.h"                      /// modem information
 #include "ltemc-network.h"                      /// cellular provider and packet network 
 
 
@@ -103,14 +102,14 @@ void ltem_destroy();
  *  @param [in] radioPriority The priority consumer for the radio receive path.
  *  @return Result code representing status of operation, OK = 200.
  */
-resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t radioPriority);
+resultCode_t ltem_setRfPriorityMode(ltemRfPrioritySet_t radioPriority);
 
 
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
  *  @return Result code representing status of operation, OK = 200.
  */
-ltemRfPriorityState_t ltem_getRfPriority();
+ltemRfPriorityState_t ltem_getRfPriorityMode();
 
 
 /**
@@ -152,20 +151,29 @@ void ltem_setPowerState(bool powerState);
  */
 bool ltem_ping();
 
+/* RF Priority (BG95\BG77)
+ ----------------------------------------------------------------------------------------------- */
 
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
  *	@param [in] setPriority New radio priority.
  *  @return Result code representing status of operation, OK = 200.
  */
-resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t setPriority);
+resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t priorityMode);
+
+
+/**
+ *	@brief Get RF priority mode on BG95/BG77 modules. 
+ *  @return Result code representing status of operation, OK = 200.
+ */
+ltemRfPriorityMode_t ltem_getRfPriorityMode();
 
 
 /**
  *	@brief Get RF priority state on BG95/BG77 modules. 
  *  @return Result code representing status of operation, OK = 200.
  */
-ltemRfPriorityState_t ltem_getRfPriority();
+ltemRfPriorityState_t ltem_getRfPriorityState();
 
 
 /**
@@ -174,6 +182,47 @@ ltemRfPriorityState_t ltem_getRfPriority();
  *  @details Formatted as: 23/09/01,13:48:55
  */
 void ltem_getDateTimeUtc(char *dateTime);
+
+/**
+ *  @brief Get the LTEm1 static device identification/provisioning information.
+ *  @return Modem information struct, see mdminfo.h for details.
+*/
+modemInfo_t *ltem_getModemInfo();
+
+
+/**
+ *  @brief Test for SIM ready
+ *  @return True if SIM is inserted and available
+*/
+bool ltem_isSimReady();
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device at a percent
+ *  @return The radio signal strength in the range of 0 to 100 (0 is no signal)
+*/
+uint8_t ltem_signalPercent();
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device as RSSI reported
+ *  @return The radio signal strength in the range of -51dBm to -113dBm (-999 is no signal)
+*/
+int16_t ltem_signalRSSI();
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device as RSSI reported
+ *  @return The raw radio signal level reported by BGx
+*/
+uint8_t ltem_signalRaw();
+
+
+/** 
+ *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone) 
+ *  @return The radio signal strength factored into a count of bars for UI display
+ * */
+uint8_t ltem_signalBars(uint8_t displayBarCount);
 
 
 /**

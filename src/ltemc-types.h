@@ -237,11 +237,12 @@ typedef enum pdpCntxtAuthMethods_tag
 /** 
  *  \brief RF Priority map for BG95/BG77 modules.
 */
-typedef enum ltemRfPrioritySet_tag
+typedef enum ltemRfPriorityMode_tag
 {
-    ltemRfPrioritySet_gnss = 0,
-    ltemRfPrioritySet_wwan = 1
-} ltemRfPrioritySet_t;
+    ltemRfPriorityMode_gnss = 0,
+    ltemRfPriorityMode_wwan = 1,
+    ltemRfPriorityMode_none = 9
+} ltemRfPriorityMode_t;
 
 
 /** 
@@ -286,26 +287,26 @@ typedef struct modemInfo_tag
 /** 
  *  \brief Struct representing the state of active PDP contexts (aka: APN or data context).
 */
-typedef struct networkInfo_tag
+typedef struct ntwkOperator_tag
 {
     bool isActive;
     uint8_t pdpContextId;                           /// context ID recognized by the carrier (valid are 1 to 16)
     pdpProtocol_t pdpProtocol;                      /// IPv4, IPv6, etc.
 	char ipAddress[ntwk__ipAddressSz];              /// The IP address obtained from the carrier for this context. The IP address of the modem.
-} networkInfo_t;
+} networkOperator_t;
 
 
 /** 
  *  \brief Struct respresenting an ACTIVE network carrier/operator.
 */
-typedef struct providerInfo_tag
+typedef struct operatorInfo_tag
 {
 	char name[PSZ(ntwk__providerNameSz)];        /// Provider name, some carriers may report as 6-digit numeric carrier ID.
 	char iotMode[PSZ(ntwk__iotModeNameSz)];      /// Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
     uint8_t defaultContext;
     uint8_t networkCnt;                             /// The number of networks in networks[]
     networkInfo_t networks[ntwk__pdpContextCnt];    /// Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
-} providerInfo_t;
+} operatorInfo_t;
 
 
 

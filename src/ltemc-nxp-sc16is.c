@@ -127,7 +127,7 @@ void SC16IS7xx_enableIrqMode()
 /**
  *	@brief Write/read UART scratchpad register
  */
-bool SC16IS7xx_isAvailable()
+bool SC16IS7xx_isPing()
 {
     uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
     SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, wrVal);

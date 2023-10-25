@@ -62,7 +62,7 @@ int8_t qbg_initCmdsCnt = sizeof(qbg_initCmds)/sizeof(const char* const);
 
 /* Static Local Function Declarations
 ------------------------------------------------------------------------------------------------ */
-bool S__initLTEmDevice();
+static bool S__initLTEmDevice();
 
 
 #pragma region Public Functions
@@ -314,54 +314,139 @@ void ltem_enterPcm()
 {
 }
 
+/**
+ *	@brief Get RF priority on BG95/BG77 modules. 
+ */
+ltemRfPriorityMode_t ltem_getRfPriorityMode()
+{
+    char* moduleType = ltem_getModuleType();
+    if ((memcmp(moduleType, "BG95", 4) == 0) || 
+        (memcmp(moduleType, "BG77", 4) == 0))
+    {
+        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
+        {
+            if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+            {
+                char tkn[5] = {'\0'};
+                atcmd_getToken(1, tkn, sizeof(tkn));
+                return strtol(tkn, NULL, 10);
+            }
+        }
+    }
+    return ltemRfPriorityState_error;
+}
+
 
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
  */
-resultCode_t ltem_setRfPriority(ltemRfPrioritySet_t priority)
+resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t priority)
 {
-    if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
-        lq_strnstr(ltem_getModuleType(), "BG77", 40))
+    if (memcmp(ltem_getModuleType(), "BG95", 4) == 0 || 
+        memcmp(ltem_getModuleType(), "BG77", 4) == 0)
     {
         if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d", priority))
         {
-            return atcmd_awaitResult();
+            char tkState = (priority == ltemRfPriorityMode_gnss) ? '4' : '3';    // GNSS=4, WWAN=3
+            if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+            {
+                char tkn[5] = {'\0'};
+                while (tkn[0] != tkState)
+                {
+                    if (ltem_getRfPriorityMode() == ltemRfPriorityMode_error)
+                        return resultCode__timeout;
+                    atcmd_getToken(2, tkn, sizeof(tkn));
+                }
+                return resultCode__success;
+            }
         }
         return resultCode__conflict;
     }
-    return resultCode__preConditionFailed;
+return resultCode__preConditionFailed;                                          //  only applicable to single-RF modules
 }
 
 
-/**
- *	@brief Get RF priority on BG95/BG77 modules. 
- */
-ltemRfPriorityState_t ltem_getRfPriority()
-{
-    if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
-        lq_strnstr(ltem_getModuleType(), "BG77", 40))
-    {
-        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
-        {
-            if (atcmd_awaitResult() == resultCode__success)
-            {
-                return atcmd_getValue();
-            }
-        }
-        return 99;
-    }
-    return 99;
-}
+// /**
+//  *	@brief Set RF priority on BG95/BG77 modules. 
+//  */
+// resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t priority)
+// {
+//     if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
+//         lq_strnstr(ltem_getModuleType(), "BG77", 40))
+//     {
+//         if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d", priority))
+//         {
+//             return atcmd_awaitResult();
+//         }
+//         return resultCode__conflict;
+//     }
+//     return resultCode__preConditionFailed;
+// }
+
+
+// /**
+//  *	@brief Get RF priority on BG95/BG77 modules. 
+//  */
+// ltemRfPriorityState_t ltem_getRfPriorityState()
+// {
+//     if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
+//         lq_strnstr(ltem_getModuleType(), "BG77", 40))
+//     {
+//         if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
+//         {
+//             if (atcmd_awaitResult() == resultCode__success)
+//             {
+//                 return atcmd_getValue();
+//             }
+//         }
+//         return 99;
+//     }
+//     return 99;
+// }
+
+
+// /**
+//  *	@brief Get the current UTC date and time.
+//  */
+// void ltem_getDateTimeUtc(char *dateTime)
+// {
+//     char* ts;
+//     uint8_t len;
+//     *dateTime = '\0';                                                       // dateTime is empty c-string now
+
+//     if (dateTime != NULL && atcmd_tryInvoke("AT+CCLK?"))
+//     {
+//         if (atcmd_awaitResult() == resultCode__success)
+//         {
+//             if ((ts = memchr(atcmd_getResponse(), '"', 12)) != NULL)        // allowance for preceeding EOL
+//             {
+//                 ts++;
+//                 if (*ts != '8')                                             // test for not initialized date/time, starts with 80 (aka 1980)
+//                 {
+//                     char* stop = memchr(ts, '-', 20);                       // strip UTC offset, safe stop in trailer somewhere
+//                     if (stop != NULL)                                       // found expected - delimeter before TZ offset
+//                     {
+//                         *stop = '\0';
+//                         strcpy(dateTime, ts);                               // safe strcpy to dateTime
+//                         return;
+//                     }
+//                 }
+//             }
+//         }
+//     }
+// }
 
 
 /**
- *	@brief Get the current UTC date and time.
+ *	@brief Get the current local date and time.
  */
-void ltem_getDateTimeUtc(char *dateTime)
+const char* ltem_getLocalDateTime(char format)
 {
     char* ts;
     uint8_t len;
-    *dateTime = '\0';                                                       // dateTime is empty c-string now
+
+    char* dateTime = &g_lqLTEM.statics.dateTimeBffr;                        // readability
+    memset(dateTime, 0, ltem__dateTimeBffrSz);
 
     if (dateTime != NULL && atcmd_tryInvoke("AT+CCLK?"))
     {
@@ -372,18 +457,231 @@ void ltem_getDateTimeUtc(char *dateTime)
                 ts++;
                 if (*ts != '8')                                             // test for not initialized date/time, starts with 80 (aka 1980)
                 {
-                    char* stop = memchr(ts, '-', 20);                       // strip UTC offset, safe stop in trailer somewhere
-                    if (stop != NULL)                                       // found expected - delimeter before TZ offset
+                    char* tzDelim = memchr(ts, '-', 20);                       // strip UTC offset, safe stop in trailer somewhere
+                    if (tzDelim != NULL)                                       // found expected - delimeter before TZ offset
                     {
-                        *stop = '\0';
-                        strcpy(dateTime, ts);                               // safe strcpy to dateTime
-                        return;
+                        if (format == 'v' || format == 'V')                     // "VERBOSE" format
+                        {
+                            *tzDelim = '\0';                                    // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
+                            strcpy(dateTime, ts);                               // safe c-string strcpy to dateTime
+                        }
+                        else                                                    // default format ISO8601
+                        {
+                            if (format != 'c' && format != 'C')                 // not 'c'ompact format: 4 digit year
+                                memcpy(dateTime, "20", 2);                      // convert to 4 digit year (ISO8601)
+                            dateTime += 2;
+                            memcpy(dateTime, ts, 2);                            // year
+                            dateTime += 2;
+                            memcpy(dateTime, ts + 3, 2);                        // month
+                            dateTime += 2;
+                            memcpy(dateTime, ts + 6, 2);                        // day
+                            dateTime += 2;
+                            *dateTime = 'T';                                    // delimiter
+                            dateTime += 1;
+                            memcpy(dateTime, ts + 9, 2);                        // hours
+                            dateTime += 2;
+                            memcpy(dateTime, ts + 12, 2);                       // minutes
+                            dateTime += 2;
+                            memcpy(dateTime, ts + 15, 2);                       // seconds
+                            dateTime += 2;
+
+                            if (format != 'c' && format != 'C')                 // not 'c'ompact format: include time zone offset
+                            {
+                                memcpy(dateTime, ts + 17, 1);                   // TZ delimiter (value sign)
+                                dateTime += 1;
+                                uint8_t tzOffset = strtol(ts + 18, NULL, 10);   // already have sign in output
+                                uint8_t hours = tzOffset / 4;
+                                uint8_t minutes = (tzOffset % 4) * 15;
+                                snprintf(dateTime + 14, 4, "%02d%02d", hours, minutes);
+                            }
+
+                        }
                     }
                 }
             }
         }
     }
+    return (const char*)&g_lqLTEM.statics.dateTimeBffr;
 }
+
+
+/**
+ *	@brief Get local time zone offset.
+ */
+int8_t ltem_getLocalTimezoneOffset(bool precise)
+{
+    char dateTime[30] = {0};
+    char *ts;
+
+    if (atcmd_tryInvoke("AT+CCLK?"))
+    {
+        if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+        {
+            if ((ts = memchr(atcmd_getResponse(), '"', 12)) != NULL)        // tolerate preceeding EOL
+            {
+                ts++;
+                if (*ts != '8')                                             // test for not initialized date/time, starts with 80 (aka 1980)
+                {
+                    char* tzDelim = memchr(ts, '-', 20);                    // strip UTC offset, safe stop in trailer somewhere
+                    if (tzDelim != NULL)                                    // found expected - delimeter before TZ offset
+                    {
+                        if (precise)
+                            return strtol(tzDelim, NULL, 10);               // BGx reports 15min TZ offsets (supports 30, 45 minutes TZ offset regions)
+                        else
+                            return strtol(tzDelim, NULL, 10) / 4;           // BGx reports 15min TZ offsets (supports 30, 45 minutes TZ offset regions)
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+
+/**
+ *  @brief Get the LTEm1 static device identification/provisioning information.
+ */
+modemInfo_t *ltem_getModemInfo()
+{
+    if (ATCMD_awaitLock(atcmd__defaultTimeout))
+    {
+        if (g_lqLTEM.modemInfo->imei[0] == 0)
+        {
+            atcmd_invokeReuseLock("AT+GSN");
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                strncpy(g_lqLTEM.modemInfo->imei, atcmd_getResponse(), ntwk__imeiSz);
+            }
+        }
+
+        if (g_lqLTEM.modemInfo->fwver[0] == 0)
+        {
+            atcmd_invokeReuseLock("AT+QGMR");
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                char *eol;
+                if ((eol = strstr(atcmd_getResponse(), "\r\n")) != NULL)
+                {
+                    uint8_t sz = eol - atcmd_getResponse();
+                    memcpy(g_lqLTEM.modemInfo->fwver, atcmd_getResponse(), MIN(sz, ntwk__dvcFwVerSz));
+                }
+            }
+        }
+
+        if (g_lqLTEM.modemInfo->mfg[0] == 0)
+        {
+            atcmd_invokeReuseLock("ATI");
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                char* response = atcmd_getResponse();
+                char* eol = strchr(response, '\r');
+                memcpy(g_lqLTEM.modemInfo->mfg, response, eol - response);
+
+                response = eol + 2;
+                eol = strchr(response, '\r');
+                memcpy(g_lqLTEM.modemInfo->model, response, eol - response);
+
+                response = eol + 2;
+                eol = strchr(response, ':');
+                response = eol + 2;
+                eol = strchr(response, '\r');
+                memcpy(g_lqLTEM.modemInfo->fwver, response, eol - response);
+            }
+        }
+
+        if (g_lqLTEM.modemInfo->iccid[0] == 0)
+        {
+            atcmd_invokeReuseLock("AT+ICCID");
+            if (atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__iccidCompleteParser) == resultCode__success)
+            {
+                strncpy(g_lqLTEM.modemInfo->iccid, atcmd_getResponse(), ntwk__iccidSz);
+            }
+        }
+        atcmd_close();
+    }
+    return (modemInfo_t *)(g_lqLTEM.modemInfo);
+}
+
+/**
+ *  @brief Test for SIM ready
+ */
+bool ltem_isSimReady()
+{
+    bool cpinState = false;
+    if (atcmd_tryInvoke("AT+CPIN?"))
+    {
+        if (atcmd_awaitResult() == resultCode__success)
+        {
+            cpinState = strstr(atcmd_getResponse(), "+CPIN: READY") != NULL;
+        }
+        atcmd_close();
+    }
+    return strlen(g_lqLTEM.modemInfo->iccid) > 0 && cpinState;
+}
+
+
+/**
+ *  @brief Get the signal strenght as raw value returned from BGx.
+ */
+uint8_t ltem_signalRaw()
+{
+    uint8_t signal = 99;
+
+    if (ltem_getDeviceState())
+    {
+        if (atcmd_tryInvoke("AT+CSQ"))
+        {
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                char *term;
+                char *lastResponse = atcmd_getResponse();
+                term = strstr(atcmd_getResponse(), "+CSQ");
+                signal = strtol(term + 6, NULL, 10);
+            }
+            atcmd_close();
+        }
+    }
+    return signal;
+}
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device at a percent
+ */
+uint8_t mdmInfo_signalPercent()
+{
+    double csq;
+    uint8_t signal = 0;
+    const double csqFactor = 3.23;
+
+    csq = (double)ltem_signalRaw();
+    signal = (csq == 99) ? 0 : (uint8_t)(csq * csqFactor);
+    return signal;
+}
+
+/**
+ *  @brief Get the signal strenght as RSSI (db).
+ */
+int16_t ltem_signalRSSI()
+{
+    const int8_t rssiBase = -113;
+    const int8_t rssiRange = 113 - 51;
+
+    uint8_t signalPercent = mdmInfo_signalPercent();
+    return (signalPercent == 0) ? rssiBase : (signalPercent * 0.01 * rssiRange) + rssiBase;
+}
+
+/**
+ *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone)
+ * */
+uint8_t ltem_signalBars(uint8_t displayBarCount)
+{
+    const int8_t barOffset = 20; // adjust point for full-bar percent (20 = full bar count at 80%)
+
+    uint8_t barSpan = 100 / displayBarCount;
+    uint8_t signalPercent = MIN(mdmInfo_signalPercent() + barOffset, 100);
+    return (uint8_t)(signalPercent / barSpan);
+}
+
 
 
 /**
@@ -592,16 +890,19 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 //     }
 // }
 
-
 #pragma endregion
 
+
+/*
+ * --------------------------------------------------------------------------------------------- */
 #pragma region Static Function Definitions
+
 
 /**
  * @brief Global URC handler
  * @details Services URC events that are not specific to a stream/protocol
  */
-void S__ltemUrcHandler()                                                     
+static void S__ltemUrcHandler()                                                     
 {
     bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
     char parseBffr[30];
@@ -628,5 +929,16 @@ void S__ltemUrcHandler()
     // }
  
 }
+
+
+/**
+ *	@brief Action response parser for iccid value request.
+ */
+static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem)
+{
+    return atcmd_stdResponseParser("+ICCID: ", true, "", 0, 0, "\r\n\r\nOK\r\n", 20);
+}
+
+
 
 #pragma endregion

@@ -112,7 +112,7 @@ typedef struct ltemDevice_tag
     atcmd_t *atcmd;                             // Action subsystem controls
     modemSettings_t *modemSettings;             // Settings to control radio and cellular network initialization
 	modemInfo_t *modemInfo;                     // Data structure holding persistent information about application modem state
-    providerInfo_t *providerInfo;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
+    operatorInfo_t *ntwkOperator;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
     streamCtrl_t* streams[ltem__streamCnt];     // Data streams: protocols or file system
     fileCtrl_t* fileCtrl;
 
