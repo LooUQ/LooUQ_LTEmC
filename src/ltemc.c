@@ -322,28 +322,6 @@ void ltem_enterPcm()
 {
 }
 
-/**
- *	@brief Get RF priority on BG95/BG77 modules. 
- */
-ltemRfPriorityMode_t ltem_getRfPriorityMode()
-{
-    char* moduleType = ltem_getModuleType();
-    if ((memcmp(moduleType, "BG95", 4) == 0) || 
-        (memcmp(moduleType, "BG77", 4) == 0))
-    {
-        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
-        {
-            if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
-            {
-                char tkn[5] = {'\0'};
-                atcmd_getToken(1, tkn, sizeof(tkn));
-                return strtol(tkn, NULL, 10);
-            }
-        }
-    }
-    return ltemRfPriorityState_unloaded;
-}
-
 
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
@@ -374,79 +352,59 @@ return resultCode__preConditionFailed;                                          
 }
 
 
-// /**
-//  *	@brief Set RF priority on BG95/BG77 modules. 
-//  */
-// resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t priority)
-// {
-//     if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
-//         lq_strnstr(ltem_getModuleType(), "BG77", 40))
-//     {
-//         if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d", priority))
-//         {
-//             return atcmd_awaitResult();
-//         }
-//         return resultCode__conflict;
-//     }
-//     return resultCode__preConditionFailed;
-// }
-
-
-// /**
-//  *	@brief Get RF priority on BG95/BG77 modules. 
-//  */
-// ltemRfPriorityState_t ltem_getRfPriorityState()
-// {
-//     if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
-//         lq_strnstr(ltem_getModuleType(), "BG77", 40))
-//     {
-//         if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
-//         {
-//             if (atcmd_awaitResult() == resultCode__success)
-//             {
-//                 return atcmd_getValue();
-//             }
-//         }
-//         return 99;
-//     }
-//     return 99;
-// }
-
-
-// /**
-//  *	@brief Get the current UTC date and time.
-//  */
-// void ltem_getDateTimeUtc(char *dateTime)
-// {
-//     char* ts;
-//     uint8_t len;
-//     *dateTime = '\0';                                                       // dateTime is empty c-string now
-
-//     if (dateTime != NULL && atcmd_tryInvoke("AT+CCLK?"))
-//     {
-//         if (atcmd_awaitResult() == resultCode__success)
-//         {
-//             if ((ts = memchr(atcmd_getResponse(), '"', 12)) != NULL)        // allowance for preceeding EOL
-//             {
-//                 ts++;
-//                 if (*ts != '8')                                             // test for not initialized date/time, starts with 80 (aka 1980)
-//                 {
-//                     char* stop = memchr(ts, '-', 20);                       // strip UTC offset, safe stop in trailer somewhere
-//                     if (stop != NULL)                                       // found expected - delimeter before TZ offset
-//                     {
-//                         *stop = '\0';
-//                         strcpy(dateTime, ts);                               // safe strcpy to dateTime
-//                         return;
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
+/**
+ *	@brief Get RF priority on BG95/BG77 modules. 
+ */
+ltemRfPriorityMode_t ltem_getRfPriorityMode()
+{
+    char* moduleType = ltem_getModuleType();
+    if ((memcmp(moduleType, "BG95", 4) == 0) || 
+        (memcmp(moduleType, "BG77", 4) == 0))
+    {
+        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
+        {
+            if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+            {
+                char tkn[5] = {'\0'};
+                atcmd_getToken(1, tkn, sizeof(tkn));
+                uint32_t mode = strtol(tkn, NULL, 10);
+                DPRINT_V(0, "<ltem_getRfPriorityMode> mode=%d\r\n", mode);
+                return mode;
+            }
+        }
+    }
+    DPRINT_V(0, "<ltem_getRfPriorityMode> mode=9");
+    return ltemRfPriorityMode_none;
+}
 
 
 /**
- *	@brief Get the current local date and time.
+ *	@brief Get RF priority on BG95/BG77 modules. 
+ */
+ltemRfPriorityState_t ltem_getRfPriorityState()
+{
+    if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
+        lq_strnstr(ltem_getModuleType(), "BG77", 40))
+    {
+        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
+        {
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                char tkn[5] = {'\0'};
+                atcmd_getToken(2, tkn, sizeof(tkn));
+                uint32_t state = strtol(tkn, NULL, 10);
+                DPRINT_V(0, "<ltem_getRfPriorityState> state=%d\r\n", state);
+                return state;
+            }
+        }
+    }
+    DPRINT_V(0, "<ltem_getRfPriorityState> state=0\r\n");
+    return ltemRfPriorityState_unloaded;
+}
+
+
+/**
+ *	@brief Get the current UTC date and time.
  */
 const char* ltem_getUtcDateTime(char format)
 {
@@ -467,25 +425,25 @@ const char* ltem_getUtcDateTime(char format)
                 dtSrc++;
                 if (*dtSrc != '8')                                              // test for not initialized date/time, starts with 80 (aka 1980)
                 {
-                    DPRINT(0, "ltem_getUtcDateTime(): format=%c\r\n", format);
+                    DPRINT_V(0, "ltem_getUtcDateTime(): format=%c\r\n", format);
 
                     if (format == 'v' || format == 'V')                         // "VERBOSE" format
                     {
                         char* tzDelimPoz = memchr(dtSrc, '+', 20);              // strip UTC offset, safe stop in trailer somewhere
                         char* tzDelimNeg = memchr(dtSrc, '-', 20);              // strip UTC offset, safe stop in trailer somewhere
-                        DPRINT(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, tzDelimNeg=%p\r\n", tzDelimPoz, tzDelimNeg);
+                        DPRINT_V(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, tzDelimNeg=%p\r\n", tzDelimPoz, tzDelimNeg);
 
                         vTaskDelay(100);
 
                         if (tzDelimPoz)
                         {
-                            DPRINT(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, offset=%d\r\n", tzDelimPoz, tzDelimPoz - dtSrc);
+                            DPRINT_V(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, offset=%d\r\n", tzDelimPoz, tzDelimPoz - dtSrc);
                             *tzDelimPoz = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
                             strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
                         }
                         else if (tzDelimNeg)
                         {
-                            DPRINT(0, "ltem_getUtcDateTime(): tzDelimNeg=%p, offset=%d\r\n", tzDelimNeg, tzDelimNeg - dtSrc);
+                            DPRINT_V(0, "ltem_getUtcDateTime(): tzDelimNeg=%p, offset=%d\r\n", tzDelimNeg, tzDelimNeg - dtSrc);
                             *tzDelimNeg = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
                             strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
                         }
@@ -499,55 +457,42 @@ const char* ltem_getUtcDateTime(char format)
                     destPtr += 2;
                     memcpy(destPtr, dtSrc, 2);                                  // year
 
-                    DPRINT(0, "ltem_getUtcDateTime(): post-year: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    DPRINT_V(0, "ltem_getUtcDateTime(): post-year: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     destPtr += 2;
                     memcpy(destPtr, dtSrc + 3, 2);                              // month
 
-                    DPRINT(0, "ltem_getUtcDateTime(): post-month: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    DPRINT_V(0, "ltem_getUtcDateTime(): post-month: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     destPtr += 2;
                     memcpy(destPtr, dtSrc + 6, 2);                              // day
 
-                    DPRINT(0, "ltem_getUtcDateTime(): post-day: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    DPRINT_V(0, "ltem_getUtcDateTime(): post-day: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     destPtr += 2;
                     *destPtr = 'T';                                             // delimiter
                     destPtr += 1;
 
-                    DPRINT(0, "ltem_getUtcDateTime(): post-T: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    DPRINT_V(0, "ltem_getUtcDateTime(): post-T: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     memcpy(destPtr, dtSrc + 9, 2);                              // hours
                     destPtr += 2;
 
-                    DPRINT(0, "ltem_getUtcDateTime(): post-hours: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    DPRINT_V(0, "ltem_getUtcDateTime(): post-hours: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     memcpy(destPtr, dtSrc + 12, 2);                       // minutes
                     destPtr += 2;
 
-                    DPRINT(0, "ltem_getUtcDateTime(): post-minutes: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    DPRINT_V(0, "ltem_getUtcDateTime(): post-minutes: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     memcpy(destPtr, dtSrc + 15, 2);                       // seconds
                     destPtr += 2;
 
-                    DPRINT(0, "ltem_getUtcDateTime(): post-seconds: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    DPRINT_V(0, "ltem_getUtcDateTime(): post-seconds: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     if (format != 'c' && format != 'C')                 // not 'c'ompact format: include time zone offset
                     {
                         strcat(destPtr, "Z");
-
-                        // DPRINT(0, "ltem_getUtcDateTime(): not done, timezone\r\n");
-
-                        // memcpy(destPtr, dtSrc + 17, 1);                   // TZ delimiter (value sign)
-                        // destPtr += 1;
-
-                        // DPRINT(0, "ltem_getUtcDateTime(): post-offsetSign: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
-
-                        // uint8_t tzOffset = strtol(dtSrc + 18, NULL, 10);   // already have sign in output
-                        // uint8_t hours = tzOffset / 4;
-                        // uint8_t minutes = (tzOffset % 4) * 15;
-                        // snprintf(destPtr, 4, "%02d%02d", hours, minutes);
-                        // DPRINT(0, "ltem_getUtcDateTime(): returnVal: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
                     }
                }
             }

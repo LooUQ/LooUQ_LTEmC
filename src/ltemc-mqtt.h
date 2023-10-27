@@ -120,9 +120,9 @@ typedef enum mqttQos_tag
 */
 typedef enum mqttState_tag
 {
-    mqttState_closed = 0,           // MQTT is idle, not active
-    mqttState_open = 1,             // MQTT is open, open but not connected
-    mqttState_connected = 2,        // MQTT is connected, in session with server
+    mqttState_closed = 0,           // MQTT is idle (not active)
+    mqttState_open = 1,             // MQTT is open (open but not connected)
+    mqttState_connected = 2,        // MQTT is connected (in data session with server)
 
     // BGx MQTT stack can hang in any of the next 3 states, only known recovery is soft-restart module
     mqttState_PENDING = 100,        ///
@@ -223,9 +223,9 @@ extern "C"
 
 /**
  *  @brief Initialize a MQTT protocol control structure.
- *  @param mqttCtrl [in] Pointer to MQTT control structure governing communications.
- *  @param dataCntxt [in] Socket/data context to host this protocol stream.
- *  @param recvCallback [in] Callback function to be invoked when received data is ready.
+ *  @param [in] mqttCtrl Pointer to MQTT control structure governing communications.
+ *  @param [in] dataCntxt Socket/data context to host this protocol stream.
+ *  @param [in] recvCallback Callback function to be invoked when received data is ready.
 */
 void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt);
 
@@ -236,22 +236,40 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt);
  * handled during message receipt. The application receive function will be called multiple times per message, each invoke delivering
  * different parts of the incoming message.
  * 
- * @param topicCtrl Pointer to the control to initialize
- * @param topic Topic name to subscribe to on the MQTT server
- * @param qos The MQTT defined quality-of-service for messages serviced in this topic (0=At most once, 1=At least once, 2=Exactly once)
- * @param appTopicRecvCB Pointer to the application function to receive incoming messages for this topic
+ * @param [in] topicCtrl Pointer to the control to initialize
+ * @param [in] topic Topic name to subscribe to on the MQTT server
+ * @param [in] qos The MQTT defined quality-of-service for messages serviced in this topic (0=At most once, 1=At least once, 2=Exactly once)
+ * @param [in] appTopicRecvCB Pointer to the application function to receive incoming messages for this topic
  */
 void mqtt_initTopicControl(mqttTopicCtrl_t* topicCtrl, const char* topic, uint8_t qos, mqttAppRecv_func appTopicRecvCB);
 
 /**
- *  @brief Set the remote server connection values.
-*/
+ * @brief Set the remote server/broker connection values.
+ * 
+ * @param [in] mqttCtrl 
+ * @param [in] hostUrl 
+ * @param [in] hostPort 
+ * @param [in] useTls 
+ * @param [in] useMqttVersion 
+ * @param [in] deviceId 
+ * @param [in] userId 
+ * @param [in] secret 
+ */
 void mqtt_setConnection_D(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, bool useTls, mqttVersion_t useMqttVersion, const char *deviceId, const char *userId, const char *secret);
 
 
 /**
- *  @brief Set the remote server connection values.
-*/
+ * @brief Set the remote server/broker connection values.
+ * 
+ * @param [in] mqttCtrl 
+ * @param [in] hostUrl 
+ * @param [in] hostPort 
+ * @param [in] useTls 
+ * @param [in] useMqttVersion 
+ * @param [in] deviceId 
+ * @param [in] userId 
+ * @param [in] secret 
+ */
 void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t hostPort, tlsCtrl_t* tlsCtrl, mqttVersion_t useMqttVersion, const char *deviceId, const char *userId, const char *secret);
 
 
@@ -348,22 +366,22 @@ void mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem);
 
 /**
  *  @brief Get current MQTT connection state
- *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param [in] mqttCtrl Pointer to MQTT type stream control to operate on.
 */
 mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl);
 
 
 /**
  *  @brief Query device for current MQTT connection state.
- *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param [in] mqttCtrl Pointer to MQTT type stream control to operate on.
  *  @return A mqttState_t value indicating the state of the MQTT connection.
 */
-mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl);
+mqttState_t mqtt_readStatus(mqttCtrl_t *mqttCtrl);
 
 
 /**
  *  @brief Get the last outgoing message ID.
- *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param [in] mqttCtrl Pointer to MQTT type stream control to operate on.
  *  @returns Integer value of the message identifier.
 */
 uint16_t mqtt_getSentMsgId(mqttCtrl_t *mqttCtrl);
@@ -371,7 +389,7 @@ uint16_t mqtt_getSentMsgId(mqttCtrl_t *mqttCtrl);
 
 /**
  *  @brief Get the last incoming message ID.
- *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param [in] mqttCtrl Pointer to MQTT type stream control to operate on.
  *  @returns Integer value of the message identifier.
 */
 uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl);
@@ -379,7 +397,7 @@ uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl);
 
 /**
  *  @brief Get the MQTT status error code.
- *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @param [in] mqttCtrl Pointer to MQTT type stream control to operate on.
  *  @returns Integer value of the MQTT status error code.
 */
 uint16_t mqtt_getErrCode(mqttCtrl_t *mqttCtrl);

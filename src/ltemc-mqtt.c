@@ -411,15 +411,21 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
  */
 void mqtt_close(mqttCtrl_t *mqttCtrl)
 {
-    /* not fully documented how Quectel intended to use close/disconnect, LTEmC uses AT+QMTCLOSE
+    /* not fully documented how Quectel intended to use close/disconnect, trying whats here
      */
-    if (mqttCtrl->state >= mqttState_open) // LTEmC uses CLOSE
+    if (mqttCtrl->state == mqttState_connected)
+    {
+        if (atcmd_tryInvoke("AT+QMTDISC=%d", mqttCtrl->dataCntxt))
+            atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), NULL);
+    }
+    else if (mqttCtrl->state == mqttState_open) // LTEmC uses CLOSE
     {
         if (atcmd_tryInvoke("AT+QMTCLOSE=%d", mqttCtrl->dataCntxt))
             atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), NULL);
     }
-    mqttCtrl->state == mqttState_closed;
+    mqttCtrl->state == mqtt_getStatus(mqttCtrl);                                            // internally set MQTT state
 }
+
 
 /**
  *  @brief Reset and attempt to reestablish a server connection.
@@ -461,7 +467,7 @@ mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl)
  *  @brief Query the status of the MQTT connection state.
  *  @note  This function works around a known issue with most (if not all) BGx firmware versions.
  */
-mqttState_t mqtt_fetchStatus(mqttCtrl_t *mqttCtrl)
+mqttState_t mqtt_readStatus(mqttCtrl_t *mqttCtrl)
 {
     // See BG96_MQTT_Application_Note: AT+QMTOPEN? and AT+QMTCONN?
 

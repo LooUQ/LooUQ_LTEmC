@@ -102,33 +102,40 @@ gnssLocation_t gnss_getLocation()
         if (rslt != resultCode__success)
             return gnssResult;                                                              // return on failure, continue to parse on success
 
-        DPRINT(PRNT_WARN, "getLocation(): parse starting...\r\n");
-        char *parsedResponse = atcmd_getResponse();
+        DPRINT_V(PRNT_WARN, "<gnss_getLocation()> parse starting...\r\n");
+        char *cmdResponse = atcmd_getResponse();
         char *delimAt;
-        DPRINT_V(PRNT_WHITE, "Raw=%s", parsedResponse);
+        DPRINT_V(PRNT_WHITE, "<gnss_getLocation()> response=%s\r\n", cmdResponse);
 
-        if ((delimAt = strchr(parsedResponse, (int)',')) != NULL)
-            strncpy(gnssResult.utc, parsedResponse, delimAt - parsedResponse);
+        if ((delimAt = strchr(cmdResponse, (int)',')) != NULL)
+            strncpy(gnssResult.utc, cmdResponse, delimAt - cmdResponse);
+        cmdResponse = delimAt + 1;
+        DPRINT_V(PRNT_WHITE, "<gnss_getLocation()> result.utc=%s\r\n", gnssResult.utc);
 
-        gnssResult.lat.val = strtof(delimAt + 1, &parsedResponse);                          // grab a float
+        gnssResult.lat.val = strtod(cmdResponse, &cmdResponse);
+        cmdResponse++;
         gnssResult.lat.dir = ' ';
-        gnssResult.lon.val = strtof(parsedResponse + 1, &parsedResponse);
-        gnssResult.lon.dir = ' ';
-        gnssResult.hdop = strtof(parsedResponse + 1, &parsedResponse);
-        gnssResult.altitude = strtof(parsedResponse + 1, &parsedResponse);
-        gnssResult.fixType = strtol(parsedResponse + 1, &parsedResponse, 10);                   // grab an integer
-        gnssResult.course = strtof(parsedResponse + 1, &parsedResponse);
-        gnssResult.speedkm = strtof(parsedResponse + 1, &parsedResponse);
-        gnssResult.speedkn = strtof(parsedResponse + 1, &parsedResponse);
 
-        if ((delimAt = strchr(parsedResponse, (int)',')) != NULL)
+        gnssResult.lon.val = strtod(cmdResponse, &cmdResponse);
+        cmdResponse++;
+        gnssResult.lon.dir = ' ';
+
+        DPRINT(PRNT_WHITE, "[gnss_getLocation()] location is lat=%f, lon=%f\r\n", gnssResult.lat.val, gnssResult.lon.val);
+
+        gnssResult.hdop = strtod(cmdResponse + 1, &cmdResponse);
+        gnssResult.altitude = strtod(cmdResponse + 1, &cmdResponse);
+        gnssResult.fixType = strtol(cmdResponse + 1, &cmdResponse, 10);
+        gnssResult.course = strtod(cmdResponse + 1, &cmdResponse);
+        gnssResult.speedkm = strtod(cmdResponse + 1, &cmdResponse);
+        gnssResult.speedkn = strtod(cmdResponse + 1, &cmdResponse);
+
+        if ((delimAt = strchr(cmdResponse, (int)',')) != NULL)
             strncpy(gnssResult.date, tokenBuf, 7);
 
-        gnssResult.nsat = strtol(parsedResponse, &parsedResponse, 10);
+        gnssResult.nsat = strtol(cmdResponse, NULL, 10);
         gnssResult.statusCode = resultCode__success;
         atcmd_close();
-
-        DPRINT_V(PRNT_WARN, "getLocation(): parse completed\r\n");
+        DPRINT_V(PRNT_WARN, "<gnss_getLocation()> parse completed\r\n");
     }
     return gnssResult;
 }
@@ -148,7 +155,7 @@ static cmdParseRslt_t gnssLocCompleteParser(const char *response, char **endptr)
 {
     //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr
     cmdParseRslt_t parseRslt = atcmd_stdResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, "OK\r\n", 0);
-    DPRINT(PRNT_DEFAULT, "gnssParser(): result=%d\r\n", parseRslt);
+    DPRINT_V(PRNT_DEFAULT, "<gnssLocCompleteParser()> result=%d\r\n", parseRslt);
     return parseRslt;
 }
 

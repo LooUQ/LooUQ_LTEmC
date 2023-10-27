@@ -376,7 +376,7 @@ uint8_t ntwk_getRegistrationStatus()
 
 
 // /**
-//  *	@brief Set network operator.
+//  *  @brief Set network operator.
 //  *  @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
 
 //  *  @param [in] mode Action to be performed, set/clear/set default.
@@ -433,7 +433,8 @@ static void S__clearOperatorInfo()
 */
 static cmdParseRslt_t S__contextStatusCompleteParser(void *atcmd, const char *response)
 {
-    return atcmd_stdResponseParser("+QIACT: ", false, NULL, 2, 2, NULL, 0);
+    DPRINT_V(0, "<S__contextStatusCompleteParser()> response=%s\r\n", response);
+    return atcmd_stdResponseParser("+QIACT: ", false, "", 2, 2, NULL, 0);
 }
 
 
