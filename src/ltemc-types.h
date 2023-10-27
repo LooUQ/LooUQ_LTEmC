@@ -279,7 +279,7 @@ typedef struct modemSettings_tag
 typedef struct modemInfo_tag
 {
 	char imei[PSZ(ntwk__imeiSz)];            // IMEI (15 digits) International Mobile Equipment Identity or IEEE UI (aka MAC, EUI-48 or EUI-64).
-	char iccid[PSZ(ntwk__iccidSz)];          // ICCID (20 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
+	char iccid[PSZ(ntwk__iccidSz)];          // ICCID (up to 24 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
     char mfg[PSZ(ntwk__dvcMfgSz)];           // Device manufacturer name
 	char model[PSZ(ntwk__dvcModelSz)];       // Device model number
 	char fwver[PSZ(ntwk__dvcFwVerSz)];       // Firmware version of the device

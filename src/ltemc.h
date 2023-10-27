@@ -191,9 +191,9 @@ ltemRfPriorityState_t ltem_getRfPriorityState();
 // void ltem_getDateTimeUtc(char *dateTime);
 
 /**
- *	@brief Get the current local date and time.
+ *	@brief Get the current UTC date and time.
  */
-const char* ltem_getLocalDateTime(char format);
+const char* ltem_getUtcDateTime(char format);
 
 
 /**
@@ -321,9 +321,14 @@ void ltem_setEventNotifCallback(appEvntNotify_func eventNotifyCB);
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
 
 
-#pragma region LTEM internal functions
+#pragma region LooUQ/LTEM internal functions
 /*
  ----------------------------------------------------------------------------------------------- */
+
+void LTEM_registerDiagCallback(appDiagCallback_func diagCB);
+void LTEM_diagCallback(const char* diagPointDescription);
+
+
 
 // uint8_t LTEM__getStreamIndx(dataCntxt_t dataCntxt);
 

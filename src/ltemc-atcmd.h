@@ -123,9 +123,9 @@ char *atcmd_getRawResponse();
 
 /**
  *	@brief Returns the string captured from the last command response with prefixing white-space and any preamble removed.
- *  @return Char pointer to the command response (note: this is stripped of preamble and finale strings)
+ *  @return Const char pointer to the command response (note: this is stripped of preamble and finale strings)
  */
-char *atcmd_getResponse();
+const char *atcmd_getResponse();
 
 
 /**

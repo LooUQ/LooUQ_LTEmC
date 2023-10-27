@@ -114,6 +114,7 @@ typedef struct ltemDevice_tag
     bool hostConfigured;                        // Host resources configured for LTEm use
     deviceState_t deviceState;                  // Device state of the BGx module
     appEvntNotify_func appEvntNotifyCB;         // Event notification callback to parent application
+    appDiagCallback_func appDiagnosticCB;       // Callback to application (platform specific) diagnostics function (stack, memory or other system state)
 
     platformSpi_t* platformSpi;
     //void *spi;                                  // SPI device (methods signatures compatible with Arduino)
@@ -121,7 +122,7 @@ typedef struct ltemDevice_tag
     iop_t *iop;                                 // IOP subsystem controls
     atcmd_t *atcmd;                             // Action subsystem controls
     modemSettings_t *modemSettings;             // Settings to control radio and cellular network initialization
-	modemInfo_t *modemInfo;                     // Data structure holding persistent information about application modem state
+	modemInfo_t *modemInfo;                     // Data structure holding persistent information about modem device
     ntwkOperator_t *ntwkOperator;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
     streamCtrl_t* streams[ltem__streamCnt];     // Data streams: protocols or file system
     fileCtrl_t* fileCtrl;

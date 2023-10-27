@@ -63,6 +63,7 @@ int8_t qbg_initCmdsCnt = sizeof(qbg_initCmds)/sizeof(const char* const);
 /* Static Local Function Declarations
 ------------------------------------------------------------------------------------------------ */
 // static bool S__initLTEmDevice();
+static void S__ltemUrcHandler();
 static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
 
 
@@ -135,6 +136,8 @@ void ltem_destroy()
  */
 bool ltem_start(resetAction_t resetAction)
 {
+    LTEM_diagCallback(">> ltem_start()");
+
     if (!g_lqLTEM.hostConfigured)
     {
         // on Arduino compatible, ensure pin is in default "logical" state prior to opening
@@ -445,64 +448,108 @@ return resultCode__preConditionFailed;                                          
 /**
  *	@brief Get the current local date and time.
  */
-const char* ltem_getLocalDateTime(char format)
+const char* ltem_getUtcDateTime(char format)
 {
-    char* ts;
+    char* dtSrc;
     uint8_t len;
 
-    char* dateTime = &g_lqLTEM.statics.dateTimeBffr;                        // readability
-    memset(dateTime, 0, ltem__dateTimeBffrSz);
+    memset(&g_lqLTEM.statics.dateTimeBffr, 0, ltem__dateTimeBffrSz);            // return empty string if failure
 
-    if (dateTime != NULL && atcmd_tryInvoke("AT+CCLK?"))
+    char* destPtr = &g_lqLTEM.statics.dateTimeBffr;
+    char* dtDbg  = &g_lqLTEM.statics.dateTimeBffr;
+
+    if (destPtr != NULL && atcmd_tryInvoke("AT+CCLK?"))
     {
         if (atcmd_awaitResult() == resultCode__success)
         {
-            if ((ts = memchr(atcmd_getResponse(), '"', 12)) != NULL)        // allowance for preceeding EOL
+            if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)         // allowance for preceeding EOL
             {
-                ts++;
-                if (*ts != '8')                                             // test for not initialized date/time, starts with 80 (aka 1980)
+                dtSrc++;
+                if (*dtSrc != '8')                                              // test for not initialized date/time, starts with 80 (aka 1980)
                 {
-                    char* tzDelim = memchr(ts, '-', 20);                       // strip UTC offset, safe stop in trailer somewhere
-                    if (tzDelim != NULL)                                       // found expected - delimeter before TZ offset
+                    DPRINT(0, "ltem_getUtcDateTime(): format=%c\r\n", format);
+
+                    if (format == 'v' || format == 'V')                         // "VERBOSE" format
                     {
-                        if (format == 'v' || format == 'V')                     // "VERBOSE" format
-                        {
-                            *tzDelim = '\0';                                    // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
-                            strcpy(dateTime, ts);                               // safe c-string strcpy to dateTime
-                        }
-                        else                                                    // default format ISO8601
-                        {
-                            if (format != 'c' && format != 'C')                 // not 'c'ompact format: 4 digit year
-                                memcpy(dateTime, "20", 2);                      // convert to 4 digit year (ISO8601)
-                            dateTime += 2;
-                            memcpy(dateTime, ts, 2);                            // year
-                            dateTime += 2;
-                            memcpy(dateTime, ts + 3, 2);                        // month
-                            dateTime += 2;
-                            memcpy(dateTime, ts + 6, 2);                        // day
-                            dateTime += 2;
-                            *dateTime = 'T';                                    // delimiter
-                            dateTime += 1;
-                            memcpy(dateTime, ts + 9, 2);                        // hours
-                            dateTime += 2;
-                            memcpy(dateTime, ts + 12, 2);                       // minutes
-                            dateTime += 2;
-                            memcpy(dateTime, ts + 15, 2);                       // seconds
-                            dateTime += 2;
+                        char* tzDelimPoz = memchr(dtSrc, '+', 20);              // strip UTC offset, safe stop in trailer somewhere
+                        char* tzDelimNeg = memchr(dtSrc, '-', 20);              // strip UTC offset, safe stop in trailer somewhere
+                        DPRINT(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, tzDelimNeg=%p\r\n", tzDelimPoz, tzDelimNeg);
 
-                            if (format != 'c' && format != 'C')                 // not 'c'ompact format: include time zone offset
-                            {
-                                memcpy(dateTime, ts + 17, 1);                   // TZ delimiter (value sign)
-                                dateTime += 1;
-                                uint8_t tzOffset = strtol(ts + 18, NULL, 10);   // already have sign in output
-                                uint8_t hours = tzOffset / 4;
-                                uint8_t minutes = (tzOffset % 4) * 15;
-                                snprintf(dateTime + 14, 4, "%02d%02d", hours, minutes);
-                            }
+                        vTaskDelay(100);
 
+                        if (tzDelimPoz)
+                        {
+                            DPRINT(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, offset=%d\r\n", tzDelimPoz, tzDelimPoz - dtSrc);
+                            *tzDelimPoz = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
+                            strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
                         }
+                        else if (tzDelimNeg)
+                        {
+                            DPRINT(0, "ltem_getUtcDateTime(): tzDelimNeg=%p, offset=%d\r\n", tzDelimNeg, tzDelimNeg - dtSrc);
+                            *tzDelimNeg = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
+                            strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
+                        }
+                        return &g_lqLTEM.statics.dateTimeBffr;
                     }
-                }
+
+                    /*  process 'i'= ISO8601 or 'c'= compact ISO (2-digit year and no timezone)
+                    */
+                    if (format != 'c' && format != 'C')                         // not 'c'ompact format: 4 digit year
+                        memcpy(destPtr, "20", 2);                               // convert to 4 digit year (ISO8601)
+                    destPtr += 2;
+                    memcpy(destPtr, dtSrc, 2);                                  // year
+
+                    DPRINT(0, "ltem_getUtcDateTime(): post-year: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+
+                    destPtr += 2;
+                    memcpy(destPtr, dtSrc + 3, 2);                              // month
+
+                    DPRINT(0, "ltem_getUtcDateTime(): post-month: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+
+                    destPtr += 2;
+                    memcpy(destPtr, dtSrc + 6, 2);                              // day
+
+                    DPRINT(0, "ltem_getUtcDateTime(): post-day: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+
+                    destPtr += 2;
+                    *destPtr = 'T';                                             // delimiter
+                    destPtr += 1;
+
+                    DPRINT(0, "ltem_getUtcDateTime(): post-T: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+
+                    memcpy(destPtr, dtSrc + 9, 2);                              // hours
+                    destPtr += 2;
+
+                    DPRINT(0, "ltem_getUtcDateTime(): post-hours: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+
+                    memcpy(destPtr, dtSrc + 12, 2);                       // minutes
+                    destPtr += 2;
+
+                    DPRINT(0, "ltem_getUtcDateTime(): post-minutes: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+
+                    memcpy(destPtr, dtSrc + 15, 2);                       // seconds
+                    destPtr += 2;
+
+                    DPRINT(0, "ltem_getUtcDateTime(): post-seconds: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+
+                    if (format != 'c' && format != 'C')                 // not 'c'ompact format: include time zone offset
+                    {
+                        strcat(destPtr, "Z");
+
+                        // DPRINT(0, "ltem_getUtcDateTime(): not done, timezone\r\n");
+
+                        // memcpy(destPtr, dtSrc + 17, 1);                   // TZ delimiter (value sign)
+                        // destPtr += 1;
+
+                        // DPRINT(0, "ltem_getUtcDateTime(): post-offsetSign: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+
+                        // uint8_t tzOffset = strtol(dtSrc + 18, NULL, 10);   // already have sign in output
+                        // uint8_t hours = tzOffset / 4;
+                        // uint8_t minutes = (tzOffset % 4) * 15;
+                        // snprintf(destPtr, 4, "%02d%02d", hours, minutes);
+                        // DPRINT(0, "ltem_getUtcDateTime(): returnVal: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    }
+               }
             }
         }
     }
@@ -516,18 +563,18 @@ const char* ltem_getLocalDateTime(char format)
 int8_t ltem_getLocalTimezoneOffset(bool precise)
 {
     char dateTime[30] = {0};
-    char *ts;
+    char *dtSrc;
 
     if (atcmd_tryInvoke("AT+CCLK?"))
     {
         if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
         {
-            if ((ts = memchr(atcmd_getResponse(), '"', 12)) != NULL)        // tolerate preceeding EOL
+            if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)        // tolerate preceeding EOL
             {
-                ts++;
-                if (*ts != '8')                                             // test for not initialized date/time, starts with 80 (aka 1980)
+                dtSrc++;
+                if (*dtSrc != '8')                                             // test for not initialized date/time, stardtSrc with 80 (aka 1980)
                 {
-                    char* tzDelim = memchr(ts, '-', 20);                    // strip UTC offset, safe stop in trailer somewhere
+                    char* tzDelim = memchr(dtSrc, '-', 20);                    // strip UTC offset, safe stop in trailer somewhere
                     if (tzDelim != NULL)                                    // found expected - delimeter before TZ offset
                     {
                         if (precise)
@@ -544,9 +591,9 @@ int8_t ltem_getLocalTimezoneOffset(bool precise)
 
 
 /**
- *  @brief Get the LTEm1 static device identification/provisioning information.
+ *  @brief Get the LTEm static device identification/provisioning information.
  */
-modemInfo_t *ltem_getModemInfo()
+modemInfo_t* ltem_getModemInfo()
 {
     if (ATCMD_awaitLock(atcmd__defaultTimeout))
     {
@@ -599,13 +646,19 @@ modemInfo_t *ltem_getModemInfo()
             atcmd_invokeReuseLock("AT+ICCID");
             if (atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__iccidCompleteParser) == resultCode__success)
             {
-                strncpy(g_lqLTEM.modemInfo->iccid, atcmd_getResponse(), ntwk__iccidSz);
+                char* delimAt;
+                char* responseAt = atcmd_getResponse();
+                if (strlen(responseAt) && (delimAt = memchr(responseAt, '\r', strlen(responseAt))))
+                {
+                    memcpy(g_lqLTEM.modemInfo->iccid, responseAt, MIN(delimAt - responseAt, ntwk__iccidSz));
+                }
             }
         }
         atcmd_close();
     }
-    return (modemInfo_t *)(g_lqLTEM.modemInfo);
+    return g_lqLTEM.modemInfo;
 }
+
 
 /**
  *  @brief Test for SIM ready
@@ -747,12 +800,14 @@ void ltem_eventMgr()
 {
     /* look for a new incoming URC 
      */
-    int16_t urcPossible = bbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);       // look for prefix char in URC
-    if (BBFFR_ISNOTFOUND(urcPossible))
+    int16_t potentialUrc = bbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);      // look for URC prefix char in RX buffer
+    if (BBFFR_ISNOTFOUND(potentialUrc))
     {
-        return;
+        return;                                                                     // nope, done here
     }
 
+    /* Invoke each stream's URC handler (if stream has one), it will service or return with a cancelled if not handled
+     */
     for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
     {
         resultCode_t serviceRslt;
@@ -767,7 +822,7 @@ void ltem_eventMgr()
         break;                                                                      // service attempted (might have errored), so this event is over
     }
 
-    // S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
+    S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
 }
 
 
@@ -865,6 +920,20 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 #pragma region LTEmC Internal Functions (ltemc-internal.h)
 /*-----------------------------------------------------------------------------------------------*/
 
+// typedef void (*appDiagCallback_func)(const char *diagPointDescription);                                 // application diagnostics callback
+
+void LTEM_registerDiagCallback(appDiagCallback_func diagCB)
+{
+    //argument of type "void (*)(char *info_string)" is incompatible with parameter of type "appDiagCallback_func"C/C++(167)
+    g_lqLTEM.appDiagnosticCB = diagCB;
+}
+
+void LTEM_diagCallback(const char* diagPointDescription)
+{
+    if (g_lqLTEM.appDiagnosticCB != NULL)                                       
+        (g_lqLTEM.appDiagnosticCB)(diagPointDescription);                                // if app diag registered invoke it
+}
+
 // void LTEM_registerUrcHandler(urcHandler_func *urcHandler)
 // {
 //     bool registered = false;
@@ -909,16 +978,16 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
  */
 static void S__ltemUrcHandler()                                                     
 {
-    bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
-    char parseBffr[30];
-
-    // bool isQuectel = cbffr_find(rxBffr, "+Q", 0, 0, false) != CBFFR_NOFIND;
-    // bool isCCITT = cbffr_find(rxBffr, "+C", 0, 0, false) != CBFFR_NOFIND;
-
     /* LTEm System URCs Handled Here
      *
-     * +QIURC: "pdpdeact",<contextID>
+     * +QIURC: "pdpdeact",<contextID>                               // PDP context closed (power down, remote termination)
     */
+
+    bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                       // for convenience
+    char parseBffr[30];
+
+    // bool isQuectel = cbffr_find(rxBffr, "+Q", 0, 0, false) != CBFFR_NOFIND;      // look for Quectel or CCITT URC prefixes
+    // bool isCCITT = cbffr_find(rxBffr, "+C", 0, 0, false) != CBFFR_NOFIND;
 
     /* PDP (packet network) deactivation/close
      ------------------------------------------------------------------------------------------- */
