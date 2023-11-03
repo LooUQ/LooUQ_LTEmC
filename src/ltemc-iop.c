@@ -123,64 +123,31 @@ void IOP_create()
  */
 void IOP_attachIrq()
 {
+    if (g_lqLTEM.iop->irqAttached == 0)
+    {
+        g_lqLTEM.iop->irqAttached = g_lqLTEM.pinConfig.irqPin;
+        spi_usingInterrupt(g_lqLTEM.platformSpi, g_lqLTEM.pinConfig.irqPin);
+        platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, IOP_interruptCallbackISR);
+    }
+
+    SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);            // ensure FIFO state is empty, UART will not refire interrupt if pending
     g_lqLTEM.iop->txSrc = NULL;
     g_lqLTEM.iop->txPending = 0;
-    g_lqLTEM.iop->irqAttached = g_lqLTEM.pinConfig.irqPin;
-
-    spi_usingInterrupt(g_lqLTEM.platformSpi, g_lqLTEM.pinConfig.irqPin);
-    platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, IOP_interruptCallbackISR);
-    SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);            // ensure FIFO state is empty, UART will not refire interrupt if pending
-}
-
-
-/**
- *	@brief Stop IOP services.
- */
-void IOP_detachIrq()
-{
-    if (g_lqLTEM.iop->irqAttached)
-    {
-        platform_detachIsr(g_lqLTEM.pinConfig.irqPin);
-        g_lqLTEM.iop->irqAttached = 0;
-    }
+    g_lqLTEM.iop->isrEnabled = true;
 }
 
 
 // /**
-//  *	@brief Verify LTEm firmware has started and is ready for driver operations.
+//  *	@brief Stop IOP services.
 //  */
-// bool IOP_awaitAppReady()
+// void IOP_detachIrq()
 // {
-//     char buf[120] = {0};
-//     char *head = &buf;
-//     uint8_t rxLevel = 0;
-//     uint32_t waitStart = pMillis();
-
-//     while (pMillis() - waitStart < QBG_APPREADY_MILLISMAX)                  // typical wait: 700-1450 mS
+//     if (g_lqLTEM.iop->irqAttached)
 //     {
-//         rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-//         if (rxLevel > 0)
-//         {
-//             if (((head - buf) + rxLevel) < 120)
-//             {
-//                 SC16IS7xx_read(head, rxLevel);
-//                 for (size_t i = 0; i < rxLevel; i++)                        // innoculate any prefixing NULL
-//                 {
-//                     head[i] = (head[i] == '\0') ? '~' : head[i];
-//                 }
-//                 head += rxLevel;
-//                 if (strstr(buf, "APP RDY"))
-//                 {
-//                     DPRINT(PRNT_WHITE, "AppRdy @ %lums\r", pMillis() - waitStart);
-//                     g_lqLTEM.deviceState = deviceState_appReady;
-//                     return true;
-//                 }
-//             }
-//         }
-//         pYield();                                                           // give application time for non-comm startup activities or watchdog
+//         DPRINT(0, "[IOP_detachIrq()] detached=%d\r\n", g_lqLTEM.pinConfig.irqPin);
+//         platform_detachIsr(g_lqLTEM.pinConfig.irqPin);
+//         g_lqLTEM.iop->irqAttached = 0;
 //     }
-//     DPRINT(PRNT_WARN, "AppRdy Fault: ");
-//     return false;
 // }
 
 
@@ -269,6 +236,10 @@ static inline uint8_t S_convertCharToContextId(const char cntxtChar)
  */
 void IOP_interruptCallbackISR()
 {
+    SC16IS7xx_IIR iirVal;
+    uint8_t rxLevel;
+    uint8_t txLevel;
+
     /* ----------------------------------------------------------------------------------------------------------------
      * NOTE: The IIR, TXLVL and RXLVL are read seemingly redundantly, this is required to ensure NXP SC16IS741
      * IRQ line is reset (belt AND suspenders).  During initial testing it was determined that without this 
@@ -280,10 +251,10 @@ void IOP_interruptCallbackISR()
     *   write (THR): buffer emptied sufficiently to send more chars
     */
 
-    SC16IS7xx_IIR iirVal;
-    uint8_t rxLevel;
-    uint8_t txLevel;
-
+    if (!g_lqLTEM.iop->isrEnabled)
+    {
+        return;
+    }
     retryIsr:
 
     iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);

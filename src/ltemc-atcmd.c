@@ -25,8 +25,8 @@
 ***************************************************************************** */
 
 #define SRCFILE "ATC"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-//#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+// #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+// #define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
@@ -39,7 +39,7 @@ extern ltemDevice_t g_lqLTEM;
 
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------- */
-static resultCode_t S__getToken(const char* preamble, uint8_t tokenIndx, char* token, uint8_t tkBffrLen);
+static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, uint8_t tkBffrLen);
 static resultCode_t S__readResult();
 static void S__rxParseForUrc();
 
@@ -131,6 +131,7 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
 
     // TEMPORARY
     memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+    DPRINT_V(0, "<atcmd_tryInvoke> cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
 
     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
     return true;
@@ -231,6 +232,15 @@ resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_
 /**
  *	@brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
  */
+const char* atcmd_getCommand()
+{
+    return g_lqLTEM.atcmd->CMDMIRROR;
+}
+
+
+/**
+ *	@brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
+ */
 resultCode_t atcmd_getResult()
 {
     return g_lqLTEM.atcmd->resultCode;
@@ -249,7 +259,7 @@ bool atcmd_getPreambleFound()
 /**
  *	@brief Returns the string captured from the last command response; between pPreamble and pFinale (excludes both)
  */
-char *atcmd_getRawResponse()
+char* atcmd_getRawResponse()
 {
     ASSERT(g_lqLTEM.atcmd->rawResponse != NULL);
     return g_lqLTEM.atcmd->rawResponse;
@@ -260,7 +270,7 @@ char *atcmd_getRawResponse()
  *	@brief Returns the string captured from the last command response with prefixing white-space and any preamble removed.
  *  @return Char pointer to the command response (note: this is stripped of preamble and finale strings)
  */
-const char *atcmd_getResponse()
+char* atcmd_getResponse()
 {
     ASSERT(g_lqLTEM.atcmd->response != NULL);
     return g_lqLTEM.atcmd->response;
@@ -279,9 +289,10 @@ int32_t atcmd_getValue()
 /**
  *	@brief Returns a token from the result of the last module command
  */
-resultCode_t atcmd_getToken(uint8_t tokenIndx, char* token, uint8_t tkBffrSz)
+char* atcmd_getToken(uint8_t tokenIndx)
 {
-    return S__getToken(": ", tokenIndx, token, tkBffrSz);
+    S__getToken(": ", tokenIndx, g_lqLTEM.atcmd->respToken, atcmd__respTokenSz);        // returns empty c-str if not found
+    return g_lqLTEM.atcmd->respToken;
 }
 
 
@@ -465,14 +476,17 @@ static resultCode_t S__readResult()
 
     if (g_lqLTEM.atcmd->parserResult == cmdParseRslt_pending)                      // still pending, check for timeout error
     {
-        if (pElapsed(g_lqLTEM.atcmd->invokedAt, g_lqLTEM.atcmd->timeout))
+        if (IS_ELAPSED(g_lqLTEM.atcmd->invokedAt, g_lqLTEM.atcmd->timeout))
         {
             g_lqLTEM.atcmd->resultCode = resultCode__timeout;
             g_lqLTEM.atcmd->isOpenLocked = false;                                   // close action to release action lock
             g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->invokedAt;
 
             if (ltem_getDeviceState() != deviceState_appReady)                      // if action timed-out, verify not a device wide failure
+            {
                 ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not AppReady");
+                ltem_notifyApp(appEvent_fault_hardLogic, g_lqLTEM.atcmd->CMDMIRROR);
+            }
             else if (!SC16IS7xx_ping())
                 ltem_notifyApp(appEvent_fault_softLogic, "LTEm SPI Fault");         // UART bridge SPI not initialized correctly, IRQ not enabled
 
@@ -688,19 +702,20 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *	xbrief Returns a token from the result of the last module command
- *  xparam [in] preamble Character phrase prefixing the section of the response to search
- *  xparam [in] tokenIndx The 0-based token index to return
- *  xparam [out] token Char pointer to found token (will be returned null-terminated)
- *  xparam [in] tkBffrSz Size of the application provided buffer to hold the returned token
- *  xreturn Result code describing token search and extraction results (success, notFound, preConditionFailed-insufficient buffer)
+ *	@brief Returns a token from the result of the last module command
+ *  @param [in] preamble Character phrase prefixing the section of the response to search
+ *  @param [in] tokenIndx The 0-based token index to return
+ *  @param [out] token Char pointer to found token (will be returned null-terminated)
+ *  @param [in] tkBffrLen Size of the application provided buffer to hold the returned token
  */
-static resultCode_t S__getToken(const char* preamble, uint8_t tokenIndx, char* token, uint8_t tkBffrLen)
+static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, uint8_t tkBffrLen)
 {
     uint8_t preambleLen = strlen(preamble);
     uint16_t responseLen = strlen(g_lqLTEM.atcmd->rawResponse);
+    memset(token, 0, tkBffrLen);                                                            // ensure token is NULL-terminated
+
     if (responseLen <= preambleLen)                                                         // nothing between preamble and term
-        return resultCode__notFound;
+        return;
 
     char* searchPtr = g_lqLTEM.atcmd->rawResponse;                                          // need to leave atcmd internals intact
     if (preambleLen > 0)                                                                    // adjust start of search to past preamble
@@ -712,13 +727,12 @@ static resultCode_t S__getToken(const char* preamble, uint8_t tokenIndx, char* t
             searchPtr++;
         }
     }
-    memset(token, '\0', tkBffrLen);
     searchPtr += preambleLen;
     for (size_t i = 0; i <= tokenIndx; i++)
     {   
         uint16_t bffrRemaining = g_lqLTEM.atcmd->rawResponse + atcmd__respBufferSz - searchPtr;
         if (!bffrRemaining)
-            return resultCode__notFound;
+            return;
 
         const char delims[] = { ",\rO\0"};
         char* tkEnd;
@@ -737,11 +751,10 @@ static resultCode_t S__getToken(const char* preamble, uint8_t tokenIndx, char* t
         if (i == tokenIndx && tkEnd > searchPtr)                                                // is this the token we want
         {
             memcpy(token, searchPtr, MIN(tkBffrLen, tkEnd - searchPtr));                        // copy, leaving room for '\0'
-            return resultCode__success;
+            return;
         }
         searchPtr = tkEnd + 1;                                                                  // next token
     }
-    return resultCode__internalError;
 }
 
 

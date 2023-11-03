@@ -53,16 +53,10 @@ void IOP_create();
 void IOP_attachIrq();
 
 
-/**
- *	@brief Stop IOP services.
- */
-void IOP_detachIrq();
-
-
 // /**
-//  *	@brief Verify LTEm firmware has started and is ready for driver operations.
+//  *	@brief Stop IOP services.
 //  */
-// bool IOP_awaitAppReady();
+// void IOP_detachIrq();
 
 
 /**

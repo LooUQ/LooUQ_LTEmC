@@ -393,26 +393,10 @@ void file_getTsFilename(char* tsFilename, uint8_t fnSize, const char* suffix)
     char* srcPtr = timestamp;
     char* destPtr = tsFilename;
 
-    ltem_getDateTimeUtc(timestamp);
-    memset(tsFilename, 0, fnSize);
+    ASSERT(fnSize >= strlen(suffix) + 13);                                  // ensure buffer can hold result
 
-    memcpy(destPtr, srcPtr, 2);                                             // get year
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get month
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get day
-    strcat(destPtr, "T");
-    srcPtr += 3;
-    destPtr += 3;
-    memcpy(destPtr, srcPtr, 2);                                             // get hour
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get minute
-    srcPtr += 3;
-    destPtr += 2;
-    memcpy(destPtr, srcPtr, 2);                                             // get second
+    memset(tsFilename, 0, fnSize);
+    strcpy(tsFilename, ltem_getUtcDateTime('c'));
 
     if (strlen(suffix) > 0)                                                 // add suffix, if provided by caller
         strcat(destPtr,suffix);

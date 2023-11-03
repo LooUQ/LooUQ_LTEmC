@@ -66,14 +66,12 @@ bool QBG_isPowerOn()
         platform_closePin(g_lqLTEM.pinConfig.statusPin);
         platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_output);    // open status for write, set low
         platform_writePin(g_lqLTEM.pinConfig.statusPin, gpioValue_low);     // set low
-        //pDelay(1);
+        pDelay(1);
         platform_closePin(g_lqLTEM.pinConfig.statusPin);
         platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);     // reopen for normal usage (read)
 
         statusPin = platform_readPin(g_lqLTEM.pinConfig.statusPin);                     // perform 2nd read, after pull-down sequence
     }
-    #else
-    statusPin = platform_readPin(g_lqLTEM.pinConfig.statusPin);
     #endif
 
     g_lqLTEM.deviceState = statusPin ? MAX(deviceState_powerOn, g_lqLTEM.deviceState) : deviceState_powerOff;

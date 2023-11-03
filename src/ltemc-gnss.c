@@ -64,7 +64,7 @@ resultCode_t gnss_on()
 {
     if (atcmd_tryInvoke("AT+QGPS=1"))
     {
-        return atcmd_awaitResult();
+        return atcmd_awaitResultWithOptions(SEC_TO_MS(2), NULL);
     }
     return resultCode__conflict;
 }

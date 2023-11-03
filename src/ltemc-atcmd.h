@@ -115,17 +115,23 @@ resultCode_t atcmd_getResult();
 
 
 /**
+ *	@brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
+ */
+const char* atcmd_getCommand();
+
+
+/**
  *	@brief Returns the atCmd parsed response (preamble to finale) if completed. An empty C-string will return prior to completion.
  *  @return Char pointer to the command response (note: this is stripped of preamble and finale strings)
  */
-char *atcmd_getRawResponse();
+char* atcmd_getRawResponse();
 
 
 /**
  *	@brief Returns the string captured from the last command response with prefixing white-space and any preamble removed.
  *  @return Const char pointer to the command response (note: this is stripped of preamble and finale strings)
  */
-const char *atcmd_getResponse();
+char* atcmd_getResponse();
 
 
 /**
@@ -133,6 +139,14 @@ const char *atcmd_getResponse();
  *  @return True if preamble string was detected in the AT command response
  */
 bool atcmd_getPreambleFound();
+
+
+/**
+ * @brief Returns a token from the result of the last module command
+ * @param tokenIndx 
+ * @return Pointer to token from LTEm internal buffer
+ */
+char* atcmd_getToken(uint8_t tokenIndx);
 
 
 /**

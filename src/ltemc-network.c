@@ -1,7 +1,7 @@
 /** ****************************************************************************
-  \file 
-  \brief Public API controlling modem interface with the cellular network
-  \author Greg Terrell, LooUQ Incorporated
+  @file 
+  @brief Public API controlling modem interface with the cellular network
+  @author Greg Terrell, LooUQ Incorporated
 
   \loouq
 
@@ -58,7 +58,7 @@ static void S__clearOperatorInfo();
 #pragma region public functions
 
 /**
- *	\brief Initialize the IP network contexts structure.
+ *	@brief Initialize the IP network contexts structure.
  */
 void ntwk_create()
 {
@@ -69,7 +69,7 @@ void ntwk_create()
 
 
 /**
- *	\brief Build default data context configuration for modem to use on startup.
+ *	@brief Build default data context configuration for modem to use on startup.
  */
 resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn)
 {
@@ -78,7 +78,7 @@ resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoTyp
 
 
 /**
- *  \brief Configure RAT searching sequence
+ *  @brief Configure RAT searching sequence
 */
 void ntwk_setOperatorScanSeq(const char* scanSequence)
 {
@@ -97,7 +97,7 @@ void ntwk_setOperatorScanSeq(const char* scanSequence)
 
 
 /** 
- *  \brief Configure RAT(s) allowed to be searched.
+ *  @brief Configure RAT(s) allowed to be searched.
 */
 void ntwk_setOperatorScanMode(ntwkScanMode_t scanMode)
 {
@@ -116,7 +116,7 @@ void ntwk_setOperatorScanMode(ntwkScanMode_t scanMode)
 
 
 /** 
- *  \brief Configure the network category to be searched under LTE RAT.
+ *  @brief Configure the network category to be searched under LTE RAT.
  */
 void ntwk_setIotMode(ntwkIotMode_t iotMode)
 {
@@ -133,7 +133,7 @@ void ntwk_setIotMode(ntwkIotMode_t iotMode)
 
 
 /**
- *	\brief Initialize BGx Radio Access Technology (RAT) options.
+ *	@brief Initialize BGx Radio Access Technology (RAT) options.
  */
 void ntwk_setRatOptions()
 {
@@ -164,7 +164,7 @@ resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t proto
 
 
 /**
- *	\brief Configure PDP Context requiring authentication
+ *	@brief Configure PDP Context requiring authentication
  *  \details This configuration only supports IP4 data contexts
  */
 resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn, const char *userName, const char *pw, pdpCntxtAuthMethods_t authMethod)
@@ -183,7 +183,7 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
 
 
 /**
- *	\brief Apply the default PDP context configuration settings to BGx.
+ *	@brief Apply the default PDP context configuration settings to BGx.
  */
 void ntwk_applyPpdNetworkConfig()
 {
@@ -199,7 +199,7 @@ void ntwk_applyPpdNetworkConfig()
 
 
 /**
- *   \brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_lqLTEM->cancellationRequest.
+ *   @brief Wait for a network operator name and network mode. Can be cancelled in threaded env via g_lqLTEM->cancellationRequest.
 */
 ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
 {
@@ -283,7 +283,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
                     strcpy(g_lqLTEM.ntwkOperator->networks[i].ipAddress, "0.0.0.0");
                 }
             }
-            g_lqLTEM.ntwkOperator->networkCnt = ++ntwkIndx;
+            g_lqLTEM.ntwkOperator->pdpCntxtCnt = ++ntwkIndx;
         }
     }
     atcmd_close();
@@ -292,60 +292,66 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
 
 
 /**
- *	\brief Deactivate PDP Context/APN.
+ *	@brief Deactivate PDP Context.
  */
-void ntwk_activateNetwork(uint8_t cntxtId)
+void ntwk_activatePdpContext(uint8_t cntxtId)
 {
-    if (atcmd_tryInvoke("AT+CGACT=1,%d", cntxtId))
+    if (atcmd_tryInvoke("AT+QIACT=%d", cntxtId))
     {
         resultCode_t rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
-        if ( rslt == resultCode__success)
-            ntwk_awaitOperator(5);
     }
 }
 
 
 /**
- *	\brief Deactivate PDP Context/APN.
+ *	@brief Deactivate PDP Context.
  */
-void ntwk_deactivateNetwork(uint8_t cntxtId)
+void ntwk_deactivatePdpContext(uint8_t cntxtId)
 {
-    if (atcmd_tryInvoke("AT+CGACT=0,%d", cntxtId))
+    if (atcmd_tryInvoke("AT+QIDEACT=%d", cntxtId))
     {
-        resultCode_t rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
-        if ( rslt == resultCode__success)
-            ntwk_awaitOperator(5);
+        // resultCode_t rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
+        resultCode_t rslt = atcmd_awaitResult();
     }
 }
 
 
 /**
- *   \brief Get current operator information. If not connected to a operator will be an empty operatorInfo struct
- *   \return Struct containing the network operator name (operName) and network mode (ntwkMode).
+ *	@brief Returns true if context is ready and updates LTEm internal network information for the context
+ */
+bool ntwk_getPdpContextState(uint8_t cntxtId)
+{
+    return true;
+}
+
+
+/**
+ *   @brief Get current operator information. If not connected to a operator will be an empty operatorInfo struct
+ *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
 */
 ntwkOperator_t *ntwk_getOperatorInfo()
 {
-    if (strlen(g_lqLTEM.ntwkOperator->name) > 0)
+    if (strlen(g_lqLTEM.ntwkOperator->name))
         return &g_lqLTEM.ntwkOperator;
     return NULL;
 }
 
 
 /**
- *	\brief Get count of APN active data contexts from BGx.
+ *	@brief Get count of APN active data contexts from BGx.
  */
-uint8_t ntwk_getActiveNetworkCount()
+uint8_t ntwk_getActiveContextCount()
 {
-    return g_lqLTEM.ntwkOperator->networkCnt;
+    return g_lqLTEM.ntwkOperator->pdpCntxtCnt;
 }
 
 
 /**
- *	\brief Get network (PDP) information
+ *	@brief Get network (PDP) information
  */
 networkInfo_t *ntwk_getNetworkInfo(uint8_t pdpContextId)
 {
-    for (size_t i = 0; i < g_lqLTEM.ntwkOperator->networkCnt; i++)
+    for (size_t i = 0; i < g_lqLTEM.ntwkOperator->pdpCntxtCnt; i++)
     {
         if (g_lqLTEM.ntwkOperator->networks[i].pdpContextId == pdpContextId)
         {
@@ -358,7 +364,7 @@ networkInfo_t *ntwk_getNetworkInfo(uint8_t pdpContextId)
 
 /**
  *	@brief Get current network registration status.
- *  @return The current network operator registration status.
+ * @return The current network operator registration status.
  */
 uint8_t ntwk_getRegistrationStatus()
 {
@@ -374,15 +380,25 @@ uint8_t ntwk_getRegistrationStatus()
     }
 }
 
+/**
+ * @brief Check network ready condition.
+ * @return True, if network is fully established and ready for data transmission.
+ */
+bool ntwk_isReady()
+{
+    return strlen(g_lqLTEM.ntwkOperator->name) > 0;
+}
+
+
 
 // /**
-//  *  @brief Set network operator.
-//  *  @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
+//  * @brief Set network operator.
+//  * @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
 
-//  *  @param [in] mode Action to be performed, set/clear/set default.
-//  *  @param [in] format The form for the ntwkOperator parameter value: long, short, numeric.
-//  *  @param [in] ntwkOperator Operator to select, presented in the "format". Not all modes require/act on this parameter.
-//  *  @return Current operator selection mode. Note:
+//  * @param [in] mode Action to be performed, set/clear/set default.
+//  * @param [in] format The form for the ntwkOperator parameter value: long, short, numeric.
+//  * @param [in] ntwkOperator Operator to select, presented in the "format". Not all modes require/act on this parameter.
+//  * @return Current operator selection mode. Note:
 //  */
 // uint8_t ntwk_setOperator(uint8_t mode, uint8_t format, const char* ntwkOperator)
 // {
@@ -390,7 +406,7 @@ uint8_t ntwk_getRegistrationStatus()
 
 
 /** 
- *  \brief Development/diagnostic function to retrieve visible operators from cell radio.
+ *  @brief Development/diagnostic function to retrieve visible operators from cell radio.
  */
 void ntwkDiagnostics_getOperators(char *operatorsList, uint16_t listSz)
 {
@@ -422,14 +438,14 @@ void ntwkDiagnostics_getOperators(char *operatorsList, uint16_t listSz)
 
 static void S__clearOperatorInfo()
 {
-    memset((void*)g_lqLTEM.ntwkOperator->networks, 0, g_lqLTEM.ntwkOperator->networkCnt * sizeof(networkInfo_t));
+    memset((void*)g_lqLTEM.ntwkOperator->networks, 0, g_lqLTEM.ntwkOperator->pdpCntxtCnt * sizeof(networkInfo_t));
     memset((void*)g_lqLTEM.ntwkOperator, 0, sizeof(ntwkOperator_t));
 }
 
 
 /**
- *   \brief Tests for the completion of a network APN context activate action.
- *   \return standard action result integer (http result).
+ *   @brief Tests for the completion of a network APN context activate action.
+ *   @return standard action result integer (http result).
 */
 static cmdParseRslt_t S__contextStatusCompleteParser(void *atcmd, const char *response)
 {
@@ -439,14 +455,14 @@ static cmdParseRslt_t S__contextStatusCompleteParser(void *atcmd, const char *re
 
 
 /**
- *  \brief Scans a C-String (char array) for the next delimeted token and null terminates it.
+ *  @brief Scans a C-String (char array) for the next delimeted token and null terminates it.
  * 
- *  \param [in] source - Original char array to scan.
- *  \param [in] delimeter - Character separating tokens (passed as integer value).
- *  \param [out] tokenBuf - Pointer to where token should be copied to.
- *  \param [in] tokenBufSz - Size of buffer to receive token.
+ *  @param [in] source - Original char array to scan.
+ *  @param [in] delimeter - Character separating tokens (passed as integer value).
+ *  @param [out] tokenBuf - Pointer to where token should be copied to.
+ *  @param [in] tokenBufSz - Size of buffer to receive token.
  * 
- *  \return Pointer to the location in the source string immediately following the token.
+ *  @return Pointer to the location in the source string immediately following the token.
 */
 static char *S__grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz) 
 {

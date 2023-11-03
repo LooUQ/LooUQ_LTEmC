@@ -136,7 +136,9 @@ void ltem_destroy()
  */
 bool ltem_start(resetAction_t resetAction)
 {
-    LTEM_diagCallback(">> ltem_start()");
+    LTEM_diagCallback(">> ltem_start()");  
+    g_lqLTEM.appEventNotifyEnabled = false;                                     // start may be a restart, suspend operations
+    g_lqLTEM.iop->isrEnabled = false;
 
     if (!g_lqLTEM.hostConfigured)
     {
@@ -171,23 +173,6 @@ bool ltem_start(resetAction_t resetAction)
                 if (!SC16IS7xx_ping())                                          // fall back to power reset if UART not available
                     resetAction = resetAction_powerReset;
             }
-            // DPRINT_V(PRNT_DEFAULT, "Ready to power off\r\n");
-            // QBG_powerOff();
-            // DPRINT_V(PRNT_DEFAULT, "Powered OFF\r\n");
-
-            // // for (size_t i = 0; i < 5; i++)
-            // // {
-            // //     DPRINT_V(PRNT_DEFAULT, ".");
-            // //     pDelay(1000);
-            // // }
-            // pDelay(1000);
-            
-            // DPRINT_V(PRNT_DEFAULT, "Ready to power on\r\n");
-            // IOP_detachIrq();
-            // QBG_powerOn();                                                       // turn on BGx
-            // DPRINT_V(PRNT_DEFAULT, "Powered ON\r\n");
-
-            IOP_detachIrq();
             QBG_reset(resetAction);                                         // do requested reset (sw, hw, pwrCycle)
         }
     }
@@ -205,32 +190,25 @@ bool ltem_start(resetAction_t resetAction)
     DPRINT_V(PRNT_CYAN, "UART IRQ attached\r\n");
 
     IOP_interruptCallbackISR();                                             // force ISR to run once to sync IRQ 
+    g_lqLTEM.appEventNotifyEnabled = true;                                  // through the low-level actions, re-enable notifications
+
+    DPRINT_V(0, "LTEm prior state=%d\r\n", g_lqLTEM.deviceState);
 
     uint32_t startAppRdy = pMillis();                                       // wait for BGx to signal internal ready
-    while (bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, true))
+    do
     {
-        // pDelay(500);
-        // SC16IS7xx_IIR iirVal;
-        // uint8_t rxLevel;
-        // char rxData[65] = {0};
-        // iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
-        // DPRINT(PRNT_CYAN, "iirVal=%d\r\n", iirVal.reg);
-
-        // rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-        // DPRINT(PRNT_CYAN, "rxLevel=%d\r\n", rxLevel);
-
-        // // SC16IS7xx_read(rxData, rxLevel);
-        // // DPRINT(PRNT_CYAN, "rxData=%s\r\n", rxData);
+        if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, true)))
+            g_lqLTEM.deviceState = deviceState_appReady;
 
         if (IS_ELAPSED(startAppRdy, APPRDY_TIMEOUT))
+        {
+            DPRINT_V(PRNT_WARN, "AppRdy not received! Timeout at %dms\r\n", APPRDY_TIMEOUT);
             return false;
-    }
+        }
+    } while (g_lqLTEM.deviceState != deviceState_appReady);
+    
     DPRINT_V(PRNT_dCYAN, "AppRdy recv'd=%dms\r\n", pMillis() - startAppRdy);
     bbffr_reset(g_lqLTEM.iop->rxBffr);
-
-    // if (!IOP_awaitAppReady())
-    //     return;
-    // S__initLTEmDevice();
 
     if (!QBG_setOptions())
     {
@@ -249,6 +227,7 @@ bool ltem_start(resetAction_t resetAction)
     ntwk_awaitOperator(2);                                              // attempt to warm-up provider/PDP briefly. 
     DPRINT_V(PRNT_CYAN, "ltem_start(): provider warmed up\r\n");        // If longer duration required, leave that to application
 
+    ltem_getModemInfo();                                                // populate modem info struct
     return true;
 }
 
@@ -326,29 +305,24 @@ void ltem_enterPcm()
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
  */
-resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t priority)
+resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t mode)
 {
-    if (memcmp(ltem_getModuleType(), "BG95", 4) == 0 || 
-        memcmp(ltem_getModuleType(), "BG77", 4) == 0)
+    DPRINT_V(0, "<ltem_setRfPriorityMode()> mode=%d\r\n", mode);
+    DPRINT_V(0, "<ltem_setRfPriorityMode()> module:%s\r\n", g_lqLTEM.modemInfo->model);
+
+    if (memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) == 0 || memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) == 0)
     {
-        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d", priority))
+        DPRINT_V(0, "<ltem_setRfPriorityMode()> invoking\r\n");
+        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d", mode))
         {
-            char tkState = (priority == ltemRfPriorityMode_gnss) ? '4' : '3';    // GNSS=4, WWAN=3
-            if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
-            {
-                char tkn[5] = {'\0'};
-                while (tkn[0] != tkState)
-                {
-                    if (ltem_getRfPriorityMode() == ltemRfPriorityMode_none)
-                        return resultCode__timeout;
-                    atcmd_getToken(2, tkn, sizeof(tkn));
-                }
-                return resultCode__success;
-            }
+            DPRINT_V(0, "<ltem_setRfPriorityMode()> invoked\r\n");
+            resultCode_t rslt = atcmd_awaitResult();
+            DPRINT_V(0, "<ltem_setRfPriorityMode()> response:%s\r\n", atcmd_getRawResponse());
+            return rslt;
         }
         return resultCode__conflict;
     }
-return resultCode__preConditionFailed;                                          //  only applicable to single-RF modules
+    return resultCode__preConditionFailed;                                          //  only applicable to single-RF modules
 }
 
 
@@ -357,23 +331,18 @@ return resultCode__preConditionFailed;                                          
  */
 ltemRfPriorityMode_t ltem_getRfPriorityMode()
 {
-    char* moduleType = ltem_getModuleType();
-    if ((memcmp(moduleType, "BG95", 4) == 0) || 
-        (memcmp(moduleType, "BG77", 4) == 0))
+    if ((memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) == 0) || (memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) == 0))
     {
         if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
         {
             if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
             {
-                char tkn[5] = {'\0'};
-                atcmd_getToken(1, tkn, sizeof(tkn));
-                uint32_t mode = strtol(tkn, NULL, 10);
+                uint32_t mode = strtol(atcmd_getToken(1), NULL, 10);
                 DPRINT_V(0, "<ltem_getRfPriorityMode> mode=%d\r\n", mode);
                 return mode;
             }
         }
     }
-    DPRINT_V(0, "<ltem_getRfPriorityMode> mode=9");
     return ltemRfPriorityMode_none;
 }
 
@@ -383,16 +352,13 @@ ltemRfPriorityMode_t ltem_getRfPriorityMode()
  */
 ltemRfPriorityState_t ltem_getRfPriorityState()
 {
-    if (lq_strnstr(ltem_getModuleType(), "BG95", 40) ||
-        lq_strnstr(ltem_getModuleType(), "BG77", 40))
+    if (memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) == 0 || memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) == 0)
     {
         if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
         {
             if (atcmd_awaitResult() == resultCode__success)
             {
-                char tkn[5] = {'\0'};
-                atcmd_getToken(2, tkn, sizeof(tkn));
-                uint32_t state = strtol(tkn, NULL, 10);
+                uint32_t state = strtol(atcmd_getToken(2), NULL, 10);
                 DPRINT_V(0, "<ltem_getRfPriorityState> state=%d\r\n", state);
                 return state;
             }
@@ -701,10 +667,6 @@ const char* ltem_getSwVersion()
  */
 const char* ltem_getModuleType()
 {
-    if (strlen(g_lqLTEM.modemInfo->model) == 0)
-    {
-        ltem_getModemInfo();
-    }
     return g_lqLTEM.modemInfo->model;
 }
 
@@ -714,11 +676,14 @@ const char* ltem_getModuleType()
  */
 deviceState_t ltem_getDeviceState()
 {
+    DPRINT_V(0, "<ltem_getDeviceState()> prior state=%d\r\n", g_lqLTEM.deviceState);
+
     if (QBG_isPowerOn())             // ensure powered off device doesn't report otherwise
         g_lqLTEM.deviceState = MAX(g_lqLTEM.deviceState, deviceState_powerOn); 
     else
         g_lqLTEM.deviceState = deviceState_powerOff;
 
+    DPRINT_V(0, "<ltem_getDeviceState()> new state=%d\r\n", g_lqLTEM.deviceState);
     return g_lqLTEM.deviceState;
 }
 
@@ -837,7 +802,7 @@ streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType)
  */
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
-    if (g_lqLTEM.appEvntNotifyCB != NULL)                                       
+    if (g_lqLTEM.appEventNotifyEnabled && g_lqLTEM.appEvntNotifyCB != NULL)                                       
         (g_lqLTEM.appEvntNotifyCB)(notifyType, notifyMsg);                                // if app handler registered, it may/may not return
 }
 
@@ -847,6 +812,7 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
  */
 void ltem_setEventNotifCallback(appEvntNotify_func eventNotifCallback)
 {
+    g_lqLTEM.appEventNotifyEnabled = true;
     g_lqLTEM.appEvntNotifyCB = eventNotifCallback;
 }
 
@@ -926,6 +892,7 @@ static void S__ltemUrcHandler()
     /* LTEm System URCs Handled Here
      *
      * +QIURC: "pdpdeact",<contextID>                               // PDP context closed (power down, remote termination)
+     * POWER 
     */
 
     bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                       // for convenience

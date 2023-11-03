@@ -36,7 +36,7 @@
 */
 
 
-#define STATUS_LOW_PULLDOWN
+//#define STATUS_LOW_PULLDOWN
 
 #ifdef HOST_FEATHER_UXPLOR_L
 const ltemPinConfig_t ltem_pinConfig =

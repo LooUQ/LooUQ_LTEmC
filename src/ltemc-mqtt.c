@@ -244,9 +244,10 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
         }
         else
         {
-            switch (atcmd_getValue())
+            const char* token = atcmd_getToken(2);
+            int32_t rsltVal = strtol(token, NULL, 10);
+            switch (rsltVal)
             {
-            case -1:
             case 1:
                 return resultCode__badRequest;
             case 2:
@@ -254,12 +255,13 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
             case 4:
                 return resultCode__notFound;
             default:
-                return resultCode__gtwyTimeout;
+                return resultCode__extendedBase + rsltVal;
             }
         }
     }
     return resultCode__internalError;
 }
+
 
 /**
  *  @brief Connect (authenticate) to a MQTT server.
@@ -281,24 +283,27 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
 
     if (rslt == resultCode__success) // COMMAND executed, outcome of CONNECTION may not be a success
     {
-        switch (atcmd_getValue())
+        const char* token = atcmd_getToken(2);
+        int32_t rsltVal = strtol(token, NULL, 10);
+        switch (rsltVal)
         {
-        case 0:
-            return resultCode__success;
-        case 1:
-            return resultCode__methodNotAllowed; // invalid protocol version
-        case 2:
-        case 4:
-        case 5:
-            return resultCode__unauthorized; // bad user ID or password
-        case 3:
-            return resultCode__unavailable; // server unavailable
-        default:
-            return resultCode__internalError;
+            case 0:
+                return resultCode__success;
+            case 1:
+                return resultCode__methodNotAllowed;    // invalid protocol version
+            case 2:
+            case 4:
+            case 5:
+                return resultCode__unauthorized;        // bad user ID or password
+            case 3:
+                return resultCode__notFound;            // user/server not found
+            default:
+                return resultCode__extendedBase + rsltVal;
         }
     }
     return resultCode__badRequest; // command rejected by BGx
 }
+
 
 /**
  *  @brief Open and connect to a remote MQTT server.
