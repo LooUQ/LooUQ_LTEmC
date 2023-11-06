@@ -61,7 +61,8 @@ resultCode_t gpio_adcRead(uint8_t portNumber, uint16_t* analogValue)
         {
             if (memcmp(atcmd_getResponse(), "+QADC: 1", 8) == 0)
             {
-                *analogValue = atcmd_getValue();
+                const char* token = atcmd_getToken(1);
+                *analogValue = strtol(token, NULL, 10);
                 return resultCode__success;
             }
             return resultCode__badRequest;
@@ -113,7 +114,8 @@ resultCode_t gpio_read(uint8_t portNumber, bool* pinValue)
     {
         if (atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__ioValueParser) == resultCode__success)
         {
-            *pinValue = atcmd_getValue();
+            const char* token = atcmd_getToken(1);
+            *pinValue = strtol(token, NULL, 10);
             return resultCode__success;
         }
     }

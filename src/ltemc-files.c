@@ -287,7 +287,9 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
     if (rslt == resultCode__success)
     {
         g_lqLTEM.fileCtrl->handle = fileHandle;
-        *readSz = (uint32_t)atcmd_getValue();
+        
+        const char* token = atcmd_getToken(1);
+        *readSz = strtol(token, NULL, 10);
         if (*readSz < requestSz)
             rslt = resultCode__noContent;                                       // content exhausted    
     }

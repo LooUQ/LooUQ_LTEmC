@@ -277,13 +277,13 @@ char* atcmd_getResponse()
 }
 
 
-/**
- *	@brief Returns the atCmd value response
- */
-int32_t atcmd_getValue()
-{
-    return g_lqLTEM.atcmd->retValue;
-}
+// /**
+//  *	@brief Returns the atCmd value response
+//  */
+// int32_t atcmd_getValue()
+// {
+//     return g_lqLTEM.atcmd->retValue;
+// }
 
 
 /**

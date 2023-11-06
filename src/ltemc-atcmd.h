@@ -149,11 +149,11 @@ bool atcmd_getPreambleFound();
 char* atcmd_getToken(uint8_t tokenIndx);
 
 
-/**
- *	@brief Returns the atCmd result value
- *  @return If the parser was instructed to capture a value (see atcmd_stdResponseParser()) the signed integer value found
- */
-int32_t atcmd_getValue();
+// /**
+//  *	@brief Returns the atCmd result value
+//  *  @return If the parser was instructed to capture a value (see atcmd_stdResponseParser()) the signed integer value found
+//  */
+// int32_t atcmd_getValue();
 
 
 /**

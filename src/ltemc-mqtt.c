@@ -237,7 +237,10 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
         resultCode_t rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(30), S__mqttOpenCompleteParser);
         DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
 
-        if (rslt == resultCode__success && atcmd_getValue() == 0)
+        const char* token = atcmd_getToken(2);                          // token 2 is open result
+        int32_t rsltVal = strtol(token, NULL, 10);
+
+        if (rslt == resultCode__success && rsltVal == 0)
         {
             mqttCtrl->state = mqttState_open;
             return resultCode__success;
@@ -383,6 +386,7 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
 //     return rslt;
 // }
 
+
 /**
  *  @brief Publish a message to server.
  */
@@ -488,7 +492,9 @@ mqttState_t mqtt_readStatus(mqttCtrl_t *mqttCtrl)
         {
             if (atcmd_getPreambleFound())
             {
-                switch (atcmd_getValue())
+                const char* token = atcmd_getToken(2);
+                int32_t rsltVal = strtol(token, NULL, 10);
+                switch (rsltVal)
                 {
                 case 1:
                     mqttCtrl->state = mqttState_open;

@@ -96,8 +96,8 @@ typedef struct fileCtrl_tag
  */
 typedef struct ltemStatics_tag
 {
+    char dateTimeBffr[PSZ(ltem__dateTimeBffrSz)];   // reused by date/time functions for parsing formats
     char reportBffr[PSZ(ltem__reportsBffrSz)];      // reused by *Rpt() functions
-    char dateTimeBffr[PSZ(ltem__dateTimeBffrSz)];   // reused by clock functions
 } ltemStatics_t;
 
 

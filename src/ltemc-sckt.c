@@ -345,7 +345,11 @@ static void S__scktUrcHndlr()
                 atcmd_tryInvoke("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             atcmd_awaitResult();
-            irdRemain = atcmd_getValue();
+
+            const char* token = atcmd_getToken(1);
+            irdRemain = strtol(token, NULL, 10);
+
+            // irdRemain = atcmd_getValue();
 
         } while (irdRemain > 0);
     }

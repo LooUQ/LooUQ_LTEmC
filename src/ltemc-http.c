@@ -284,20 +284,27 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
             atcmd_invokeReuseLock("AT+QHTTPGET=%d", PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
         }
 
-        rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpGetStatusParser);                                                                     // wait for "+QHTTPGET trailer (request completed)
-        if (rslt == resultCode__success && atcmd_getValue() == 0)
+        rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpGetStatusParser);     // wait for "+QHTTPGET trailer (request completed)
+
+        const char* token = atcmd_getToken(1);
+        long tokenVal = strtol(token, NULL, 10);
+
+        if (rslt == resultCode__success && tokenVal == 0)
         {
             httpCtrl->httpStatus = S__parseResponseForHttpStatus(httpCtrl, atcmd_getResponse());
             if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
             {
-                httpCtrl->requestState = httpState_requestComplete;                                         // update httpState, got GET/POST response
+                httpCtrl->requestState = httpState_requestComplete;                                                 // update httpState, got GET/POST response
                 DPRINT(PRNT_MAGENTA, "GetRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
             }
         }
         else
         {
             httpCtrl->requestState = httpState_idle;
-            httpCtrl->httpStatus = atcmd_getValue();
+
+            const char* token = atcmd_getToken(1);
+            httpCtrl->httpStatus = strtol(token, NULL, 10);
+
             DPRINT(PRNT_WARN, "Closed failed GET request, status=%d %s\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
         }
         atcmd_close();
@@ -391,7 +398,11 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
             // atcmd_reset(false);                                                                         // clear CONNECT event from atcmd results
             // atcmd_sendCmdData(postData, postDataSz);
             // rslt = atcmd_awaitResultWithOptions(httpCtrl->timeoutSec, S__httpPostStatusParser);
-            if (rslt == resultCode__success && atcmd_getValue() == 0)                                   // wait for "+QHTTPPOST trailer: rslt=200, postErr=0
+
+            const char* token = atcmd_getToken(1);
+            long tokenVal = strtol(token, NULL, 10);
+
+            if (rslt == resultCode__success && tokenVal == 0)                                   // wait for "+QHTTPPOST trailer: rslt=200, postErr=0
             {
                 httpCtrl->httpStatus = S__parseResponseForHttpStatus(httpCtrl, atcmd_getResponse());
                 if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
