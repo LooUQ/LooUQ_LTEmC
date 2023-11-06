@@ -290,13 +290,13 @@ typedef struct modemInfo_tag
 /** 
  *  \brief Struct representing the state of active PDP contexts (aka: APN or data context).
 */
-typedef struct networkInfo_tag
+typedef struct packetNetwork_tag
 {
     bool isActive;
     uint8_t pdpContextId;                           // context ID recognized by the carrier (valid are 1 to 16)
     pdpProtocol_t pdpProtocol;                      // IPv4, IPv6, etc.
 	char ipAddress[ntwk__ipAddressSz];              // The IP address obtained from the carrier for this context. The IP address of the modem.
-} networkInfo_t;
+} packetNetwork_t;
 
 
 /** 
@@ -304,11 +304,11 @@ typedef struct networkInfo_tag
 */
 typedef struct ntwkOperator_tag
 {
-	char name[PSZ(ntwk__operatorNameSz)];           // Provider name, some carriers may report as 6-digit numeric carrier ID.
-	char iotMode[PSZ(ntwk__iotModeNameSz)];         // Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
+	char name[PSZ(ntwk__operatorNameSz)];               // Provider name, some carriers may report as 6-digit numeric carrier ID.
+	char iotMode[PSZ(ntwk__iotModeNameSz)];             // Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
     uint8_t defaultContext;
-    uint8_t pdpCntxtCnt;                            // The number of PDP contexts available
-    networkInfo_t networks[ntwk__pdpContextCnt];    // Collection of contexts with network carrier. This is typically only 1, but some carriers implement more (ex VZW).
+    uint8_t pdpCntxtCnt;                                // The number of PDP contexts available
+    packetNetwork_t packetNetworks[ntwk__pdpContextCnt];  // Collection of packet network with cell operator. This is typically only 1, but some carriers implement more (ex VZW).
 } ntwkOperator_t;
 
 
