@@ -419,10 +419,11 @@ const char* ltem_getUtcDateTime(char format)
                     /*  process 'i'= ISO8601 or 'c'= compact ISO (2-digit year and no timezone)
                     */
                     if (format != 'c' && format != 'C')                         // not 'c'ompact format: 4 digit year
+                    {
                         memcpy(destPtr, "20", 2);                               // convert to 4 digit year (ISO8601)
-                    destPtr += 2;
-                    memcpy(destPtr, dtSrc, 2);                                  // year
-
+                        destPtr += 2;
+                    }
+                    memcpy(destPtr, dtSrc, 2);                                  // 2-digit year
                     DPRINT_V(0, "ltem_getUtcDateTime(): post-year: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     destPtr += 2;
