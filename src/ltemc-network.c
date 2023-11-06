@@ -254,10 +254,10 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
                 pContinue = strstr(atcmd_getResponse(), "+QIACT: ");
                 while (pContinue != NULL && ntwkIndx < ntwk__pdpContextCnt)
                 {
-                    g_lqLTEM.ntwkOperator->networks[ntwkIndx].pdpContextId = strtol(pContinue + 8, &pContinue, 10);
-                    g_lqLTEM.ntwkOperator->networks[ntwkIndx].isActive = *(++pContinue) == '1';
+                    g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpContextId = strtol(pContinue + 8, &pContinue, 10);
+                    g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].isActive = *(++pContinue) == '1';
                     // only supported protocol now is IPv4, alias IP
-                    g_lqLTEM.ntwkOperator->networks[ntwkIndx].pdpProtocol = pdpProtocol_IPV4;
+                    g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpProtocol = pdpProtocol_IPV4;
                     pContinue = strstr(pContinue, "+QIACT: ");
                     if (pContinue == NULL)
                         break;
@@ -267,20 +267,20 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
             // get IP addresses
             for (size_t i = 0; i <= ntwkIndx; i++)
             {
-                if (g_lqLTEM.ntwkOperator->networks[i].isActive)
+                if (g_lqLTEM.ntwkOperator->packetNetworks[i].isActive)
                 {
-                    atcmd_invokeReuseLock("AT+CGPADDR=%d", g_lqLTEM.ntwkOperator->networks[i].pdpContextId);
+                    atcmd_invokeReuseLock("AT+CGPADDR=%d", g_lqLTEM.ntwkOperator->packetNetworks[i].pdpContextId);
                     if (atcmd_awaitResult() == resultCode__success)
                     {
                         pContinue = strstr(atcmd_getResponse(), "+CGPADDR: ");
                         pContinue = strchr(pContinue + 10, ',') + 1;
                         char *pLineEnd = strchr(pContinue, '\r');
-                        strncpy(g_lqLTEM.ntwkOperator->networks[i].ipAddress, pContinue, MIN(pLineEnd - pContinue, ntwk__ipAddressSz));
+                        strncpy(g_lqLTEM.ntwkOperator->packetNetworks[i].ipAddress, pContinue, MIN(pLineEnd - pContinue, ntwk__ipAddressSz));
                     }
                 }
                 else
                 {
-                    strcpy(g_lqLTEM.ntwkOperator->networks[i].ipAddress, "0.0.0.0");
+                    strcpy(g_lqLTEM.ntwkOperator->packetNetworks[i].ipAddress, "0.0.0.0");
                 }
             }
             g_lqLTEM.ntwkOperator->pdpCntxtCnt = ++ntwkIndx;
@@ -349,13 +349,37 @@ uint8_t ntwk_getActiveContextCount()
 /**
  *	@brief Get network (PDP) information
  */
-networkInfo_t *ntwk_getNetworkInfo(uint8_t pdpContextId)
+packetNetwork_t *ntwk_getPacketNetwork(uint8_t pdpContextId)
 {
     for (size_t i = 0; i < g_lqLTEM.ntwkOperator->pdpCntxtCnt; i++)
     {
-        if (g_lqLTEM.ntwkOperator->networks[i].pdpContextId == pdpContextId)
+        if (g_lqLTEM.ntwkOperator->packetNetworks[i].pdpContextId == pdpContextId)
         {
-            return &g_lqLTEM.ntwkOperator->networks[i];
+            return &g_lqLTEM.ntwkOperator->packetNetworks[i];
+        }
+    }
+    return NULL;
+}
+
+/**
+ * @brief Get information about the active operator network
+ * @return Char array pointer describing operator network characteristics
+ */
+const char* ntwk_getNetworkInfo()
+{
+    if (atcmd_tryInvoke("AT+QNWINFO"))
+    {
+        if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+        {
+            if (strstr(g_lqLTEM.atcmd->rawResponse, "+QNWINFO: "))                          // clean up extra content/EOL
+            {
+                void* eol = memchr(g_lqLTEM.atcmd->rawResponse, '\r', atcmd__respBufferSz - 10);
+                if (eol)
+                {
+                    memcpy(g_lqLTEM.statics.reportBffr, g_lqLTEM.atcmd->rawResponse, (eol - (void*)g_lqLTEM.atcmd->rawResponse));
+                    return g_lqLTEM.statics.reportBffr + 10;
+                }
+            }
         }
     }
     return NULL;
@@ -366,7 +390,7 @@ networkInfo_t *ntwk_getNetworkInfo(uint8_t pdpContextId)
  *	@brief Get current network registration status.
  * @return The current network operator registration status.
  */
-uint8_t ntwk_getRegistrationStatus()
+resultCode_t ntwk_getRegistrationStatus()
 {
     if (atcmd_tryInvoke("AT+CREG?"))
     {
@@ -376,7 +400,7 @@ uint8_t ntwk_getRegistrationStatus()
     }
     else
     {
-        return 255;
+        return resultCode__conflict;
     }
 }
 
@@ -438,7 +462,7 @@ void ntwkDiagnostics_getOperators(char *operatorsList, uint16_t listSz)
 
 static void S__clearOperatorInfo()
 {
-    memset((void*)g_lqLTEM.ntwkOperator->networks, 0, g_lqLTEM.ntwkOperator->pdpCntxtCnt * sizeof(networkInfo_t));
+    memset((void*)g_lqLTEM.ntwkOperator->packetNetworks, 0, g_lqLTEM.ntwkOperator->pdpCntxtCnt * sizeof(packetNetwork_t));
     memset((void*)g_lqLTEM.ntwkOperator, 0, sizeof(ntwkOperator_t));
 }
 

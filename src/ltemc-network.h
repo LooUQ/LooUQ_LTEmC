@@ -162,14 +162,21 @@ uint8_t ntwk_getActiveNetworkCount();
  * @param [in] cntxtId The PDP context ID/index to retreive.
  * @return Pointer to network (PDP) info in active network table, NULL if context ID not active
  */
-networkInfo_t *ntwk_getNetworkInfo(uint8_t contxtId);
+packetNetwork_t* ntwk_getPacketNetwork(uint8_t pdpContextId);
+
+
+/**
+ * @brief Get information about the active operator network
+ * @return Char array pointer describing operator network characteristics
+ */
+const char* ntwk_getNetworkInfo();
 
 
 /**
  * @brief Get current network registration status.
  * @return The current network operator registration status.
  */
-uint8_t ntwk_getRegistrationStatus();
+resultCode_t ntwk_getRegistrationStatus();
 
 
 // /**
