@@ -41,7 +41,7 @@ extern "C" {
 
 
 /**
- *	@brief Resets atCmd struct (BGx AT command structure) and optionally releases lock.
+ * @brief Resets atCmd struct (BGx AT command structure) and optionally releases lock.
  *  @param [in] releaseLock If false, clears ATCMD internal state, but leaves the command lock state unchanged
  */
 void atcmd_reset(bool releaseLock);
@@ -69,10 +69,27 @@ void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_
 //  */
 // void atcmd_setDataModeEot(uint8_t eotChar);
 
+/**
+ * @brief Sets command timeout for next invocation of a BGx AT command. 
+ * @details If newTimeout is zero (0) no change to timeout is made, the current timeout is returned. Following the next command, the timeout value returns to default value.
+ * @param [in] newTimeout Value in milliseconds to wait for a command to complete.
+ * @return The value of the existing timeout.
+ */
+uint16_t atcmd_ovrrdTimeout(uint16_t newTimeout);
+
 
 /**
- *	@brief Invokes a BGx AT command using default option values (automatic locking).
- *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
+ * @brief Sets response parser for next invocation of a BGx AT command. 
+ * @details If newParser is NULL the existing parser is CLEARED, but its location is returned. Following the next command, the parser will revert to the default parser function.
+ * @param [in] newParser Address of the parser function to use for the next command. 
+ * @return The value of the existing timeout.
+ */
+cmdResponseParser_func atcmd_ovrrdParser(cmdResponseParser_func newParser);
+
+
+/**
+ * @brief Invokes a BGx AT command using default option values (automatic locking).
+ * @param [in] cmdStrTemplate The command string to send to the BG96 module.
  *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
  *  @return True if action was invoked, false if not
  */
@@ -80,62 +97,64 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...);
 
 
 /**
- *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
- *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
- *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
- */
-void atcmd_invokeReuseLock(const char *cmdTemplate, ...);
-
-
-/**
- *	@brief Closes (completes) a BGx AT command structure and frees action resource (release action lock).
+ * @brief Closes (completes) a BGx AT command structure and frees action resource (release action lock).
  */
 void atcmd_close();
 
 
 /**
- *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
+ * @brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
  */
 resultCode_t atcmd_awaitResult();
 
 
-/**
- *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
- *  @param timeoutMS Time to wait for command response (0==no change). 
- *  @param cmdResponseParser If provided sets parser as the response parser (NULL==no change). 
+
+/* DEPRECAITED
  */
-resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser);
+
+/**
+ * @brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
+ * @param [in] cmdStrTemplate The command string to send to the BG96 module.
+ *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
+ */
+void atcmd_invokeReuseLock(const char *cmdTemplate, ...);
+// /**
+//  * @brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
+//  *  @param timeoutMS Time to wait for command response (0==no change). 
+//  *  @param cmdResponseParser If provided sets parser as the response parser (NULL==no change). 
+//  */
+// resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser);
 
 
 /**
- *	@brief Returns the atCmd result code or 0 if command is pending completion
+ * @brief Returns the atCmd result code or 0 if command is pending completion
  *  @return HTTP style result code.
  */
 resultCode_t atcmd_getResult();
 
 
 /**
- *	@brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
+ * @brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
  */
 const char* atcmd_getCommand();
 
 
 /**
- *	@brief Returns the atCmd parsed response (preamble to finale) if completed. An empty C-string will return prior to completion.
+ * @brief Returns the atCmd parsed response (preamble to finale) if completed. An empty C-string will return prior to completion.
  *  @return Char pointer to the command response (note: this is stripped of preamble and finale strings)
  */
 char* atcmd_getRawResponse();
 
 
 /**
- *	@brief Returns the string captured from the last command response with prefixing white-space and any preamble removed.
+ * @brief Returns the string captured from the last command response with prefixing white-space and any preamble removed.
  *  @return Const char pointer to the command response (note: this is stripped of preamble and finale strings)
  */
 char* atcmd_getResponse();
 
 
 /**
- *	@brief Returns true if the last atCmd response contained a requested preamble. If no preamble specified will return false.
+ * @brief Returns true if the last atCmd response contained a requested preamble. If no preamble specified will return false.
  *  @return True if preamble string was detected in the AT command response
  */
 bool atcmd_getPreambleFound();
@@ -150,54 +169,54 @@ char* atcmd_getToken(uint8_t tokenIndx);
 
 
 // /**
-//  *	@brief Returns the atCmd result value
+//  * @brief Returns the atCmd result value
 //  *  @return If the parser was instructed to capture a value (see atcmd_stdResponseParser()) the signed integer value found
 //  */
 // int32_t atcmd_getValue();
 
 
 /**
- *	@brief Returns the atCmd parser result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
+ * @brief Returns the atCmd parser result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
  *  @return The PARSER result from the last interation of the parser execution. This is generally not applicable to end-user applications.
  */
 cmdParseRslt_t atcmd_getParserResult();
 
 
 /**
- *	@brief Returns the BGx reported CME/CMS error code. Use this function to get details on a resultCode_t = 500
+ * @brief Returns the BGx reported CME/CMS error code. Use this function to get details on a resultCode_t = 500
  *  @return Pointer to a error value reported by the BGx module. Note that not all BGx errors have a detailed descriptor.
  */
 char *atcmd_getErrorDetail();
 
 
 /**
- *	@brief Returns the BGx reported CME/CMS error code as a numeric value.
+ * @brief Returns the BGx reported CME/CMS error code as a numeric value.
  *  @return Numeric CM* error code, 999 otherwise.
  */
 uint16_t atcmd_getErrorDetailCode();
 
 
 /**
- *	@brief Returns the atCmd last execution duration in milliseconds
+ * @brief Returns the atCmd last execution duration in milliseconds
  *  @return The number of milliseconds. If the command timed out this will be approximately timeout value.
  */
 uint32_t atcmd_getDuration();
 
 
 /**
- *	@brief Sends ^Z character to ensure BGx is not in text mode.
+ * @brief Sends ^Z character to ensure BGx is not in text mode.
  */
 void atcmd_exitTextMode();
 
 
 /**
- *	@brief Sends break sequence to transition BGx out of fixed-size data mode to command mode (up to 1500 char).
+ * @brief Sends break sequence to transition BGx out of fixed-size data mode to command mode (up to 1500 char).
  */
 void atcmd_exitDataMode();
 
 
 /**
- *	@brief Sends +++ sequence to transition BGx out of transparent data mode to command mode.
+ * @brief Sends +++ sequence to transition BGx out of transparent data mode to command mode.
  */
 void atcmd_exitTransparentMode();
 
@@ -206,7 +225,7 @@ void atcmd_exitTransparentMode();
  * --------------------------------------------------------------------------------------------- */
 
 /**
- *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
+ * @brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
  *  @details LTEmC internal function, not static as it is used by several LTEmC modules
  *           Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). 
  *           Note: If no stop condition is specified, finale, tokensReqd, and lengthReqd are all omitted, the parser will return with 
@@ -226,26 +245,26 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *preamble, bool preambleReqd, 
 
 
 // /**
-//  *	@brief LTEmC internal testing parser to capture incoming response until timeout. This is generally not used by end-user applications.
+//  * @brief LTEmC internal testing parser to capture incoming response until timeout. This is generally not used by end-user applications.
 //  *  @return Parse status result (always pending for this test parser)
 //  */
 // cmdParseRslt_t ATCMD_testResponseTrace();
 
 
 /**
- *	@brief Stardard TX (out) data handler used by dataMode. Sends data and checks for OK response.
+ * @brief Stardard TX (out) data handler used by dataMode. Sends data and checks for OK response.
  */
 resultCode_t atcmd_stdTxDataHndlr();
 
 
 /**
- *	@brief TX (out) data handler that performs a blind send of data.
+ * @brief TX (out) data handler that performs a blind send of data.
  */
 resultCode_t atcmd_txDataHndlrRaw();
 
 
 /**
- *	@brief Stardard RX (in) data handler used by dataMode.
+ * @brief Stardard RX (in) data handler used by dataMode.
  */
 resultCode_t atcmd_stdRxDataHndlr();
 

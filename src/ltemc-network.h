@@ -201,11 +201,9 @@ bool ntwk_isReady();
 /** 
  * @brief Development/diagnostic function to retrieve visible providers from radio.
  * @warning This command can take MINUTES to respond! It is generally considered a command used solely for diagnostics.
- * 
- * @param [out] operatorList  Pointer to char buffer to return operator list information retrieved from BGx.
- * @param [in] listSz Length of provided buffer.
+ * @return Char array-ptr with list of operators (raw format)
  */
-void ntwkDiagnostics_getOperators(char *operatorList, uint16_t listSz);
+const char* ntwkDiagnostics_getOperators();
 
 
 #ifdef __cplusplus

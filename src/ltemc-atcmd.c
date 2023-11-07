@@ -100,10 +100,34 @@ void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_
 }
 
 
-void atcmd_setDataModeEot(uint8_t eotChar)
+// void atcmd_setDataModeEot(uint8_t eotChar)
+// {
+//     g_lqLTEM.iop->txEot = (char)eotChar;
+// }
+
+/**
+ * @brief Sets command timeout for next invocation of a BGx AT command. 
+ */
+uint16_t atcmd_ovrrdTimeout(uint16_t newTimeout)
 {
-    g_lqLTEM.iop->txEot = (char)eotChar;
+    uint16_t oldTimeout = g_lqLTEM.atcmd->timeout;
+    if (newTimeout > 0)
+        g_lqLTEM.atcmd->timeout = newTimeout;
+    return oldTimeout;
 }
+
+
+/**
+ * @brief Sets response parser for next invocation of a BGx AT command. 
+ */
+cmdResponseParser_func atcmd_ovrrdParser(cmdResponseParser_func newParser)
+{
+    cmdResponseParser_func oldParser = g_lqLTEM.atcmd->responseParserFunc;
+    g_lqLTEM.atcmd->responseParserFunc = newParser;
+    return oldParser;
+}
+
+
 
 
 /**
@@ -111,11 +135,12 @@ void atcmd_setDataModeEot(uint8_t eotChar)
  */
 bool atcmd_tryInvoke(const char *cmdTemplate, ...)
 {
-    if (g_lqLTEM.atcmd->isOpenLocked)
+    if (!pMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))
         return false;
+    // if (g_lqLTEM.atcmd->isOpenLocked)
+    //     return false;
 
     atcmd_reset(true);                                 // clear atCmd control
-    g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto; // set automatic lock control mode
 
     // char *cmdStr = g_lqLTEM.atcmd->cmdStr;
     va_list ap;
@@ -138,30 +163,30 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
 }
 
 
-/**
- *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
- */
-void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
-{
-    ASSERT(g_lqLTEM.atcmd->isOpenLocked); // function assumes re-use of existing lock
+// /**
+//  *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
+//  */
+// void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
+// {
+//     ASSERT(g_lqLTEM.atcmd->isOpenLocked); // function assumes re-use of existing lock
 
-    atcmd_reset(false); // clear out properties WITHOUT lock release
-    g_lqLTEM.atcmd->autoLock = atcmd__setLockModeManual;
+//     atcmd_reset(false); // clear out properties WITHOUT lock release
+//     g_lqLTEM.atcmd->autoLock = atcmd__setLockModeManual;
 
-    char *cmdStr = g_lqLTEM.atcmd->cmdStr;
-    va_list ap;
+//     char *cmdStr = g_lqLTEM.atcmd->cmdStr;
+//     va_list ap;
 
-    va_start(ap, cmdTemplate);
-    vsnprintf(cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
-    strcat(g_lqLTEM.atcmd->cmdStr, "\r");
+//     va_start(ap, cmdTemplate);
+//     vsnprintf(cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
+//     strcat(g_lqLTEM.atcmd->cmdStr, "\r");
 
-    g_lqLTEM.atcmd->invokedAt = pMillis();
+//     g_lqLTEM.atcmd->invokedAt = pMillis();
 
-    // TEMPORARY
-    memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, atcmd__cmdBufferSz);
+//     // TEMPORARY
+//     memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, atcmd__cmdBufferSz);
 
-    IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
-}
+//     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+// }
 
 
 /**
@@ -210,23 +235,23 @@ resultCode_t atcmd_awaitResult()
 }
 
 
-/**
- *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
- */
-resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser)
-{
-    // set options
-    if (timeoutMS != atcmd__noTimeoutChange)
-    {
-        g_lqLTEM.atcmd->timeout = timeoutMS;
-    }
-    if (cmdResponseParser) // caller can use atcmd__useDefaultOKCompletionParser
-        g_lqLTEM.atcmd->responseParserFunc = cmdResponseParser;
-    else
-        g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
+// /**
+//  *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
+//  */
+// resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser)
+// {
+//     // set options
+//     if (timeoutMS != atcmd__noTimeoutChange)
+//     {
+//         g_lqLTEM.atcmd->timeout = timeoutMS;
+//     }
+//     if (cmdResponseParser) // caller can use atcmd__useDefaultOKCompletionParser
+//         g_lqLTEM.atcmd->responseParserFunc = cmdResponseParser;
+//     else
+//         g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
 
-    return atcmd_awaitResult();
-}
+//     return atcmd_awaitResult();
+// }
 
 
 /**
@@ -497,8 +522,9 @@ static resultCode_t S__readResult()
 
     if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_success)                        // success bit: parser completed with success (may have excessRecv warning)
     {
-        if (g_lqLTEM.atcmd->autoLock)                                               // if the individual cmd is controlling lock state
-            g_lqLTEM.atcmd->isOpenLocked = false;                                   // equivalent to atcmd_close()
+        pMutexGive(mutexTableIndex_atcmd);
+        // if (g_lqLTEM.atcmd->autoLock)                                               // if the individual cmd is controlling lock state
+        //     g_lqLTEM.atcmd->isOpenLocked = false;                                   // equivalent to atcmd_close()
         g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->invokedAt;
         g_lqLTEM.atcmd->resultCode = resultCode__success;
         g_lqLTEM.metrics.cmdInvokes++;

@@ -214,12 +214,13 @@ bool QBG_setOptions()
         DPRINT(PRNT_DEFAULT, " > %s", qbg_initCmds[i]);
         strcpy(cmdBffr, qbg_initCmds[i]);
 
-        if (atcmd_tryInvoke(cmdBffr))
+        atcmd_ovrrdTimeout(SEC_TO_MS(2));
+        if (!atcmd_tryInvoke(cmdBffr))
+            return resultCode__conflict;
+
+        if (IS_SUCCESS(atcmd_awaitResult()))    // somewhat unknown cmd list for modem initialization, relax timeout
         {
-            if (atcmd_awaitResultWithOptions(2000, NULL) == resultCode__success)    // somewhat unknown cmd list for modem initialization, relax timeout
-            {
-                continue;
-            }
+            continue;
         }
         DPRINT(PRNT_ERROR, "BGx Init CmdError: %s\r", qbg_initCmds[i]);
         setOptionsSuccess = false;

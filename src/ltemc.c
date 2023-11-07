@@ -333,14 +333,14 @@ ltemRfPriorityMode_t ltem_getRfPriorityMode()
 {
     if ((memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) == 0) || (memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) == 0))
     {
-        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
+        if (!atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
+            return ltemRfPriorityMode_none;                                         // resultCode__conflict
+
+        if (IS_SUCCESS(atcmd_awaitResult()))
         {
-            if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
-            {
-                uint32_t mode = strtol(atcmd_getToken(1), NULL, 10);
-                DPRINT_V(0, "<ltem_getRfPriorityMode> mode=%d\r\n", mode);
-                return mode;
-            }
+            uint32_t mode = strtol(atcmd_getToken(1), NULL, 10);
+            DPRINT_V(0, "<ltem_getRfPriorityMode> mode=%d\r\n", mode);
+            return mode;
         }
     }
     return ltemRfPriorityMode_none;
@@ -478,23 +478,23 @@ int8_t ltem_getLocalTimezoneOffset(bool precise)
     char dateTime[30] = {0};
     char *dtSrc;
 
-    if (atcmd_tryInvoke("AT+CCLK?"))
+    if (!atcmd_tryInvoke("AT+CCLK?"))
+        return 0;                                                           // resultCode__conflict normally
+
+    if (IS_SUCCESS(atcmd_awaitResult()))
     {
-        if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+        if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)         // tolerate preceeding EOL
         {
-            if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)        // tolerate preceeding EOL
+            dtSrc++;
+            if (*dtSrc != '8')                                              // test for not initialized date/time, stardtSrc with 80 (aka 1980)
             {
-                dtSrc++;
-                if (*dtSrc != '8')                                             // test for not initialized date/time, stardtSrc with 80 (aka 1980)
+                char* tzDelim = memchr(dtSrc, '-', 20);                     // strip UTC offset, safe stop in trailer somewhere
+                if (tzDelim != NULL)                                        // found expected - delimeter before TZ offset
                 {
-                    char* tzDelim = memchr(dtSrc, '-', 20);                    // strip UTC offset, safe stop in trailer somewhere
-                    if (tzDelim != NULL)                                    // found expected - delimeter before TZ offset
-                    {
-                        if (precise)
-                            return strtol(tzDelim, NULL, 10);               // BGx reports 15min TZ offsets (supports 30, 45 minutes TZ offset regions)
-                        else
-                            return strtol(tzDelim, NULL, 10) / 4;           // BGx reports 15min TZ offsets (supports 30, 45 minutes TZ offset regions)
-                    }
+                    if (precise)
+                        return strtol(tzDelim, NULL, 10);                   // BGx reports 15min TZ offsets (supports 30, 45 minutes TZ offset regions)
+                    else
+                        return strtol(tzDelim, NULL, 10) / 4;               // BGx reports 15min TZ offsets (supports 30, 45 minutes TZ offset regions)
                 }
             }
         }
@@ -512,8 +512,10 @@ modemInfo_t* ltem_getModemInfo()
     {
         if (g_lqLTEM.modemInfo->imei[0] == 0)
         {
-            atcmd_invokeReuseLock("AT+GSN");
-            if (atcmd_awaitResult() == resultCode__success)
+            if (!atcmd_tryInvoke("AT+GSN"))
+                return resultCode__conflict;
+
+            if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 strncpy(g_lqLTEM.modemInfo->imei, atcmd_getResponse(), ntwk__imeiSz);
             }
@@ -521,8 +523,10 @@ modemInfo_t* ltem_getModemInfo()
 
         if (g_lqLTEM.modemInfo->fwver[0] == 0)
         {
-            atcmd_invokeReuseLock("AT+QGMR");
-            if (atcmd_awaitResult() == resultCode__success)
+            if (!atcmd_tryInvoke("AT+QGMR"))
+                return resultCode__conflict;
+
+            if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 char *eol;
                 if ((eol = strstr(atcmd_getResponse(), "\r\n")) != NULL)
@@ -535,8 +539,10 @@ modemInfo_t* ltem_getModemInfo()
 
         if (g_lqLTEM.modemInfo->mfg[0] == 0)
         {
-            atcmd_invokeReuseLock("ATI");
-            if (atcmd_awaitResult() == resultCode__success)
+            if (!atcmd_tryInvoke("ATI"))
+                return resultCode__conflict;
+
+            if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 char* response = atcmd_getResponse();
                 char* eol = strchr(response, '\r');
@@ -556,8 +562,11 @@ modemInfo_t* ltem_getModemInfo()
 
         if (g_lqLTEM.modemInfo->iccid[0] == 0)
         {
-            atcmd_invokeReuseLock("AT+ICCID");
-            if (atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__iccidCompleteParser) == resultCode__success)
+            atcmd_ovrrdParser(S__iccidCompleteParser);
+            if (!atcmd_tryInvoke("AT+ICCID"))
+                return resultCode__conflict;
+
+            if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 char* delimAt;
                 char* responseAt = atcmd_getResponse();

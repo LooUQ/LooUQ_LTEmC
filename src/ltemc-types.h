@@ -62,7 +62,7 @@ enum ltem__constants
     ltem__streamCnt = 4,            // 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
     //ltem__urcHandlersCnt = 4        // max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
 
-    ltem__reportsBffrSz = 80,
+    ltem__reportsBffrSz = 160,
     ltem__dateTimeBffrSz = 24
 };
 
@@ -409,9 +409,6 @@ enum atcmd__constants
     atcmd__noTimeoutChange = 0,
     atcmd__defaultTimeout = 800,
 
-    atcmd__setLockModeManual = 0,
-    atcmd__setLockModeAuto = 1,
-
     atcmd__cmdBufferSz = 448,                       // prev=120, mqtt(Azure) connect=384, new=512 for universal cmd coverage, data mode to us dynamic TX bffr switching
     atcmd__respBufferSz = 128,
     atcmd__respTokenSz = 64,
@@ -473,7 +470,6 @@ typedef struct atcmd_tag
 
     uint32_t timeout;                                   // Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
     bool isOpenLocked;                                  // True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
-    bool autoLock;                                      // last invoke was auto and should be closed automatically on complete
     uint32_t invokedAt;                                 // Tick value at the command invocation, used for timeout detection.
     
     char rawResponse[PSZ(atcmd__respBufferSz)];         // response buffer, allows for post cmd execution review of received text (0-filled).

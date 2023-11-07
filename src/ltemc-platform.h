@@ -31,6 +31,7 @@
 #include "platform/platform-gpio.h"
 #include "platform/platform-timing.h"
 #include "platform/platform-spi.h"
+#include "platform/platform-signal.h"
 
 // #include "platform/lqPlatform-debug.h"
 
