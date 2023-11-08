@@ -188,7 +188,6 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
         break;
     } while (0);
 
-    atcmd_close();
     return rslt;
 }
 
@@ -302,33 +301,35 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
 
 resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz, fileWriteResult_t *writeResult)
 {
-    resultCode_t rslt;
-    char *workPtr;
-
-    if (!ATCMD_awaitLock(atcmd__defaultTimeout))
-        return resultCode__conflict;                                                            // failed to get lock
+    // if (!ATCMD_awaitLock(atcmd__defaultTimeout))
+    //     return resultCode__conflict;                                                            // failed to get lock
 
     do
     {
         atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, writeData, writeSz, NULL, false);
-        atcmd_invokeReuseLock("AT+QFWRITE=%d,%d", fileHandle, writeSz);
-        rslt = atcmd_awaitResult();
-        if (rslt == resultCode__success)                                                        // "CONNECT" prompt result
+
+        if (!atcmd_tryInvoke("AT+QFWRITE=%d,%d", fileHandle, writeSz))
+            return resultCode__conflict;
+
+        if (IS_SUCCESS(atcmd_awaitResult()))                                                    // "CONNECT" prompt result
         {
             atcmd_reset(false);                                                                 // clear CONNECT event from atcmd results
             // atcmd_sendCmdData(writeData, writeSz);
         }
 
-        rslt = atcmd_awaitResult(atcmd__defaultTimeout, S__writeStatusParser);       // wait for "+QFWRITE result
-        if (rslt == resultCode__success)
+        resultCode_t _rslt;
+        atcmd_ovrrdParser(S__writeStatusParser);
+        if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
         {
+            char *workPtr;
             writeResult->writtenSz = strtol(atcmd_getResponse(), &workPtr, 10);
             writeResult->fileSz = strtol(++workPtr, NULL, 10);
         }
-    } while (0);
+        else
+            return _rslt;
 
-    atcmd_close();
-    return rslt;
+    } while (DO_ONCE);
+    return resultCode__success;
 }
 
 

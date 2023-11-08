@@ -464,26 +464,27 @@ typedef cmdParseRslt_t (*cmdResponseParser_func)();                             
 typedef struct atcmd_tag
 {
     char cmdStr[atcmd__cmdBufferSz];                    // AT command string to be passed to the BGx module.
-
-    // temporary                                        // waiting on fix to SPI TX overright
-    char CMDMIRROR[atcmd__cmdBufferSz];
-
-    uint32_t timeout;                                   // Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
-    bool isOpenLocked;                                  // True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
+    uint16_t timeout;
+    cmdResponseParser_func responseParserFunc;          // parser function to analyze AT cmd response
+    dataMode_t dataMode;                                // controls for automatic data mode servicing - both TX (out) and RX (in). Std functions or extensions supported.
     uint32_t invokedAt;                                 // Tick value at the command invocation, used for timeout detection.
     
     char rawResponse[PSZ(atcmd__respBufferSz)];         // response buffer, allows for post cmd execution review of received text (0-filled).
-    char* response;                                     // PTR variable section of response.
     char respToken[PSZ(atcmd__respTokenSz)];            // buffer to hold a token string grabbed from response
-
-    uint32_t execDuration;                              // duration of command's execution in milliseconds
-    resultCode_t resultCode;                            // consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
-    cmdResponseParser_func responseParserFunc;          // parser function to analyze AT cmd response and optionally extract value
     cmdParseRslt_t parserResult;                        // last parser invoke result returned
     bool preambleFound;                                 // true if parser found preamble
     char errorDetail[PSZ(ltem__errorDetailSz)];         // BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
+
+    uint32_t execDuration;                              // duration of command's execution in milliseconds
+    resultCode_t resultCode;                            // consumer API result value (HTTP style), success=200, timeout=408, unmapped BGx errors are offset by 1000
+    cmdResponseParser_func lastRespPrsrFunc;            // parser function used for last command
+
+    // temporary or deprecated
+    char CMDMIRROR[atcmd__cmdBufferSz];                 // waiting on fix to SPI TX overright
+    bool isOpenLocked;                                  // True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
+    char* response;                                     // PTR variable section of response.
     int32_t retValue;                                   // (deprecated) optional signed int value extracted from response
-    dataMode_t dataMode;                                // controls for automatic data mode servicing - both TX (out) and RX (in). Std functions or extensions supported.
+
 } atcmd_t;
 
 

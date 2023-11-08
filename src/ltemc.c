@@ -72,7 +72,7 @@ static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *	@brief Initialize the LTEm1 modem.
+ * @brief Initialize the LTEm1 modem.
  */
 void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEvntNotify_func eventNotifCallback)
 {
@@ -99,7 +99,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     
     g_lqLTEM.atcmd = calloc(1, sizeof(atcmd_t));
     ASSERT(g_lqLTEM.atcmd != NULL);
-    atcmd_reset(true);
+    ATCMD_reset(true);                                          // initialize atcmd control values
 
     g_lqLTEM.fileCtrl = calloc(1, sizeof(fileCtrl_t));
     ASSERT(g_lqLTEM.fileCtrl != NULL);
@@ -113,7 +113,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
 
 
 /**
- *	@brief Uninitialize the LTEm device structures.
+ * @brief Uninitialize the LTEm device structures.
  */
 void ltem_destroy()
 {
@@ -132,7 +132,7 @@ void ltem_destroy()
 
 
 /**
- *	@brief Start the modem.
+ * @brief Start the modem.
  */
 bool ltem_start(resetAction_t resetAction)
 {
@@ -233,7 +233,7 @@ bool ltem_start(resetAction_t resetAction)
 
 
 // /**
-//  *	@brief Static internal BGx initialization logic shared between start and reset
+//  * @brief Static internal BGx initialization logic shared between start and reset
 //  */
 // bool S__initLTEmDevice()
 // {
@@ -267,7 +267,7 @@ bool ltem_start(resetAction_t resetAction)
 
 
 /**
- *	@brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW.
+ * @brief Powers off the modem without destroying memory objects. Modem device will require ltem_start() to reinit HW.
  */
 void ltem_stop()
 {
@@ -279,7 +279,7 @@ void ltem_stop()
 
 
 /**
- *	@brief Performs a reset of LTEm.
+ * @brief Performs a reset of LTEm.
  */
 bool ltem_reset(bool hardReset)
 {
@@ -289,7 +289,7 @@ bool ltem_reset(bool hardReset)
 
 
 /**
- *	@brief Turn modem power OFF
+ * @brief Turn modem power OFF
  */
 void ltem_powerOff()
 {
@@ -303,7 +303,7 @@ void ltem_enterPcm()
 
 
 /**
- *	@brief Set RF priority on BG95/BG77 modules. 
+ * @brief Set RF priority on BG95/BG77 modules. 
  */
 resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t mode)
 {
@@ -327,7 +327,7 @@ resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t mode)
 
 
 /**
- *	@brief Get RF priority on BG95/BG77 modules. 
+ * @brief Get RF priority on BG95/BG77 modules. 
  */
 ltemRfPriorityMode_t ltem_getRfPriorityMode()
 {
@@ -348,7 +348,7 @@ ltemRfPriorityMode_t ltem_getRfPriorityMode()
 
 
 /**
- *	@brief Get RF priority on BG95/BG77 modules. 
+ * @brief Get RF priority on BG95/BG77 modules. 
  */
 ltemRfPriorityState_t ltem_getRfPriorityState()
 {
@@ -370,7 +370,7 @@ ltemRfPriorityState_t ltem_getRfPriorityState()
 
 
 /**
- *	@brief Get the current UTC date and time.
+ * @brief Get the current UTC date and time.
  */
 const char* ltem_getUtcDateTime(char format)
 {
@@ -471,7 +471,7 @@ const char* ltem_getUtcDateTime(char format)
 
 
 /**
- *	@brief Get local time zone offset.
+ * @brief Get local time zone offset.
  */
 int8_t ltem_getLocalTimezoneOffset(bool precise)
 {
@@ -576,7 +576,6 @@ modemInfo_t* ltem_getModemInfo()
                 }
             }
         }
-        atcmd_close();
     }
     return g_lqLTEM.modemInfo;
 }
@@ -588,13 +587,12 @@ modemInfo_t* ltem_getModemInfo()
 bool ltem_isSimReady()
 {
     bool cpinState = false;
-    if (atcmd_tryInvoke("AT+CPIN?"))
+    if (!atcmd_tryInvoke("AT+CPIN?"))
+        return false;                                                               // resultCode_conflict
+
+    if (IS_SUCCESS(atcmd_awaitResult()))
     {
-        if (atcmd_awaitResult() == resultCode__success)
-        {
-            cpinState = strstr(atcmd_getResponse(), "+CPIN: READY") != NULL;
-        }
-        atcmd_close();
+        cpinState = strstr(atcmd_getResponse(), "+CPIN: READY") != NULL;
     }
     return strlen(g_lqLTEM.modemInfo->iccid) > 0 && cpinState;
 }
@@ -605,24 +603,21 @@ bool ltem_isSimReady()
  */
 uint8_t ltem_signalRaw()
 {
-    uint8_t signal = 99;
+    uint8_t signalValue = 99;
 
-    if (ltem_getDeviceState())
+    if (ltem_getDeviceState() || !atcmd_tryInvoke("AT+CSQ"))
     {
-        if (atcmd_tryInvoke("AT+CSQ"))
+        if (IS_SUCCESS(atcmd_awaitResult()))
         {
-            if (atcmd_awaitResult() == resultCode__success)
-            {
-                char *term;
-                char *lastResponse = atcmd_getResponse();
-                term = strstr(atcmd_getResponse(), "+CSQ");
-                signal = strtol(term + 6, NULL, 10);
-            }
-            atcmd_close();
+            char *term;
+            char *lastResponse = atcmd_getResponse();
+            term = strstr(atcmd_getResponse(), "+CSQ");
+            signalValue = strtol(term + 6, NULL, 10);
         }
     }
-    return signal;
+    return signalValue;
 }
+
 
 /**
  *  @brief Get the signal strength reported by the LTEm device at a percent
@@ -665,7 +660,7 @@ uint8_t ltem_signalBars(uint8_t displayBarCount)
 
 
 /**
- *	@brief Get the LTEmC software version.
+ * @brief Get the LTEmC software version.
  */
 const char* ltem_getSwVersion()
 {
@@ -674,7 +669,7 @@ const char* ltem_getSwVersion()
 
 
 /**
- *	@brief Get the LTEmC software version.
+ * @brief Get the LTEmC software version.
  */
 const char* ltem_getModuleType()
 {
@@ -683,7 +678,8 @@ const char* ltem_getModuleType()
 
 
 /**
- *	@brief Performs a HW reset of LTEm1 and optionally executes start sequence.
+ * @brief Get the operating state of the BGx module
+ * @return Enum of module current state
  */
 deviceState_t ltem_getDeviceState()
 {
@@ -700,7 +696,7 @@ deviceState_t ltem_getDeviceState()
 
 
 /**
- *	@brief Test for responsive BGx.
+ * @brief Test for responsive BGx.
  */
 bool ltem_ping()
 {
@@ -715,7 +711,7 @@ bool ltem_ping()
 
 
 /**
- *	@brief Background work task runner. To be called in application Loop() periodically.
+ * @brief Background work task runner. To be called in application Loop() periodically.
  */
 void ltem_eventMgr()
 {
@@ -809,7 +805,7 @@ streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType)
 }
 
 /**
- *	@brief Notify host application of significant events. Application may ignore, display, save status, whatever. 
+ * @brief Notify host application of significant events. Application may ignore, display, save status, whatever. 
  */
 void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 {
@@ -819,7 +815,7 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg)
 
 
 /**
- *	@brief Registers the address (void*) of your application event nofication callback handler.
+ * @brief Registers the address (void*) of your application event nofication callback handler.
  */
 void ltem_setEventNotifCallback(appEvntNotify_func eventNotifCallback)
 {
@@ -828,7 +824,7 @@ void ltem_setEventNotifCallback(appEvntNotify_func eventNotifCallback)
 }
 
 /**
- *	@brief Registers the address (void*) of your application yield callback handler.
+ * @brief Registers the address (void*) of your application yield callback handler.
  */
 void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
 {
@@ -929,7 +925,7 @@ static void S__ltemUrcHandler()
 
 
 /**
- *	@brief Action response parser for iccid value request.
+ * @brief Action response parser for iccid value request.
  */
 static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem)
 {
