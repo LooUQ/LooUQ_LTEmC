@@ -40,6 +40,8 @@ enum http__constants
 
     http__noResponseHeaders = 0, 
     http__returnResponseHeaders = 1, 
+    http__getRequestSz = 448,
+    http__postRequestSz = 448,
     http__useDefaultTimeout = 0,
     http__defaultTimeoutBGxSec = 60,
     http__rqstTypeSz = 5,                           /// GET or POST

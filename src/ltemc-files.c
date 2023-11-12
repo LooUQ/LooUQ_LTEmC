@@ -204,7 +204,8 @@ resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
     char* eolPtr;
     memset(fileInfo, 0, fileInfoSz);                            // init for c-str behavior
 
-    if (IS_SUCCESS(atcmd_awaitResult()))
+    resultCode_t _rslt;
+    if (IS_SUCCESS__RSLT(atcmd_awaitResult()))
     {
         workPtr = atcmd_getResponse();                          // ptr to response
         while (memcmp(workPtr, "+QFOPEN: ", file__dataOffset_open) == 0)
@@ -219,6 +220,7 @@ resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
         }
         return resultCode__success;
     }
+    return _rslt;
 }
 
 

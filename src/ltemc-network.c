@@ -185,14 +185,14 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
  */
 void ntwk_applyPpdNetworkConfig()
 {
-    if(strlen(g_lqLTEM.modemSettings->pdpNtwkConfig) == 0)
-        return resultCode__success;
-    
-    if (!atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+    if(strlen(g_lqLTEM.modemSettings->pdpNtwkConfig) > 0)
     {
-        resultCode_t _rslt;
-        if (IS_NOTSUCCESS_RSLT(atcmd_awaitResult()))
-            DPRINT(PRNT_CYAN, "DefaultNtwk Config Failed=%d\r", rslt);
+        if (!atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+        {
+            resultCode_t _rslt;
+            if (IS_NOTSUCCESS_RSLT(atcmd_awaitResult()))
+                DPRINT(PRNT_CYAN, "DefaultNtwk Config Failed=%d\r", _rslt);
+        }
     }
 }
 
@@ -217,7 +217,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
         if (IS_SUCCESS(atcmd_awaitResult()))
         {
             char *pContinue;
-            pContinue = strchr(atcmd_getResponse(), '"');
+            pContinue = strchr(atcmd_getResponseData(), '"');
             if (pContinue != NULL)
             {
                 pContinue = S__grabToken(pContinue + 1, '"', g_lqLTEM.ntwkOperator->name, ntwk__operatorNameSz);
@@ -301,10 +301,10 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
 void ntwk_activatePdpContext(uint8_t cntxtId)
 {
     atcmd_ovrrdParser(S__contextStatusCompleteParser);
-    if (!atcmd_tryInvoke("AT+QIACT=%d", cntxtId))
-        return resultCode__conflict;
-
-    atcmd_awaitResult();
+    if (atcmd_tryInvoke("AT+QIACT=%d", cntxtId))
+    {
+        atcmd_awaitResult();
+    }
 }
 
 
@@ -314,9 +314,9 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
 void ntwk_deactivatePdpContext(uint8_t cntxtId)
 {
     if (!atcmd_tryInvoke("AT+QIDEACT=%d", cntxtId))
-        return resultCode__conflict;
-
-    atcmd_awaitResult();
+    {
+        atcmd_awaitResult();
+    }
 }
 
 
@@ -418,7 +418,7 @@ bool ntwk_isReady()
 
 // /**
 //  * @brief Set network operator.
-//  * @details The characteristics of the selected operator are accessible using the atcmd_getResponse() function.
+//  * @details The characteristics of the selected operator are accessible using the atcmd_getResponseData() function.
 
 //  * @param [in] mode Action to be performed, set/clear/set default.
 //  * @param [in] format The form for the ntwkOperator parameter value: long, short, numeric.
@@ -438,15 +438,17 @@ const char* ntwkDiagnostics_getOperators()
     /* AT+COPS=? */
     ASSERT_W(false, "ntwkDiagnostics_getOperators() blocks and is SLOW!");
 
-    if (!atcmd_tryInvoke("AT+COPS=?"))
-        return resultCode__conflict;
+    memset(g_lqLTEM.statics.reportBffr, 0, ltem__reportsBffrSz);
 
-    atcmd_ovrrdTimeout(SEC_TO_MS(240));
-    if (IS_SUCCESS(atcmd_awaitResult()))
+    if (!atcmd_tryInvoke("AT+COPS=?"))
     {
-        strncpy(g_lqLTEM.statics.reportBffr, atcmd_getResponse() + 9, MIN(ltem__reportsBffrSz, atcmd_getResponse() - 9));
-        return g_lqLTEM.statics.reportBffr;
+        atcmd_ovrrdTimeout(SEC_TO_MS(240));
+        if (IS_SUCCESS(atcmd_awaitResult()))
+        {
+            strncpy(g_lqLTEM.statics.reportBffr, atcmd_getResponseData() + 9, MIN(ltem__reportsBffrSz, atcmd_getResponseData() - 9));
+        }
     }
+    return g_lqLTEM.statics.reportBffr;
 }
 
 

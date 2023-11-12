@@ -4,9 +4,6 @@
 #include "platform-signal.h"
 
 #include <stdint.h>
-#include <FreeRTOS.h>
-#include <task.h>
-#include "freertos/semphr.h"
 
 
 static uint8_t _mutexContainer(mutexTableIndex_t indx, int newValue);
@@ -32,7 +29,8 @@ bool pMutexTake(mutexTableIndex_t indx, uint16_t timeout)           // SAMD is s
 
 void pMutexGive(mutexTableIndex_t indx)
 {
-    return _mutexContainer(indx, SAMD_SIGNAL_GIVE);
+    uint8_t mtxCount = _mutexContainer(indx, SAMD_SIGNAL_GIVE);
+    return;
 }
 
 
