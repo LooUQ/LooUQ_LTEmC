@@ -440,12 +440,13 @@ const char* ntwkDiagnostics_getOperators()
 
     memset(g_lqLTEM.statics.reportBffr, 0, ltem__reportsBffrSz);
 
-    if (!atcmd_tryInvoke("AT+COPS=?"))
+    memset(g_lqLTEM.statics.reportBffr, 0, ltem__reportsBffrSz);
+    if (atcmd_tryInvoke("AT+COPS=?"))
     {
         atcmd_ovrrdTimeout(SEC_TO_MS(240));
         if (IS_SUCCESS(atcmd_awaitResult()))
         {
-            strncpy(g_lqLTEM.statics.reportBffr, atcmd_getResponseData() + 9, MIN(ltem__reportsBffrSz, atcmd_getResponseData() - 9));
+            strncpy(g_lqLTEM.statics.reportBffr, atcmd_getResponse() + 9, MIN(ltem__reportsBffrSz, atcmd_getResponse() - 9));
         }
     }
     return g_lqLTEM.statics.reportBffr;

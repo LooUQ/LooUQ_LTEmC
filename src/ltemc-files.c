@@ -202,6 +202,7 @@ resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
 
     char* workPtr;
     char* eolPtr;
+    resultCode_t _rslt;
     memset(fileInfo, 0, fileInfoSz);                            // init for c-str behavior
 
     resultCode_t _rslt;
@@ -442,7 +443,6 @@ static resultCode_t S__filesRxHndlr()
     bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                                               // pop CONNECT phrase w/ EOL to parse data length
     uint16_t readSz = strtol(wrkBffr + 8, NULL, 10);
     uint16_t availableSz = readSz;
-    g_lqLTEM.atcmd->retValue = 0;
     DPRINT_V(PRNT_CYAN, "S__filesRxHndlr() fHandle=%d available=%d\r", g_lqLTEM.fileCtrl->handle, availableSz);
 
     uint32_t readTimeout = pMillis();
@@ -452,7 +452,6 @@ static resultCode_t S__filesRxHndlr()
         occupiedCnt = bbffr_getOccupied(g_lqLTEM.iop->rxBffr);
         if (pMillis() - readTimeout > g_lqLTEM.atcmd->timeout)
         {
-            g_lqLTEM.atcmd->retValue = 0;
             DPRINT(PRNT_WARN, "S__filesRxHndlr bffr timeout: %d rcvd\r\n", occupiedCnt);
             return resultCode__timeout;                                                                             // return no receive
         }
@@ -472,7 +471,6 @@ static resultCode_t S__filesRxHndlr()
     {
         bbffr_skipTail(g_lqLTEM.iop->rxBffr, file__readTrailerSz);
     }
-    g_lqLTEM.atcmd->retValue = availableSz;
     return resultCode__success;
 }
 

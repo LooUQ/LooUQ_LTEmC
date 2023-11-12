@@ -481,9 +481,9 @@ typedef struct atcmd_tag
 
     // temporary or deprecated
     char CMDMIRROR[atcmd__cmdBufferSz];                 // waiting on fix to SPI TX overright
-    bool isOpenLocked;                                  // True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
-    char* response;                                     // PTR variable section of response.
-    int32_t retValue;                                   // (deprecated) optional signed int value extracted from response
+    // bool isOpenLocked;                                  // True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
+    // char* response;                                     // PTR variable section of response.
+    // int32_t retValue;                                   // (deprecated) optional signed int value extracted from response
 
 } atcmd_t;
 

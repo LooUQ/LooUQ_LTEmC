@@ -23,42 +23,33 @@ uint8_t pMutexCount(mutexTableIndex_t indx)
 
 bool pMutexTake(mutexTableIndex_t indx, uint16_t timeout)           // SAMD is single-threaded, no alternate task to release mutex; API parameter timeout is ignored
 {
-    return _mutexContainer(indx, SAMD_SIGNAL_TAKE);
+    uint8_t prevState = _mutexContainer(indx, SAMD_SIGNAL_QUERY);
+    return _mutexContainer(indx, SAMD_SIGNAL_TAKE) != prevState;    // true = mutex changed (take successful)
 }
 
 
 void pMutexGive(mutexTableIndex_t indx)
 {
-    uint8_t mtxCount = _mutexContainer(indx, SAMD_SIGNAL_GIVE);
-    return;
+    _mutexContainer(indx, SAMD_SIGNAL_GIVE);
 }
 
 
 /* Static local functions
  ----------------------------------------------------------------------------------------------- */
-static uint8_t _mutexContainer(mutexTableIndex_t indx, int newValue)
+static uint8_t _mutexContainer(mutexTableIndex_t indx, int newVal)
 {
     //static bool initialized = false;
     // static SemaphoreHandle_t _handles[mutexTableSz];
     // static StaticSemaphore_t _mutexTable[mutexTableSz];
 
 
-    static uint8_t _mutexTable[mutexTableSz] = {0};
+    static uint8_t _mutexTable[mutexTableSz] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-    if (newValue > 0 && _mutexTable[indx] < 1)
+    if (newVal > 0 && _mutexTable[indx] < 1)
         _mutexTable[indx]++;
-    else if (newValue < 0 && _mutexTable[indx] > 0)
+
+    else if (newVal < 0 && _mutexTable[indx] > 0)
         _mutexTable[indx]--;
-
-
-    // if (!initialized)
-    // {
-    //     for (size_t i = 0; i < mutexTableSz; i++)
-    //     {
-    //         _handles[indx] = xSemaphoreCreateMutexStatic(&_mutexTable[indx]);
-    //     }
-    //     initialized = true;
-    // }
 
     return _mutexTable[indx];
 }

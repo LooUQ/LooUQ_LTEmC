@@ -55,7 +55,7 @@ void setup()
 
 void loop() 
 {
-    if (ELAPSED(lastCycle, cycle_interval))
+    if (IS_ELAPSED(lastCycle, cycle_interval))
     {
         lastCycle = millis();
         loopCnt++;
@@ -81,7 +81,7 @@ void loop()
         {
             resultCode_t atResult = atcmd_awaitResult();
             
-                char *response = atcmd_getRawResponse();
+                const char *response = atcmd_getResponse();
                 DPRINT(PRNT_INFO, "Got %d chars\r", strlen(response));
                 DPRINT(PRNT_WHITE, "Resp:");
                 DPRINT(PRNT_CYAN, "%s\r", response);

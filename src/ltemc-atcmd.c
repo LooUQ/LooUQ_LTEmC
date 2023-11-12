@@ -67,7 +67,7 @@ void ATCMD_reset(bool releaseLock)
     memset(g_lqLTEM.atcmd->errorDetail, 0, ltem__errorDetailSz);
     g_lqLTEM.atcmd->resultCode = 0;
     g_lqLTEM.atcmd->invokedAt = 0;
-    g_lqLTEM.atcmd->retValue = 0;
+    // g_lqLTEM.atcmd->retValue = 0;
     g_lqLTEM.atcmd->execDuration = 0;
 
     // command side
@@ -75,7 +75,7 @@ void ATCMD_reset(bool releaseLock)
     g_lqLTEM.iop->txPending = 0;
 
     // response side
-    g_lqLTEM.atcmd->response = g_lqLTEM.atcmd->rawResponse;                 // reset data component of response to full-response
+    // g_lqLTEM.atcmd->response = g_lqLTEM.atcmd->rawResponse;                 // reset data component of response to full-response
 }
 
 
@@ -168,7 +168,8 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
  */
 void ATCMD_close()
 {
-    g_lqLTEM.atcmd->isOpenLocked = false;
+    pMutexGive(mutexTableIndex_atcmd);
+    // g_lqLTEM.atcmd->isOpenLocked = false;
     g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->invokedAt;
 }
 
@@ -276,11 +277,11 @@ const char* atcmd_getResponseData()
 {
     ASSERT(g_lqLTEM.atcmd->response != NULL);
 
-    char* delimPtr = memchr(g_lqLTEM.atcmd->response, ':', atcmd__respBufferSz);        // looking for ": "
+    char* delimPtr = memchr(g_lqLTEM.atcmd->rawResponse, ':', atcmd__respBufferSz);        // looking for ": "
     if (*(delimPtr + 1) == ' ')
         return delimPtr + 2;
     else
-        return g_lqLTEM.atcmd->response;
+        return g_lqLTEM.atcmd->rawResponse;
 }
 
 
@@ -379,35 +380,35 @@ void atcmd_exitTransparentMode()
 #pragma region LTEmC Internal Functions
 /*-----------------------------------------------------------------------------------------------*/
 
-/**
- * @brief Awaits exclusive access to QBG module command interface.
- */
-bool ATCMD_awaitLock(uint16_t timeoutMS)
-{
-    uint32_t waitStart = pMillis();
+// /**
+//  * @brief Awaits exclusive access to QBG module command interface.
+//  */
+// bool ATCMD_awaitLock(uint16_t timeoutMS)
+// {
+//     uint32_t waitStart = pMillis();
 
-    do
-    {
-        if (!g_lqLTEM.atcmd->isOpenLocked) // if not existing lock
-        {
-            g_lqLTEM.atcmd->isOpenLocked = true; // ...acquired new lock
-            return true;
-        }
-        pYield();        // call back to platform yield() in case there is work there that can be done
-        ltem_eventMgr(); // process any new receives prior to starting cmd invoke
+//     do
+//     {
+//         if (!g_lqLTEM.atcmd->isOpenLocked) // if not existing lock
+//         {
+//             g_lqLTEM.atcmd->isOpenLocked = true; // ...acquired new lock
+//             return true;
+//         }
+//         pYield();        // call back to platform yield() in case there is work there that can be done
+//         ltem_eventMgr(); // process any new receives prior to starting cmd invoke
 
-    } while (pMillis() - waitStart < timeoutMS); // until timed out
-    return false;                                // timed out waiting for lock
-}
+//     } while (pMillis() - waitStart < timeoutMS); // until timed out
+//     return false;                                // timed out waiting for lock
+// }
 
-/**
- * @brief Returns the current atCmd lock state
- */
-bool ATCMD_isLockActive()
-{
-    return pMutexCount(mutexTableIndex_atcmd) == 0;
-    // return g_lqLTEM.atcmd->isOpenLocked;
-}
+// /**
+//  * @brief Returns the current atCmd lock state
+//  */
+// bool ATCMD_isLockActive()
+// {
+//     return pMutexCount(mutexTableIndex_atcmd) == 0;
+//     // return g_lqLTEM.atcmd->isOpenLocked;
+// }
 
 /**
  * @brief Checks receive buffer for command response and sets atcmd structure data with result.
@@ -594,16 +595,17 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 
     ASSERT(!(preambleReqd && STREMPTY(pPreamble)));                             // if preamble required, cannot be empty
     ASSERT(pPreamble != NULL && pDelimeters != NULL && pFinale != NULL);        // char params are not NULL, must be valid empty char arrays
-    ASSERT((!(tokensReqd || valueIndx) || strlen(pDelimeters) > 0));            // if tokens count or value return, need delimiter
+    ASSERT((!tokensReqd || strlen(pDelimeters) > 0));                           // if tokens count or value return, need delimiter
 
     uint8_t preambleLen = strlen(pPreamble);
     uint8_t reqdPreambleLen = preambleReqd ? preambleLen : 0;
     uint8_t finaleLen = strlen(pFinale);
-    uint16_t responseLen = strlen(g_lqLTEM.atcmd->rawResponse);
+    char* workPtr = g_lqLTEM.atcmd->rawResponse;                                // easier to work with pointer
+    uint16_t responseLen = strlen(workPtr);
 
     // always look for error, short-circuit result if CME/CMS
     char *pErrorLoctn;
-    if ((pErrorLoctn = strstr(g_lqLTEM.atcmd->rawResponse, "+CM")) || (pErrorLoctn = strstr(g_lqLTEM.atcmd->rawResponse, "ERROR")))
+    if ((pErrorLoctn = strstr(workPtr, "+CM")) || (pErrorLoctn = strstr(workPtr, "ERROR")))
     {
         for (size_t i = 0; i < ltem__errorDetailSz; i++)                        // copy raw chars: unknown incoming format, stop at line end
         {
@@ -621,34 +623,35 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
         return cmdParseRslt_pending;
 
     /* Response length has been satisfied (and no error detected).
-     * Search response for preamble, finale, token count (tokensReqd/valueIndx)
+     * Search response for preamble, finale, token count (tokensReqd)
      */
 
-    while (g_lqLTEM.atcmd->response[0] == '\r' || g_lqLTEM.atcmd->response[0] == '\n')
+    while (workPtr[0] == '\r' || workPtr[0] == '\n')
     {
-        g_lqLTEM.atcmd->response++;                                             // skip past prefixing line terminators
+        workPtr + 1;                                             // skip past prefixing line terminators
     }
 
     bool preambleSatisfied = false;
     if (preambleLen) // if pPreamble provided
     {
-        char *pPreambleLoctn = strstr(g_lqLTEM.atcmd->rawResponse, pPreamble);  // find it in response
+        char *pPreambleLoctn = strstr(workPtr, pPreamble);      // find it in response
         if (pPreambleLoctn)
         {
             preambleSatisfied = true;
             g_lqLTEM.atcmd->preambleFound = true;
-            g_lqLTEM.atcmd->response = pPreambleLoctn + preambleLen;            // remove pPreamble from retResponse
+
+            workPtr = pPreambleLoctn + preambleLen;             // remove pPreamble from retResponse
         }
         else if (preambleReqd)
         {
             if (responseLen >= preambleLen)
-                return cmdParseRslt_error | cmdParseRslt_preambleMissing; // require preamble missing, response is sufficient for match
+                return cmdParseRslt_error | cmdParseRslt_preambleMissing;           // require preamble missing, response is sufficient for match
 
-            return cmdParseRslt_pending; // keep waiting on response
+            return cmdParseRslt_pending;                                            // keep waiting on response
         }
         else  // !preambleReqd
         {
-            if (strstr(g_lqLTEM.atcmd->rawResponse, pFinale))
+            if (strstr(workPtr, pFinale))
             {
                 preambleSatisfied = true;
                 g_lqLTEM.atcmd->preambleFound = false;
@@ -676,7 +679,7 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
             finaleSatisfied = true;
         else
         {
-            pFinaleLoctn = strstr(g_lqLTEM.atcmd->response, pFinale);
+            pFinaleLoctn = strstr(workPtr, pFinale);
             if (pFinaleLoctn)
             {
                 finaleSatisfied = true;
@@ -688,19 +691,16 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
     /*  Parse content between pPreamble/response start and pFinale for tokens (reqd cnt) and value extraction
      *  Only supporting one delimiter for now; support for optional delimeter list in future won't require API change
      */
-    bool tokenCntSatified = !(tokensReqd || valueIndx);
-    if (finaleSatisfied && !tokenCntSatified) // count tokens to service value return or validate required token count
+    bool tokenCntSatified = !tokensReqd;
+    if (finaleSatisfied && !tokenCntSatified)                                   // count tokens to service value return or validate required token count
     {
         tokenCnt = 1;
         char *pDelimeterAt;
-        char *pTokenAt = g_lqLTEM.atcmd->response;
+        char *pTokenAt = workPtr;
         do
         {
-            if (tokenCnt == valueIndx) // grab value, this is what is requested
-                g_lqLTEM.atcmd->retValue = strtol(pTokenAt, NULL, 0);
-
-            pDelimeterAt = strpbrk(pTokenAt, pDelimeters);       // look for delimeter/next token
-            if (tokenCnt >= tokensReqd && tokenCnt >= valueIndx) // at/past required token = done
+            pDelimeterAt = strpbrk(pTokenAt, pDelimeters);                      // look for delimeter/next token
+            if (tokenCnt >= tokensReqd)                                         // at/past required token = done
             {
                 tokenCntSatified = true;
                 break;
@@ -713,15 +713,15 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
         } while (pDelimeterAt);
 
         if (!tokenCntSatified)
-            parseRslt |= cmdParseRslt_error | cmdParseRslt_countShort; // set error and count short bits
+            parseRslt |= cmdParseRslt_error | cmdParseRslt_countShort;          // set error and count short bits
     }
 
-    if (!(parseRslt & cmdParseRslt_error) && // check error bit
+    if (!(parseRslt & cmdParseRslt_error) &&                                    // check error bit
         preambleSatisfied &&
         finaleSatisfied &&
-        tokenCntSatified) // and all component test conditions
+        tokenCntSatified)                                                       // and all component test conditions
     {
-        parseRslt |= cmdParseRslt_success; // no error, preserve possible warnings (excess recv, etc.)
+        parseRslt |= cmdParseRslt_success;                                      // no error, preserve possible warnings (excess recv, etc.)
     }
     return parseRslt; // done
 }
