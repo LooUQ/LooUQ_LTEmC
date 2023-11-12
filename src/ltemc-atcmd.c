@@ -261,7 +261,7 @@ bool atcmd_wasPreambleFound()
 /**
  * @brief Returns the string captured from the last command response; between pPreamble and pFinale (excludes both)
  */
-const char* atcmd_getResponse()
+const char* atcmd_getRawResponse()
 {
     ASSERT(g_lqLTEM.atcmd->rawResponse != NULL);
     return g_lqLTEM.atcmd->rawResponse;
