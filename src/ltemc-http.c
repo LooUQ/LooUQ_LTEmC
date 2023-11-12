@@ -65,7 +65,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func
     g_lqLTEM.streams[dataCntxt] = httpCtrl;
 
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
-
+    httpCtrl->dataCntxt = dataCntxt;
     httpCtrl->streamType = streamType_HTTP;
     httpCtrl->appRecvDataCB = recvCallback;
     httpCtrl->dataRxHndlr = S__httpRxHndlr;
