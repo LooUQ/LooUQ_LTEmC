@@ -503,9 +503,13 @@ mqttState_t mqtt_readStatus(mqttCtrl_t *mqttCtrl)
     {
         if (atcmd_getPreambleFound())
         {
+<<<<<<< Updated upstream
             const char* token = atcmd_getToken(2);
             int32_t rsltVal = strtol(token, NULL, 10);
             switch (rsltVal)
+=======
+            if (atcmd_wasPreambleFound())
+>>>>>>> Stashed changes
             {
             case 1:
                 mqttCtrl->state = mqttState_open;

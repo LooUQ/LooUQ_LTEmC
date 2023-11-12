@@ -25,7 +25,7 @@
 ***************************************************************************** */
 
 #define SRCFILE "NWK"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-//#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
@@ -202,7 +202,7 @@ void ntwk_applyPpdNetworkConfig()
 */
 ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
 {
-    ASSERT(g_lqLTEM.ntwkOperator != NULL);         // ASSERT g_lqLTEM.ntwkOperator has been initialized
+    ASSERT(g_lqLTEM.ntwkOperator != NULL);                                  // ASSERT g_lqLTEM.ntwkOperator struct has been initialized
 
     uint32_t startMillis, endMillis;
     startMillis = endMillis = pMillis();

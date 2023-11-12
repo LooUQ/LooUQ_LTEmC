@@ -38,7 +38,7 @@
  * --------------------------------------------------------------------------------------------- */
 ltemDevice_t g_lqLTEM;
 
-#define APPRDY_TIMEOUT 8000
+#define MODULERDY_TIMEOUT 8000
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
@@ -142,7 +142,7 @@ bool ltem_start(resetAction_t resetAction)
 
     if (!g_lqLTEM.hostConfigured)
     {
-        // on Arduino compatible, ensure pin is in default "logical" state prior to opening
+        // for specific platforms/MCU, need to ensure pin in default "logical" state prior to opening
         platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
         platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
         platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
@@ -173,46 +173,68 @@ bool ltem_start(resetAction_t resetAction)
                 if (!SC16IS7xx_ping())                                          // fall back to power reset if UART not available
                     resetAction = resetAction_powerReset;
             }
-            QBG_reset(resetAction);                                         // do requested reset (sw, hw, pwrCycle)
+            QBG_reset(resetAction);                                             // do requested reset (sw, hw, pwrCycle)
         }
     }
     else 
     {
-       QBG_powerOn();                                                       // turn on BGx
+       QBG_powerOn();                                                           // turn on BGx
     }
     DPRINT_V(PRNT_DEFAULT, "LTEm was reset=%d\r\n", ltemWasReset);
 
-    SC16IS7xx_start();                                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
+    SC16IS7xx_start();                                                          // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
     DPRINT_V(PRNT_CYAN, "UART started\r\n");
-    SC16IS7xx_enableIrqMode();                                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
+    SC16IS7xx_enableIrqMode();                                                  // enable IRQ generation on SPI-UART bridge (IRQ mode)
     DPRINT_V(PRNT_CYAN, "UART set to IRQ mode\r\n");
-    IOP_attachIrq();                                                        // attach I/O processor ISR to IRQ
+    IOP_attachIrq();                                                            // attach I/O processor ISR to IRQ
     DPRINT_V(PRNT_CYAN, "UART IRQ attached\r\n");
 
-    IOP_interruptCallbackISR();                                             // force ISR to run once to sync IRQ 
-    g_lqLTEM.appEventNotifyEnabled = true;                                  // through the low-level actions, re-enable notifications
+    IOP_interruptCallbackISR();                                                 // force ISR to run once to sync IRQ 
+    g_lqLTEM.appEventNotifyEnabled = true;                                      // through the low-level actions, re-enable notifications
 
     DPRINT_V(0, "LTEm prior state=%d\r\n", g_lqLTEM.deviceState);
 
-    uint32_t startAppRdy = pMillis();                                       // wait for BGx to signal internal ready
+    uint32_t appReady = 0;
+    uint32_t simReady = 0;
+    uint32_t startModuleReady = pMillis();                                      // wait for BGx to signal internal ready
     do
     {
-        if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, true)))
-            g_lqLTEM.deviceState = deviceState_appReady;
-
-        if (IS_ELAPSED(startAppRdy, APPRDY_TIMEOUT))
+        if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, false)))
         {
-            DPRINT_V(PRNT_WARN, "AppRdy not received! Timeout at %dms\r\n", APPRDY_TIMEOUT);
-            return false;
+            appReady = pMillis();                                               // support timings reporting
         }
-    } while (g_lqLTEM.deviceState != deviceState_appReady);
+        if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "+CPIN: READY", 0, 0, false)))
+        {
+            simReady = pMillis();
+        }
+
+        if (IS_ELAPSED(startModuleReady, MODULERDY_TIMEOUT))
+        {
+            DPRINT_V(PRNT_WARN, "Timeout (%dms) waiting for module ready (%d/%d)!\r\n", MODULERDY_TIMEOUT, appReady, simReady);
+            break;
+        }
+    } while (!appReady || !simReady);
     
-    DPRINT_V(PRNT_dCYAN, "AppRdy recv'd=%dms\r\n", pMillis() - startAppRdy);
+    if (!simReady)
+        ltem_notifyApp(appEvent_fault_hardFault, "SIM fault");                      // send notification, maybe app can recover
+    if (!appReady)
+        ltem_notifyApp(appEvent_fault_hardFault, "BGx module fault: not AppRdy");   // send notification, maybe app can recover
+
+    if (appReady && simReady)
+    {
+        g_lqLTEM.deviceState = deviceState_appReady;
+        DPRINT(PRNT_dCYAN, "Module ready at %dms (%d/%d)\r\n", pMillis() - startModuleReady, appReady - startModuleReady, simReady - startModuleReady);
+    }
+    else
+        return false;
+    pDelay(500);
     bbffr_reset(g_lqLTEM.iop->rxBffr);
+
+    DPRINT_V(0, "LTEm state=%d\r\n", g_lqLTEM.deviceState);
 
     if (!QBG_setOptions())
     {
-        ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");     // send notification, maybe app can recover
+        ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");         // send notification, maybe app can recover
         DPRINT(PRNT_DEFAULT, "\r");
     }
     else
@@ -403,13 +425,13 @@ const char* ltem_getUtcDateTime(char format)
 
                         if (tzDelimPoz)
                         {
-                            DPRINT_V(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, offset=%d\r\n", tzDelimPoz, tzDelimPoz - dtSrc);
+                            DPRINT_V(0, "ltem_getUtcDateTime(): tmZone offset=%d\r\n", tzDelimPoz - dtSrc);
                             *tzDelimPoz = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
                             strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
                         }
                         else if (tzDelimNeg)
                         {
-                            DPRINT_V(0, "ltem_getUtcDateTime(): tzDelimNeg=%p, offset=%d\r\n", tzDelimNeg, tzDelimNeg - dtSrc);
+                            DPRINT_V(0, "ltem_getUtcDateTime(): offset=%d\r\n", tzDelimNeg - dtSrc);
                             *tzDelimNeg = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
                             strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
                         }

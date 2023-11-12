@@ -35,17 +35,16 @@
 */
 enum http__constants
 {
-    http__getRequestLength = 128,
-    http__postRequestLength = 128,
+    // http__getRequestLength = 128,
+    // http__postRequestLength = 128,
 
     http__noResponseHeaders = 0, 
     http__returnResponseHeaders = 1, 
     http__useDefaultTimeout = 0,
     http__defaultTimeoutBGxSec = 60,
-    http__rqstTypeSz = 5,                           /// GET or POST
-    http__customHdrSmallWarning = 40
-    // http__urlHostSz                              // see ltemc-types for stream host size
-    // http__reqdResponseSz = 22                    /// BGx HTTP(S) Application Note
+    http__rqstTypeSz = 5,                           // GET or POST
+    http__customHdrSmallWarning = 40,
+    http__customHdrBffrSz = 448               
 };
 
 

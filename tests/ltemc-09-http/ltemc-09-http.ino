@@ -51,6 +51,8 @@
 #include <ltemc.h>
 #include <ltemc-tls.h>
 #include <ltemc-http.h>
+#include <ltemc-files.h>
+
 
 // #define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
 // #define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') appNotifyCB(255, failMsg)
@@ -66,6 +68,12 @@ uint32_t lastCycle;
 httpCtrl_t httpCtrlG;
 httpCtrl_t httpCtrlP;
 httpCtrl_t *httpCtrl;                            // used for common READ 
+
+
+httpCtrl_t httpCtrl_BMS;
+
+
+
 
 static char webPageBuf[1024];
 //char cstmHdrs[256];                           // if you use custom HTTP headers then create a buffer to hold them
@@ -84,23 +92,23 @@ void setup() {
     //lqDiag_setNotifyCallback(appEvntNotify);
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
-    ltem_setProviderScanMode(ntwkScanMode_lteonly);
-    ltem_setIotMode(ntwkIotMode_m1);
-    ltem_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
+    ntwk_setOperatorScanMode(ntwkScanMode_lteonly);
+    ntwk_setIotMode(ntwkIotMode_M1);
+    ntwk_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
     ltem_start(resetAction_swReset);
 
-    providerInfo_t *provider;
+    ntwkOperator_t *ntwkOperator;
     while(true)
     {
-        provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
-        if (STREMPTY(provider->name))
+        ntwkOperator = ntwk_awaitOperator(PERIOD_FROM_SECONDS(15));
+        if (STREMPTY(ntwkOperator->name))
             DPRINT(PRNT_WARN, "Searching for provider...");
         else
             break;
     }
-    if (strlen(provider->name) > 0)
+    if (strlen(ntwkOperator->name) > 0)
     {
-        DPRINT(PRNT_INFO, "Connected to %s using %s, %d networks available.\r", provider->name, provider->iotMode, provider->networkCnt);
+        DPRINT(PRNT_INFO, "Connected to %s using %s, %d networks available.\r", ntwkOperator->name, ntwkOperator->iotMode, ntwkOperator->pdpCntxtCnt);
     }
 
     /* Basic connectivity established, moving on to HTTPS setup */
@@ -135,6 +143,18 @@ void setup() {
     http_initControl(&httpCtrlP, dataCntxt_1, httpRecvCB);
     http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
     DPRINT(PRNT_dGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
+
+
+
+http_initControl(&httpCtrl_BMS, dataCntxt_2, httpRecvCB);
+http_setConnection(&httpCtrl_BMS, "https://ota-cdn.memfault.com/3916/952/11412810952?token=bVDX5Ed95OV5EjBILIFKHYCKjy-qcEqoKov9Ojky02c&expires=1699754400", 80);
+DPRINT(PRNT_dGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
+
+resultCode_t rslt = http_get(&httpCtrl_BMS, "", false);
+rslt = http_readPageToFile(&httpCtrl_BMS, "ota_test.bin");
+
+file_delete("ota_test.bin");
+
 }
 
 resultCode_t rslt;

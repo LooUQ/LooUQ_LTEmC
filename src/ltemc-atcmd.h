@@ -103,6 +103,7 @@ void ATCMD_reset(bool releaseLock);
 
 
 /**
+<<<<<<< Updated upstream
  * @brief Closes (completes) a BGx AT command structure and frees action resource (release action lock).
  */
 void ATCMD_close();
@@ -117,6 +118,9 @@ resultCode_t atcmd_getResult();
 
 /**
  * @brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
+=======
+ *	@brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
+>>>>>>> Stashed changes
  */
 const char* atcmd_getCommand();
 
@@ -129,15 +133,32 @@ const char* atcmd_getCommand();
 
 
 /**
+<<<<<<< Updated upstream
  * @brief Returns the string captured from the last command response with prefixing white-space and any preamble removed.
  * @return Const char pointer to the command response (note: this is stripped of preamble and finale strings)
+=======
+ *	@brief Returns the atCmd result code or 0 if command is pending completion
+ *  @return HTTP style result code.
  */
-const char* atcmd_getResponse();
+resultCode_t atcmd_getResultCode();
 
 
 /**
+ *	@brief Returns the string captured from the last command response with prefixing white-space and any preamble removed.
+ *  @return Char pointer to the command response
+>>>>>>> Stashed changes
+ */
+const char* atcmd_getRawResponse();
+
+
+/**
+<<<<<<< Updated upstream
  * @brief Returns the string captured from the last command response skipping any preamble
  * @return Const char pointer to the command response (note: this is stripped of preamble and finale strings)
+=======
+ *	@brief Returns the atCmd parsed response (preamble to finale) if completed. An empty C-string will return prior to completion.
+ *  @return Char pointer to the parsed command response (note: this is stripped of preamble and finale strings)
+>>>>>>> Stashed changes
  */
 const char* atcmd_getResponseData();
 
@@ -146,7 +167,7 @@ const char* atcmd_getResponseData();
  * @brief Returns true if the last atCmd response contained a requested preamble. If no preamble specified will return false.
  * @return True if preamble string was detected in the AT command response
  */
-bool atcmd_getPreambleFound();
+bool atcmd_wasPreambleFound();
 
 
 /**

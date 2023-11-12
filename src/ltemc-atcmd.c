@@ -243,7 +243,7 @@ const char* atcmd_getCommand()
 /**
  * @brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
  */
-resultCode_t atcmd_getResult()
+resultCode_t atcmd_getResultCode()
 {
     return g_lqLTEM.atcmd->resultCode;
 }
@@ -252,7 +252,7 @@ resultCode_t atcmd_getResult()
 /**
  * @brief Returns the atCmd value response
  */
-bool atcmd_getPreambleFound()
+bool atcmd_wasPreambleFound()
 {
     return g_lqLTEM.atcmd->preambleFound;
 }

@@ -26,7 +26,7 @@
 
 
 #define SRCFILE "HTT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-//#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
@@ -65,7 +65,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func
     g_lqLTEM.streams[dataCntxt] = httpCtrl;
 
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
-
+    httpCtrl->dataCntxt = dataCntxt;
     httpCtrl->streamType = streamType_HTTP;
     httpCtrl->appRecvDataCB = recvCallback;
     httpCtrl->dataRxHndlr = S__httpRxHndlr;
@@ -258,18 +258,23 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
             return _rslt;
 
+<<<<<<< Updated upstream
         char httpRequestCmd[http__getRequestLength];
         atcmd_ovrrdTimeout(SEC_TO_MS(httpCtrl->timeoutSec));
         atcmd_ovrrdParser(S__httpGetStatusParser);
 
+=======
+>>>>>>> Stashed changes
         if (httpCtrl->cstmHdrs)
         {
             char *hostName = strchr(httpCtrl->hostUrl, ':');
             hostName = hostName ? hostName + 3 : httpCtrl->hostUrl;
+            DPRINT(PRNT_dMAGENTA, "\r\nHost: %s\r\n", hostName);
 
-            char cstmRequest[240];
-            snprintf(cstmRequest, sizeof(cstmRequest), "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrs);
-            DPRINT(PRNT_dMAGENTA, "CustomRqst:\r%s\r", cstmRequest);
+            char cstmRequest[http__customHdrBffrSz];
+            snprintf(cstmRequest, http__customHdrBffrSz, "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrs);
+            DPRINT(PRNT_dMAGENTA, "CustomRqst:\r\n%s\r\n", cstmRequest);
+            DPRINT(PRNT_dMAGENTA, "\r\n");                                              // above DPRINT may be truncated
 
             atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, cstmRequest, strlen(cstmRequest), NULL, true);
             if (!atcmd_tryInvoke("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, strlen(cstmRequest)))
@@ -290,18 +295,28 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
             httpCtrl->httpStatus = S__parseResponseForHttpStatus(httpCtrl, atcmd_getResponse());
             if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
             {
+<<<<<<< Updated upstream
                 httpCtrl->requestState = httpState_requestComplete;                                                 // update httpState, got GET/POST response
                 DPRINT(PRNT_MAGENTA, "GetRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+=======
+                httpCtrl->requestState = httpState_requestComplete;                                         // update httpState, got GET/POST response
+                DPRINT(PRNT_MAGENTA, "[http_get()] dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+>>>>>>> Stashed changes
             }
         }
         else
         {
             httpCtrl->requestState = httpState_idle;
+<<<<<<< Updated upstream
 
             const char* token = atcmd_getToken(1);
             httpCtrl->httpStatus = strtol(token, NULL, 10);
 
             DPRINT(PRNT_WARN, "Closed failed GET request, status=%d %s\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
+=======
+            httpCtrl->httpStatus = atcmd_getValue();
+            DPRINT(PRNT_WARN, "[http_get()] FAILED, status=%d %s\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
+>>>>>>> Stashed changes
         }
         return httpCtrl->httpStatus;
 }   // http_get()
@@ -387,8 +402,87 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
             httpCtrl->httpStatus = S__parseResponseForHttpStatus(httpCtrl, atcmd_getResponse());
             if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
             {
+<<<<<<< Updated upstream
                 httpCtrl->requestState = httpState_requestComplete;                                 // update httpState, got GET/POST response
                 DPRINT(PRNT_MAGENTA, "PostRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+=======
+                atcmd_close();
+                return rslt;
+            }
+        }
+
+        if (httpCtrl->useTls)
+        {
+            // AT+QHTTPCFG="sslctxid",<httpCtrl->sckt>
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt);
+            rslt = atcmd_awaitResult();
+            if (rslt != resultCode__success)
+            {
+                atcmd_close();
+                return rslt;
+            }
+        }
+
+        /* SET URL FOR REQUEST
+        * set BGx HTTP URL: AT+QHTTPURL=<urlLength>,timeoutSec  (BGx default timeout is 60, if not specified)
+        * wait for CONNECT prompt, then output <URL>, /r/n/r/nOK
+        * 
+        * NOTE: there is only 1 URL in the BGx at a time
+        *---------------------------------------------------------------------------------------------------------------*/
+
+        rslt = S__setUrl(httpCtrl->hostUrl, relativeUrl);
+        if (rslt != resultCode__success)
+        {
+            DPRINT(PRNT_WARN, "Failed set URL rslt=%d\r", rslt);
+            atcmd_close();
+            return rslt;
+        }
+
+        /* INVOKE HTTP ** POST ** METHOD
+        * BGx responds with OK immediately upon acceptance of cmd, then later (up to timeout) with "+QHTTPPOST: " string
+        * After "OK" we switch IOP to data mode and return. S_httpDoWork() handles the parsing of the page response and
+        * if successful, the issue of the AT+QHTTPREAD command to start the page data stream
+        * 
+        * This allows other application tasks to be performed while waiting for page. No LTEm commands can be invoked
+        * but non-LTEm tasks like reading sensors can continue.
+        *---------------------------------------------------------------------------------------------------------------*/
+        atcmd_reset(false);                                                                             // reset atCmd control struct WITHOUT clearing lock
+
+        uint16_t httpRequestLen = postDataSz;                                                           // requestLen starts with postDataSz
+        httpRequestLen += (httpCtrl->cstmHdrsSz > 0) ? (httpCtrl->cstmHdrsSz + 2) : 0;                  // add the custom headers + 2 char for EOL after hdrs
+
+        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, postData, postDataSz, NULL, true);
+
+        if (httpCtrl->cstmHdrsSz)
+        {
+            atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", httpRequestLen, httpCtrl->timeoutSec);
+        }
+        else
+        {
+            atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", postDataSz, httpCtrl->timeoutSec);
+        }
+
+        rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpPostStatusParser);
+        if (rslt == resultCode__success)
+        {
+            // atcmd_reset(false);                                                                         // clear CONNECT event from atcmd results
+            // atcmd_sendCmdData(postData, postDataSz);
+            // rslt = atcmd_awaitResultWithOptions(httpCtrl->timeoutSec, S__httpPostStatusParser);
+            if (rslt == resultCode__success && atcmd_getValue() == 0)                                   // wait for "+QHTTPPOST trailer: rslt=200, postErr=0
+            {
+                httpCtrl->httpStatus = S__parseResponseForHttpStatus(httpCtrl, atcmd_getResponse());
+                if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
+                {
+                    httpCtrl->requestState = httpState_requestComplete;                                 // update httpState, got GET/POST response
+                    DPRINT(PRNT_MAGENTA, "PostRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+                }
+            }
+            else
+            {
+                httpCtrl->requestState = httpState_idle;
+                httpCtrl->httpStatus = rslt;
+                DPRINT(PRNT_WARN, "Closed failed POST request, status=%d (%s)\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
+>>>>>>> Stashed changes
             }
         }
         else
@@ -438,6 +532,7 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
 
     if (httpCtrl->requestState != httpState_requestComplete)
         return resultCode__preConditionFailed;                                  // readPage() only valid after a completed GET\POST
+<<<<<<< Updated upstream
     
     atcmd_ovrrdTimeout(SEC_TO_MS(httpCtrl->timeoutSec));
     atcmd_ovrrdParser(S__httpReadFileStatusParser);
@@ -445,6 +540,29 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
         return resultCode__conflict;
 
     return atcmd_awaitResult();
+=======
+
+    if (atcmd_tryInvoke("AT+QHTTPREADFILE=\"%s\",%d", filename, httpCtrl->timeoutSec))
+    {
+
+        DPRINT(0, "\n\n\n***\n\n\ninvoked\n\n");
+
+        rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(120), S__httpReadFileStatusParser);
+
+        DPRINT(0, "AT+QHTTPREADFILE rslt=%d\n\n", rslt);
+
+        if (IS_SUCCESS(rslt))
+        {
+            // looking for "+QHTTPREADFILE: 0" in response, parser will strip preamble in atcmd_getResponse()
+            if ((strlen(atcmd_getRawResponse()) > sizeof("+QHTTPREADFILE: 0")) && *atcmd_getResponse() == '0')
+                return resultCode__success;
+            else
+                return resultCode__extendedBase + rslt;
+        }
+        return rslt;
+    }
+    return resultCode__conflict;
+>>>>>>> Stashed changes
 }
 
 
@@ -613,7 +731,7 @@ static cmdParseRslt_t S__httpPostStatusParser()
 static cmdParseRslt_t S__httpReadFileStatusParser() 
 {
     // +QHTTPPOST: <err>[,<httprspcode>[,<content_length>]] 
-    return atcmd_stdResponseParser("+QHTTPREADFILE: ", true, ",", 0, 1, "\r\n", 0);
+    return atcmd_stdResponseParser("+QHTTPREADFILE: ", true, ",", 0, 0, "\r\n", 0);
 }
 
 #pragma endregion

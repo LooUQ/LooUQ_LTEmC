@@ -105,7 +105,7 @@ typedef enum deviceState_tag
     deviceState_powerOff = 0,        // BGx is powered off, in this state all components on the LTEm1 are powered down.
     deviceState_powerOn = 1,         // BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
     deviceState_appReady = 2,        // BGx is powered ON and ready for application/services.
-    deviceState_error = 99           // BGx is powered ON and ready for application/services.
+    deviceState_error = 99           // error or invalid state detected.
 } deviceState_t;
 
 
