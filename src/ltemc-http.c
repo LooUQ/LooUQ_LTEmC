@@ -26,7 +26,7 @@
 
 
 #define SRCFILE "HTT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-//#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #include <lqdiag.h>
@@ -242,7 +242,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         rslt = S__setUrl(httpCtrl->hostUrl, relativeUrl);
         if (rslt != resultCode__success)
         {
-            DPRINT(PRNT_WARN, "Failed set URL rslt=%d\r", rslt);
+            DPRINT(PRNT_WARN, "Failed set URL rslt=%d\r\n", rslt);
             atcmd_close();
             return rslt;
         }
@@ -274,7 +274,8 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
 
             char cstmRequest[240];
             snprintf(cstmRequest, sizeof(cstmRequest), "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrs);
-            DPRINT(PRNT_dMAGENTA, "CustomRqst:\r%s\r", cstmRequest);
+            DPRINT(PRNT_dMAGENTA, "CustomHdrs\r\n");
+            DPRINT_V(PRNT_dMAGENTA, "%s\r\n", cstmRequest);
 
             atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, cstmRequest, strlen(cstmRequest), NULL, true);
             atcmd_invokeReuseLock("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, strlen(cstmRequest));
@@ -291,14 +292,14 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
             if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
             {
                 httpCtrl->requestState = httpState_requestComplete;                                         // update httpState, got GET/POST response
-                DPRINT(PRNT_MAGENTA, "GetRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+                DPRINT(PRNT_MAGENTA, "GetRqst dCntxt:%d, status=%d\r\n", httpCtrl->dataCntxt, httpCtrl->httpStatus);
             }
         }
         else
         {
             httpCtrl->requestState = httpState_idle;
             httpCtrl->httpStatus = atcmd_getValue();
-            DPRINT(PRNT_WARN, "Closed failed GET request, status=%d %s\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
+            DPRINT(PRNT_WARN, "Closed failed GET request, status=%d %s\r\n", httpCtrl->httpStatus, atcmd_getErrorDetail());
         }
         atcmd_close();
         return httpCtrl->httpStatus;
@@ -355,7 +356,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
         rslt = S__setUrl(httpCtrl->hostUrl, relativeUrl);
         if (rslt != resultCode__success)
         {
-            DPRINT(PRNT_WARN, "Failed set URL rslt=%d\r", rslt);
+            DPRINT(PRNT_WARN, "Failed set URL rslt=%d\r\n", rslt);
             atcmd_close();
             return rslt;
         }
@@ -397,14 +398,14 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
                 if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                 {
                     httpCtrl->requestState = httpState_requestComplete;                                 // update httpState, got GET/POST response
-                    DPRINT(PRNT_MAGENTA, "PostRqst dCntxt:%d, status=%d\r", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+                    DPRINT(PRNT_MAGENTA, "PostRqst dCntxt:%d, status=%d\r\n", httpCtrl->dataCntxt, httpCtrl->httpStatus);
                 }
             }
             else
             {
                 httpCtrl->requestState = httpState_idle;
                 httpCtrl->httpStatus = rslt;
-                DPRINT(PRNT_WARN, "Closed failed POST request, status=%d (%s)\r", httpCtrl->httpStatus, atcmd_getErrorDetail());
+                DPRINT(PRNT_WARN, "Closed failed POST request, status=%d (%s)\r\n", httpCtrl->httpStatus, atcmd_getErrorDetail());
             }
         }
         else
@@ -419,8 +420,8 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
 
 
 /**
- *	@brief Retrieves page results from a previous GET or POST.
- *  -----------------------------------------------------------------------------------------------
+ * @brief Retrieves page results from a previous GET or POST.
+ * @return HTTP status code from server
  */
 uint16_t http_readPage(httpCtrl_t *httpCtrl)
 {
@@ -442,18 +443,20 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
 }
 
 
+/**
+ * @brief Read HTTP page to BGx file system
+ * @return HTTP status code from server
+ */
 uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
 {
-    // AT+QHTTPREADFILE="230921T1218_ota.bin",30
-
-    resultCode_t rslt;
+    ASSERT(strlen(filename) < http__readToFileNameSzMax);
 
     if (httpCtrl->requestState != httpState_requestComplete)
         return resultCode__preConditionFailed;                                  // readPage() only valid after a completed GET\POST
     
-    if (atcmd_tryInvoke("AT+QHTTPREADFILE=\"%s\",%d", filename, httpCtrl->timeoutSec))
+    if (atcmd_tryInvoke("AT+QHTTPREADFILE=\"%s\",%d", filename, http__readToFileInterPcktTimeoutSec))
     {
-        return atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpReadFileStatusParser);
+        return atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(http__readToFileTimeoutSec), S__httpReadFileStatusParser);
     }
     return resultCode__conflict;
 }
@@ -504,7 +507,7 @@ static resultCode_t S__setUrl(const char *host, const char *relative)
         //     strcat(url, relative);                                                              // host suffix is not '/' and relative prefix is '/'
         // }
     }
-    DPRINT(PRNT_dMAGENTA, "URL(%d)=\"%s\" \r", strlen(url), url);
+    DPRINT(PRNT_dMAGENTA, "URL(%d)=\"%s\" \r\n", strlen(url), url);
     
     atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, url, strlen(url), NULL, false);        // setup for URL dataMode transfer 
     atcmd_invokeReuseLock("AT+QHTTPURL=%d,5", strlen(url));
@@ -551,7 +554,7 @@ static resultCode_t S__httpRxHndlr()
     }
     
     bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                               // pop CONNECT phrase for parsing data length
-    DPRINT(PRNT_CYAN, "httpPageRcvr() stream started\r");
+    DPRINT(PRNT_CYAN, "httpPageRcvr() stream started\r\n");
 
     memset(wrkBffr, 0, sizeof(wrkBffr));                                                                // need clean wrkBffr for trailer parsing
     uint32_t readStart = pMillis();
@@ -566,7 +569,7 @@ static resultCode_t S__httpRxHndlr()
         {
             char* streamPtr;
             uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, reqstBlockSz);              // get address from rxBffr
-            DPRINT(PRNT_CYAN, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r", streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
+            DPRINT(PRNT_CYAN, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r\n", streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
 
             // forward to application
             ((httpRecv_func)(*httpCtrl->appRecvDataCB))(httpCtrl->dataCntxt, streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
