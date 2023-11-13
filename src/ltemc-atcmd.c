@@ -482,9 +482,9 @@ static resultCode_t S__readResult()
             g_lqLTEM.atcmd->isOpenLocked = false;                                   // close action to release action lock
             g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->invokedAt;
 
-            if (ltem_getDeviceState() != deviceState_appReady)                      // if action timed-out, verify not a device wide failure
+            if (ltem_getDeviceState() != deviceState_ready)                         // if action timed-out, verify not a device wide failure
             {
-                ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not AppReady");
+                ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not Ready");
                 ltem_notifyApp(appEvent_fault_hardLogic, g_lqLTEM.atcmd->CMDMIRROR);
             }
             else if (!SC16IS7xx_ping())

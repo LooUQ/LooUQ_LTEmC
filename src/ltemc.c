@@ -194,21 +194,28 @@ bool ltem_start(resetAction_t resetAction)
 
     DPRINT_V(0, "LTEm prior state=%d\r\n", g_lqLTEM.deviceState);
 
-    uint32_t startAppRdy = pMillis();                                       // wait for BGx to signal internal ready
+    uint32_t startRdyChk = pMillis();                                       // wait for BGx to signal internal ready
+    uint32_t appRdyAt = 0;
+    uint32_t simRdyAt = 0; 
     do
     {
-        if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, true)))
-            g_lqLTEM.deviceState = deviceState_appReady;
+        if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, false)))
+            appRdyAt = pMillis();
 
-        if (IS_ELAPSED(startAppRdy, APPRDY_TIMEOUT))
+        if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "+CPIN: READY", 0, 0, false)))
+            simRdyAt = pMillis();
+
+        if (IS_ELAPSED(startRdyChk, APPRDY_TIMEOUT))
         {
             DPRINT_V(PRNT_WARN, "AppRdy not received! Timeout at %dms\r\n", APPRDY_TIMEOUT);
             return false;
         }
-    } while (g_lqLTEM.deviceState != deviceState_appReady);
+    } while (!appRdyAt || !simRdyAt);
     
-    DPRINT_V(PRNT_dCYAN, "AppRdy recv'd=%dms\r\n", pMillis() - startAppRdy);
-    bbffr_reset(g_lqLTEM.iop->rxBffr);
+    g_lqLTEM.deviceState = deviceState_ready;
+    DPRINT(PRNT_dCYAN, "ModuleReady at %dms (%d/%d)\r\n", pMillis() - startRdyChk, appRdyAt - startRdyChk, simRdyAt - startRdyChk);
+    pDelay(500);
+    bbffr_reset(g_lqLTEM.iop->rxBffr);                                      // clean out start messages from RX buffer
 
     if (!QBG_setOptions())
     {

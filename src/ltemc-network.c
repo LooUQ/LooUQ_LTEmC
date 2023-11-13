@@ -87,7 +87,7 @@ void ntwk_setOperatorScanSeq(const char* scanSequence)
     if (strlen(scanSequence) > 0)
     {
         strcpy(g_lqLTEM.modemSettings->scanSequence, scanSequence);
-        if (ltem_getDeviceState() == deviceState_appReady)
+        if (ltem_getDeviceState() == deviceState_ready)
         {
             atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence);
             atcmd_awaitResult();
@@ -106,7 +106,7 @@ void ntwk_setOperatorScanMode(ntwkScanMode_t scanMode)
    if (strstr(ltem_getModuleType(), "BG9") != NULL)                         // BG96, BG95 only
    {
         g_lqLTEM.modemSettings->scanMode = scanMode; 
-        if (ltem_getDeviceState() == deviceState_appReady)
+        if (ltem_getDeviceState() == deviceState_ready)
         {
             atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode);
             atcmd_awaitResult();
@@ -123,7 +123,7 @@ void ntwk_setIotMode(ntwkIotMode_t iotMode)
     /* AT+QCFG="iotopmode",<mode>
     */
     g_lqLTEM.modemSettings->iotMode = iotMode; 
-    if (ltem_getDeviceState() == deviceState_appReady)
+    if (ltem_getDeviceState() == deviceState_ready)
     {
         atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode);
         atcmd_awaitResult();
@@ -151,7 +151,7 @@ resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t proto
     snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
 
     resultCode_t rslt = resultCode__accepted;
-    if (g_lqLTEM.deviceState == deviceState_appReady)
+    if (g_lqLTEM.deviceState == deviceState_ready)
     {
         if(atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
         {

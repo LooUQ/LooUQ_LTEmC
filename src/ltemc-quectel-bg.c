@@ -87,7 +87,7 @@ void QBG_powerOn()
     if (QBG_isPowerOn())
     {
         DPRINT(PRNT_DEFAULT, "LTEm found powered on\r");
-        g_lqLTEM.deviceState = deviceState_appReady;                    // APP READY msg comes only once, shortly after chip start, would have missed it 
+        g_lqLTEM.deviceState = deviceState_ready;                       // Module start messages come only once, shortly after start, would have missed it 
         return;
     }
     g_lqLTEM.deviceState = deviceState_powerOff;

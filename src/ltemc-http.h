@@ -35,9 +35,10 @@
 */
 enum http__constants
 {
-    http__getRequestLength = 128,
-    http__postRequestLength = 128,
+    // http__getRequestLength = 128,
+    // http__postRequestLength = 128,
 
+    http__getRequestCustomSz = 256,
     http__noResponseHeaders = 0, 
     http__returnResponseHeaders = 1, 
     http__useDefaultTimeout = 0,

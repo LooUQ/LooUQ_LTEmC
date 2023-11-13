@@ -266,13 +266,13 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
             return rslt;
         }
 
-        char httpRequestCmd[http__getRequestLength];
+        // char httpRequestCmd[http__getRequestLength];
         if (httpCtrl->cstmHdrs)
         {
             char *hostName = strchr(httpCtrl->hostUrl, ':');
             hostName = hostName ? hostName + 3 : httpCtrl->hostUrl;
 
-            char cstmRequest[240];
+            char cstmRequest[http__getRequestCustomSz];
             snprintf(cstmRequest, sizeof(cstmRequest), "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrs);
             DPRINT(PRNT_dMAGENTA, "CustomHdrs\r\n");
             DPRINT_V(PRNT_dMAGENTA, "%s\r\n", cstmRequest);
@@ -371,7 +371,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
         *---------------------------------------------------------------------------------------------------------------*/
         atcmd_reset(false);                                                                             // reset atCmd control struct WITHOUT clearing lock
 
-        char httpRequestCmd[http__postRequestLength];
+        // char httpRequestCmd[http__postRequestLength];
         uint16_t httpRequestLen = postDataSz;                                                           // requestLen starts with postDataSz
         httpRequestLen += (httpCtrl->cstmHdrsSz > 0) ? (httpCtrl->cstmHdrsSz + 2) : 0;                  // add the custom headers + 2 char for EOL after hdrs
 
@@ -456,7 +456,15 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
     
     if (atcmd_tryInvoke("AT+QHTTPREADFILE=\"%s\",%d", filename, http__readToFileInterPcktTimeoutSec))
     {
-        return atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(http__readToFileTimeoutSec), S__httpReadFileStatusParser);
+        resultCode_t rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(http__readToFileTimeoutSec), S__httpReadFileStatusParser);
+        if (IS_SUCCESS(rslt))
+        {
+            if (strlen(atcmd_getRawResponse()) > sizeof("AT+QHTTPREADFILE: 0") && *atcmd_getResponse() == '0')
+                return resultCode__success;
+            else
+                return resultCode__internalError;
+        }
+        return resultCode__extendedBase + rslt;
     }
     return resultCode__conflict;
 }
