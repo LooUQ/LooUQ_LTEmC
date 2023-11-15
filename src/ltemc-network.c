@@ -226,8 +226,10 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
                     uint8_t ntwkMode = (uint8_t)strtol(pContinue + 1, &pContinue, 10);
                     if (ntwkMode == 8)
                         strcpy(g_lqLTEM.ntwkOperator->iotMode, "M1");
-                    else
+                    else if (ntwkMode == 9)
                         strcpy(g_lqLTEM.ntwkOperator->iotMode, "NB1");
+                    else
+                        strcpy(g_lqLTEM.ntwkOperator->iotMode, "GSM");
                 }
             }
             if (!STREMPTY(g_lqLTEM.ntwkOperator->name))
