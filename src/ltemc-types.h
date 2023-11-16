@@ -480,14 +480,16 @@ typedef struct atcmd_tag
     char* response;                                     // PTR variable section of response.
     char respToken[PSZ(atcmd__respTokenSz)];            // buffer to hold a token string grabbed from response
 
-    uint32_t execDuration;                              // duration of command's execution in milliseconds
     resultCode_t resultCode;                            // consumer API result value (HTTP style), success=200, timeout=408, single digit BG errors are expected to be offset by 1000
+    int16_t resultValue;                                // optional result value returned by some AT commands
     cmdResponseParser_func responseParserFunc;          // parser function to analyze AT cmd response and optionally extract value
     cmdParseRslt_t parserResult;                        // last parser invoke result returned
     bool preambleFound;                                 // true if parser found preamble
+    uint32_t execDuration;                              // duration of command's execution in milliseconds
     char errorDetail[PSZ(ltem__errorDetailSz)];         // BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
-    int32_t retValue;                                   // (deprecated) optional signed int value extracted from response
     dataMode_t dataMode;                                // controls for automatic data mode servicing - both TX (out) and RX (in). Std functions or extensions supported.
+
+    int32_t retValue;                                   // (deprecated) optional signed int value extracted from response
 } atcmd_t;
 
 
