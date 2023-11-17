@@ -1,7 +1,6 @@
 # LooUQ - LTEmC
 
-LooUQ Circuit River
-Universal modem device driver for LooUQ’s embedded system LTE modems: LTEm1, LTEm2 and LTEm3F (coming soon).
+LooUQ's universal modem device driver for LooUQ’s embedded system LTE modems: LTEm1, LTEm2 and LTEm3F (coming soon).
 
 The LooUQ LTEmC driver supports the LooUQ LTEm line of embedded modem devices. The LTEm modem series is designed to allow for cost-effective cellular communications in embedded systems by supporting LTE CAT-M1 and LTE CAT-NB1 (NB-IOT) communications. The LTEm1 and LTEm2 modems are certified for use on the Verizon network and tested on all major US networks.
 
