@@ -1,4 +1,4 @@
-# Circuit River - LTEmC
+# LooUQ - LTEmC
 
 LooUQ Circuit River
 Universal modem device driver for LooUQ’s embedded system LTE modems: LTEm1, LTEm2 and LTEm3F (coming soon).
