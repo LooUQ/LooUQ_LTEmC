@@ -81,7 +81,7 @@ void loop()
         {
             resultCode_t atResult = atcmd_awaitResult();
             
-                const char *response = atcmd_getResponse();
+                const char *response = atcmd_getResponseData();
                 DPRINT(PRNT_INFO, "Got %d chars\r", strlen(response));
                 DPRINT(PRNT_WHITE, "Resp:");
                 DPRINT(PRNT_CYAN, "%s\r", response);

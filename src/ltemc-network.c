@@ -1,28 +1,35 @@
-/** ****************************************************************************
+/** ***************************************************************************
   @file 
-  @brief Public API controlling modem interface with the cellular network
+  @brief Cellular/packet data network support features and services
+
   @author Greg Terrell, LooUQ Incorporated
 
   \loouq
 
---------------------------------------------------------------------------------
+  @warning Internal dependencies, changes only as directed by LooUQ staff.
 
-    This project is released under the GPL-3.0 License.
+-------------------------------------------------------------------------------
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+LooUQ-LTEmC // Software driver for the LooUQ LTEm series cellular modems.
+Copyright (C) 2017-2023 LooUQ Incorporated
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
- 
-***************************************************************************** */
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+Also add information on how to contact you by electronic and paper mail.
+
+**************************************************************************** */
+
 
 #define SRCFILE "NWK"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
@@ -251,7 +258,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
 
         if (IS_SUCCESS(atcmd_awaitResult()))
         {
-            pContinue = strstr(atcmd_getResponse(), "+QIACT: ");
+            pContinue = strstr(atcmd_getResponseData(), "+QIACT: ");
             while (pContinue != NULL && ntwkIndx < ntwk__pdpContextCnt)
             {
                 g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpContextId = strtol(pContinue + 8, &pContinue, 10);
@@ -277,7 +284,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
                 atcmd_tryInvoke("AT+CGPADDR=%d", g_lqLTEM.ntwkOperator->packetNetworks[i].pdpContextId);
                 if (atcmd_awaitResult() == resultCode__success)
                 {
-                    pContinue = strstr(atcmd_getResponse(), "+CGPADDR: ");
+                    pContinue = strstr(atcmd_getResponseData(), "+CGPADDR: ");
                     pContinue = strchr(pContinue + 10, ',') + 1;
                     char *pLineEnd = strchr(pContinue, '\r');
                     strncpy(g_lqLTEM.ntwkOperator->packetNetworks[i].ipAddress, pContinue, MIN(pLineEnd - pContinue, ntwk__ipAddressSz));
@@ -446,7 +453,7 @@ const char* ntwkDiagnostics_getOperators()
         atcmd_ovrrdTimeout(SEC_TO_MS(240));
         if (IS_SUCCESS(atcmd_awaitResult()))
         {
-            strncpy(g_lqLTEM.statics.reportBffr, atcmd_getResponse() + 9, MIN(ltem__reportsBffrSz, atcmd_getResponse() - 9));
+            strncpy(g_lqLTEM.statics.reportBffr, atcmd_getResponseData() + 9, MIN(ltem__reportsBffrSz, atcmd_getResponseData() - 9));
         }
     }
     return g_lqLTEM.statics.reportBffr;

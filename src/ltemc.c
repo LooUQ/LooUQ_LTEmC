@@ -1,28 +1,35 @@
-/** ****************************************************************************
-  \file 
-  \brief LTEmC LTEm Device Driver for LooUQ LTEm Series Modems
-  \author Greg Terrell, LooUQ Incorporated
+/** ***************************************************************************
+  @file 
+  @brief Driver application for control and use of the LooUQ LTEm cellular modem.
+
+  @author Greg Terrell, LooUQ Incorporated
 
   \loouq
 
---------------------------------------------------------------------------------
+  @warning Internal dependencies, changes only as directed by LooUQ staff.
 
-    This project is released under the GPL-3.0 License.
+-------------------------------------------------------------------------------
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+LooUQ-LTEmC // Software driver for the LooUQ LTEm series cellular modems.
+Copyright (C) 2017-2023 LooUQ Incorporated
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
- 
-***************************************************************************** */
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+Also add information on how to contact you by electronic and paper mail.
+
+**************************************************************************** */
+
 
 #define SRCFILE "LTE"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
@@ -408,7 +415,7 @@ const char* ltem_getUtcDateTime(char format)
     {
         if (atcmd_awaitResult() == resultCode__success)
         {
-            if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)         // allowance for preceeding EOL
+            if ((dtSrc = memchr(atcmd_getResponseData(), '"', 12)) != NULL)         // allowance for preceeding EOL
             {
                 dtSrc++;
                 if (*dtSrc != '8')                                              // test for not initialized date/time, starts with 80 (aka 1980)
@@ -505,7 +512,7 @@ int8_t ltem_getLocalTimezoneOffset(bool precise)
 
     if (IS_SUCCESS(atcmd_awaitResult()))
     {
-        if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)         // tolerate preceeding EOL
+        if ((dtSrc = memchr(atcmd_getResponseData(), '"', 12)) != NULL)         // tolerate preceeding EOL
         {
             dtSrc++;
             if (*dtSrc != '8')                                              // test for not initialized date/time, stardtSrc with 80 (aka 1980)
@@ -530,72 +537,69 @@ int8_t ltem_getLocalTimezoneOffset(bool precise)
  */
 modemInfo_t* ltem_getModemInfo()
 {
-    if (ATCMD_awaitLock(atcmd__defaultTimeout))
+    if (g_lqLTEM.modemInfo->imei[0] == 0)
     {
-        if (g_lqLTEM.modemInfo->imei[0] == 0)
-        {
-            if (!atcmd_tryInvoke("AT+GSN"))
-                return resultCode__conflict;
+        if (!atcmd_tryInvoke("AT+GSN"))
+            return resultCode__conflict;
 
-            if (IS_SUCCESS(atcmd_awaitResult()))
+        if (IS_SUCCESS(atcmd_awaitResult()))
+        {
+            strncpy(g_lqLTEM.modemInfo->imei, atcmd_getResponseData(), ntwk__imeiSz);
+        }
+    }
+
+    if (g_lqLTEM.modemInfo->fwver[0] == 0)
+    {
+        if (!atcmd_tryInvoke("AT+QGMR"))
+            return resultCode__conflict;
+
+        if (IS_SUCCESS(atcmd_awaitResult()))
+        {
+            char *eol;
+            if ((eol = strstr(atcmd_getResponseData(), "\r\n")) != NULL)
             {
-                strncpy(g_lqLTEM.modemInfo->imei, atcmd_getResponse(), ntwk__imeiSz);
+                uint8_t sz = eol - atcmd_getResponseData();
+                memcpy(g_lqLTEM.modemInfo->fwver, atcmd_getResponseData(), MIN(sz, ntwk__dvcFwVerSz));
             }
         }
+    }
 
-        if (g_lqLTEM.modemInfo->fwver[0] == 0)
+    if (g_lqLTEM.modemInfo->mfg[0] == 0)
+    {
+        if (!atcmd_tryInvoke("ATI"))
+            return resultCode__conflict;
+
+        if (IS_SUCCESS(atcmd_awaitResult()))
         {
-            if (!atcmd_tryInvoke("AT+QGMR"))
-                return resultCode__conflict;
+            char* response = atcmd_getResponseData();
+            char* eol = strchr(response, '\r');
+            memcpy(g_lqLTEM.modemInfo->mfg, response, eol - response);
 
-            if (IS_SUCCESS(atcmd_awaitResult()))
-            {
-                char *eol;
-                if ((eol = strstr(atcmd_getResponse(), "\r\n")) != NULL)
-                {
-                    uint8_t sz = eol - atcmd_getResponse();
-                    memcpy(g_lqLTEM.modemInfo->fwver, atcmd_getResponse(), MIN(sz, ntwk__dvcFwVerSz));
-                }
-            }
+            response = eol + 2;
+            eol = strchr(response, '\r');
+            memcpy(g_lqLTEM.modemInfo->model, response, eol - response);
+
+            response = eol + 2;
+            eol = strchr(response, ':');
+            response = eol + 2;
+            eol = strchr(response, '\r');
+            memcpy(g_lqLTEM.modemInfo->fwver, response, eol - response);
         }
+    }
 
-        if (g_lqLTEM.modemInfo->mfg[0] == 0)
+    if (g_lqLTEM.modemInfo->iccid[0] == 0)
+    {
+        atcmd_ovrrdParser(S__iccidCompleteParser);
+        if (!atcmd_tryInvoke("AT+ICCID"))
+            return resultCode__conflict;
+
+        if (IS_SUCCESS(atcmd_awaitResult()))
         {
-            if (!atcmd_tryInvoke("ATI"))
-                return resultCode__conflict;
-
-            if (IS_SUCCESS(atcmd_awaitResult()))
+            char* delimAt;
+            char* responseAt = atcmd_getResponseData();
+            if (strlen(responseAt) && (delimAt = memchr(responseAt, '\r', strlen(responseAt))))
             {
-                char* response = atcmd_getResponse();
-                char* eol = strchr(response, '\r');
-                memcpy(g_lqLTEM.modemInfo->mfg, response, eol - response);
-
-                response = eol + 2;
-                eol = strchr(response, '\r');
-                memcpy(g_lqLTEM.modemInfo->model, response, eol - response);
-
-                response = eol + 2;
-                eol = strchr(response, ':');
-                response = eol + 2;
-                eol = strchr(response, '\r');
-                memcpy(g_lqLTEM.modemInfo->fwver, response, eol - response);
-            }
-        }
-
-        if (g_lqLTEM.modemInfo->iccid[0] == 0)
-        {
-            atcmd_ovrrdParser(S__iccidCompleteParser);
-            if (!atcmd_tryInvoke("AT+ICCID"))
-                return resultCode__conflict;
-
-            if (IS_SUCCESS(atcmd_awaitResult()))
-            {
-                char* delimAt;
-                char* responseAt = atcmd_getResponse();
-                if (strlen(responseAt) && (delimAt = memchr(responseAt, '\r', strlen(responseAt))))
-                {
-                    memcpy(g_lqLTEM.modemInfo->iccid, responseAt, MIN(delimAt - responseAt, ntwk__iccidSz));
-                }
+                memcpy(g_lqLTEM.modemInfo->iccid, responseAt, MIN(delimAt - responseAt, ntwk__iccidSz));
             }
         }
     }
@@ -614,7 +618,7 @@ bool ltem_isSimReady()
 
     if (IS_SUCCESS(atcmd_awaitResult()))
     {
-        cpinState = strstr(atcmd_getResponse(), "+CPIN: READY") != NULL;
+        cpinState = strstr(atcmd_getResponseData(), "+CPIN: READY") != NULL;
     }
     return strlen(g_lqLTEM.modemInfo->iccid) > 0 && cpinState;
 }
@@ -632,8 +636,8 @@ uint8_t ltem_signalRaw()
         if (IS_SUCCESS(atcmd_awaitResult()))
         {
             char *term;
-            char *lastResponse = atcmd_getResponse();
-            term = strstr(atcmd_getResponse(), "+CSQ");
+            char *lastResponse = atcmd_getResponseData();
+            term = strstr(atcmd_getResponseData(), "+CSQ");
             signalValue = strtol(term + 6, NULL, 10);
         }
     }

@@ -1,28 +1,35 @@
-/** ****************************************************************************
-  \file
-  @brief LTEmC INTERNAL BGx AT command processor
-  \author Greg Terrell, LooUQ Incorporated
+/** ***************************************************************************
+  @file 
+  @brief Modem command/response and data transfer functions.
+
+  @author Greg Terrell, LooUQ Incorporated
 
   \loouq
 
---------------------------------------------------------------------------------
+  @warning Internal dependencies, changes only as directed by LooUQ staff.
 
-    This project is released under the GPL-3.0 License.
+-------------------------------------------------------------------------------
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+LooUQ-LTEmC // Software driver for the LooUQ LTEm series cellular modems.
+Copyright (C) 2017-2023 LooUQ Incorporated
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
 
-***************************************************************************** */
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+Also add information on how to contact you by electronic and paper mail.
+
+**************************************************************************** */
+
 
 #define SRCFILE "ATC"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 // #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
@@ -140,7 +147,7 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
     // if (g_lqLTEM.atcmd->isOpenLocked)
     //     return false;
 
-    ATCMD_reset(true);                                 // clear atCmd control
+    ATCMD_reset(true);                                                          // clear atCmd control
 
     // char *cmdStr = g_lqLTEM.atcmd->cmdStr;
     va_list ap;
@@ -149,7 +156,7 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
     vsnprintf(g_lqLTEM.atcmd->cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
     strcat(g_lqLTEM.atcmd->cmdStr, "\r");
 
-    if (!ATCMD_awaitLock(g_lqLTEM.atcmd->timeout)) // attempt to acquire new atCmd lock for this instance
+    if (pMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))             // attempt to acquire new atCmd lock for this instance
         return false;
 
     g_lqLTEM.atcmd->invokedAt = pMillis();
