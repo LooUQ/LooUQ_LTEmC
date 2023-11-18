@@ -1,31 +1,31 @@
-/******************************************************************************
- *  \file ltemc-7-sockets.ino
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020 LooUQ Incorporated.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * Test IP sockets protocol client send/receive.
- * 
- * The sketch is designed for debug output to observe results.
- *****************************************************************************/
+/** ***************************************************************************
+  @file 
+  @brief LTEm example/test for socket (UDP/TCP) client communications.
+
+  @author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+-------------------------------------------------------------------------------
+
+LooUQ-LTEmC // Software driver for the LooUQ LTEm series cellular modems.
+Copyright (C) 2017-2023 LooUQ Incorporated
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+Also add information on how to contact you by electronic and paper mail.
+
+**************************************************************************** */
 
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
@@ -82,22 +82,22 @@ void setup() {
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);               // create LTEmC modem, no yield req'd for testing
     ltem_start(resetAction_swReset);                                // ... and start it
-    DPRINT(PRNT_DEFAULT, "BGx %s\r", mdminfo_ltem()->fwver);
+    DPRINT(PRNT_DEFAULT, "BGx %s\r", ltem_getModemInfo()->fwver);
 
     DPRINT(PRNT_DEFAULT, "Waiting on network...\r");
-    providerInfo_t* provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
-    while (strlen(provider->name) == 0)
+    ntwkOperator_t* ntwkOperator = ntwk_awaitOperator(PERIOD_FROM_SECONDS(15));
+    while (strlen(ntwkOperator->name) == 0)
     {
         DPRINT(PRNT_dYELLOW, ">");
     }
-    DPRINT(PRNT_INFO, "Network type is %s on %s\r", provider->iotMode, provider->name);
+    DPRINT(PRNT_INFO, "Network type is %s on %s\r", ntwkOperator->iotMode, ntwkOperator->name);
 
     // create a socket control and open it
     sckt_initControl(&scktCtrl, dataCntxt_0, SCKTTEST_PROTOCOL, scktRecvCB);
     sckt_setConnection(&scktCtrl, PDP_DATA_CONTEXT, SCKTTEST_HOST, SCKTTEST_PORT, 0);
     resultCode_t scktResult = sckt_open(&scktCtrl,  true);
 
-    if (scktResult == resultCode__previouslyOpened)
+    if (scktResult == resultCode__conflict)
     {
         DPRINT(PRNT_WARN, "Socket 0 found already open!\r");
     }
@@ -151,7 +151,7 @@ void loop()
 
 uint16_t scktRecover()
 {
-    DPRINT(PRNT_WARN, "sgnl=%d, scktState=%d\r", mdminfo_signalRSSI(), sckt_getState(&scktCtrl));
+    DPRINT(PRNT_WARN, "sgnl=%d, scktState=%d\r", ltem_signalRSSI(), sckt_getState(&scktCtrl));
     sckt_close(&scktCtrl);
     return sckt_open(&scktCtrl, true);
 }

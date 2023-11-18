@@ -519,7 +519,7 @@ static resultCode_t S__readResult()
         //     g_lqLTEM.atcmd->isOpenLocked = false;                                   // equivalent to ATCMD_close()
         g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->invokedAt;
         g_lqLTEM.atcmd->resultCode = resultCode__success;
-        g_lqLTEM.metrics.cmdInvokes++;
+        g_lqLTEM.metrics.cmdInvokeCnt++;
     }
     return g_lqLTEM.atcmd->resultCode;
 }

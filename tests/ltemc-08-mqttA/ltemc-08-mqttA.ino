@@ -1,33 +1,32 @@
-/******************************************************************************
- *  \file ltemc-8-mqtt.ino
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020-2022 LooUQ Incorporated.
- *  www.loouq.com
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * Test MQTT protocol client send/receive. 
- * Uses Azure IoTHub and the LooUQ Cloud as server side
- * 
- * The sketch is designed for debug output to observe results.
- *****************************************************************************/
+/** ***************************************************************************
+  @file 
+  @brief LTEm example/test for MQTT client communications (with Azure IoTHub).
+
+  @author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+-------------------------------------------------------------------------------
+
+LooUQ-LTEmC // Software driver for the LooUQ LTEm series cellular modems.
+Copyright (C) 2017-2023 LooUQ Incorporated
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+Also add information on how to contact you by electronic and paper mail.
+
+**************************************************************************** */
+
 
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
@@ -109,6 +108,7 @@ uint32_t lastCycle;
 
 
 // LTEm variables
+tlsCtrl_t tlsCtrl;
 mqttCtrl_t mqttCtrl;                // MQTT control, data to manage MQTT connection to server
 mqttTopicCtrl_t topicCtrl;
 
@@ -133,29 +133,30 @@ void setup() {
     // lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, applEvntNotify);
-    ltem_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
+    ntwk_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
     ltem_start(resetAction_swReset);
 
     DPRINT(PRNT_DEFAULT, "Waiting on network...\r");
-    providerInfo_t *provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
-    while (strlen(provider->name) == 0)
+    ntwkOperator_t *ntwkOperator = ntwk_awaitOperator(PERIOD_FROM_SECONDS(15));
+    while (strlen(ntwkOperator->name) == 0)
     {
         DPRINT(PRNT_dYELLOW, ">");
     }
-    DPRINT(PRNT_INFO, "Network type is %s on %s\r", provider->iotMode, provider->name);
+    DPRINT(PRNT_INFO, "Network type is %s on %s\r", ntwkOperator->iotMode, ntwkOperator->name);
 
 
     /* Basic connectivity established, moving on to MQTT setup with Azure IoTHub
      * Azure requires TLS 1.2 and MQTT version 3.11 
      * --------------------------------------------------------------------------------------------
      */
-    tls_configure(dataCntxt_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+
+    tls_initControl(&tlsCtrl, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default, true);
 
     mqtt_initControl(&mqttCtrl, MQTT_DATACONTEXT);
     mqtt_initTopicControl(&topicCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1, mqttRecvCB);
 
     mqtt_subscribeTopic(&mqttCtrl, &topicCtrl);
-    mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, true, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
+    mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, &tlsCtrl, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
 
     mqtt_start(&mqttCtrl, true);
 

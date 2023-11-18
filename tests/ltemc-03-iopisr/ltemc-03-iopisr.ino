@@ -1,3 +1,32 @@
+/** ***************************************************************************
+  @file 
+  @brief LTEm example/test for I/O and interrupt processing.
+
+  @author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+-------------------------------------------------------------------------------
+
+LooUQ-LTEmC // Software driver for the LooUQ LTEm series cellular modems.
+Copyright (C) 2017-2023 LooUQ Incorporated
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+Also add information on how to contact you by electronic and paper mail.
+
+**************************************************************************** */
+
 
 #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
@@ -77,7 +106,7 @@ void setup()
 
 void loop() 
 {
-    if (ELAPSED(lastCycle, cycle_interval))
+    if (IS_ELAPSED(lastCycle, cycle_interval))
     {
         lastCycle = millis();
         loopCnt++;
@@ -167,15 +196,15 @@ void startLTEm()
     QBG_reset(resetAction_powerReset);                                      // force power cycle here, limited initial state conditioning
     SC16IS7xx_start();                                                      // start (resets previously powered on) NXP SPI-UART bridge
 
-    if (g_lqLTEM.deviceState != deviceState_appReady)
-    {
-        if (IOP_awaitAppReady())
-        {
-            DPRINT(PRNT_INFO, "AppRdy recv'd\r\n");
-        }
-    }
-    else
-        DPRINT(PRNT_dYELLOW, "AppRdy assumed\r\n");
+    // if (g_lqLTEM.deviceState != deviceState_appReady)
+    // {
+    //     if (IOP_awaitAppReady())
+    //     {
+    //         DPRINT(PRNT_INFO, "AppRdy recv'd\r\n");
+    //     }
+    // }
+    // else
+    //     DPRINT(PRNT_dYELLOW, "AppRdy assumed\r\n");
     SC16IS7xx_enableIrqMode();
     IOP_attachIrq();
 }
@@ -199,7 +228,7 @@ void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 void indicateFailure(const char* failureMsg)
 {
 	DPRINT(PRNT_ERROR, "\r\n** %s \r\n", failureMsg);
-    DPRINT(PRNT_ERROR, "IsrCount=%d  errors=%d\r\n", g_lqLTEM.isrInvokeCnt, errorCnt);
+    DPRINT(PRNT_ERROR, "IsrCount=%d  errors=%d\r\n", g_lqLTEM.metrics.isrInvokeCnt, errorCnt);
     DPRINT(PRNT_ERROR, "** Test Assertion Failed. \r\n");
 
     errorCnt++;

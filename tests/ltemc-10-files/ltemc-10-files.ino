@@ -1,30 +1,32 @@
-/******************************************************************************
- *  \file ltemc-10-files.ino
- *  \author Greg Terrell
- *  \license MIT License
- *
- *  Copyright (c) 2020 LooUQ Incorporated.
- *  www.loouq.com
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED
- * "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
- * LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
- * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- ******************************************************************************
- * Test\demonstrate using the LTEm file system for persistent file storage.
- *****************************************************************************/
+/** ***************************************************************************
+  @file 
+  @brief LTEm example/test for using the modem filesystem for file storage.
+
+  @author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+-------------------------------------------------------------------------------
+
+LooUQ-LTEmC // Software driver for the LooUQ LTEm series cellular modems.
+Copyright (C) 2017-2023 LooUQ Incorporated
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+Also add information on how to contact you by electronic and paper mail.
+
+**************************************************************************** */
+
 
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
@@ -110,6 +112,8 @@ void setup() {
 const int testCnt = 6;
 uint16_t loopCnt = 1;
 uint32_t lastCycle;
+uint16_t bytesCnt;
+
 
 void loop() 
 {
@@ -143,7 +147,7 @@ void loop()
     {
         rslt = file_open("testfile2", fileOpenMode_rdWr, &fHandle2);
         rslt = file_seek(fHandle2, 10, fileSeekMode_fromBegin);
-        rslt = file_read(fHandle2, 10);
+        rslt = file_read(fHandle2, 10, &bytesCnt);
         rslt = file_close(fHandle2);
     }
 
@@ -157,7 +161,7 @@ void loop()
             createFileImage(filedata3, 256);
             DPRINT(PRNT_CYAN, "wr=%d\r", file_write(fHandle3, filedata3, 256, &writeRslt));
             DPRINT(PRNT_CYAN, "sk=%d\r", file_seek(fHandle3, 0, fileSeekMode_fromBegin));
-            DPRINT(PRNT_CYAN, "rd=%d\r", file_read(fHandle3, 200));
+            DPRINT(PRNT_CYAN, "rd=%d\r", file_read(fHandle3, 200, &bytesCnt));
         }
     }
 

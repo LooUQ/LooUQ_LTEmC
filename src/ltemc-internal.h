@@ -69,9 +69,12 @@ Also add information on how to contact you by electronic and paper mail.
 typedef struct ltemMetrics_tag
 {
     // metrics
-    uint32_t cmdInvokes;
-
+    uint32_t cmdInvokeCnt;
+    uint32_t isrInvokeCnt;
+    uint32_t isrReadCnt;
+    uint32_t isrWriteCnt;
 } ltemMetrics_t;
+
 
 /**
  * @brief enum describing the last receive event serviced by the ISR
