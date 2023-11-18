@@ -1,28 +1,32 @@
-/** ****************************************************************************
-  \file
-  \brief Public API providing MQTT/MQTTS support
-  \author Greg Terrell, LooUQ Incorporated
+/** ***************************************************************************
+  @file 
+  @brief Modem MQTT(S) communication functions/services.
+
+  @author Greg Terrell, LooUQ Incorporated
 
   \loouq
+-------------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
+LooUQ-LTEmC // Software driver for the LooUQ LTEm series cellular modems.
+Copyright (C) 2017-2023 LooUQ Incorporated
 
-    This project is released under the GPL-3.0 License.
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+Also add information on how to contact you by electronic and paper mail.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+**************************************************************************** */
 
-***************************************************************************** */
 
 #define SRCFILE "MQT"            // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT         // expand DIAGPRINT into debug output
@@ -231,7 +235,6 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
             return resultCode__internalError;
     }
 
-    // TYPICAL: AT+QMTOPEN=0,"iothub-dev-pelogical.azure-devices.net",8883
     if (atcmd_tryInvoke("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, mqttCtrl->hostUrl, mqttCtrl->hostPort))
     {
         resultCode_t rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(30), S__mqttOpenCompleteParser);
@@ -239,23 +242,24 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
 
         if (rslt == resultCode__success && atcmd_getValue() == 0)
         {
-            mqttCtrl->state = mqttState_open;
-            return resultCode__success;
-        }
-        else
-        {
             const char* token = atcmd_getToken(2);
-            int32_t rsltVal = strtol(token, NULL, 10);
-            switch (rsltVal)
+            g_lqLTEM.atcmd->resultValue = strtol(token, NULL, 10);
+
+            switch (g_lqLTEM.atcmd->resultValue)
             {
-            case 1:
-                return resultCode__badRequest;
-            case 2:
-                return resultCode__conflict;
-            case 4:
-                return resultCode__notFound;
-            default:
-                return resultCode__extendedBase + rsltVal;
+                case 0:
+                {
+                    mqttCtrl->state = mqttState_open;
+                    return resultCode__success;
+                }
+                case 1:
+                    return resultCode__badRequest;                                  // wrong parameter
+                case 2:
+                    return resultCode__conflict;                                    // MQTT socket identifier is occupied
+                case 4:
+                    return resultCode__notFound;                                    // failed to parse domain name
+                default:
+                    return resultCode__extendedBase + g_lqLTEM.atcmd->resultValue;  // everything else
             }
         }
     }
@@ -281,24 +285,26 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
     rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), S__mqttConnectCompleteParser); // in autolock mode, so this will release lock
     DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
 
-    if (rslt == resultCode__success) // COMMAND executed, outcome of CONNECTION may not be a success
+    if (rslt == resultCode__success)                                                // COMMAND executed, outcome of CONNECTION may not be a success
     {
         const char* token = atcmd_getToken(2);
-        int32_t rsltVal = strtol(token, NULL, 10);
-        switch (rsltVal)
+        g_lqLTEM.atcmd->resultValue = strtol(token, NULL, 10);
+        switch (g_lqLTEM.atcmd->resultValue)
         {
             case 0:
                 return resultCode__success;
-            case 1:
-                return resultCode__methodNotAllowed;    // invalid protocol version
-            case 2:
-            case 4:
-            case 5:
-                return resultCode__unauthorized;        // bad user ID or password
-            case 3:
-                return resultCode__notFound;            // user/server not found
+            case 1:                                                                 // Connection Refused: Unacceptable Protocol Version
+                return resultCode__methodNotAllowed;
+            case 2:                                                                 // Connection Refused: Identifier Rejected
+                return resultCode__forbidden;
+            case 3:                                                                 // Connection Refused: Server Unavailable (iotHub: user not found)
+                return resultCode__notFound;
+            case 4:                                                                 // Connection Refused: Bad User Name or Password
+                return resultCode__forbidden;
+            case 5:                                                                 // Connection Refused: Not Authorized
+                return resultCode__forbidden;
             default:
-                return resultCode__extendedBase + rsltVal;
+                return resultCode__extendedBase + g_lqLTEM.atcmd->resultValue;      // everything else
         }
     }
     return resultCode__badRequest; // command rejected by BGx

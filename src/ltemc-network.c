@@ -1,28 +1,32 @@
-/** ****************************************************************************
+/** ***************************************************************************
   @file 
-  @brief Public API controlling modem interface with the cellular network
+  @brief Cellular/packet data network support features and services
+
   @author Greg Terrell, LooUQ Incorporated
 
   \loouq
+-------------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
+LooUQ-LTEmC // Software driver for the LooUQ LTEm series cellular modems.
+Copyright (C) 2017-2023 LooUQ Incorporated
 
-    This project is released under the GPL-3.0 License.
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+Also add information on how to contact you by electronic and paper mail.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
- 
-***************************************************************************** */
+**************************************************************************** */
+
 
 #define SRCFILE "NWK"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 //#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
@@ -203,11 +207,17 @@ void ntwk_applyPpdNetworkConfig()
 */
 ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
 {
-    ASSERT(g_lqLTEM.ntwkOperator != NULL);         // ASSERT g_lqLTEM.ntwkOperator has been initialized
+    ASSERT(g_lqLTEM.ntwkOperator != NULL);          // ASSERT g_lqLTEM.ntwkOperator has been initialized
 
     uint32_t startMillis, endMillis;
     startMillis = endMillis = pMillis();
-    uint32_t waitMs = (waitSec > 300) ? 300000 : waitSec * 1000;            // max is 5 minutes
+    uint32_t waitMs;
+    if (waitSec > 300)
+        waitMs = SEC_TO_MS(300);                    // max is 5 minutes
+    else if (waitSec < 1)
+        waitMs = 250;                               // min is 250ms
+    else 
+        waitMs = SEC_TO_MS(waitSec);
 
     if (ATCMD_awaitLock(waitMs))                                            // open a reusable lock to complete multiple steps
     {
@@ -408,10 +418,12 @@ resultCode_t ntwk_getRegistrationStatus()
 
 /**
  * @brief Check network ready condition.
- * @return True, if network is fully established and ready for data transmission.
  */
-bool ntwk_isReady()
+bool ntwk_isReady(bool refresh)
 {
+    if (refresh)
+        ntwk_awaitOperator(0);
+
     return strlen(g_lqLTEM.ntwkOperator->name) > 0;
 }
 
