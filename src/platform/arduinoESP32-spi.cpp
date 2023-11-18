@@ -1,10 +1,3 @@
-// Copyright (c) 2020 LooUQ Incorporated.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
-
-/* 
-* arduinoSpi.cpp provides the translation between LTEm1 platform "C" and Arduino "C++".
-* Each platform function has a matching Arduino C++ free-function to wrap arduino functions.
-------------------------------------------------------------------------------------------------------------------------- */
 
 #ifdef ARDUINO_ARCH_ESP32
 
