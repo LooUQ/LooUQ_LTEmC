@@ -509,21 +509,27 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
 
 /**
  * @brief Read HTTP page to BGx file system
- * @return HTTP status code from server
  */
-uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
+uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename, uint32_t fileSz)
 {
     ASSERT(strlen(filename) < http__readToFileNameSzMax);
 
     if (httpCtrl->requestState != httpState_requestComplete)
         return resultCode__preConditionFailed;                                  // readPage() only valid after a completed GET\POST
     
-    atcmd_ovrrdTimeout(SEC_TO_MS(httpCtrl->timeoutSec));
+    uint16_t cmdTimeoutSec = (fileSz == 0) ? http__readToFileTimeoutSec : (fileSz / http__readToFileBytesPerSecond * http__readToFileTimeoutRatio / 100);
+    atcmd_ovrrdTimeout(SEC_TO_MS(cmdTimeoutSec));
     atcmd_ovrrdParser(S__httpReadFileStatusParser);
     if (!atcmd_tryInvoke("AT+QHTTPREADFILE=\"%s\",%d", filename, httpCtrl->timeoutSec))
         return resultCode__locked;
 
-    return atcmd_awaitResult();
+    resultCode_t _rslt;
+    if (IS_SUCCESS__RSLT(atcmd_awaitResult()))
+    {
+        if (strlen(atcmd_getRawResponse()) > sizeof("AT+QHTTPREADFILE: ") && *atcmd_getResponseData() == '0')
+            return resultCode__success;
+    }
+    return resultCode__extendedBase + _rslt;
 }
 
 

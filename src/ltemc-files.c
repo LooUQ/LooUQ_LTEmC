@@ -50,7 +50,7 @@ static resultCode_t S__filesRxHndlr();
 
 
 /**
- *	@brief Set the data callback function for filedata.
+ * @brief Set the data callback function for filedata.
  */
 void file_setAppReceiver(fileReceiver_func fileReceiver)
 {
@@ -63,7 +63,7 @@ void file_setAppReceiver(fileReceiver_func fileReceiver)
 
 
 /**
- *	@brief get filesystem information.
+ * @brief get filesystem information.
  */
 resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
 {
@@ -196,7 +196,7 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
 
 
 /**
- *	@brief Get a list of open files, including their mode and file handles.
+ * @brief Get a list of open files, including their mode and file handles.
  */
 resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
 {
@@ -228,7 +228,7 @@ resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
 
 
 /**
- *	@brief Closes the file. 
+ * @brief Closes the file. 
  */
 resultCode_t file_close(uint16_t fileHandle)
 {
@@ -240,7 +240,7 @@ resultCode_t file_close(uint16_t fileHandle)
 
 
 /**
- *	@brief Closes all open files. 
+ * @brief Closes all open files. 
  *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
  */
 resultCode_t file_closeAll()
@@ -339,7 +339,7 @@ resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t wri
 
 
 /**
- *	@brief Set the position of the file pointer.
+ * @brief Set the position of the file pointer.
  */
 resultCode_t file_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t seekFrom)
 {
@@ -370,7 +370,7 @@ resultCode_t file_getPosition(uint16_t fileHandle, uint32_t* filePtr)
 
 
 /**
- *	@brief Truncate all the data beyond the CURRENT position of the file pointer.
+ * @brief Truncate all the data beyond the CURRENT position of the file pointer.
  */
 resultCode_t file_truncate(uint16_t fileHandle)
 {
@@ -382,7 +382,7 @@ resultCode_t file_truncate(uint16_t fileHandle)
 
 
 /**
- *	@brief Delete a file from the file system.
+ * @brief Delete a file from the file system.
  */
 resultCode_t file_delete(const char* filename)
 {

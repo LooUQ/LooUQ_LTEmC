@@ -38,7 +38,7 @@ Also add information on how to contact you by electronic and paper mail.
 #include "ltemc-types.h"
 
 /** 
- *  @brief Typed numeric constants used in HTTP module.
+ * @brief Typed numeric constants used in HTTP module.
 */
 enum http__constants
 {
@@ -53,25 +53,27 @@ enum http__constants
     http__defaultTimeoutBGxSec = 60,
     http__rqstTypeSz = 5,                           /// GET or POST
     http__customHdrSmallWarning = 40,
+    http__readToFileBytesPerSecond = 11520,
+    http__readToFileTimeoutRatio = 150,
     http__readToFileNameSzMax = 80,
-    http__readToFileTimeoutSec = 180,               // Total number of seconds for read to file allowed (atcmd processing)
+    http__readToFileTimeoutSec = 240,               // Total number of seconds for read to file allowed (atcmd processing)
     http__readToFileInterPcktTimeoutSec = 20        // BGx inter-packet timeout (max interval between two packets)
 };
 
 
 /** 
- *  @brief Callback function for data received event. Notifies application that new data is available and needs serviced.
+ * @brief Callback function for data received event. Notifies application that new data is available and needs serviced.
  *
- *  @param [in] dataCntxt [in] Originating data context
- *  @param [in] data [in] Pointer to received data buffer
- *  @param [in] dataSz [in] The number of bytes available
- *  @param [in] isFinal Last invoke of the callback will indicate with isFinal = true.
+ * @param [in] dataCntxt [in] Originating data context
+ * @param [in] data [in] Pointer to received data buffer
+ * @param [in] dataSz [in] The number of bytes available
+ * @param [in] isFinal Last invoke of the callback will indicate with isFinal = true.
  */
 typedef void (*httpRecv_func)(dataCntxt_t dataCntxt, char *data, uint16_t dataSz, bool isFinal);
 
 
 /** 
- *  @brief If using custom headers, bit-map indicating what headers to create for default custom header collection.
+ * @brief If using custom headers, bit-map indicating what headers to create for default custom header collection.
 */
 typedef enum httpHeaderMap_tag              // bit-map to indicate headers to create for add custom headers, bitwise OR to http_addDefaultHdrs()
 {
@@ -128,46 +130,46 @@ extern "C"
 
 
 /**
- *	@brief Create a HTTP(s) control structure to manage web communications. 
- *  @param [in] httpCtrl HTTP control structure pointer, struct defines parameters of communications with web server.
- *	@param [in] dataCntxt [in] The data context (0-5) to use for this communications.
- *  @param [in] recvCallback [in] Callback function to receive incoming page data.
+ * @brief Create a HTTP(s) control structure to manage web communications. 
+ * @param [in] httpCtrl HTTP control structure pointer, struct defines parameters of communications with web server.
+ * @param [in] dataCntxt [in] The data context (0-5) to use for this communications.
+ * @param [in] recvCallback [in] Callback function to receive incoming page data.
  */
 void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func recvCallback);
 
 
 /**
- *	@brief Set host connection characteristics. 
- *  @param [in] httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
- *  @param [in] hostURL [in] The HOST address of the web server URL.
- *  @param [in] hostPort [in] The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
+ * @brief Set host connection characteristics. 
+ * @param [in] httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
+ * @param [in] hostURL [in] The HOST address of the web server URL.
+ * @param [in] hostPort [in] The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
  */
 void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t hostPort);
 
 
 /**
- *	@brief Registers custom headers (char) buffer with HTTP control.
- *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *	@param [in] headerBuf pointer to header buffer  created by application
- *  @param [in] headerBufSz size of the header buffer
+ * @brief Registers custom headers (char) buffer with HTTP control.
+ * @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ * @param [in] headerBuf pointer to header buffer  created by application
+ * @param [in] headerBufSz size of the header buffer
  */
 void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *hdrBuffer, uint16_t hdrBufferSz);
 
 
 /**
- *	@brief Adds common http headers to the custom headers buffer. REQUIRES previous enable of custom headers and buffer registration.
- *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *	@param [in] headerMap Bitmap for which standard headers to use.
+ * @brief Adds common http headers to the custom headers buffer. REQUIRES previous enable of custom headers and buffer registration.
+ * @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ * @param [in] headerMap Bitmap for which standard headers to use.
  */
 void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap);
 
 
 /**
- *	@brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
+ * @brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
  *
- *  @param [in] http Pointer to the control block for HTTP communications.
- *	@param [in] user User name.
- *  @param [in] pw Password/secret for header.
+ * @param [in] http Pointer to the control block for HTTP communications.
+ * @param [in] user User name.
+ * @param [in] pw Password/secret for header.
  */
 void http_addBasicAuthHdr(httpCtrl_t *httpCtrl, const char *user, const char *pw);
 
@@ -180,51 +182,52 @@ void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText);
  * --------------------------------------------------------------------------------------------- */
 
 /**
- *	@brief Perform HTTP GET operation. Results are internally buffered on the LTEm, see http_read().
- *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *	@param [in] relativeUrl The URL to GET (starts with \ and doesn't include the host part)
- *  @param [in] returnResponseHdrs Set to true for page result to include response headers at the start of the page
- *  @return true if GET request sent successfully
+ * @brief Perform HTTP GET operation. Results are internally buffered on the LTEm, see http_read().
+ * @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ * @param [in] relativeUrl The URL to GET (starts with \ and doesn't include the host part)
+ * @param [in] returnResponseHdrs Set to true for page result to include response headers at the start of the page
+ * @return true if GET request sent successfully
  */
 resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs);
 
 
 /**
- *	@brief Performs a HTTP POST page web request.
- *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *	@param [in] relativeUrl URL, relative to the host. If none, can be provided as "" or "/" ()
- *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data
- *  @param [in] postData Pointer to char buffer with POST content
- *  @param [in] postDataSz Size of the POST content reference by *postData
- *  @return true if POST request completed
+ * @brief Performs a HTTP POST page web request.
+ * @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ * @param [in] relativeUrl URL, relative to the host. If none, can be provided as "" or "/" ()
+ * @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data
+ * @param [in] postData Pointer to char buffer with POST content
+ * @param [in] postDataSz Size of the POST content reference by *postData
+ * @return true if POST request completed
  */
 resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, const char* postData, uint16_t dataSz);
 
 
 /**
- *	@brief Retrieves page results from a previous GET or POST.
+ * @brief Retrieves page results from a previous GET or POST.
 
- *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *  @return HTTP status of read.
+ * @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ * @return HTTP status of read.
  */
 uint16_t http_readPage(httpCtrl_t *httpCtrl);
 
 
 /**
- *	@brief Retrieves page results from a previous GET or POST.
+ * @brief Retrieves page results from a previous GET or POST.
 
- *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *  @param [in] filename C-string containing the name of the file to create from page content.
- *  @return HTTP status of read.
+ * @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ * @param [in] filename C-string containing the name of the file to create from page content.
+ * @param [in] filesz Approximate file size for read, used to calculate command timeout. 0=use default timeout of http__readToFileTimeoutSec. 
+ * @return HTTP status of read.
  */
-uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename);
+uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename, uint32_t filesz);
 
 
 /**
- *	@brief Cancels a http_readPage flow if the remaining contents are not needed.
- *  @details This is a blocking call. The page read off the network will continue, but the contents will be discarded.
+ * @brief Cancels a http_readPage flow if the remaining contents are not needed.
+ * @details This is a blocking call. The page read off the network will continue, but the contents will be discarded.
 
- *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ * @param [in] httpCtrl Pointer to the control block for HTTP communications.
  */
 void http_cancelPage(httpCtrl_t *httpCtrl);
 

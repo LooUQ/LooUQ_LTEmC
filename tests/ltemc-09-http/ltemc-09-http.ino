@@ -145,14 +145,14 @@ void setup() {
 
 
 
-http_initControl(&httpCtrl_BMS, dataCntxt_2, httpRecvCB);
-http_setConnection(&httpCtrl_BMS, "https://ota-cdn.memfault.com/3916/952/11412810952?token=bVDX5Ed95OV5EjBILIFKHYCKjy-qcEqoKov9Ojky02c&expires=1699754400", 80);
-DPRINT(PRNT_dGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
+// http_initControl(&httpCtrl_BMS, dataCntxt_2, httpRecvCB);
+// http_setConnection(&httpCtrl_BMS, "https://ota-cdn.memfault.com/3916/952/11412810952?token=bVDX5Ed95OV5EjBILIFKHYCKjy-qcEqoKov9Ojky02c&expires=1699754400", 80);
+// DPRINT(PRNT_dGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
 
-resultCode_t rslt = http_get(&httpCtrl_BMS, "", false);
-rslt = http_readPageToFile(&httpCtrl_BMS, "ota_test.bin");
+// resultCode_t rslt = http_get(&httpCtrl_BMS, "", false);
+// rslt = http_readPageToFile(&httpCtrl_BMS, "ota_test.bin");
 
-file_delete("ota_test.bin");
+// file_delete("ota_test.bin");
 
 }
 
