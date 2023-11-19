@@ -416,6 +416,7 @@ const char* ltem_getUtcDateTime(char format)
         if (atcmd_awaitResult() == resultCode__success)
         {
             if ((dtSrc = memchr(atcmd_getResponseData(), '"', 12)) != NULL)         // allowance for preceeding EOL
+            if ((dtSrc = memchr(atcmd_getResponseData(), '"', 12)) != NULL)         // allowance for preceeding EOL
             {
                 dtSrc++;
                 if (*dtSrc != '8')                                              // test for not initialized date/time, starts with 80 (aka 1980)
@@ -618,6 +619,7 @@ bool ltem_isSimReady()
 
     if (IS_SUCCESS(atcmd_awaitResult()))
     {
+        cpinState = strstr(atcmd_getResponseData(), "+CPIN: READY") != NULL;
         cpinState = strstr(atcmd_getResponseData(), "+CPIN: READY") != NULL;
     }
     return strlen(g_lqLTEM.modemInfo->iccid) > 0 && cpinState;
