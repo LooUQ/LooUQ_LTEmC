@@ -91,7 +91,7 @@ void QBG_powerOn()
     if (QBG_isPowerOn())
     {
         DPRINT(PRNT_DEFAULT, "LTEm found powered on\r");
-        g_lqLTEM.deviceState = deviceState_appReady;                    // APP READY msg comes only once, shortly after chip start, would have missed it 
+        g_lqLTEM.deviceState = deviceState_ready;                       // ready messages come only once, shortly after module start, would have missed it 
         return;
     }
     g_lqLTEM.deviceState = deviceState_powerOff;
@@ -220,7 +220,7 @@ bool QBG_setOptions()
 
         atcmd_ovrrdTimeout(SEC_TO_MS(2));
         if (!atcmd_tryInvoke(cmdBffr))
-            return resultCode__conflict;
+            return resultCode__locked;
 
         if (IS_SUCCESS(atcmd_awaitResult()))    // somewhat unknown cmd list for modem initialization, relax timeout
         {

@@ -94,7 +94,7 @@ void ntwk_setOperatorScanSeq(const char* scanSequence)
     if (strlen(scanSequence) > 0)
     {
         strcpy(g_lqLTEM.modemSettings->scanSequence, scanSequence);
-        if (ltem_getDeviceState() == deviceState_appReady)
+        if (ltem_getDeviceState() == deviceState_ready)
         {
             if (!atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence))
                 return;
@@ -114,7 +114,7 @@ void ntwk_setOperatorScanMode(ntwkScanMode_t scanMode)
    if (strstr(ltem_getModuleType(), "BG9") != NULL)                         // BG96, BG95 only
    {
         g_lqLTEM.modemSettings->scanMode = scanMode; 
-        if (ltem_getDeviceState() == deviceState_appReady)
+        if (ltem_getDeviceState() == deviceState_ready)
         {
             if (!atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode))
                 return;
@@ -132,7 +132,7 @@ void ntwk_setIotMode(ntwkIotMode_t iotMode)
     /* AT+QCFG="iotopmode",<mode>
     */
     g_lqLTEM.modemSettings->iotMode = iotMode; 
-    if (ltem_getDeviceState() == deviceState_appReady)
+    if (ltem_getDeviceState() == deviceState_ready)
     {
         if (!atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode))
             return;
@@ -159,10 +159,10 @@ resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t proto
     ASSERT_W(protoType == pdpProtocol_IPV4, "OnlyIPV4SupportedCurrently");              // warn on not IPv4
 
     snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
-    if (g_lqLTEM.deviceState == deviceState_appReady)
+    if (g_lqLTEM.deviceState == deviceState_ready)
     {
         if(!atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
-            return resultCode__conflict;
+            return resultCode__locked;
 
         return atcmd_awaitResult();
     }
@@ -181,7 +181,7 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
     snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,1,\"%s\",\"%s\",\"%s\",%d", pdpContextId, apn, userName, pw, authMethod);
 
     if(!atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     return atcmd_awaitResult();
 }
@@ -219,7 +219,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
     do 
     {
         if (!atcmd_tryInvoke("AT+COPS?"))                                   // get PROVIDER cellular carrier
-            return resultCode__conflict;
+            return resultCode__locked;
 
         if (IS_SUCCESS(atcmd_awaitResult()))
         {
@@ -254,7 +254,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
         atcmd_ovrrdTimeout(SEC_TO_MS(20));
 
         if (!atcmd_tryInvoke("AT+QIACT?"))
-            return resultCode__conflict;
+            return resultCode__locked;
 
         if (IS_SUCCESS(atcmd_awaitResult()))
         {
@@ -379,7 +379,7 @@ packetNetwork_t *ntwk_getPacketNetwork(uint8_t pdpContextId)
 const char* ntwk_getNetworkInfo()
 {
     if (!atcmd_tryInvoke("AT+QNWINFO"))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     if (IS_SUCCESS(atcmd_awaitResult()))
     {
@@ -404,7 +404,7 @@ const char* ntwk_getNetworkInfo()
 resultCode_t ntwk_getRegistrationStatus()
 {
     if (!atcmd_tryInvoke("AT+CREG?"))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     // TODO need a parser wrapper to grab <stat> (pos 2)
     resultCode_t rslt = atcmd_awaitResult();
@@ -414,10 +414,12 @@ resultCode_t ntwk_getRegistrationStatus()
 
 /**
  * @brief Check network ready condition.
- * @return True, if network is fully established and ready for data transmission.
  */
-bool ntwk_isReady()
+bool ntwk_isReady(bool refresh)
 {
+    if (refresh)
+        ntwk_awaitOperator(0);
+
     return strlen(g_lqLTEM.ntwkOperator->name) > 0;
 }
 

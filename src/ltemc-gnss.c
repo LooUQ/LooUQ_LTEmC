@@ -72,7 +72,7 @@ resultCode_t gnss_on()
     atcmd_ovrrdTimeout(SEC_TO_MS(2));
     if (!atcmd_tryInvoke("AT+QGPS=1"))
     {
-        return resultCode__conflict;
+        return resultCode__locked;
     }
     return atcmd_awaitResult();
 }
@@ -85,7 +85,7 @@ resultCode_t gnss_off()
 {
     if (!atcmd_tryInvoke("AT+QGPSEND"))
     {
-        return resultCode__conflict;
+        return resultCode__locked;
     }
     return atcmd_awaitResult();
 }
@@ -105,7 +105,7 @@ gnssLocation_t gnss_getLocation()
 
     if (!atcmd_tryInvoke("AT+QGPSLOC=2"))
     {
-        gnssResult.statusCode = resultCode__conflict;
+        gnssResult.statusCode = resultCode__locked;
         return gnssResult;
     }
 

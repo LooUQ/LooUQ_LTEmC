@@ -219,7 +219,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         if (returnResponseHdrs)
         {
             if (!atcmd_tryInvoke("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs)))
-                return resultCode__conflict;
+                return resultCode__locked;
 
             if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
                 return _rslt;
@@ -228,7 +228,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         if (httpCtrl->useTls)
         {
             if (!atcmd_tryInvoke("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt))
-                return resultCode__conflict;
+                return resultCode__locked;
 
             if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
                 return _rslt;
@@ -259,7 +259,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         /* If custom headers, need to both set flag here and include in request stream below
          */
         if (!atcmd_tryInvoke("AT+QHTTPCFG=\"requestheader\",%d", httpCtrl->cstmHdrs ? 1 : 0))
-            return resultCode__conflict;
+            return resultCode__locked;
 
         if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
             return _rslt;
@@ -280,12 +280,12 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
 
             atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, customRqst, strlen(customRqst), NULL, true);
             if (!atcmd_tryInvoke("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, strlen(customRqst)))
-                return resultCode__conflict;
+                return resultCode__locked;
         }
         else
         {
             if (!atcmd_tryInvoke("AT+QHTTPGET=%d", PERIOD_FROM_SECONDS(httpCtrl->timeoutSec)))
-                return resultCode__conflict;
+                return resultCode__locked;
         }
 
         _rslt = atcmd_awaitResult();                                             // wait for "+QHTTPGET trailer (request completed)
@@ -326,7 +326,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
     if (returnResponseHdrs)
     {
         if (!atcmd_tryInvoke("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs)))
-            return resultCode__conflict;
+            return resultCode__locked;
         if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
             return _rslt;
     }
@@ -334,7 +334,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
     if (httpCtrl->useTls)
     {
         if (!atcmd_tryInvoke("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt))
-            return resultCode__conflict;
+            return resultCode__locked;
         if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
             return _rslt;
     }
@@ -372,12 +372,12 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
     if (httpCtrl->cstmHdrsSz)
     {
         if(!atcmd_tryInvoke("AT+QHTTPPOST=%d,5,%d", httpRequestLen, httpCtrl->timeoutSec))
-            return resultCode__conflict;
+            return resultCode__locked;
     }
     else
     {
         if (!atcmd_tryInvoke("AT+QHTTPPOST=%d,5,%d", postDataSz, httpCtrl->timeoutSec))
-            return resultCode__conflict;
+            return resultCode__locked;
     }
 
     if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
@@ -503,7 +503,7 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
         // atcmd_setStreamControl("CONNECT", (streamCtrl_t*)httpCtrl);
         return atcmd_awaitResult();                                             // dataHandler will be invoked by atcmd module and return a resultCode
     }
-    return resultCode__conflict;
+    return resultCode__locked;
 }
 
 
@@ -521,7 +521,7 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
     atcmd_ovrrdTimeout(SEC_TO_MS(httpCtrl->timeoutSec));
     atcmd_ovrrdParser(S__httpReadFileStatusParser);
     if (!atcmd_tryInvoke("AT+QHTTPREADFILE=\"%s\",%d", filename, httpCtrl->timeoutSec))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     return atcmd_awaitResult();
 }

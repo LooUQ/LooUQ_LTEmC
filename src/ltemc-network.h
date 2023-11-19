@@ -200,9 +200,10 @@ resultCode_t ntwk_getRegistrationStatus();
 
 /**
  * @brief Check network ready condition.
+ * @param [in] refresh If true, performs a query with module for current state.
  * @return True, if network is fully established and ready for data transmission.
  */
-bool ntwk_isReady();
+bool ntwk_isReady(bool refresh);
 
 
 /** 

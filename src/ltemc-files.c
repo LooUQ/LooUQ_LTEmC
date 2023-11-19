@@ -71,7 +71,7 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
     char *workPtr;
 
     // if (!ATCMD_awaitLock(atcmd__defaultTimeout))
-    //     return resultCode__conflict;                                    // failed to get lock
+    //     return resultCode__locked;                                    // failed to get lock
 
     do
     {
@@ -88,7 +88,7 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
 
         // now get file collection info
         if (!atcmd_tryInvoke("AT+QFLDS"))
-            return resultCode__conflict;
+            return resultCode__locked;
         rslt = atcmd_awaitResult();
         if (rslt != resultCode__success)
             break;
@@ -112,7 +112,7 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
     {
         // if (!ATCMD_awaitLock(atcmd__defaultTimeout))
         // {
-        //     rslt = resultCode__conflict;                                    // failed to get lock
+        //     rslt = resultCode__locked;                                    // failed to get lock
         //     break;
         // }
 
@@ -121,13 +121,13 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
             fileList->namePattern[0] = '*';
             fileList->namePattern[1] = '\0';
             if (!atcmd_tryInvoke("AT+QFLST"))
-                return resultCode__conflict;
+                return resultCode__locked;
         }
         else
         {
             strncpy(fileList->namePattern, filename, MIN(strlen(filename), file__filenameSz));
             if (!atcmd_tryInvoke("AT+QFLST=\"%s\"", fileList->namePattern))
-                return resultCode__conflict;
+                return resultCode__locked;
         }
 
         rslt = atcmd_awaitResult();
@@ -169,7 +169,7 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
     {
         if (!atcmd_tryInvoke("AT+QFOPEN=\"%s\",%d", filename, openMode))
         {
-            return resultCode__conflict;
+            return resultCode__locked;
         }
         
         rslt = atcmd_awaitResult();
@@ -201,7 +201,7 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
 resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
 {
     if (!atcmd_tryInvoke("AT+QFOPEN?"))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     char* workPtr;
     char* eolPtr;
@@ -233,7 +233,7 @@ resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
 resultCode_t file_close(uint16_t fileHandle)
 {
     if (!atcmd_tryInvoke("AT+QFCLOSE=%d", fileHandle))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     return atcmd_awaitResult();
 }
@@ -279,12 +279,12 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
     if (readSz > 0)
     {
         if (!atcmd_tryInvoke("AT+QFREAD=%d,%d", fileHandle, requestSz))
-            return resultCode__conflict;
+            return resultCode__locked;
     }
     else
     {
         if (!atcmd_tryInvoke("AT+QFREAD=%d", fileHandle))
-            return resultCode__conflict;
+            return resultCode__locked;
     }
 
     resultCode_t _rslt;
@@ -307,14 +307,14 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
 resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz, fileWriteResult_t *writeResult)
 {
     // if (!ATCMD_awaitLock(atcmd__defaultTimeout))
-    //     return resultCode__conflict;                                                            // failed to get lock
+    //     return resultCode__locked;                                                            // failed to get lock
 
     do
     {
         atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, writeData, writeSz, NULL, false);
 
         if (!atcmd_tryInvoke("AT+QFWRITE=%d,%d", fileHandle, writeSz))
-            return resultCode__conflict;
+            return resultCode__locked;
 
         if (IS_SUCCESS(atcmd_awaitResult()))                                                    // "CONNECT" prompt result
         {
@@ -344,7 +344,7 @@ resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t wri
 resultCode_t file_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t seekFrom)
 {
     if (!atcmd_tryInvoke("AT+QFSEEK=%d,%d,%d", fileHandle, offset, seekFrom))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     return atcmd_awaitResult();
 }
@@ -356,7 +356,7 @@ resultCode_t file_getPosition(uint16_t fileHandle, uint32_t* filePtr)
     char *workPtr;
 
     if (!atcmd_tryInvoke("AT+QFPOSITION=%d", fileHandle))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     rslt = atcmd_awaitResult();
     if (rslt != resultCode__success)
@@ -375,7 +375,7 @@ resultCode_t file_getPosition(uint16_t fileHandle, uint32_t* filePtr)
 resultCode_t file_truncate(uint16_t fileHandle)
 {
     if (!atcmd_tryInvokeAdv("AT+QFTUCAT=%d", fileHandle))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     return atcmd_awaitResult();
 }
@@ -387,7 +387,7 @@ resultCode_t file_truncate(uint16_t fileHandle)
 resultCode_t file_delete(const char* filename)
 {
     if (!atcmd_tryInvoke("AT+QFDEL=\"%s\"", filename))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     return atcmd_awaitResult();
 }

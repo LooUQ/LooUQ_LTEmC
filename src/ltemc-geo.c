@@ -98,7 +98,7 @@ resultCode_t geo_add(uint8_t geoId, geoMode_t mode, geoShape_t shape, double lat
     {
         return atcmd_awaitResult();
     }
-    return resultCode__conflict;
+    return resultCode__locked;
 }
 
 
@@ -114,7 +114,7 @@ resultCode_t geo_delete(uint8_t geoId)
     {
         return atcmd_awaitResult();
     }
-    return resultCode__conflict;
+    return resultCode__locked;
 }
 
 

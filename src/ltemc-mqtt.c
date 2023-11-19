@@ -238,7 +238,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
     atcmd_ovrrdTimeout(SEC_TO_MS(30));
     atcmd_ovrrdParser(S__mqttOpenCompleteParser);
     if (!atcmd_tryInvoke("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, mqttCtrl->hostUrl, mqttCtrl->hostPort))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     resultCode_t _rslt = atcmd_awaitResult();
     const char* token = atcmd_getToken(2);                          // token 2 is open result
@@ -280,7 +280,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
         return resultCode__success;
 
     if (!atcmd_tryInvoke("AT+QMTCFG=\"session\",%d,%d", mqttCtrl->dataCntxt, (uint8_t)cleanSession)) // set option to clear session history on connect
-        return resultCode__conflict;
+        return resultCode__locked;
 
     resultCode_t _rslt;
     if (IS_NOTSUCCESS_RSLT(atcmd_awaitResult()))
@@ -289,7 +289,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
     atcmd_ovrrdTimeout(SEC_TO_MS(60));
     atcmd_ovrrdParser(S__mqttConnectCompleteParser);
     if (!atcmd_tryInvoke("AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->dataCntxt, mqttCtrl->clientId, mqttCtrl->username, mqttCtrl->password))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     _rslt = atcmd_awaitResult()
     DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
@@ -337,7 +337,7 @@ resultCode_t mqtt_subscribeTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtr
     {
         S__notifyServerTopicChange(mqttCtrl, mqttCtrl->topics[topicIndx], true);
     }
-    return resultCode__conflict;
+    return resultCode__locked;
 }
 
 /**
@@ -359,7 +359,7 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
     {
         S__notifyServerTopicChange(mqttCtrl, topicIndx, false);
     }
-    return resultCode__conflict;
+    return resultCode__locked;
 }
 
 // /**
@@ -378,7 +378,7 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
 
 //     uint32_t timeoutMS = (timeoutSeconds == 0) ? mqtt__publishTimeout : timeoutSeconds * 1000;
 //     char msgText[mqtt__messageSz];
-//     resultCode_t rslt = resultCode__conflict;               // assume lock not obtainable, conflict
+//     resultCode_t rslt = resultCode__locked;               // assume lock not obtainable, conflict
 
 //     mqttCtrl->lastMsgId++;                                                                                      // keep sequence going regardless of MQTT QOS
 //     uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->lastMsgId;                                             // msgId not sent with QOS == 0, otherwise sent
@@ -416,7 +416,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
     atcmd_ovrrdParser(S__mqttPublishCompleteParser);
 
     if (!atcmd_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     resultCode_t _rslt;
     if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
@@ -501,7 +501,7 @@ mqttState_t mqtt_readStatus(mqttCtrl_t *mqttCtrl)
     atcmd_ovrrdParser(S__mqttConnectStatusParser);
 
     if (!atcmd_tryInvoke("AT+QMTCONN?"))
-        return resultCode__conflict;
+        return resultCode__locked;
 
     if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
     {
@@ -601,14 +601,14 @@ static resultCode_t S__notifyServerTopicChange(mqttCtrl_t *mqttCtrl, mqttTopicCt
         atcmd_ovrrdParser(S__mqttSubscribeCompleteParser);
 
         if (!atcmd_tryInvoke("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->dataCntxt, ++mqttCtrl->sentMsgId, topicName, topicCtrl->Qos))
-            return resultCode__conflict;
+            return resultCode__locked;
         
         return atcmd_awaitResult();
     }
     else
     {
         if (!atcmd_tryInvoke("AT+QMTUNS=%d,%d,\"%s\"", mqttCtrl->dataCntxt, ++mqttCtrl->sentMsgId, topicName))
-            return resultCode__conflict;
+            return resultCode__locked;
 
         return atcmd_awaitResult();
     }

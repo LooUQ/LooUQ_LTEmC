@@ -75,7 +75,7 @@ resultCode_t gpio_adcRead(uint8_t portNumber, uint16_t* analogValue)
             return resultCode__badRequest;
         }
     }
-    return resultCode__conflict;
+    return resultCode__locked;
 }
 
 
@@ -105,7 +105,7 @@ resultCode_t gpio_configPort(uint8_t portNumber, gpioDirection_t direction, gpio
             return resultCode__badRequest;
         }
     }
-    return resultCode__conflict;
+    return resultCode__locked;
 }
 
 
@@ -126,7 +126,7 @@ resultCode_t gpio_read(uint8_t portNumber, bool* pinValue)
             return resultCode__success;
         }
     }
-    return resultCode__conflict;
+    return resultCode__locked;
 }
 
 
@@ -145,7 +145,7 @@ resultCode_t gpio_write(uint8_t portNumber, bool pinValue)
             return resultCode__success;
         }
     }
-    return resultCode__conflict;
+    return resultCode__locked;
 }
 
 

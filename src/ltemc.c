@@ -79,7 +79,7 @@ static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- * @brief Initialize the LTEm1 modem.
+ * @brief Initialize the LTEm modem.
  */
 void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEvntNotify_func eventNotifCallback)
 {
@@ -229,7 +229,7 @@ bool ltem_start(resetAction_t resetAction)
 
     if (appReady && simReady)
     {
-        g_lqLTEM.deviceState = deviceState_appReady;
+        g_lqLTEM.deviceState = deviceState_ready;
         DPRINT(PRNT_dCYAN, "Module ready at %dms (%d/%d)\r\n", pMillis() - startModuleReady, appReady - startModuleReady, simReady - startModuleReady);
     }
     else
