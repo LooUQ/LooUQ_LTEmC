@@ -34,7 +34,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
-#include "ltemc-internal.h"
+#include "ltemc-iTypes.h"
 #include "ltemc-sckt.h"
 
 extern ltemDevice_t g_lqLTEM;
@@ -50,7 +50,6 @@ extern ltemDevice_t g_lqLTEM;
 
 // file scope local function declarations
 static resultCode_t S__scktTxDataHndlr();
-static void S__scktUrcHndlr();
 static resultCode_t S__scktRxHndlr();
 
 static cmdParseRslt_t S__irdResponseHeaderParser();
@@ -162,7 +161,7 @@ void sckt_close(scktCtrl_t *scktCtrl)
  */
 void SCKT_closeCntxt(uint8_t cntxtNm)
 {
-    streamCtrl_t* streamCtrl = ltem_getStreamFromCntxt(cntxtNm, streamType__SCKT);
+    streamCtrl_t* streamCtrl = ltem_getStreamFromCntxt(cntxtNm, streamType_SCKT);
     ASSERT(streamCtrl);
 
     sckt_close(streamCtrl);
@@ -274,7 +273,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
      * +QIURC: "pdpdeact",<contextID>   // not handled here, falls through to global URC handler
     */
 
-static void S__scktUrcHndlr()
+void SCKT__urcHndlr()
 {
     bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
 

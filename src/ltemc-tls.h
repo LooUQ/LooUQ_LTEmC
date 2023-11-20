@@ -74,15 +74,6 @@ bool tls_configure(uint8_t sckt, tlsVersion_t version, tlsCipher_t cipherSuite, 
 void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel, bool sniEnabled);
 
 
-/** 
- *  @brief Configure the TLS/SSL settings for a context
- *  @details The TLS/SSL context is loosely associated with the protocol context. LTEmC maintains a 1-to-1 map for consistency.
- *  @param [in] contxt TLS/SSL context to configure
- *  @return TLS options structure with the settings currently applied to the specified context
- */
-tlsOptions_t tlsGetOptions(uint8_t sckt);
-
-
 /* Maintenance of customer trustd root (TR) certificates requires the file_ module functionality (under developement Q3-2021)
  *  1) upload certficate to BGx file system 
  *  2) configure TR for context 
@@ -91,8 +82,6 @@ tlsOptions_t tlsGetOptions(uint8_t sckt);
 // void tls_configureTRCertificate(context_t cntxt, const char *certificatePath);
 
 
-/* Release 3.0.3 Changes Below
- * ==============================================================================================*/
 
 /** 
  *  @brief Configure the SNI (Server Name Indication) option for TLS/SSL (default is no SNI).

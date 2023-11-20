@@ -36,7 +36,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
-#include "ltemc-internal.h"
+#include "ltemc-iTypes.h"
 #include "ltemc-platform.h"
 #include "ltemc-nxp-sc16is.h"
 

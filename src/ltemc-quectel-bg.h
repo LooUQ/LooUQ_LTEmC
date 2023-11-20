@@ -34,8 +34,6 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_QUECTEL_QBG_H__
 #define __LTEMC_QUECTEL_QBG_H__
 
-#include "ltemc-internal.h"
-
 // #define BGX_RATSEQ_AUTO    "00"
 // #define BGX_RATSEQ_GSM     "01"
 // #define BGX_RATSEQ_CATM1   "02"
@@ -47,6 +45,8 @@ Also add information on how to contact you by electronic and paper mail.
 #define QBG_RESET_DELAY        300U
 #define QBG_BAUDRATE_DEFAULT   115200U
 */
+
+#include "ltemc-iTypes.h"
 
 
 /** 

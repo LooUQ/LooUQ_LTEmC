@@ -44,7 +44,7 @@ extern "C" {
 // #include <string.h>
 // #include <stdlib.h>
 
-//#include "ltemc-types.h"
+#include "ltemc-iTypes.h"
 
 
 /**
@@ -68,24 +68,6 @@ void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_
 //  * @param eotChar 
 //  */
 // void atcmd_setDataModeEot(uint8_t eotChar);
-
-/**
- * @brief Sets command timeout for next invocation of a BGx AT command. 
- * @details If newTimeout is zero (0) no change to timeout is made, the current timeout is returned. Following the next command, the timeout value returns to default value.
- * @param [in] newTimeout Value in milliseconds to wait for a command to complete.
- * @return The value of the existing timeout.
- */
-uint16_t atcmd_ovrrdTimeout(uint16_t newTimeout);
-
-
-/**
- * @brief Sets response parser for next invocation of a BGx AT command. 
- * @details If newParser is NULL the existing parser is CLEARED, but its location is returned. Following the next command, the parser will revert to the default parser function.
- * @param [in] newParser Address of the parser function to use for the next command. 
- * @return The value of the existing timeout.
- */
-cmdResponseParser_func atcmd_ovrrdParser(cmdResponseParser_func newParser);
-
 
 /**
  * @brief Invokes a BGx AT command using default option values (automatic locking).
@@ -185,20 +167,6 @@ bool atcmd_wasPreambleFound();
 char* atcmd_getToken(uint8_t tokenIndx);
 
 
-// /**
-//  * @brief Returns the atCmd result value
-//  * @return If the parser was instructed to capture a value (see atcmd_stdResponseParser()) the signed integer value found
-//  */
-// int32_t atcmd_getValue();
-
-
-/**
- * @brief Returns the atCmd parser result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
- * @return The PARSER result from the last interation of the parser execution. This is generally not applicable to end-user applications.
- */
-cmdParseRslt_t atcmd_getParserResult();
-
-
 /**
  * @brief Returns the BGx reported CME/CMS error code. Use this function to get details on a resultCode_t = 500
  * @return Pointer to a error value reported by the BGx module. Note that not all BGx errors have a detailed descriptor.
@@ -238,52 +206,6 @@ void atcmd_exitDataMode();
 void atcmd_exitTransparentMode();
 
 
-/* Response Parsers
- * --------------------------------------------------------------------------------------------- */
-
-/**
- * @brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
- * @details LTEmC internal function, not static as it is used by several LTEmC modules
- *           Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). 
- *           Note: If no stop condition is specified, finale, tokensReqd, and lengthReqd are all omitted, the parser will return with 
- *                 the first block of characters received.
- *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getValue()
- *           and atcmd_getResponse() functions respectively.
- * @param [in] preamble - C-string containing the expected phrase that starts response. 
- * @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
- * @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
- * @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
- * @param [in] valueIndx - (optional: 0=N/A, 1=first) Indicates the 1-n position (chars/tokens) of an integer value to grab from the response.
- * @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
- * @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
- * @return Parse status result
- */
-cmdParseRslt_t atcmd_stdResponseParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, uint8_t valueIndx, const char *finale, uint16_t lengthReqd);
-
-
-// /**
-//  * @brief LTEmC internal testing parser to capture incoming response until timeout. This is generally not used by end-user applications.
-//  * @return Parse status result (always pending for this test parser)
-//  */
-// cmdParseRslt_t ATCMD_testResponseTrace();
-
-
-/**
- * @brief Stardard TX (out) data handler used by dataMode. Sends data and checks for OK response.
- */
-resultCode_t atcmd_stdTxDataHndlr();
-
-
-/**
- * @brief TX (out) data handler that performs a blind send of data.
- */
-resultCode_t atcmd_txDataHndlrRaw();
-
-
-/**
- * @brief Stardard RX (in) data handler used by dataMode.
- */
-resultCode_t atcmd_stdRxDataHndlr();
 
 
 #ifdef __cplusplus

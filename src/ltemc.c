@@ -37,13 +37,14 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
+#include "ltemc-iTypes.h"
 #include "ltemc.h"
-#include "ltemc-internal.h"
 
-/* ------------------------------------------------------------------------------------------------
- * GLOBAL LTEm Device Objects, One LTEmX supported
- * --------------------------------------------------------------------------------------------- */
+
+/* LTEmC Global Singleton Instance
+------------------------------------------------------------------------------------------------- */
 ltemDevice_t g_lqLTEM;
+
 
 #define MODULERDY_TIMEOUT 8000
 
@@ -756,9 +757,9 @@ void ltem_eventMgr()
     for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
     {
         resultCode_t serviceRslt;
-        if (g_lqLTEM.streams[i] != NULL &&  g_lqLTEM.streams[i]->urcHndlr != NULL)  // URC event handler in this stream, offer the data to the handler
+        if (g_lqLTEM.streams[i] != NULL &&  (g_lqLTEM.urcEvntHndlrs[i]) != NULL)  // URC event handler in this stream, offer the data to the handler
         {
-            serviceRslt = g_lqLTEM.streams[i]->urcHndlr();
+            serviceRslt = (g_lqLTEM.urcEvntHndlrs[i])();
         }
         if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
         {
@@ -784,6 +785,24 @@ void ltem_addStream(streamCtrl_t *streamCtrl)
         if (g_lqLTEM.streams[i] == NULL)
         {
             g_lqLTEM.streams[i] = streamCtrl;
+            switch (streamCtrl->streamType)
+            {
+                // case streamType_file:
+                //     g_lqLTEM.urcEvntHndlrs[i] = file_urcHandler;         // file module has no URC events
+                //     break;
+                
+                // case streamType_HTTP:
+                //     g_lqLTEM.urcEvntHndlrs[i] = HTTP_urcHandler;
+                //     break;
+
+                case streamType_MQTT:
+                    g_lqLTEM.urcEvntHndlrs[i] = MQTT_urcHandler;
+                    break;
+
+                case streamType_SCKT:
+                    g_lqLTEM.urcEvntHndlrs[i] = SCKT_urcHandler;
+                    break;
+            }
             return;
         }
     }
@@ -818,7 +837,7 @@ streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType)
             {
                 return g_lqLTEM.streams[i];
             }
-            else if (streamType == streamType__SCKT)
+            else if (streamType == streamType_SCKT)
             {
                 if (g_lqLTEM.streams[i]->streamType == streamType_UDP ||
                     g_lqLTEM.streams[i]->streamType == streamType_TCP ||

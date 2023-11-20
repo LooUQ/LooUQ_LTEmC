@@ -34,8 +34,8 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
+#include "ltemc-iTypes.h"
 #include "ltemc-tls.h"
-#include "ltemc-atcmd.h"
 
 
 bool tls_configure(uint8_t dataCntxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)

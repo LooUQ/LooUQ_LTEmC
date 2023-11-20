@@ -88,16 +88,6 @@ typedef enum mqttResult_tag
 
 
 /** 
- *  @brief Enum of available MQTT protocol version options.
-*/
-typedef enum mqttVersion_tag
-{
-    mqttVersion_3 = 3,              // Set behavior to MQTT version 3.0
-    mqttVersion_311 = 4             // Set behavior to MQTT version 3.1.1, Note: this is not MQTT 4.0
-} mqttVersion_t;
-
-
-/** 
  *  @brief Enum specifying the MQTT QOS for a publish and subscribed topics.
 */
 typedef enum mqttQos_tag
@@ -109,14 +99,14 @@ typedef enum mqttQos_tag
 } mqttQos_t;
 
 
-// /** 
-//  *  @brief Enum specifying behavior for messages pre-session establishment (session starts with connect, not open).
-// */
-// typedef enum mqttSession_tag
-// {
-//     mqttSession_preserve = 0,       // Preserve message that arrive previous to session and deliver to application.
-//     mqttSession_cleanStart = 1,     // Clear out any previously received messages and start session "clean".
-// } mqttSession_t;
+/** 
+ *  @brief Enum specifying behavior for messages pre-session establishment (session starts with connect, not open).
+*/
+typedef enum mqttSession_tag
+{
+    mqttSession_preserve = 0,       // Preserve message that arrive previous to session and deliver to application.
+    mqttSession_cleanStart = 1,     // Clear out any previously received messages and start session "clean".
+} mqttSession_t;
 
 
 /** 
@@ -136,21 +126,31 @@ typedef enum mqttState_tag
 } mqttState_t;
 
 
-// /** 
-//  *  @brief Struct describing a MQTT topic subscription.
-// */
-// typedef struct mqttTopicSub_tag
-// {
-//     char topicName[mqtt__topic_nameSz];     // Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
-//     char wildcard;                          // Set to '#' if multilevel wildcard specified when subscribing to topic.
-// } mqttTopicSub_t;
-// typedef enum mqttRecvState_tag
-// {
-//     mqttRecvState_none = 0,
-//     mqttRecvState_signalled,
-//     mqttRecvState_topicDelivered,
-//     mqttRecvState_msgUnderway
-// } mqttRecvState_t;
+/** 
+ *  @brief Struct describing a MQTT topic subscription.
+*/
+typedef struct mqttTopicSub_tag
+{
+    char topicName[mqtt__topic_nameSz];     // Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
+    char wildcard;                          // Set to '#' if multilevel wildcard specified when subscribing to topic.
+} mqttTopicSub_t;
+typedef enum mqttRecvState_tag
+{
+    mqttRecvState_none = 0,
+    mqttRecvState_signalled,
+    mqttRecvState_topicDelivered,
+    mqttRecvState_msgUnderway
+} mqttRecvState_t;
+
+
+/** 
+ *  @brief Enum of available MQTT protocol version options.
+*/
+typedef enum mqttVersion_tag
+{
+    mqttVersion_3 = 3,              // Set behavior to MQTT version 3.0
+    mqttVersion_311 = 4             // Set behavior to MQTT version 3.1.1, Note: this is not MQTT 4.0
+} mqttVersion_t;
 
 
 typedef enum mqttMsgSegment_tag
@@ -180,14 +180,13 @@ typedef struct mqttCtrl_tag
     char streamType;                            // stream type
     dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
     dataRxHndlr_func dataRxHndlr;               // function to handle data streaming, initiated by eventMgr() or atcmd module
-    urcEvntHndlr_func urcEvntHndlr;             // function to determine if "potential" URC event is for an open stream and perform reqd actions
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
     mqttState_t state;                          // Current state of the MQTT protocol services on device.
     bool useTls;                                // flag indicating SSL/TLS applied to stream
     tlsCtrl_t* tlsCtrl;                         // NULL for no TLS/SSL, otherwise a TLS control with settings
-    char hostUrl[host__urlSz];                  // URL or IP address of host
+    char hostUrl[ltem__hostUrlSz];            // URL or IP address of host
     uint16_t hostPort;                          // IP port number host is listening on (allows for 65535/0)
     mqttTopicCtrl_t* topics[mqtt__topicsCnt];   // array of topic controls, provides for independent app receive functions per topic
     char clientId[PSZ(mqtt__clientIdSz)];   // for auto-restart

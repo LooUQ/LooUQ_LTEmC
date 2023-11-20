@@ -34,7 +34,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
-#include "ltemc-internal.h"
+#include "ltemc-iTypes.h"
 #include "ltemc-files.h"
 
 extern ltemDevice_t g_lqLTEM;
@@ -104,7 +104,7 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
 }
 
 
-resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
+resultCode_t file_getFilelist(const char* namePattern, fileListResult_t *fileList)
 {
 
     resultCode_t rslt;
@@ -116,7 +116,7 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
         //     break;
         // }
 
-        if (strlen(filename) == 0)
+        if (strlen(namePattern) == 0)
         {
             fileList->namePattern[0] = '*';
             fileList->namePattern[1] = '\0';
@@ -125,7 +125,7 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
         }
         else
         {
-            strncpy(fileList->namePattern, filename, MIN(strlen(filename), file__filenameSz));
+            strncpy(fileList->namePattern, namePattern, MIN(strlen(namePattern), file__filenameSz));
             if (!atcmd_tryInvoke("AT+QFLST=\"%s\"", fileList->namePattern))
                 return resultCode__locked;
         }

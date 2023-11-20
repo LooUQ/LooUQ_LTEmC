@@ -37,28 +37,28 @@ Also add information on how to contact you by electronic and paper mail.
 #include <lq-types.h>
 #include "ltemc-types.h"
 
-/** 
- * @brief Typed numeric constants used in HTTP module.
-*/
-enum http__constants
-{
-    // http__getRequestLength = 128,
-    // http__postRequestLength = 128,
+// /** 
+//  * @brief Typed numeric constants used in HTTP module.
+// */
+// enum http__constants
+// {
+//     // http__getRequestLength = 128,
+//     // http__postRequestLength = 128,
 
-    http__noResponseHeaders = 0, 
-    http__returnResponseHeaders = 1, 
-    http__getRequestSz = 448,
-    http__postRequestSz = 448,
-    http__useDefaultTimeout = 0,
-    http__defaultTimeoutBGxSec = 60,
-    http__rqstTypeSz = 5,                           /// GET or POST
-    http__customHdrSmallWarning = 40,
-    http__readToFileBytesPerSecond = 11520,
-    http__readToFileTimeoutRatio = 150,
-    http__readToFileNameSzMax = 80,
-    http__readToFileTimeoutSec = 240,               // Total number of seconds for read to file allowed (atcmd processing)
-    http__readToFileInterPcktTimeoutSec = 20        // BGx inter-packet timeout (max interval between two packets)
-};
+//     http__noResponseHeaders = 0, 
+//     http__returnResponseHeaders = 1, 
+//     http__getRequestSz = 448,
+//     http__postRequestSz = 448,
+//     http__useDefaultTimeout = 0,
+//     http__defaultTimeoutBGxSec = 60,
+//     http__rqstTypeSz = 5,                           /// GET or POST
+//     http__customHdrSmallWarning = 40,
+//     http__readToFileBytesPerSecond = 11520,
+//     http__readToFileTimeoutRatio = 150,
+//     http__readToFileNameSzMax = 80,
+//     http__readToFileTimeoutSec = 240,               // Total number of seconds for read to file allowed (atcmd processing)
+//     http__readToFileInterPcktTimeoutSec = 20        // BGx inter-packet timeout (max interval between two packets)
+// };
 
 
 /** 
@@ -100,13 +100,12 @@ typedef struct httpCtrl_tag
     char streamType;                            /// stream type
     dataCntxt_t dataCntxt;                      /// integer representing the source of the stream; fixed for protocols, file handle for FS
     dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
-    urcEvntHndlr_func urcEvntHndlr;             /// function to determine if "potential" URC event is for an open stream and perform reqd actions
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
     appRcvProto_func appRecvDataCB;             /// callback into host application with data (cast from generic func* to stream specific function)
     bool useTls;                                /// flag indicating SSL/TLS applied to stream
-    char hostUrl[host__urlSz];                  /// URL or IP address of host
+    char hostUrl[ltem__hostUrlSz];              /// URL or IP address of host
     uint16_t hostPort;                          /// IP port number host is listening on (allows for 65535/0)
     bool returnResponseHdrs;                    /// if set true, response headers are included in the returned response
     char *cstmHdrs;                             /// custom header content, optional buffer provided by application
@@ -121,6 +120,33 @@ typedef struct httpCtrl_tag
     uint16_t defaultBlockSz;                    /// default size of block (in of bytes) to transfer to app from page read (page read spans blocks)
     bool pageCancellation;                      /// set to abandon further page loading
 } httpCtrl_t;
+
+
+
+// /** 
+//  * @brief Typed numeric constants used in HTTP module.
+// */
+// enum http__constants
+// {
+//     // http__getRequestLength = 128,
+//     // http__postRequestLength = 128,
+
+//     http__noResponseHeaders = 0, 
+//     http__returnResponseHeaders = 1, 
+//     http__getRequestSz = 448,
+//     http__postRequestSz = 448,
+//     http__useDefaultTimeout = 0,
+//     http__defaultTimeoutBGxSec = 60,
+//     http__rqstTypeSz = 5,                           /// GET or POST
+//     http__customHdrSmallWarning = 40,
+//     http__readToFileBytesPerSecond = 11520,
+//     http__readToFileTimeoutRatio = 150,
+//     http__readToFileNameSzMax = 80,
+//     http__readToFileTimeoutSec = 240,               // Total number of seconds for read to file allowed (atcmd processing)
+//     http__readToFileInterPcktTimeoutSec = 20        // BGx inter-packet timeout (max interval between two packets)
+// };
+
+
 
 
 #ifdef __cplusplus

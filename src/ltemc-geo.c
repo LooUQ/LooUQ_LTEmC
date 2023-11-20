@@ -39,7 +39,7 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <stdio.h>
-#include "ltemc-internal.h"
+#include "ltemc-iTypes.h"
 #include "ltemc-geo.h"
 
 

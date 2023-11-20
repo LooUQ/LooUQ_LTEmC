@@ -279,34 +279,6 @@ void ltem_eventMgr();
 
 
 /**
- * @brief Adds a protocol stream to the LTEm streams table
- * @details ASSERTS that no stream is occupying the stream control's data context
- * 
- * @param streamCtrl The stream to add to the LTEm stream table
- */
-void ltem_addStream(streamCtrl_t *streamCtrl);
-
-
-/**
- * @brief Remove a stream from the LTEm streams table, excludes it from further processing
- * @details ASSERTS that the stream parameter matches the stream in the LTEm table
- * 
- * @param streamCtrl The stream to remove from the LTEm stream table
- */
-void ltem_deleteStream(streamCtrl_t *streamCtrl);
-
-
-/**
- * @brief Get a stream control from data context, optionally filtering on stream type.
- * 
- * @param context The data context for the stream 
- * @param streamType Protocol of the stream
- * @return streamCtrl_t* Pointer of a generic stream, can be cast (after type validation) to a specific protocol control
- */
-streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType);
-
-
-/**
  *	@brief Registers the address (void*) of your application yield callback handler.
  *  @param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
  */

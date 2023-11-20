@@ -38,11 +38,12 @@ Also add information on how to contact you by electronic and paper mail.
 #include <lqdiag.h>
 
 #include <stdarg.h>
-#include "ltemc-internal.h"
+
+#include "ltemc-iTypes.h"
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-extern ltemDevice_t g_lqLTEM;
+
 
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------- */
@@ -51,6 +52,7 @@ static inline void S__restoreCmdDefaultOptions();
 static inline void S__clearCmdOptions();
 static void S__rxParseForUrc();
 static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, uint8_t tkBffrLen);
+
 
 #pragma region Public Functions
 /*-----------------------------------------------------------------------------------------------*/
@@ -381,8 +383,39 @@ void atcmd_exitTransparentMode()
     lDelay(1000);
 }
 
-
 #pragma endregion
+
+
+
+/**
+ * @brief Set parameters for standard AT-Cmd response parser
+ * @details LTEmC internal function, not static as it is used by several LTEmC modules
+ *           Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). 
+ *           Note: If no stop condition is specified, finale, tokensReqd, and lengthReqd are all omitted, the parser will return with 
+ *                 the first block of characters received.
+ *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getValue()
+ *           and atcmd_getResponse() functions respectively.
+ * @param [in] preamble - C-string containing the expected phrase that starts response. 
+ * @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
+ * @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
+ * @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
+ * @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
+ * @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
+ */
+void ATCMD_configureResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, const char *pFinale, uint16_t lengthReqd)
+{
+    memset(&g_lqLTEM.atcmd->parserConfig, 0, sizeof(atcmdParserConfig_t));
+    g_lqLTEM.atcmd->parserConfig.preamble = pPreamble;
+    g_lqLTEM.atcmd->parserConfig.preambleReqd = preambleReqd;
+    g_lqLTEM.atcmd->parserConfig.delimeters = pDelimeters;
+    g_lqLTEM.atcmd->parserConfig.tokensReqd = tokensReqd;
+    g_lqLTEM.atcmd->parserConfig.finale = pFinale;
+    g_lqLTEM.atcmd->parserConfig.lengthReqd = lengthReqd;
+}
+
+
+
+
 
 #pragma region LTEmC Internal Functions
 /*-----------------------------------------------------------------------------------------------*/
@@ -569,6 +602,13 @@ cmdParseRslt_t ATCMD_okResponseParser()
 {
     return atcmd_stdResponseParser("", false, "", 0, 0, "OK\r\n", 0);
 }
+
+
+void ATCMD_setOkResponseParser()
+{
+    ATCMD_configureResponseParser("", false, "", 0, "OK\r\n", 0);
+}
+
 
 /**
  * @brief Stardard TX (out) data handler used by dataMode.

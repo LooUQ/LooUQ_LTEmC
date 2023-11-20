@@ -34,7 +34,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
-#include "ltemc-internal.h"
+#include "ltemc-iTypes.h"
 #include "ltemc-mqtt.h"
 
 extern ltemDevice_t g_lqLTEM;
@@ -58,7 +58,7 @@ enum
 
 static uint8_t S__findtopicIndx(mqttCtrl_t *mqttCntl, mqttTopicCtrl_t *topicCtrl);
 static resultCode_t S__notifyServerTopicChange(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl, bool subscribe);
-static void S__mqttUrcHandler();
+
 
 // static cmdParseRslt_t S__mqttOpenStatusParser();
 static cmdParseRslt_t S__mqttOpenCompleteParser();
@@ -82,7 +82,7 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt)
     memset(mqttCtrl, 0, sizeof(mqttCtrl_t));
 
     mqttCtrl->streamType = streamType_MQTT;
-    mqttCtrl->urcEvntHndlr = S__mqttUrcHandler; // for MQTT, URC handler performs all necessary functions
+    // mqttCtrl->urcEvntHndlr = MQTT_urcHandler; // for MQTT, URC handler performs all necessary functions
     mqttCtrl->dataRxHndlr = NULL;               // marshalls data from buffer to app done by URC handler
 }
 
@@ -211,8 +211,6 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
     // AT+QMTCFG="ssl",5,1,0
     // AT+QMTCFG="version",5,4
     // AT+QMTOPEN=5,"iothub-dev-pelogical.azure-devices.net",8883
-
-    atcmdResult_t rslt;
 
     if (mqttCtrl->state >= mqttState_open) // already open or connected
         return resultCode__success;
@@ -685,7 +683,7 @@ static resultCode_t S__notifyServerTopicChange(mqttCtrl_t *mqttCtrl, mqttTopicCt
 // }
 
 
-static void S__mqttUrcHandler()
+void MQTT_urcHandler()
 {
     bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr; // for convenience
 

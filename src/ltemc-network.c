@@ -43,8 +43,8 @@ Also add information on how to contact you by electronic and paper mail.
 #include <string.h>
 #include <stdlib.h>
 
+#include "ltemc-iTypes.h"
 #include "ltemc-network.h"
-#include "ltemc-internal.h"
 
 extern ltemDevice_t g_lqLTEM;
 

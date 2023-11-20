@@ -31,7 +31,7 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-/*** Known BGx Header Patterns Supported by LTEmC IOP ***
+/** * Known BGx Header Patterns Supported by LTEmC IOP * **/
 /**
  * @details
 
@@ -67,7 +67,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
-#include "ltemc-internal.h"
+#include "ltemc-iTypes.h"
 #include "ltemc-iop.h"
 
 extern ltemDevice_t g_lqLTEM;
