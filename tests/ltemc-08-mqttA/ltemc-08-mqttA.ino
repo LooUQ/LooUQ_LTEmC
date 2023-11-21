@@ -109,6 +109,7 @@ uint32_t lastCycle;
 
 
 // LTEm variables
+tlsCtrl_t tlsCtrl;
 mqttCtrl_t mqttCtrl;                // MQTT control, data to manage MQTT connection to server
 mqttTopicCtrl_t topicCtrl;
 
@@ -133,11 +134,11 @@ void setup() {
     // lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, applEvntNotify);
-    ltem_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
+    ntwk_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
     ltem_start(resetAction_swReset);
 
     DPRINT(PRNT_DEFAULT, "Waiting on network...\r");
-    providerInfo_t *provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
+    ntwkOperator_t *provider = ntwk_awaitOperator(PERIOD_FROM_SECONDS(15));
     while (strlen(provider->name) == 0)
     {
         DPRINT(PRNT_dYELLOW, ">");
@@ -149,13 +150,14 @@ void setup() {
      * Azure requires TLS 1.2 and MQTT version 3.11 
      * --------------------------------------------------------------------------------------------
      */
-    tls_configure(dataCntxt_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    // tls_configure(dataCntxt_0, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    tls_initControl(&tlsCtrl, tlsVersion_tls12, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default, true);
 
     mqtt_initControl(&mqttCtrl, MQTT_DATACONTEXT);
     mqtt_initTopicControl(&topicCtrl, MQTT_IOTHUB_C2D_TOPIC, mqttQos_1, mqttRecvCB);
 
     mqtt_subscribeTopic(&mqttCtrl, &topicCtrl);
-    mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, true, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
+    mqtt_setConnection(&mqttCtrl, MQTT_IOTHUB, MQTT_PORT, &tlsCtrl, mqttVersion_311, MQTT_IOTHUB_DEVICEID, MQTT_IOTHUB_USERID, MQTT_IOTHUB_SASTOKEN);
 
     mqtt_start(&mqttCtrl, true);
 
