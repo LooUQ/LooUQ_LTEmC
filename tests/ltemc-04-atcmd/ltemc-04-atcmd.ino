@@ -42,17 +42,10 @@ Also add information on how to contact you by electronic and paper mail.
     // #define HOST_FEATHER_LTEM3F
 #endif
 
-// #define PERIOD_FROM_SECONDS(period)  (period * 1000)
-// #define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
-// #define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
-
-
-#include <ltemc-internal.h>
-
 
 // LTEmC Includes
+#include <ltemc-iTypes.h>
 #include <ltemc.h>
-
 
 // test controls
 bBuffer_t* rxBffrPtr;
@@ -105,11 +98,11 @@ void loop()
         // char cmdStr[] = "AT+QCCID";
         DPRINT(PRNT_DEFAULT, "Invoking cmd: %s \r\n", cmdStr);
 
-        if (atcmd_tryInvoke(cmdStr))
+        if (ATCMD_tryInvoke(cmdStr))
         {
-            resultCode_t atResult = atcmd_awaitResult();
+            resultCode_t atResult = ATCMD_awaitResult();
             
-                const char *response = atcmd_getResponseData();
+                const char *response = ATCMD_getResponseData();
                 DPRINT(PRNT_INFO, "Got %d chars\r", strlen(response));
                 DPRINT(PRNT_WHITE, "Resp:");
                 DPRINT(PRNT_CYAN, "%s\r", response);

@@ -43,8 +43,6 @@ Also add information on how to contact you by electronic and paper mail.
     // #define HOST_FEATHER_LTEM3F
 #endif
 
-#include <lq-SAMDutil.h>                // allows read of reset cause
-
 #include <ltemc.h>
 #include <ltemc-files.h>
 
@@ -67,9 +65,6 @@ uint16_t fHandle2;
 uint16_t fHandle3;
 char readData[256];
 
-// for debugging access
-#include "ltemc-internal.h"
-extern ltemDevice_t g_lqLTEM;
 
 void setup() {
     #ifdef DIAGPRINT_SERIAL
@@ -81,8 +76,7 @@ void setup() {
         #endif
     #endif
 
-    DPRINT(PRNT_RED, "\rLTEmC test-10-filesystem\r");
-    DPRINT(PRNT_WHITE, "RCause=%d\r\n", lqSAMD_getResetCause());
+    DPRINT(PRNT_RED, "\rLTEmC 10-filesystem\r");
     platform_openPin(LED_BUILTIN, gpioMode_output);
     //lqDiag_setNotifyCallback(applEvntNotify);
 
@@ -98,7 +92,7 @@ void setup() {
     rslt = file_getFSInfo(&fsInfo);
     DPRINT(PRNT_GREEN, "FileSystem: avail=%d, free=%d, fileCnt=%d, taken=%d\r", fsInfo.totalSz, fsInfo.freeSz, fsInfo.filesCnt, fsInfo.filesSz);
 
-    rslt = file_getFilelist(&fileList, "");
+    rslt = file_getFilelist("", &fileList);
     DPRINT(PRNT_GREEN, "\r\rFiles\r");
     for (size_t i = 0; i < fileList.fileCnt; i++)
     {

@@ -40,6 +40,24 @@ Also add information on how to contact you by electronic and paper mail.
 */
 
 
+typedef struct ltemPinConfig_tag
+{
+    int spiIndx;
+    int spiCsPin;
+    int spiClkPin;
+    int spiMisoPin;
+    int spiMosiPin;
+    int irqPin;
+    int statusPin;
+    int powerkeyPin;
+    int resetPin;
+    int ringUrcPin;
+    int connected;
+    int wakePin;
+} ltemPinConfig_t;
+
+
+
 //#define STATUS_LOW_PULLDOWN
 
 #ifdef HOST_FEATHER_UXPLOR_L

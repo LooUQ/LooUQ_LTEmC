@@ -31,8 +31,9 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __MQTT_H__
 #define __MQTT_H__
 
-#include "ltemc-types.h"
+#include <lq-types.h>
 #include "ltemc-tls.h"
+#include "ltemc.h"
 
 /** 
  *  @brief typed numeric constants used by MQTT subsystem.
@@ -134,6 +135,8 @@ typedef struct mqttTopicSub_tag
     char topicName[mqtt__topic_nameSz];     // Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
     char wildcard;                          // Set to '#' if multilevel wildcard specified when subscribing to topic.
 } mqttTopicSub_t;
+
+
 typedef enum mqttRecvState_tag
 {
     mqttRecvState_none = 0,
@@ -160,6 +163,13 @@ typedef enum mqttMsgSegment_tag
     mqttMsgSegment_msgBody = 2
 } mqttMsgSegment_t;
 
+
+/**
+ * @brief MQTT application data receiver prototype
+ */
+typedef void (*mqttRecv_func)(dataCntxt_t dataCntxt, char* dataPtr, uint16_t dataSz, bool isFinal);  // stream callback to deliver data to application
+
+
 /** 
  *  @brief Struct describing a MQTT topic subscription.
 */
@@ -168,7 +178,7 @@ typedef struct mqttTopicCtrl_tag
     char topicName[PSZ(mqtt__topic_nameSz)];    // Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
     char wildcard;                                  // Set to '#' if multilevel wildcard specified when subscribing to topic.
     uint8_t Qos;
-    appRcvProto_func appRecvDataCB;                 // callback into host application with data (cast from generic func* to stream specific function)
+    mqttRecv_func appRecvDataCB;                 // callback into host application with data (cast from generic func* to stream specific function)
 } mqttTopicCtrl_t;
 
 
@@ -179,7 +189,8 @@ typedef struct mqttCtrl_tag
 {
     char streamType;                            // stream type
     dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;               // function to handle data streaming, initiated by eventMgr() or atcmd module
+    
+    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */

@@ -91,7 +91,7 @@ void ATCMD_reset(bool releaseLock)
 /**
  * @brief Setup automatic data mode switch/servicing.
  */
-void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_func rxDataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
+void ATCMD_configDataMode(uint16_t contextKey, const char *trigger, dataHndlr_func dataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
 {
     ASSERT(strlen(trigger) > 0); // verify 3rd party setup (stream)
     ASSERT(rxDataHndlr != NULL); //
@@ -101,7 +101,7 @@ void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_
     g_lqLTEM.atcmd->dataMode.dmState = dmState_enabled;
     g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
-    g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
+    g_lqLTEM.atcmd->dataMode.dataHndlr = dataHndlr;
     g_lqLTEM.atcmd->dataMode.txDataLoc = dataLoc;
     g_lqLTEM.atcmd->dataMode.txDataSz = dataSz;
     g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
@@ -109,7 +109,7 @@ void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_
 }
 
 
-// void atcmd_setDataModeEot(uint8_t eotChar)
+// void ATCMD_setDataModeEot(uint8_t eotChar)
 // {
 //     g_lqLTEM.iop->txEot = (char)eotChar;
 // }
@@ -117,7 +117,7 @@ void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_
 /**
  * @brief Sets command timeout for next invocation of a BGx AT command. 
  */
-uint16_t atcmd_ovrrdTimeout(uint16_t newTimeout)
+uint16_t ATCMD_ovrrdTimeout(uint16_t newTimeout)
 {
     uint16_t oldTimeout = g_lqLTEM.atcmd->timeout;
     if (newTimeout > 0)
@@ -129,7 +129,7 @@ uint16_t atcmd_ovrrdTimeout(uint16_t newTimeout)
 /**
  * @brief Sets response parser for next invocation of a BGx AT command. 
  */
-cmdResponseParser_func atcmd_ovrrdParser(cmdResponseParser_func newParser)
+cmdResponseParser_func ATCMD_ovrrdParser(cmdResponseParser_func newParser)
 {
     cmdResponseParser_func oldParser = g_lqLTEM.atcmd->responseParserFunc;
     g_lqLTEM.atcmd->responseParserFunc = newParser;
@@ -142,7 +142,7 @@ cmdResponseParser_func atcmd_ovrrdParser(cmdResponseParser_func newParser)
 /**
  * @brief Invokes a BGx AT command using default option values (automatic locking).
  */
-bool atcmd_tryInvoke(const char *cmdTemplate, ...)
+bool ATCMD_tryInvoke(const char *cmdTemplate, ...)
 {
     if (!pMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))
         return false;
@@ -165,7 +165,7 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
 
     // TEMPORARY
     memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
-    DPRINT_V(0, "<atcmd_tryInvoke> cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
+    DPRINT_V(0, "<ATCMD_tryInvoke> cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
 
     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
     return true;
@@ -186,7 +186,7 @@ void ATCMD_close()
 /**
  * @brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
  */
-resultCode_t atcmd_awaitResult()
+resultCode_t ATCMD_awaitResult()
 {
     S__restoreCmdDefaultOptions();                                              // restore default options if not overriden
     resultCode_t rslt = resultCode__unknown;                                    // resultCode_t result;
@@ -225,7 +225,7 @@ resultCode_t atcmd_awaitResult()
 // /**
 //  * @brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
 //  */
-// resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser)
+// resultCode_t ATCMD_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser)
 // {
 //     // set options
 //     if (timeoutMS != atcmd__noTimeoutChange)
@@ -237,14 +237,14 @@ resultCode_t atcmd_awaitResult()
 //     else
 //         g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
 
-//     return atcmd_awaitResult();
+//     return ATCMD_awaitResult();
 // }
 
 
 /**
  * @brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
  */
-const char* atcmd_getCommand()
+const char* ATCMD_getCommand()
 {
     return g_lqLTEM.atcmd->CMDMIRROR;
 }
@@ -253,7 +253,7 @@ const char* atcmd_getCommand()
 /**
  * @brief Returns the atCmd result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
  */
-resultCode_t atcmd_getResultCode()
+resultCode_t ATCMD_getResultCode()
 {
     return g_lqLTEM.atcmd->resultCode;
 }
@@ -262,7 +262,7 @@ resultCode_t atcmd_getResultCode()
 /**
  * @brief Returns the atCmd value response
  */
-bool atcmd_wasPreambleFound()
+bool ATCMD_wasPreambleFound()
 {
     return g_lqLTEM.atcmd->preambleFound;
 }
@@ -271,7 +271,7 @@ bool atcmd_wasPreambleFound()
 /**
  * @brief Returns the string captured from the last command response; between pPreamble and pFinale (excludes both)
  */
-const char* atcmd_getRawResponse()
+const char* ATCMD_getRawResponse()
 {
     ASSERT(g_lqLTEM.atcmd->rawResponse != NULL);
     return g_lqLTEM.atcmd->rawResponse;
@@ -282,7 +282,7 @@ const char* atcmd_getRawResponse()
  * @brief Returns the string captured from the last command response with preamble removed.
  * @return Char pointer to the command response (note: this is stripped of preamble and finale strings)
  */
-const char* atcmd_getResponseData()
+const char* ATCMD_getResponseData()
 {
     ASSERT(g_lqLTEM.atcmd->response != NULL);
 
@@ -297,7 +297,7 @@ const char* atcmd_getResponseData()
 // /**
 //  * @brief Returns the atCmd value response
 //  */
-// int32_t atcmd_getValue()
+// int32_t ATCMD_getValue()
 // {
 //     return g_lqLTEM.atcmd->retValue;
 // }
@@ -306,7 +306,7 @@ const char* atcmd_getResponseData()
 /**
  * @brief Returns a token from the result of the last module command
  */
-char* atcmd_getToken(uint8_t tokenIndx)
+char* ATCMD_getToken(uint8_t tokenIndx)
 {
     S__getToken(": ", tokenIndx, g_lqLTEM.atcmd->respToken, atcmd__respTokenSz);        // returns empty c-str if not found
     return g_lqLTEM.atcmd->respToken;
@@ -316,7 +316,7 @@ char* atcmd_getToken(uint8_t tokenIndx)
 /**
  * @brief Returns the atCmd last execution duration in milliseconds
  */
-uint32_t atcmd_getDuration()
+uint32_t ATCMD_getDuration()
 {
     return g_lqLTEM.atcmd->execDuration;
 }
@@ -325,7 +325,7 @@ uint32_t atcmd_getDuration()
 /**
  * @brief Returns the atCmd parser result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
  */
-cmdParseRslt_t atcmd_getParserResult()
+cmdParseRslt_t ATCMD_getParserResult()
 {
     return g_lqLTEM.atcmd->parserResult;
 }
@@ -334,7 +334,7 @@ cmdParseRslt_t atcmd_getParserResult()
 /**
  * @brief Returns the BGx module error code or 0 if no error. Use this function to get details on a resultCode_t = 500
  */
-char *atcmd_getErrorDetail()
+char *ATCMD_getErrorDetail()
 {
     return &g_lqLTEM.atcmd->errorDetail;
 }
@@ -344,7 +344,7 @@ char *atcmd_getErrorDetail()
  * @brief Returns the BGx reported CME/CMS error code as a numeric value.
  * @return Numeric CM* error code, 999 otherwise.
  */
-uint16_t atcmd_getErrorDetailCode()
+uint16_t ATCMD_getErrorDetailCode()
 {
     if (g_lqLTEM.atcmd->errorDetail[1] == 'C' && g_lqLTEM.atcmd->errorDetail[2] == 'M')
     {
@@ -358,7 +358,7 @@ uint16_t atcmd_getErrorDetailCode()
 /**
  * @brief Sends ^Z character to ensure BGx is not in text mode.
  */
-void atcmd_exitTextMode()
+void ATCMD_exitTextMode()
 {
     char ctrlZ[] = {0x1A};
     IOP_startTx(ctrlZ, sizeof(ctrlZ));
@@ -368,7 +368,7 @@ void atcmd_exitTextMode()
 /**
  * @brief Sends break sequence to transition BGx out of fixed-size data mode to command mode (up to 1500 char).
  */
-void atcmd_exitDataMode()
+void ATCMD_exitDataMode()
 {
 }
 
@@ -376,7 +376,7 @@ void atcmd_exitDataMode()
 /**
  * @brief Sends +++ sequence to transition BGx out of transparent data mode to command mode.
  */
-void atcmd_exitTransparentMode()
+void ATCMD_exitTransparentMode()
 {
     lDelay(1000);
     IOP_startTx("+++", 3); // send +++, gaurded by 1 second of quiet
@@ -393,8 +393,8 @@ void atcmd_exitTransparentMode()
  *           Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). 
  *           Note: If no stop condition is specified, finale, tokensReqd, and lengthReqd are all omitted, the parser will return with 
  *                 the first block of characters received.
- *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getValue()
- *           and atcmd_getResponse() functions respectively.
+ *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with ATCMD_getValue()
+ *           and ATCMD_getResponse() functions respectively.
  * @param [in] preamble - C-string containing the expected phrase that starts response. 
  * @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
  * @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
@@ -600,7 +600,7 @@ static void S__restoreCmdDefaultOptions()
  */
 cmdParseRslt_t ATCMD_okResponseParser()
 {
-    return atcmd_stdResponseParser("", false, "", 0, 0, "OK\r\n", 0);
+    return ATCMD_stdResponseParser("", false, "", 0, 0, "OK\r\n", 0);
 }
 
 
@@ -613,7 +613,7 @@ void ATCMD_setOkResponseParser()
 /**
  * @brief Stardard TX (out) data handler used by dataMode.
  */
-resultCode_t atcmd_stdTxDataHndlr()
+resultCode_t ATCMD_stdTxDataHndlr()
 {
     IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz);
 
@@ -636,7 +636,7 @@ resultCode_t atcmd_stdTxDataHndlr()
 /**
  * @brief Stardard atCmd response parser, flexible response pattern match and parse.
  */
-cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, uint8_t valueIndx, const char *pFinale, uint16_t lengthReqd)
+cmdParseRslt_t ATCMD_stdResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, uint8_t valueIndx, const char *pFinale, uint16_t lengthReqd)
 {
     cmdParseRslt_t parseRslt = cmdParseRslt_pending;
 

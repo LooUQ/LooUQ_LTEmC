@@ -96,9 +96,9 @@ void ntwk_setOperatorScanSeq(const char* scanSequence)
         strcpy(g_lqLTEM.modemSettings->scanSequence, scanSequence);
         if (ltem_getDeviceState() == deviceState_ready)
         {
-            if (!atcmd_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence))
+            if (!ATCMD_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence))
                 return;
-            atcmd_awaitResult();
+            ATCMD_awaitResult();
         }
     }
 }
@@ -116,9 +116,9 @@ void ntwk_setOperatorScanMode(ntwkScanMode_t scanMode)
         g_lqLTEM.modemSettings->scanMode = scanMode; 
         if (ltem_getDeviceState() == deviceState_ready)
         {
-            if (!atcmd_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode))
+            if (!ATCMD_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode))
                 return;
-            atcmd_awaitResult();
+            ATCMD_awaitResult();
         }
    }
 }
@@ -134,9 +134,9 @@ void ntwk_setIotMode(ntwkIotMode_t iotMode)
     g_lqLTEM.modemSettings->iotMode = iotMode; 
     if (ltem_getDeviceState() == deviceState_ready)
     {
-        if (!atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode))
+        if (!ATCMD_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode))
             return;
-        atcmd_awaitResult();
+        ATCMD_awaitResult();
     }
 }
 
@@ -161,10 +161,7 @@ resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t proto
     snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
     if (g_lqLTEM.deviceState == deviceState_ready)
     {
-        if(!atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
-            return resultCode__locked;
-
-        return atcmd_awaitResult();
+        NTWK_applyPpdNetworkConfig();
     }
     return resultCode__accepted;
 }
@@ -180,25 +177,27 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
 
     snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,1,\"%s\",\"%s\",\"%s\",%d", pdpContextId, apn, userName, pw, authMethod);
 
-    if(!atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+    if(!ATCMD_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
         return resultCode__locked;
 
-    return atcmd_awaitResult();
+    return ATCMD_awaitResult();
 }
 
 
 /**
- *	@brief Apply the default PDP context configuration settings to BGx.
+ *	@brief Apply the a PDP context configuration settings to BGx.
  */
-void ntwk_applyPpdNetworkConfig()
+void NTWK_applyPpdNetworkConfig()
 {
     if(strlen(g_lqLTEM.modemSettings->pdpNtwkConfig) > 0)
     {
-        if (!atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+        if (ATCMD_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
         {
             resultCode_t _rslt;
-            if (IS_NOTSUCCESS_RSLT(atcmd_awaitResult()))
+            if (IS_NOTSUCCESS__RSLT(ATCMD_awaitResult()))
+            {
                 DPRINT(PRNT_CYAN, "DefaultNtwk Config Failed=%d\r", _rslt);
+            }
         }
     }
 }
@@ -218,13 +217,13 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
     S__clearOperatorInfo();
     do 
     {
-        if (!atcmd_tryInvoke("AT+COPS?"))                                   // get PROVIDER cellular carrier
+        if (!ATCMD_tryInvoke("AT+COPS?"))                                   // get PROVIDER cellular carrier
             return resultCode__locked;
 
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        if (IS_SUCCESS(ATCMD_awaitResult()))
         {
             char *pContinue;
-            pContinue = strchr(atcmd_getResponseData(), '"');
+            pContinue = strchr(ATCMD_getResponseData(), '"');
             if (pContinue != NULL)
             {
                 pContinue = S__grabToken(pContinue + 1, '"', g_lqLTEM.ntwkOperator->name, ntwk__operatorNameSz);
@@ -251,14 +250,14 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
         char *pContinue;
         uint8_t ntwkIndx = 0;
 
-        atcmd_ovrrdTimeout(SEC_TO_MS(20));
+        ATCMD_ovrrdTimeout(SEC_TO_MS(20));
 
-        if (!atcmd_tryInvoke("AT+QIACT?"))
+        if (!ATCMD_tryInvoke("AT+QIACT?"))
             return resultCode__locked;
 
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        if (IS_SUCCESS(ATCMD_awaitResult()))
         {
-            pContinue = strstr(atcmd_getResponseData(), "+QIACT: ");
+            pContinue = strstr(ATCMD_getResponseData(), "+QIACT: ");
             while (pContinue != NULL && ntwkIndx < ntwk__pdpContextCnt)
             {
                 g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpContextId = strtol(pContinue + 8, &pContinue, 10);
@@ -281,10 +280,10 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
         {
             if (g_lqLTEM.ntwkOperator->packetNetworks[i].isActive)
             {
-                atcmd_tryInvoke("AT+CGPADDR=%d", g_lqLTEM.ntwkOperator->packetNetworks[i].pdpContextId);
-                if (atcmd_awaitResult() == resultCode__success)
+                ATCMD_tryInvoke("AT+CGPADDR=%d", g_lqLTEM.ntwkOperator->packetNetworks[i].pdpContextId);
+                if (ATCMD_awaitResult() == resultCode__success)
                 {
-                    pContinue = strstr(atcmd_getResponseData(), "+CGPADDR: ");
+                    pContinue = strstr(ATCMD_getResponseData(), "+CGPADDR: ");
                     pContinue = strchr(pContinue + 10, ',') + 1;
                     char *pLineEnd = strchr(pContinue, '\r');
                     strncpy(g_lqLTEM.ntwkOperator->packetNetworks[i].ipAddress, pContinue, MIN(pLineEnd - pContinue, ntwk__ipAddressSz));
@@ -307,10 +306,10 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
  */
 void ntwk_activatePdpContext(uint8_t cntxtId)
 {
-    atcmd_ovrrdParser(S__contextStatusCompleteParser);
-    if (atcmd_tryInvoke("AT+QIACT=%d", cntxtId))
+    ATCMD_ovrrdParser(S__contextStatusCompleteParser);
+    if (ATCMD_tryInvoke("AT+QIACT=%d", cntxtId))
     {
-        atcmd_awaitResult();
+        ATCMD_awaitResult();
     }
 }
 
@@ -320,9 +319,9 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
  */
 void ntwk_deactivatePdpContext(uint8_t cntxtId)
 {
-    if (!atcmd_tryInvoke("AT+QIDEACT=%d", cntxtId))
+    if (!ATCMD_tryInvoke("AT+QIDEACT=%d", cntxtId))
     {
-        atcmd_awaitResult();
+        ATCMD_awaitResult();
     }
 }
 
@@ -378,10 +377,10 @@ packetNetwork_t *ntwk_getPacketNetwork(uint8_t pdpContextId)
  */
 const char* ntwk_getNetworkInfo()
 {
-    if (!atcmd_tryInvoke("AT+QNWINFO"))
+    if (!ATCMD_tryInvoke("AT+QNWINFO"))
         return resultCode__locked;
 
-    if (IS_SUCCESS(atcmd_awaitResult()))
+    if (IS_SUCCESS(ATCMD_awaitResult()))
     {
         if (strstr(g_lqLTEM.atcmd->rawResponse, "+QNWINFO: "))                          // clean up extra content/EOL
         {
@@ -403,11 +402,11 @@ const char* ntwk_getNetworkInfo()
  */
 resultCode_t ntwk_getRegistrationStatus()
 {
-    if (!atcmd_tryInvoke("AT+CREG?"))
+    if (!ATCMD_tryInvoke("AT+CREG?"))
         return resultCode__locked;
 
     // TODO need a parser wrapper to grab <stat> (pos 2)
-    resultCode_t rslt = atcmd_awaitResult();
+    resultCode_t rslt = ATCMD_awaitResult();
     return 0;
 }
 
@@ -427,7 +426,7 @@ bool ntwk_isReady(bool refresh)
 
 // /**
 //  * @brief Set network operator.
-//  * @details The characteristics of the selected operator are accessible using the atcmd_getResponseData() function.
+//  * @details The characteristics of the selected operator are accessible using the ATCMD_getResponseData() function.
 
 //  * @param [in] mode Action to be performed, set/clear/set default.
 //  * @param [in] format The form for the ntwkOperator parameter value: long, short, numeric.
@@ -450,12 +449,12 @@ const char* ntwkDiagnostics_getOperators()
     memset(g_lqLTEM.statics.reportBffr, 0, ltem__reportsBffrSz);
 
     memset(g_lqLTEM.statics.reportBffr, 0, ltem__reportsBffrSz);
-    if (atcmd_tryInvoke("AT+COPS=?"))
+    if (ATCMD_tryInvoke("AT+COPS=?"))
     {
-        atcmd_ovrrdTimeout(SEC_TO_MS(240));
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        ATCMD_ovrrdTimeout(SEC_TO_MS(240));
+        if (IS_SUCCESS(ATCMD_awaitResult()))
         {
-            strncpy(g_lqLTEM.statics.reportBffr, atcmd_getResponseData() + 9, MIN(ltem__reportsBffrSz, atcmd_getResponseData() - 9));
+            strncpy(g_lqLTEM.statics.reportBffr, ATCMD_getResponseData() + 9, MIN(ltem__reportsBffrSz, ATCMD_getResponseData() - 9));
         }
     }
     return g_lqLTEM.statics.reportBffr;
@@ -484,7 +483,7 @@ static void S__clearOperatorInfo()
 static cmdParseRslt_t S__contextStatusCompleteParser(void *atcmd, const char *response)
 {
     DPRINT_V(0, "<S__contextStatusCompleteParser()> response=%s\r\n", response);
-    return atcmd_stdResponseParser("+QIACT: ", false, "", 2, 2, NULL, 0);
+    return ATCMD_stdResponseParser("+QIACT: ", false, "", 2, 2, NULL, 0);
 }
 
 

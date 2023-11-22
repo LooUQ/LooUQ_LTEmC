@@ -43,7 +43,7 @@ Also add information on how to contact you by electronic and paper mail.
 #endif
 
 // LTEmC Includes
-#include <ltemc-internal.h>                         /* not usually referenced in user application */
+#include <ltemc-iTypes.h>                         /* not usually referenced in user application */
 #include <ltemc-types.h>                            // - necessary to access internal buffers
 #include <ltemc-nxp-sc16is.h>                       // - necessary to perform direct component access via SPI
 

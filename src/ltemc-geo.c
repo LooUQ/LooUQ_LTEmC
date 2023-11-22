@@ -94,9 +94,9 @@ resultCode_t geo_add(uint8_t geoId, geoMode_t mode, geoShape_t shape, double lat
         strcat(cmdStr, cmdChunk);
     }
 
-    if (atcmd_tryInvokeDefaults(cmdStr))
+    if (ATCMD_tryInvokeDefaults(cmdStr))
     {
-        return atcmd_awaitResult();
+        return ATCMD_awaitResult();
     }
     return resultCode__locked;
 }
@@ -110,9 +110,9 @@ resultCode_t geo_delete(uint8_t geoId)
 {
     char cmdStr[28] = {0};
     snprintf(cmdStr, 80, "AT+QCFGEXT=\"deletegeo\",%d", geoId);
-    if (atcmd_tryInvokeDefaults(cmdStr))
+    if (ATCMD_tryInvokeDefaults(cmdStr))
     {
-        return atcmd_awaitResult();
+        return ATCMD_awaitResult();
     }
     return resultCode__locked;
 }
@@ -124,9 +124,9 @@ resultCode_t geo_delete(uint8_t geoId)
  */
 geoPosition_t geo_query(uint8_t geoId)
 {
-    if (atcmd_tryInvoke("AT+QCFGEXT=\"querygeo\",%d", geoId))
+    if (ATCMD_tryInvoke("AT+QCFGEXT=\"querygeo\",%d", geoId))
     {
-        if (atcmd_awaitResult() != resultCode__success)
+        if (ATCMD_awaitResult() != resultCode__success)
             return geoPosition_unknown;
         return geoPosition_outside;
     }

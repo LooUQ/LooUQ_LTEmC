@@ -50,7 +50,6 @@ Also add information on how to contact you by electronic and paper mail.
 #include <ltemc.h>
 #include <ltemc-tls.h>
 #include <ltemc-http.h>
-#include <ltemc-files.h>
 
 
 // #define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
@@ -87,7 +86,7 @@ void setup() {
         #endif
     #endif
 
-    DPRINT(PRNT_RED, "\rLTEmC test9-HTTP\r");
+    DPRINT(PRNT_RED, "\rLTEmC 09-HTTP\r");
     //lqDiag_setNotifyCallback(appEvntNotify);
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
@@ -132,9 +131,9 @@ void setup() {
      */
 
     // // create a control for talking to the website
-    http_initControl(&httpCtrlG, dataCntxt_0, httpRecvCB);                  // initialize local (internal) structures
-    http_setConnection(&httpCtrlG, "https://api.weather.gov", 443);                                         // set remote web host
-    DPRINT(PRNT_dGREEN, "URL Host1=%s\r", httpCtrlG.hostUrl);
+    http_initControl(&httpCtrlG, dataCntxt_0, httpRecvCB);                                          // initialize local (internal) structures
+    http_setConnection(&httpCtrlG, "https://api.weather.gov", 443);                                 // set remote web host
+    DPRINT(PRNT_dGREEN, "URL Host1=%s \r", httpCtrlG.hostUrl);
 
     // you can optionally setup a httpCtrl, EXAMPLE: httpCtrl *httpCtrl = &httpCtrl2
     // Below the &httpCtrl2 style is required since there is no "ptr" variable created (around line 65) to use here
@@ -142,18 +141,6 @@ void setup() {
     http_initControl(&httpCtrlP, dataCntxt_1, httpRecvCB);
     http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
     DPRINT(PRNT_dGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
-
-
-
-// http_initControl(&httpCtrl_BMS, dataCntxt_2, httpRecvCB);
-// http_setConnection(&httpCtrl_BMS, "https://ota-cdn.memfault.com/3916/952/11412810952?token=bVDX5Ed95OV5EjBILIFKHYCKjy-qcEqoKov9Ojky02c&expires=1699754400", 80);
-// DPRINT(PRNT_dGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
-
-// resultCode_t rslt = http_get(&httpCtrl_BMS, "", false);
-// rslt = http_readPageToFile(&httpCtrl_BMS, "ota_test.bin");
-
-// file_delete("ota_test.bin");
-
 }
 
 resultCode_t rslt;

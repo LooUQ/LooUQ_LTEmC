@@ -1,7 +1,7 @@
 {
     "sketch": "ltemc-06-gnss.ino",
-    "configuration": "JTAGAdapter=default,PSRAM=disabled,FlashMode=qio,FlashSize=4M,LoopCore=1,EventsCore=1,USBMode=hwcdc,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=default,PartitionScheme=default,CPUFreq=240,UploadSpeed=921600,DebugLevel=none,EraseFlash=none",
-    "board": "esp32:esp32:esp32s3",
+    "configuration": "opt=debug,usbstack=arduino,debug=on",
+    "board": "adafruit:samd:adafruit_feather_m0_express",
     "output": "./build",
     "port": "COM13"
 }

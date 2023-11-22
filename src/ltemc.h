@@ -38,13 +38,13 @@ Also add information on how to contact you by electronic and paper mail.
 
 // #undef __cplusplus
 
-// #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
-// #include <lq-diagnostics.h>                     /// ASSERT and diagnostic data collection
-// #include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
-// #include "lq-platform.h"                        /// platform abstractions (arduino, etc.)
-// #include "ltemc-atcmd.h"                        /// command processor interface
-// #include "ltemc-mdminfo.h"                      /// modem information
-// #include "ltemc-network.h"                      /// cellular provider and packet network 
+// #include <lq-types.h>                           // LooUQ embedded device library typedefs, common across products/libraries
+// #include <lq-diagnostics.h>                     // ASSERT and diagnostic data collection
+// #include "ltemc-types.h"                        // type definitions for LTEm device driver: LTEmC
+// #include "lq-platform.h"                        // platform abstractions (arduino, etc.)
+// #include "ltemc-atcmd.h"                        // command processor interface
+// #include "ltemc-mdminfo.h"                      // modem information
+// #include "ltemc-network.h"                      // cellular provider and packet network 
 // #ifdef __cplusplus
 // extern "C"
 // {
@@ -54,33 +54,124 @@ Also add information on how to contact you by electronic and paper mail.
 // #define IOP_RX_COREBUF_SZ 256
 // #define IOP_TX_BUFFER_SZ 1460
 
-#include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
-#include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
-#include <lqdiag.h>                             /// PRINTDBG and ASSERT diagnostic data collection
+#include <lq-types.h>                           // LooUQ embedded device library typedefs, common across products/libraries
+#include <lqdiag.h>                             // PRINTDBG and ASSERT diagnostic data collection
 
-#include "ltemc-platform.h"                     /// platform abstractions (arduino, etc.)
-#include "ltemc-atcmd.h"                        /// command processor interface
-#include "ltemc-network.h"                      /// cellular provider and packet network 
+#include "ltemc-platform.h"                     // platform abstractions (arduino, etc.)
+#include "ltemc-atcmd.h"                        // command processor interface
+#include "ltemc-network.h"                      // cellular provider and packet network 
 
 
 /* Add the following LTEmC feature sets as required for your project's main .cpp or .c file 
  * ----------------------------------------------------------------------------------------------- */
-// #include "ltemc-gnss.h"                         /// GNSS/GPS location services
-// #include "ltemc-sckt.h"                         /// tcp/udp socket communications
-// #include "ltemc-tls"                            /// SSL/TLS support
-// #include "ltemc-http"                           /// HTTP(S) support: GET/POST requests
-// #include "ltemc-mqtt"                           /// MQTT(S) support
-// #include "ltemc-filesys.h"                      /// use of BGx module file system functionality
-// #include "ltemc-gpio.h"                         /// use of BGx module GPIO expansion functionality
-
-
-/* LTEmC uses 2 global buffers: the IOP transmit buffer and the ATCMD cmd\core buffer.
- * These are sized in the ltemc-iop.h and ltemc-atcmd.h header files respectively.
- * LooUQ set defaults sizes are:
- *      IOP__txBufferSize = 1800
- *      ATCMD__commandBufferSz = 256
- */
+// #include "ltemc-gnss.h"                         // GNSS/GPS location services
+// #include "ltemc-sckt.h"                         // tcp/udp socket communications
+// #include "ltemc-tls"                            // SSL/TLS support
+// #include "ltemc-http"                           // HTTP(S) support: GET/POST requests
+// #include "ltemc-mqtt"                           // MQTT(S) support
+// #include "ltemc-filesys.h"                      // use of BGx module file system functionality
+// #include "ltemc-gpio.h"                         // use of BGx module GPIO expansion functionality
 /* ----------------------------------------------------------------------------------- */
+
+
+
+
+/* Set the PRODUCT code here for all modules to use in LooUQ-Diagnostics
+ */
+#define PRODUCT "LM" 
+
+
+/**
+ * @brief LTEmC system constants
+ * @details Field sizes, resource allocations/counts, etc.  
+ */
+enum ltem__constants
+{
+    ltem__bufferSz_rx = 2000,
+    ltem__bufferSz_tx = 1000,
+    ltem__swVerSz = 12,
+    ltem__errorDetailSz = 18,
+    ltem__moduleTypeSz = 8,
+    ltem__streamCnt = 4,                    // 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
+    ltem__reportsBffrSz = 160,
+    ltem__dateTimeBffrSz = 24,
+    ltem__hostUrlSz = 192,
+
+    ltem__imeiSz = 15,
+    ltem__iccidSz = 24,
+    ltem__dvcMfgSz = 18,
+    ltem__dvcModelSz = 18,
+    ltem__dvcFwVerSz = 20,
+};
+
+
+
+
+/** 
+ *  \brief Enum describing the current device/module state
+ */
+typedef enum deviceState_tag
+{
+    deviceState_powerOff = 0,        // BGx is powered off, in this state all components on the LTEm1 are powered down.
+    deviceState_powerOn = 1,         // BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
+    deviceState_ready = 2,           // BGx is powered ON and ready for application/services.
+    deviceState_error = 99           // error or invalid state detected.
+} deviceState_t;
+
+
+/** 
+ *  @brief Enum of the available dataCntxt indexes for BGx (only SSL/TLS capable contexts are supported).
+ */
+typedef enum dataCntxt_tag
+{
+    dataCntxt_0 = 0,
+    dataCntxt_1 = 1,
+    dataCntxt_2 = 2,
+    dataCntxt_3 = 3,
+    dataCntxt_4 = 4,
+    dataCntxt_5 = 5,
+    dataCntxt__cnt = 6,
+    dataCntxt__none = 255
+} dataCntxt_t;
+
+
+/** 
+ *  \brief RF Priority map for BG95/BG77 modules.
+*/
+typedef enum ltemRfPriorityMode_tag
+{
+    ltemRfPriorityMode_gnss = 0,
+    ltemRfPriorityMode_wwan = 1,
+    ltemRfPriorityMode_none = 9
+} ltemRfPriorityMode_t;
+
+
+/** 
+ *  \brief RF Priority map for LTEm modem with BG95/BG77 modules.
+*/
+typedef enum ltemRfPriorityState_tag
+{
+ltemRfPriorityState_unloaded = 0,           // WWAN/GNSS in unloaded state
+ltemRfPriorityState_wwanPending = 1,        // WWAN in pending state
+ltemRfPriorityState_gnssPending = 2,        // GNSS in pending state
+ltemRfPriorityState_wwanLoaded = 3,         // WWAN in loaded state
+ltemRfPriorityState_gnssLoaded = 4          // GNSS in loaded state
+} ltemRfPriorityState_t;
+
+
+/** 
+ *  \brief Struct holding information about the physical BGx module.
+*/
+typedef struct modemInfo_tag
+{
+	char imei[PSZ(ltem__imeiSz)];            // IMEI (15 digits) International Mobile Equipment Identity or IEEE UI (aka MAC, EUI-48 or EUI-64).
+	char iccid[PSZ(ltem__iccidSz)];          // ICCID (up to 24 digits) Integrated Circuit Card ID. Set in the SIM card at manufacture.
+    char mfg[PSZ(ltem__dvcMfgSz)];           // Device manufacturer name
+	char model[PSZ(ltem__dvcModelSz)];       // Device model number
+	char fwver[PSZ(ltem__dvcFwVerSz)];       // Firmware version of the device
+    char swver[PSZ(ltem__swVerSz)];          // software driver version
+} modemInfo_t;
+
 
 #ifdef __cplusplus
 extern "C"
@@ -176,18 +267,18 @@ bool ltem_ping();
 resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t priorityMode);
 
 
-/**
- *	@brief Get RF priority mode on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
- */
-ltemRfPriorityMode_t ltem_getRfPriorityMode();
+// /**
+//  *	@brief Get RF priority mode on BG95/BG77 modules. 
+//  *  @return Result code representing status of operation, OK = 200.
+//  */
+// ltemRfPriorityMode_t ltem_getRfPriorityMode();
 
 
-/**
- *	@brief Get RF priority state on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
- */
-ltemRfPriorityState_t ltem_getRfPriorityState();
+// /**
+//  *	@brief Get RF priority state on BG95/BG77 modules. 
+//  *  @return Result code representing status of operation, OK = 200.
+//  */
+// ltemRfPriorityState_t ltem_getRfPriorityState();
 
 
 // /**

@@ -69,12 +69,12 @@ static cmdParseRslt_t gnssLocCompleteParser(const char *response, char **endptr)
  */
 resultCode_t gnss_on()
 {
-    atcmd_ovrrdTimeout(SEC_TO_MS(2));
-    if (!atcmd_tryInvoke("AT+QGPS=1"))
+    ATCMD_ovrrdTimeout(SEC_TO_MS(2));
+    if (!ATCMD_tryInvoke("AT+QGPS=1"))
     {
         return resultCode__locked;
     }
-    return atcmd_awaitResult();
+    return ATCMD_awaitResult();
 }
 
 
@@ -83,11 +83,11 @@ resultCode_t gnss_on()
  */
 resultCode_t gnss_off()
 {
-    if (!atcmd_tryInvoke("AT+QGPSEND"))
+    if (!ATCMD_tryInvoke("AT+QGPSEND"))
     {
         return resultCode__locked;
     }
-    return atcmd_awaitResult();
+    return ATCMD_awaitResult();
 }
 
 
@@ -100,25 +100,25 @@ gnssLocation_t gnss_getLocation()
     gnssLocation_t gnssResult = {0};
     gnssResult.statusCode = resultCode__internalError;
 
-    //atcmd_t *gnssCmd = atcmd_build("AT+QGPSLOC=2", GNSS_CMD_RESULTBUF_SZ, 500, gnssLocCompleteParser);
+    //ATCMD_t *gnssCmd = ATCMD_build("AT+QGPSLOC=2", GNSS_CMD_RESULTBUF_SZ, 500, gnssLocCompleteParser);
     // result sz=86 >> +QGPSLOC: 121003.0,44.74769,-85.56535,1.1,189.0,2,95.45,0.0,0.0,250420,08  + \r\nOK\r\n
 
-    if (!atcmd_tryInvoke("AT+QGPSLOC=2"))
+    if (!ATCMD_tryInvoke("AT+QGPSLOC=2"))
     {
         gnssResult.statusCode = resultCode__locked;
         return gnssResult;
     }
 
-    atcmd_ovrrdTimeout(2000);
-    atcmd_ovrrdParser(gnssLocCompleteParser);
-    resultCode_t rslt = atcmd_awaitResult();
+    ATCMD_ovrrdTimeout(2000);
+    ATCMD_ovrrdParser(gnssLocCompleteParser);
+    resultCode_t rslt = ATCMD_awaitResult();
 
     gnssResult.statusCode = (rslt == 516) ? resultCode__gone : rslt;                    // translate "No fix" to gone
     if (rslt != resultCode__success)
         return gnssResult;                                                              // return on failure, continue to parse on success
 
     DPRINT_V(PRNT_WARN, "<gnss_getLocation()> parse starting...\r\n");
-    char *cmdResponse = atcmd_getResponse();
+    char *cmdResponse = ATCMD_getResponseData();
     char *delimAt;
     DPRINT_V(PRNT_WHITE, "<gnss_getLocation()> response=%s\r\n", cmdResponse);
 
@@ -167,7 +167,7 @@ gnssLocation_t gnss_getLocation()
 static cmdParseRslt_t gnssLocCompleteParser(const char *response, char **endptr)
 {
     //const char *response, const char *landmark, char delim, uint8_t minTokens, const char *terminator, char** endptr
-    cmdParseRslt_t parseRslt = atcmd_stdResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, "OK\r\n", 0);
+    cmdParseRslt_t parseRslt = ATCMD_stdResponseParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, 0, "OK\r\n", 0);
     DPRINT_V(PRNT_DEFAULT, "<gnssLocCompleteParser()> result=%d\r\n", parseRslt);
     return parseRslt;
 }

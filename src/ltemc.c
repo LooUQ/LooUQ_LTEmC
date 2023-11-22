@@ -41,9 +41,9 @@ Also add information on how to contact you by electronic and paper mail.
 #include "ltemc.h"
 
 
-/* LTEmC Global Singleton Instance
-------------------------------------------------------------------------------------------------- */
-ltemDevice_t g_lqLTEM;
+// /* LTEmC Global Singleton Instance
+// ------------------------------------------------------------------------------------------------- */
+// ltemDevice_t g_lqLTEM;
 
 
 #define MODULERDY_TIMEOUT 8000
@@ -251,7 +251,7 @@ bool ltem_start(resetAction_t resetAction)
     // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
     // DPRINT_V(PRNT_CYAN, "ltem_start(): rat options set");
 
-    ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
+    NTWK_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
     DPRINT_V(PRNT_CYAN, "ltem_start(): pdp ntwk configured\r\n");
 
     ntwk_awaitOperator(2);                                              // attempt to warm-up provider/PDP briefly. 
@@ -343,16 +343,17 @@ resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t mode)
     if (memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) == 0 || memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) == 0)
     {
         DPRINT_V(0, "<ltem_setRfPriorityMode()> invoking\r\n");
-        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d", mode))
+        if (ATCMD_tryInvoke("AT+QGPSCFG=\"priority\",%d", mode))
         {
             DPRINT_V(0, "<ltem_setRfPriorityMode()> invoked\r\n");
-            resultCode_t rslt = atcmd_awaitResult();
-            DPRINT_V(0, "<ltem_setRfPriorityMode()> response:%s\r\n", atcmd_getRawResponse());
+            resultCode_t rslt = ATCMD_awaitResult();
+            DPRINT_V(0, "<ltem_setRfPriorityMode()> response:%s\r\n", ATCMD_getRawResponse());
             return rslt;
         }
-        return resultCode__conflict;
+        else
+            return resultCode__locked;
     }
-    return resultCode__preConditionFailed;                                          //  only applicable to single-RF modules
+    return resultCode__preConditionFailed;                                      //  only applicable to single-RF modules
 }
 
 
@@ -363,12 +364,12 @@ ltemRfPriorityMode_t ltem_getRfPriorityMode()
 {
     if ((memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) == 0) || (memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) == 0))
     {
-        if (!atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
-            return ltemRfPriorityMode_none;                                         // resultCode__conflict
+        if (!ATCMD_tryInvoke("AT+QGPSCFG=\"priority\""))
+            return ltemRfPriorityMode_none;                                     // locked most likely, return unknown value
 
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        if (IS_SUCCESS(ATCMD_awaitResult()))
         {
-            uint32_t mode = strtol(atcmd_getToken(1), NULL, 10);
+            uint32_t mode = strtol(ATCMD_getToken(1), NULL, 10);
             DPRINT_V(0, "<ltem_getRfPriorityMode> mode=%d\r\n", mode);
             return mode;
         }
@@ -384,11 +385,11 @@ ltemRfPriorityState_t ltem_getRfPriorityState()
 {
     if (memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) == 0 || memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) == 0)
     {
-        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
+        if (ATCMD_tryInvoke("AT+QGPSCFG=\"priority\""))
         {
-            if (atcmd_awaitResult() == resultCode__success)
+            if (ATCMD_awaitResult() == resultCode__success)
             {
-                uint32_t state = strtol(atcmd_getToken(2), NULL, 10);
+                uint32_t state = strtol(ATCMD_getToken(2), NULL, 10);
                 DPRINT_V(0, "<ltem_getRfPriorityState> state=%d\r\n", state);
                 return state;
             }
@@ -412,12 +413,12 @@ const char* ltem_getUtcDateTime(char format)
     char* destPtr = &g_lqLTEM.statics.dateTimeBffr;
     char* dtDbg  = &g_lqLTEM.statics.dateTimeBffr;
 
-    if (destPtr != NULL && atcmd_tryInvoke("AT+CCLK?"))
+    if (destPtr != NULL && ATCMD_tryInvoke("AT+CCLK?"))
     {
-        if (atcmd_awaitResult() == resultCode__success)
+        if (ATCMD_awaitResult() == resultCode__success)
         {
-            if ((dtSrc = memchr(atcmd_getResponseData(), '"', 12)) != NULL)         // allowance for preceeding EOL
-            if ((dtSrc = memchr(atcmd_getResponseData(), '"', 12)) != NULL)         // allowance for preceeding EOL
+            if ((dtSrc = memchr(ATCMD_getResponseData(), '"', 12)) != NULL)         // allowance for preceeding EOL
+            if ((dtSrc = memchr(ATCMD_getResponseData(), '"', 12)) != NULL)         // allowance for preceeding EOL
             {
                 dtSrc++;
                 if (*dtSrc != '8')                                              // test for not initialized date/time, starts with 80 (aka 1980)
@@ -509,12 +510,12 @@ int8_t ltem_getLocalTimezoneOffset(bool precise)
     char dateTime[30] = {0};
     char *dtSrc;
 
-    if (!atcmd_tryInvoke("AT+CCLK?"))
-        return 0;                                                           // resultCode__conflict normally
+    if (!ATCMD_tryInvoke("AT+CCLK?"))
+        return 0;                                                           // failed to invoke, locked most likely but return "unknown timezone"
 
-    if (IS_SUCCESS(atcmd_awaitResult()))
+    if (IS_SUCCESS(ATCMD_awaitResult()))
     {
-        if ((dtSrc = memchr(atcmd_getResponseData(), '"', 12)) != NULL)         // tolerate preceeding EOL
+        if ((dtSrc = memchr(ATCMD_getResponseData(), '"', 12)) != NULL)         // tolerate preceeding EOL
         {
             dtSrc++;
             if (*dtSrc != '8')                                              // test for not initialized date/time, stardtSrc with 80 (aka 1980)
@@ -541,39 +542,39 @@ modemInfo_t* ltem_getModemInfo()
 {
     if (g_lqLTEM.modemInfo->imei[0] == 0)
     {
-        if (!atcmd_tryInvoke("AT+GSN"))
-            return resultCode__conflict;
+        if (!ATCMD_tryInvoke("AT+GSN"))
+            return resultCode__locked;
 
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        if (IS_SUCCESS(ATCMD_awaitResult()))
         {
-            strncpy(g_lqLTEM.modemInfo->imei, atcmd_getResponseData(), ntwk__imeiSz);
+            strncpy(g_lqLTEM.modemInfo->imei, ATCMD_getResponseData(), ntwk__imeiSz);
         }
     }
 
     if (g_lqLTEM.modemInfo->fwver[0] == 0)
     {
-        if (!atcmd_tryInvoke("AT+QGMR"))
-            return resultCode__conflict;
+        if (!ATCMD_tryInvoke("AT+QGMR"))
+            return resultCode__locked;
 
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        if (IS_SUCCESS(ATCMD_awaitResult()))
         {
             char *eol;
-            if ((eol = strstr(atcmd_getResponseData(), "\r\n")) != NULL)
+            if ((eol = strstr(ATCMD_getResponseData(), "\r\n")) != NULL)
             {
-                uint8_t sz = eol - atcmd_getResponseData();
-                memcpy(g_lqLTEM.modemInfo->fwver, atcmd_getResponseData(), MIN(sz, ntwk__dvcFwVerSz));
+                uint8_t sz = eol - ATCMD_getResponseData();
+                memcpy(g_lqLTEM.modemInfo->fwver, ATCMD_getResponseData(), MIN(sz, ntwk__dvcFwVerSz));
             }
         }
     }
 
     if (g_lqLTEM.modemInfo->mfg[0] == 0)
     {
-        if (!atcmd_tryInvoke("ATI"))
-            return resultCode__conflict;
+        if (!ATCMD_tryInvoke("ATI"))
+            return resultCode__locked;
 
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        if (IS_SUCCESS(ATCMD_awaitResult()))
         {
-            char* response = atcmd_getResponseData();
+            char* response = ATCMD_getResponseData();
             char* eol = strchr(response, '\r');
             memcpy(g_lqLTEM.modemInfo->mfg, response, eol - response);
 
@@ -591,14 +592,14 @@ modemInfo_t* ltem_getModemInfo()
 
     if (g_lqLTEM.modemInfo->iccid[0] == 0)
     {
-        atcmd_ovrrdParser(S__iccidCompleteParser);
-        if (!atcmd_tryInvoke("AT+ICCID"))
-            return resultCode__conflict;
+        ATCMD_ovrrdParser(S__iccidCompleteParser);
+        if (!ATCMD_tryInvoke("AT+ICCID"))
+            return resultCode__locked;
 
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        if (IS_SUCCESS(ATCMD_awaitResult()))
         {
             char* delimAt;
-            char* responseAt = atcmd_getResponseData();
+            char* responseAt = ATCMD_getResponseData();
             if (strlen(responseAt) && (delimAt = memchr(responseAt, '\r', strlen(responseAt))))
             {
                 memcpy(g_lqLTEM.modemInfo->iccid, responseAt, MIN(delimAt - responseAt, ntwk__iccidSz));
@@ -615,13 +616,13 @@ modemInfo_t* ltem_getModemInfo()
 bool ltem_isSimReady()
 {
     bool cpinState = false;
-    if (!atcmd_tryInvoke("AT+CPIN?"))
+    if (!ATCMD_tryInvoke("AT+CPIN?"))
         return false;                                                               // resultCode_conflict
 
-    if (IS_SUCCESS(atcmd_awaitResult()))
+    if (IS_SUCCESS(ATCMD_awaitResult()))
     {
-        cpinState = strstr(atcmd_getResponseData(), "+CPIN: READY") != NULL;
-        cpinState = strstr(atcmd_getResponseData(), "+CPIN: READY") != NULL;
+        cpinState = strstr(ATCMD_getResponseData(), "+CPIN: READY") != NULL;
+        cpinState = strstr(ATCMD_getResponseData(), "+CPIN: READY") != NULL;
     }
     return strlen(g_lqLTEM.modemInfo->iccid) > 0 && cpinState;
 }
@@ -634,13 +635,13 @@ uint8_t ltem_signalRaw()
 {
     uint8_t signalValue = 99;
 
-    if (ltem_getDeviceState() || !atcmd_tryInvoke("AT+CSQ"))
+    if (ltem_getDeviceState() || !ATCMD_tryInvoke("AT+CSQ"))
     {
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        if (IS_SUCCESS(ATCMD_awaitResult()))
         {
             char *term;
-            char *lastResponse = atcmd_getResponseData();
-            term = strstr(atcmd_getResponseData(), "+CSQ");
+            char *lastResponse = ATCMD_getResponseData();
+            term = strstr(ATCMD_getResponseData(), "+CSQ");
             signalValue = strtol(term + 6, NULL, 10);
         }
     }
@@ -730,9 +731,9 @@ deviceState_t ltem_getDeviceState()
 bool ltem_ping()
 {
     resultCode_t rslt;
-    if (atcmd_tryInvoke("AT"))
+    if (ATCMD_tryInvoke("AT"))
     {
-        rslt = atcmd_awaitResult();
+        rslt = ATCMD_awaitResult();
         return rslt != resultCode__timeout;
     }
     return false;
@@ -823,7 +824,7 @@ void ltem_deleteStream(streamCtrl_t *streamCtrl)
 }
 
 
-streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType)
+streamCtrl_t* ltem_getStreamFromCntxt(uint8_t dataCntxt, streamType_t streamType);
 {
     for (size_t i = 0; i < ltem__streamCnt; i++)
     {
@@ -976,7 +977,7 @@ static void S__ltemUrcHandler()
  */
 static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem)
 {
-    return atcmd_stdResponseParser("+ICCID: ", true, "", 0, 0, "\r\n\r\nOK\r\n", 20);
+    return ATCMD_stdResponseParser("+ICCID: ", true, "", 0, 0, "\r\n\r\nOK\r\n", 20);
 }
 
 

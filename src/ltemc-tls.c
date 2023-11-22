@@ -34,7 +34,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
-#include "ltemc-iTypes.h"
+// #include "ltemc-iTypes.h"
 #include "ltemc-tls.h"
 
 
@@ -84,9 +84,9 @@ void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t ciphe
 }
 
 
-tlsOptions_t tlsGetOptions(uint8_t dataCntxt)
+tlsCtrl_t tls_getOptions(uint8_t dataCntxt)
 {
-    tlsOptions_t result = {0};
+    tlsCtrl_t result = {0};
 
     if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d", (uint8_t)dataCntxt))    // get SSL\TLS version
     {   

@@ -38,8 +38,46 @@ Also add information on how to contact you by electronic and paper mail.
 // #include "ltemc-nxp-sc16is.h"
 #include <stdint.h>
 
-#define USR_PG() (!pRxBffr->iopPg)
-#define IOP_PG() (pRxBffr->iopPg)
+#include <lq-bBuffer.h>
+
+
+/**
+ *	\brief Typed numeric Input/Output Processor subsystem contants.
+ */
+enum IOP__Constants
+{
+    IOP__uartBaudRate = 115200,                             // baud rate between BGx and NXP UART
+    IOP__uartFIFOBufferSz = 64,
+    IOP__uartFIFOFillPeriod = (int)(1 / (double)IOP__uartBaudRate * 10 * IOP__uartFIFOBufferSz * 1000) + 1,
+
+    IOP__rxDefaultTimeout = IOP__uartFIFOFillPeriod * 2,
+    IOP__urcDetectBufferSz = 40
+};
+
+
+/** 
+ *  \brief Struct for the IOP subsystem state. During initialization a pointer to this structure is reference in g_ltem1.
+ * 
+ *  Each of the protocols (sockets, MQTT, HTTP) have unique behaviors: sockets receive asynchronous alerts but the data
+ *  receive process is fully synchronous, HTTP is synchronous on receive tied to page read, MQTT is fully asynchronous 
+ *  with msg event receive signaling and data transfer taking place async behind the scenes initiated on interrupt. 
+ */
+typedef struct iop_tag
+{
+    volatile char* txSrc;                   // source pointer to TX pending data
+    volatile uint16_t txPending;            // outstanding char count for TX
+    volatile bool dmActive;                 // interaction with BGx is now in data mode
+    volatile uint16_t dmTxEvents;           // number of TX blocks sent during data mode
+    volatile bool isrEnabled;               // flag to signal ISR to run normally (true), or return immediately
+
+    uint8_t irqAttached;
+    bBuffer_t *rxBffr;                      // receive buffer
+    char txEot;                             // if not NULL, char to output on empty TX FIFO; clears automatically on use.
+ 
+    volatile uint32_t isrInvokeCnt;         // number of times the ISR function has been invoked
+    volatile uint32_t lastTxAt;             // tick count when TX send started, used for response timeout detection
+    volatile uint32_t lastRxAt;             // tick count when RX buffer fill level was known to have change
+} iop_t;
 
 
 #ifdef __cplusplus

@@ -31,7 +31,7 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_FILES_H__
 #define __LTEMC_FILES_H__
 
-#include "ltemc.h"
+//#include "ltemc-iTypes.h"
 
 
 /*
@@ -68,6 +68,26 @@ typedef enum fileInfoType_tag                       // type of information being
     fileInfoType_fileSystem = 0,                    // request for the filesystem as a whole
     fileInfoType_file = 1                           // request for info about a specific file
 } fileInfoType_t;
+
+
+/**
+ * @brief Filesystem application data receiver prototype
+ */
+typedef void (*fileRecv_func)(char* dataPtr, uint16_t dataSz, bool isFinal);  // stream callback to deliver data to application
+
+
+/**
+ * @brief Stream control for filesystem
+ * @note Does NOT follow exact struct field layout of the other streams, shares 1st field to validate type before casting 
+ */
+typedef struct fileCtrl_tag
+{
+    char streamType;                                // stream type
+    uint8_t handle;
+    // streamRecv_func streamRcvr;                     // function to handle incoming data
+    fileRecv_func appRecvDataCB;
+} fileCtrl_t;
+
 
 
 typedef struct filesysInfo_tag                      // result structure describing the filesystem status

@@ -34,13 +34,118 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __NETWORK_H__
 #define __NETWORK_H__
 
-#include "ltemc.h"
+// #include "ltemc.h"
 
 
-/* ------------------------------------------------------------------------------------------------
- * Network constants, enums, and structures are declared in the LooUQ global lq-network.h header
- * --------------------------------------------------------------------------------------------- */
-//#include <lq-network.h>
+/** 
+ *  \brief Typed numeric constants for network subsystem.
+*/
+enum ntwk__constants
+{
+    ntwk__pdpContextCnt = 4,            // varies by carrier: Verizon=2, (Aeris)ATT=3
+    ntwk__operatorNameSz = 20,
+    ntwk__iotModeNameSz = 11,
+    ntwk__pdpProtoSz = 7,
+    ntwk__ipAddressSz = 40,
+    ntwk__pdpNtwkConfigSz = 60,
+    ntwk__scanSeqSz = 12
+};
+
+
+/* Modem/Provider/Network Type Definitions
+ * ------------------------------------------------------------------------------------------------------------------------------*/
+
+#define NTWK_PROVIDER_RAT_AUTO "00"     // M1 (eMTC) >> NB-IoT >> GSM
+#define NTWK_PROVIDER_RAT_GSM "01"
+#define NTWK_PROVIDER_RAT_M1 "02"
+#define NTWK_PROVIDER_RAT_NB "03"
+
+
+/** 
+ *  \brief Enum describing the mode the BGx module is using to look for available networks (carriers).
+*/
+typedef enum ntwkScanMode_tag
+{
+    ntwkScanMode_auto = 0U,             // BGx is considering either GSM or LTE carrier connections.
+    ntwkScanMode_gsmonly = 1U,          // GSM only mode: BGx is filtering visible networks and only considering connections to GSM endpoints.
+    ntwkScanMode_lteonly = 3U           // LTE only mode: BGx is filtering visible networks and only considering connections to LTE endpoints.
+} ntwkScanMode_t;
+
+
+/** 
+ *  \brief Enum describing the available options for an IoT protocol when connecting to the network.
+*/
+typedef enum ntwkIotMode_tag
+{
+    ntwkIotMode_M1 = 0U,                // CAT-M1 only mode: BGx is filtering visible networks and only considering CAT-M1 connections.
+    ntwkIotMode_NB = 1U,                // NB-IOT only mode: BGx is filtering visible networks and only considering NB-IOT connections.
+    ntwkIotMode_M1NB = 2U               // The BGx will connect to either a CAT-M1 or NB-IOT network.
+} ntwkIotMode_t;
+
+
+/**
+ * @brief Protocol types for network PDP (packet data protocol) context
+ */
+typedef enum pdpProtocol_tag
+{
+    pdpProtocol_notSet = 0,
+    pdpProtocol_IPV4 = 1,
+    pdpProtocol_IPV6 = 2,
+    pdpProtocol_IPV4V6 = 3,
+    pdpProtocol_PPP = 99                    // not supported by LTEmC
+} pdpProtocol_t;
+
+
+/**
+ * @brief Authentication methods for packet network (PDP context) where required by network operator
+ */
+typedef enum pdpCntxtAuthMethods_tag
+{
+    pdpCntxtAuthMethods_none = 0,
+    pdpCntxtAuthMethods_pap = 1,
+    pdpCntxtAuthMethods_chap = 2,
+    pdpCntxtAuthMethods_papChap = 3
+} pdpCntxtAuthMethods_t;
+
+
+/** 
+ *  \brief Struct holding cellular and radio settings.
+*/
+typedef struct ntwkSettings_tag
+{
+    char scanSequence[PSZ(ntwk__scanSeqSz)];
+    ntwkScanMode_t scanMode;
+    ntwkIotMode_t iotMode;
+    char pdpNtwkConfig[ntwk__pdpNtwkConfigSz];  // Invoke ready default context config
+} ntwkSettings_t;
+
+
+/** 
+ *  \brief Struct representing the state of active PDP contexts (aka: APN or data context).
+*/
+typedef struct packetNetwork_tag
+{
+    bool isActive;
+    uint8_t pdpContextId;                           // context ID recognized by the carrier (valid are 1 to 16)
+    pdpProtocol_t pdpProtocol;                      // IPv4, IPv6, etc.
+	char ipAddress[ntwk__ipAddressSz];              // The IP address obtained from the carrier for this context. The IP address of the modem.
+} packetNetwork_t;
+
+
+/** 
+ *  \brief Struct respresenting an ACTIVE network carrier/operator.
+*/
+typedef struct ntwkOperator_tag
+{
+	char name[PSZ(ntwk__operatorNameSz)];               // Provider name, some carriers may report as 6-digit numeric carrier ID.
+	char iotMode[PSZ(ntwk__iotModeNameSz)];             // Network carrier protocol mode: CATM-1 or NB-IOT for BGx.
+    uint8_t defaultContext;
+    uint8_t pdpCntxtCnt;                                // The number of PDP contexts available
+    packetNetwork_t packetNetworks[ntwk__pdpContextCnt];  // Collection of packet network with cell operator. This is typically only 1, but some carriers implement more (ex VZW).
+} ntwkOperator_t;
+
+
+
 
 
 #ifdef __cplusplus
@@ -94,7 +199,7 @@ resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoTyp
  * @param [in] apn The APN name if required by network carrier.
  *  
  */
-resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t protoType, const char *apn);
+resultCode_t ntwk_configPdpNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn);
 
 
 /**
@@ -145,9 +250,6 @@ void ntwk_deactivatePdpContext(uint8_t cntxtId);
  * @return True if the context is active
  */
 bool ntwk_getPdpContextState(uint8_t cntxtId);
-
-
-
 
 
 /**

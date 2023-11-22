@@ -169,7 +169,7 @@ void QBG_reset(resetAction_t resetAction)
             {
                 DPRINT(PRNT_WARN, "LTEm swReset:OFF timeout\r");
                 // SC16IS7xx_sendBreak();
-                // atcmd_exitTextMode();                                    // clear possible text mode (hung MQTT publish, etc.)
+                // ATCMD_exitTextMode();                                    // clear possible text mode (hung MQTT publish, etc.)
                 QBG_reset(resetAction_powerReset);                          // recursive call with power-cycle reset specified
                 return;
             }
@@ -218,11 +218,11 @@ bool QBG_setOptions()
         DPRINT(PRNT_DEFAULT, " > %s", qbg_initCmds[i]);
         strcpy(cmdBffr, qbg_initCmds[i]);
 
-        atcmd_ovrrdTimeout(SEC_TO_MS(2));
-        if (!atcmd_tryInvoke(cmdBffr))
+        ATCMD_ovrrdTimeout(SEC_TO_MS(2));
+        if (!ATCMD_tryInvoke(cmdBffr))
             return resultCode__locked;
 
-        if (IS_SUCCESS(atcmd_awaitResult()))    // somewhat unknown cmd list for modem initialization, relax timeout
+        if (IS_SUCCESS(ATCMD_awaitResult()))    // somewhat unknown cmd list for modem initialization, relax timeout
         {
             continue;
         }
@@ -242,9 +242,9 @@ bool QBG_setOptions()
 // {
 //     IOP_forceTx("\x1B", 1);                                                          // send ASCII ESC
 
-//     atcmd_close();
-//     atcmd_tryInvoke("AT");
-//     resultCode_t result = atcmd_awaitResult();
+//     ATCMD_close();
+//     ATCMD_tryInvoke("AT");
+//     resultCode_t result = ATCMD_awaitResult();
 //     return  result == resultCode__success;
 // }
 

@@ -41,7 +41,7 @@ Also add information on how to contact you by electronic and paper mail.
 #include <stdbool.h>
 // #endif // __cplusplus
 
-#include "ltemc-types.h"
+//#include "ltemc-iTypes.h"
 //#include "platform/platform-spi.h"
 
 

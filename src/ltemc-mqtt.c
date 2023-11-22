@@ -67,6 +67,12 @@ static cmdParseRslt_t S__mqttConnectStatusParser();
 static cmdParseRslt_t S__mqttSubscribeCompleteParser();
 static cmdParseRslt_t S__mqttPublishCompleteParser();
 
+
+/* FIX: make local
+ * ------------------------------------------------------------------------------------------------------------------------------*/
+void MQTT_urcHandler();                                                 // parse/handle MQTT async URC events
+
+
 /* public mqtt functions
  * --------------------------------------------------------------------------------------------- */
 #pragma region public functions
@@ -220,28 +226,28 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
     // set options prior to open
     if (mqttCtrl->useTls)
     {
-        if (atcmd_tryInvoke("AT+QMTCFG=\"ssl\",%d,1,%d", mqttCtrl->dataCntxt, mqttCtrl->dataCntxt))
+        if (ATCMD_tryInvoke("AT+QMTCFG=\"ssl\",%d,1,%d", mqttCtrl->dataCntxt, mqttCtrl->dataCntxt))
         {
-            if (atcmd_awaitResult() != resultCode__success)
+            if (ATCMD_awaitResult() != resultCode__success)
                 return resultCode__internalError;
         }
     }
     // AT+QMTCFG="version",0,4
-    if (atcmd_tryInvoke("AT+QMTCFG=\"version\",%d,4", mqttCtrl->dataCntxt, mqttCtrl->mqttVersion))
+    if (ATCMD_tryInvoke("AT+QMTCFG=\"version\",%d,4", mqttCtrl->dataCntxt, mqttCtrl->mqttVersion))
     {
-        if (atcmd_awaitResult() != resultCode__success)
+        if (ATCMD_awaitResult() != resultCode__success)
             return resultCode__internalError;
     }
 
-    atcmd_ovrrdTimeout(SEC_TO_MS(30));
-    atcmd_ovrrdParser(S__mqttOpenCompleteParser);
-    if (!atcmd_tryInvoke("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, mqttCtrl->hostUrl, mqttCtrl->hostPort))
+    ATCMD_ovrrdTimeout(SEC_TO_MS(30));
+    ATCMD_ovrrdParser(S__mqttOpenCompleteParser);
+    if (!ATCMD_tryInvoke("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, mqttCtrl->hostUrl, mqttCtrl->hostPort))
         return resultCode__locked;
 
-    resultCode_t _rslt = atcmd_awaitResult();
-    const char* token = atcmd_getToken(2);                          // token 2 is open result
+    resultCode_t _rslt = ATCMD_awaitResult();
+    const char* token = ATCMD_getToken(2);                          // token 2 is open result
     int32_t rsltVal = strtol(token, NULL, 10);
-    DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
+    DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", ATCMD_getRawResponse());
 
     if (_rslt == resultCode__success && rsltVal == 0)
     {
@@ -250,7 +256,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
     }
     else
     {
-        const char* token = atcmd_getToken(2);
+        const char* token = ATCMD_getToken(2);
         int32_t rsltVal = strtol(token, NULL, 10);
         switch (rsltVal)
         {
@@ -277,24 +283,24 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
     if (mqttCtrl->state == mqttState_connected)
         return resultCode__success;
 
-    if (!atcmd_tryInvoke("AT+QMTCFG=\"session\",%d,%d", mqttCtrl->dataCntxt, (uint8_t)cleanSession)) // set option to clear session history on connect
+    if (!ATCMD_tryInvoke("AT+QMTCFG=\"session\",%d,%d", mqttCtrl->dataCntxt, (uint8_t)cleanSession)) // set option to clear session history on connect
         return resultCode__locked;
 
     resultCode_t _rslt;
-    if (IS_NOTSUCCESS_RSLT(atcmd_awaitResult()))
+    if (IS_NOTSUCCESS_RSLT(ATCMD_awaitResult()))
         return _rslt;
 
-    atcmd_ovrrdTimeout(SEC_TO_MS(60));
-    atcmd_ovrrdParser(S__mqttConnectCompleteParser);
-    if (!atcmd_tryInvoke("AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->dataCntxt, mqttCtrl->clientId, mqttCtrl->username, mqttCtrl->password))
+    ATCMD_ovrrdTimeout(SEC_TO_MS(60));
+    ATCMD_ovrrdParser(S__mqttConnectCompleteParser);
+    if (!ATCMD_tryInvoke("AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->dataCntxt, mqttCtrl->clientId, mqttCtrl->username, mqttCtrl->password))
         return resultCode__locked;
 
-    _rslt = atcmd_awaitResult()
-    DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
+    _rslt = ATCMD_awaitResult()
+    DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", ATCMD_getRawResponse());
 
     if (_rslt == resultCode__success)                                           // COMMAND executed, outcome of CONNECTION may not be a success
     {
-        const char* token = atcmd_getToken(2);
+        const char* token = ATCMD_getToken(2);
         int32_t rsltVal = strtol(token, NULL, 10);
         switch (rsltVal)
         {
@@ -382,15 +388,15 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
 //     uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->lastMsgId;                                             // msgId not sent with QOS == 0, otherwise sent
 
 //     // AT+QMTPUBEX=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>","<msg,len<=(560)>"
-//     if (atcmd_tryInvoke("AT+QMTPUBEX=%d,%d,%d,0,\"%s\",\"%s\"", mqttCtrl->dataCntxt, msgId, qos, topic, encodedMsg))
+//     if (ATCMD_tryInvoke("AT+QMTPUBEX=%d,%d,%d,0,\"%s\",\"%s\"", mqttCtrl->dataCntxt, msgId, qos, topic, encodedMsg))
 //     {
-//         rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(timeoutSeconds), NULL);
+//         rslt = ATCMD_awaitResultWithOptions(PERIOD_FROM_SECONDS(timeoutSeconds), NULL);
 //         if (rslt != resultCode__success)
 //         {
-//             DPRINT(PRNT_YELLOW, "MQTT-PUB ERROR: rslt=%d(%d)\r\n", rslt, atcmd_getValue());
+//             DPRINT(PRNT_YELLOW, "MQTT-PUB ERROR: rslt=%d(%d)\r\n", rslt, ATCMD_getValue());
 //         }
 //     }
-//     atcmd_close();
+//     ATCMD_close();
 //     return rslt;
 // }
 
@@ -400,7 +406,7 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
  */
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint16_t messageSz, uint8_t timeoutSec)
 {
-    ASSERT(messageSz <= 4096); // max msg length PUB=4096 (PUBEX=560)
+    ASSERT(messageSz <= 4096);                                      // max msg length PUB=4096 (PUBEX=560)
 
     uint32_t timeoutMS = (timeoutSec == 0) ? mqtt__publishTimeout : PERIOD_FROM_SECONDS(timeoutSec);
 
@@ -408,16 +414,16 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
     uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId; // msgId not sent with QOS == 0, otherwise sent
     // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
 
-    atcmd_configDataMode(mqttCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, true); // send message with dataMode
+    ATCMD_configDataMode(mqttCtrl->dataCntxt, "> ", ATCMD_txOkDataHndlr, message, messageSz, NULL, true); // send message with dataMode
 
-    atcmd_ovrrdTimeout(timeoutMS);
-    atcmd_ovrrdParser(S__mqttPublishCompleteParser);
+    ATCMD_ovrrdTimeout(timeoutMS);
+    ATCMD_ovrrdParser(S__mqttPublishCompleteParser);
 
-    if (!atcmd_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
+    if (!ATCMD_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
         return resultCode__locked;
 
     resultCode_t _rslt;
-    if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+    if (IS_SUCCESS_RSLT(ATCMD_awaitResult()))
     {
         DPRINT(PRNT_dGREEN, "MQTT-PUB Success: rslt=%d\r\n", _rslt);
     }
@@ -431,16 +437,16 @@ void mqtt_close(mqttCtrl_t *mqttCtrl)
 {
     /* not fully documented how Quectel intended to use close/disconnect, trying whats here
      */
-    atcmd_ovrrdTimeout(SEC_TO_MS(60));
+    ATCMD_ovrrdTimeout(SEC_TO_MS(60));
     if (mqttCtrl->state == mqttState_connected)
     {
-        if (atcmd_tryInvoke("AT+QMTDISC=%d", mqttCtrl->dataCntxt))
-            atcmd_awaitResult();
+        if (ATCMD_tryInvoke("AT+QMTDISC=%d", mqttCtrl->dataCntxt))
+            ATCMD_awaitResult();
     }
     else if (mqttCtrl->state == mqttState_open) // LTEmC uses CLOSE
     {
-        if (atcmd_tryInvoke("AT+QMTCLOSE=%d", mqttCtrl->dataCntxt))
-            atcmd_awaitResult();
+        if (ATCMD_tryInvoke("AT+QMTCLOSE=%d", mqttCtrl->dataCntxt))
+            ATCMD_awaitResult();
     }
     mqttCtrl->state == mqtt_getStatus(mqttCtrl);                                            // internally set MQTT state
 }
@@ -495,17 +501,17 @@ mqttState_t mqtt_readStatus(mqttCtrl_t *mqttCtrl)
      */
 
     resultCode_t _rslt;
-    atcmd_ovrrdTimeout(SEC_TO_MS(5));
-    atcmd_ovrrdParser(S__mqttConnectStatusParser);
+    ATCMD_ovrrdTimeout(SEC_TO_MS(5));
+    ATCMD_ovrrdParser(S__mqttConnectStatusParser);
 
-    if (!atcmd_tryInvoke("AT+QMTCONN?"))
+    if (!ATCMD_tryInvoke("AT+QMTCONN?"))
         return resultCode__locked;
 
-    if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+    if (IS_SUCCESS_RSLT(ATCMD_awaitResult()))
     {
-        if (atcmd_wasPreambleFound())
+        if (ATCMD_wasPreambleFound())
         {
-            const char* token = atcmd_getToken(2);
+            const char* token = ATCMD_getToken(2);
             int32_t rsltVal = strtol(token, NULL, 10);
             switch (rsltVal)
             {
@@ -595,20 +601,20 @@ static resultCode_t S__notifyServerTopicChange(mqttCtrl_t *mqttCtrl, mqttTopicCt
 
     if (subscribe)
     {
-        atcmd_ovrrdTimeout(SEC_TO_MS(30));
-        atcmd_ovrrdParser(S__mqttSubscribeCompleteParser);
+        ATCMD_ovrrdTimeout(SEC_TO_MS(30));
+        ATCMD_ovrrdParser(S__mqttSubscribeCompleteParser);
 
-        if (!atcmd_tryInvoke("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->dataCntxt, ++mqttCtrl->sentMsgId, topicName, topicCtrl->Qos))
+        if (!ATCMD_tryInvoke("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->dataCntxt, ++mqttCtrl->sentMsgId, topicName, topicCtrl->Qos))
             return resultCode__locked;
         
-        return atcmd_awaitResult();
+        return ATCMD_awaitResult();
     }
     else
     {
-        if (!atcmd_tryInvoke("AT+QMTUNS=%d,%d,\"%s\"", mqttCtrl->dataCntxt, ++mqttCtrl->sentMsgId, topicName))
+        if (!ATCMD_tryInvoke("AT+QMTUNS=%d,%d,\"%s\"", mqttCtrl->dataCntxt, ++mqttCtrl->sentMsgId, topicName))
             return resultCode__locked;
 
-        return atcmd_awaitResult();
+        return ATCMD_awaitResult();
     }
     return resultCode__internalError;
 }
@@ -816,7 +822,7 @@ void MQTT_urcHandler()
  */
 static cmdParseRslt_t S__mqttOpenCompleteParser()
 {
-    cmdParseRslt_t parserRslt = atcmd_stdResponseParser("+QMTOPEN: ", true, ",", 0, 2, "", 0);
+    cmdParseRslt_t parserRslt = ATCMD_stdResponseParser("+QMTOPEN: ", true, ",", 0, 2, "", 0);
     return parserRslt;
 }
 
@@ -827,7 +833,7 @@ static cmdParseRslt_t S__mqttOpenCompleteParser()
 static cmdParseRslt_t S__mqttConnectCompleteParser()
 {
     // return ATCMD_testResponseTrace();
-    return atcmd_stdResponseParser("+QMTCONN: ", true, ",", 0, 3, "\r\n", 0);
+    return ATCMD_stdResponseParser("+QMTCONN: ", true, ",", 0, 3, "\r\n", 0);
 }
 
 /**
@@ -838,7 +844,7 @@ static cmdParseRslt_t S__mqttConnectStatusParser()
 {
     // BGx +QMTCONN Returns status: 1 = connecting, 3 = connected. Service parser returns 200 + status.
     // A simple "OK" response indicates no connection
-    return atcmd_stdResponseParser("+QMTCONN: ", false, ",", 0, 2, "OK\r\n", 0);
+    return ATCMD_stdResponseParser("+QMTCONN: ", false, ",", 0, 2, "OK\r\n", 0);
 }
 
 /**
@@ -847,7 +853,7 @@ static cmdParseRslt_t S__mqttConnectStatusParser()
  */
 static cmdParseRslt_t S__mqttSubscribeCompleteParser()
 {
-    return atcmd_stdResponseParser("+QMTSUB: ", true, ",", 0, 4, "\r\n", 0);
+    return ATCMD_stdResponseParser("+QMTSUB: ", true, ",", 0, 4, "\r\n", 0);
 }
 
 /**
@@ -856,7 +862,7 @@ static cmdParseRslt_t S__mqttSubscribeCompleteParser()
  */
 static cmdParseRslt_t S__mqttPublishCompleteParser()
 {
-    return atcmd_stdResponseParser("+QMTPUB: ", true, ",", 0, 2, "", 0);
+    return ATCMD_stdResponseParser("+QMTPUB: ", true, ",", 0, 2, "", 0);
 }
 
 /**
@@ -865,7 +871,7 @@ static cmdParseRslt_t S__mqttPublishCompleteParser()
  */
 static cmdParseRslt_t S__mqttCloseCompleteParser()
 {
-    return atcmd_stdResponseParser("OK\r\n\r\n+QMTCLOSE: ", true, ",", 0, 2, "", 0);
+    return ATCMD_stdResponseParser("OK\r\n\r\n+QMTCLOSE: ", true, ",", 0, 2, "", 0);
 }
 
 #pragma endregion

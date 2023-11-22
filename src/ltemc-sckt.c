@@ -34,8 +34,9 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
-#include "ltemc-iTypes.h"
 #include "ltemc-sckt.h"
+// #include "ltemc-atcmd.h"
+
 
 extern ltemDevice_t g_lqLTEM;
 
@@ -61,6 +62,16 @@ static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr)
 
 
 
+/* FIX: make local 
+ * ------------------------------------------------------------------------------------------------------------------------------*/
+void SCKT_urcHandler();                                                 // parse/handle SCKT async URC events
+// HTTP and filesystem run in a synchronous manner, they do not have async URC events (as implemented)
+
+
+
+
+
+
 #pragma region public sockets (IP:TCP/UDP/SSL) functions
 /* --------------------------------------------------------------------------------------------- */
 
@@ -68,7 +79,7 @@ static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr)
 /**
  *	@brief Create a socket data control(TCP/UDP/SSL).
  */
-void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t protocol, scktAppRecv_func recvCallback)
+void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t protocol, appRecv_func recvCallback)
 {
     ASSERT(dataCntxt < dataCntxt__cnt);
 
@@ -109,20 +120,20 @@ resultCode_t sckt_open(scktCtrl_t *scktCtrl, bool cleanSession)
 
     if (scktCtrl->streamType == 'U')                    // protocol == UDP
     {
-        atcmd_tryInvoke("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
-        rslt = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__udptcpOpenCompleteParser);
+        ATCMD_tryInvoke("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
+        rslt = ATCMD_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__udptcpOpenCompleteParser);
     }
 
     else if (scktCtrl->streamType == 'T')               // protocol == TCP
     {
-        atcmd_tryInvoke("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
-        rslt = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__udptcpOpenCompleteParser);
+        ATCMD_tryInvoke("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
+        rslt = ATCMD_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__udptcpOpenCompleteParser);
     }
 
     else if (scktCtrl->streamType == 'S')               // protocol == SSL/TLS
     {
-        atcmd_tryInvoke("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
-        rslt = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__sslOpenCompleteParser);
+        ATCMD_tryInvoke("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
+        rslt = ATCMD_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__sslOpenCompleteParser);
     }
 
     if (rslt == resultCode__success)
@@ -143,11 +154,11 @@ void sckt_close(scktCtrl_t *scktCtrl)
         return;
 
     if (scktCtrl->useTls)
-        atcmd_tryInvokeDefaults("AT+QSSLCLOSE=%d", scktCtrl->dataCntxt);        // BGx syntax different for SSL
+        ATCMD_tryInvokeDefaults("AT+QSSLCLOSE=%d", scktCtrl->dataCntxt);        // BGx syntax different for SSL
     else
-        atcmd_tryInvokeDefaults("AT+QICLOSE=%d", scktCtrl->dataCntxt);          // BGx syntax different for TCP/UDP
+        ATCMD_tryInvokeDefaults("AT+QICLOSE=%d", scktCtrl->dataCntxt);          // BGx syntax different for TCP/UDP
     
-    if (atcmd_awaitResult() == resultCode__success)
+    if (ATCMD_awaitResult() == resultCode__success)
     {
         scktCtrl->state = scktState_closed;
         ltem_deleteStream(scktCtrl);
@@ -205,18 +216,19 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
     resultCode_t rslt;
 
-    atcmd_configDataMode(scktCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, data, dataSz, NULL, false);
-    atcmd_configDataModeEot(0x1A);
+    ATCMD_configDataMode(scktCtrl->dataCntxt, "> ", ATCMD_txOkDataHndlr, data, dataSz, NULL, false);
+    ATCMD_configDataModeEot(0x1A);
 
-    if (atcmd_tryInvoke("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz))
+    if (ATCMD_tryInvoke("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz))
     {
-        rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__socketSendCompleteParser);
+        ATCMD_ovrrdParser(S__socketSendCompleteParser);
+        rslt = ATCMD_awaitResult();
         if (rslt == resultCode__success)
         {
             scktCtrl->statsTxCnt++;
         }
     }
-    atcmd_close();
+    ATCMD_close();
     return rslt;                                                            // return sucess -OR- failure from sendRequest\sendRaw action
 }
 
@@ -273,7 +285,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
      * +QIURC: "pdpdeact",<contextID>   // not handled here, falls through to global URC handler
     */
 
-void SCKT__urcHndlr()
+void SCKT_urcHandler()
 {
     bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
 
@@ -339,20 +351,20 @@ void SCKT__urcHndlr()
             uint16_t irdRqstSz = bbffr_getVacant(g_lqLTEM.iop->rxBffr) / 2;     // request up to half of available buffer space
             if (isUdpTcp)
             {
-                atcmd_configDataMode(scktCtrl->dataCntxt, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
-                atcmd_tryInvoke("AT+QIRD=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
+                ATCMD_configDataMode(scktCtrl->dataCntxt, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
+                ATCMD_tryInvoke("AT+QIRD=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             else
             {
-                atcmd_configDataMode(scktCtrl->dataCntxt, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
-                atcmd_tryInvoke("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
+                ATCMD_configDataMode(scktCtrl->dataCntxt, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
+                ATCMD_tryInvoke("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
-            atcmd_awaitResult();
+            ATCMD_awaitResult();
 
-            const char* token = atcmd_getToken(1);
+            const char* token = ATCMD_getToken(1);
             irdRemain = strtol(token, NULL, 10);
 
-            // irdRemain = atcmd_getValue();
+            // irdRemain = ATCMD_getValue();
 
         } while (irdRemain > 0);
     }
@@ -464,7 +476,7 @@ static resultCode_t S__scktRxHndlr()
  */
 static cmdParseRslt_t S__irdResponseHeaderParser() 
 {
-    return atcmd_stdResponseParser("+QIRD: ", true, ",", 1, 1, "\r\n", 0);
+    return ATCMD_stdResponseParser("+QIRD: ", true, ",", 1, 1, "\r\n", 0);
 }
 
 
@@ -474,7 +486,7 @@ static cmdParseRslt_t S__irdResponseHeaderParser()
  */
 static cmdParseRslt_t S__sslrecvResponseHeaderParser() 
 {
-    return atcmd_stdResponseParser("+QSSLRECV: ", true, ",", 1, 1, "\r\n", 0);
+    return ATCMD_stdResponseParser("+QSSLRECV: ", true, ",", 1, 1, "\r\n", 0);
 }
 
 
@@ -483,7 +495,7 @@ static cmdParseRslt_t S__sslrecvResponseHeaderParser()
  */
 static cmdParseRslt_t S__udptcpOpenCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd_stdResponseParser("+QIOPEN: ", true, ",", 1, 1, "", 0);
+    return ATCMD_stdResponseParser("+QIOPEN: ", true, ",", 1, 1, "", 0);
 }
 
 
@@ -492,7 +504,7 @@ static cmdParseRslt_t S__udptcpOpenCompleteParser(const char *response, char **e
  */
 static cmdParseRslt_t S__sslOpenCompleteParser(const char *response, char **endptr) 
 {
-    return atcmd_stdResponseParser("+QSSLOPEN: ", true, ",", 1, 1, "", 0);
+    return ATCMD_stdResponseParser("+QSSLOPEN: ", true, ",", 1, 1, "", 0);
 }
 
 
@@ -501,7 +513,7 @@ static cmdParseRslt_t S__sslOpenCompleteParser(const char *response, char **endp
  */
 static cmdParseRslt_t S__socketSendCompleteParser(const char *response, char **endptr)
 {
-    return atcmd_stdResponseParser("", false, "", 0, 0, "SEND OK\r\n", 0);
+    return ATCMD_stdResponseParser("", false, "", 0, 0, "SEND OK\r\n", 0);
 }
 
 
@@ -515,7 +527,7 @@ static cmdParseRslt_t S__socketSendCompleteParser(const char *response, char **e
 static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr) 
 {
     // BGx +QMTCONN Read returns Status = 3 for connected, service parser returns 203
-    return atcmd_serviceResponseParser(response, "+QISTATE: ", 5, endptr) == 202 ? resultCode__success : resultCode__unavailable;
+    return ATCMD_serviceResponseParser(response, "+QISTATE: ", 5, endptr) == 202 ? resultCode__success : resultCode__unavailable;
 }
 
 #pragma endregion

@@ -49,18 +49,18 @@ Also add information on how to contact you by electronic and paper mail.
 // #define STRCMP(x,y)  (strcmp(x,y) == 0)
 
 // LTEmC Includes
-#include <ltemc-internal.h>                             // this appl performs tests on internal, non-public API components 
+#include <ltemc-iTypes.h>                                       // this appl performs tests on internal, non-public API components 
 #include <ltemc-iop.h>
 
 // LTEmC variables
-// cBuffer_t rxBffr;                                           // cBuffer control structure
-// cBuffer_t* rxBffrPtr = &rxBffr;                             // convenience pointer var
-// char rawBuffer[220] = {0};                                  // raw buffer managed by rxBffr control
+// cBuffer_t rxBffr;                                            // cBuffer control structure
+// cBuffer_t* rxBffrPtr = &rxBffr;                              // convenience pointer var
+// char rawBuffer[220] = {0};                                   // raw buffer managed by rxBffr control
 
 // test controls
-bBuffer_t* rxBffrPtr;                                       // convenience pointer var
-char hostBffr1[255];                                        // display buffer to receive received info from LTEmC
-char hostBffr2[255];                                        // display buffer to receive received info from LTEmC
+bBuffer_t* rxBffrPtr;                                           // convenience pointer var
+char hostBffr1[255];                                            // display buffer to receive received info from LTEmC
+char hostBffr2[255];                                            // display buffer to receive received info from LTEmC
 
 uint16_t loopCnt = 0;
 uint16_t cycle_interval = 2000;

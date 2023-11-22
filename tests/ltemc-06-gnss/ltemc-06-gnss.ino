@@ -44,10 +44,6 @@ Also add information on how to contact you by electronic and paper mail.
     // #define HOST_FEATHER_LTEM3F
 #endif
 
-#define PERIOD_FROM_SECONDS(period)  (period * 1000)
-#define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
-#define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
-
 #include <ltemc.h>
 #include <ltemc-gnss.h>
 
@@ -92,7 +88,7 @@ void setup() {
 
 void loop() 
 {
-    if (ELAPSED(lastCycle, cycle_interval))
+    if (IS_ELAPSED(lastCycle, cycle_interval))
     {
         lastCycle = millis();
         loopCnt++;
