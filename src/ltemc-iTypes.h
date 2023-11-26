@@ -223,7 +223,6 @@ typedef struct ltemDevice_tag
 	modemInfo_t *modemInfo;                             // Data structure holding persistent information about modem device
     ntwkOperator_t *ntwkOperator;                       // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
     streamCtrl_t* streams[ltemSz__streamCnt];           // Data streams: data context protocols
-    asyncCtrl_t* asyncStreams[ltemSz__streamCnt];       // 
     ltemMetrics_t metrics;                              // metrics for operational analysis and reporting
     ltemStatics_t statics;                              // small collection of static buffers for composition and return of modem information
 } ltemDevice_t;

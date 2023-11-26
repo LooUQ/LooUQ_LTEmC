@@ -88,6 +88,7 @@ typedef enum cmdParseRslt_tag
  */
 typedef enum streamType_tag
 {
+    streamType_none = 0,
     streamType_UDP = 'U',
     streamType_TCP = 'T',
     streamType_SSLTLS = 'S',
@@ -95,7 +96,7 @@ typedef enum streamType_tag
     streamType_HTTP = 'H',
     streamType_file = 'F',
     streamType_SCKT = 'K',
-    streamType__ANY = 0
+    streamType__ANY = '*'
 } streamType_t;
 
 
@@ -217,22 +218,13 @@ typedef struct atcmd_tag
  */
 typedef struct streamCtrl_tag
 {
-    streamType_t streamType;                // stream type (cast to char from enum )
     dataCntxt_t dataCntxt;                  // stream context 
-    uint8_t asyncIndx;                      // index of matching struct containing async stream function pointers
-//    appGenRcvr_func appRcvr;                // application receiver for incoming network data
-} streamCtrl_t;
-
-
-/**
- * @brief Asynchronous stream control, registered/deregistered with LTEmC on stream open/close
- */
-typedef struct asyncCtrl_tag
-{
-    char streamType;                        // stream type; async currently is MQTT and sockets (HTTP/filesystem are synchronous)
+    streamType_t streamType;                // stream type (cast to char from enum )
     urcEvntHndlr_func urcHndlr;             // URC handler (invoke by eventMgr)
     dataHndlr_func dataRxHndlr;             // function to handle data streaming, initiated by eventMgr() or atcmd module
-} asyncCtrl_t;
+    appGenRcvr_func appRcvr;                // application receiver for incoming network data
+} streamCtrl_t;
+
 
 
 /* --------------------------------------------------------------------------------------------- */

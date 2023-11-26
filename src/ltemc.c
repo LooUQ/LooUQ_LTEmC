@@ -751,26 +751,26 @@ void ltem_eventMgr()
 {
     /* look for a new incoming URC 
      */
-    int16_t potentialUrc = bbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);      // look for URC prefix char in RX buffer
+    int16_t potentialUrc = bbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);          // look for URC prefix char in RX buffer
     if (BBFFR_ISNOTFOUND(potentialUrc))
     {
-        return;                                                                     // nope, done here
+        return;                                                                         // nope, done here
     }
 
     /* Invoke each stream's URC handler (if stream has one), it will service or return with a cancelled if not handled
      */
-    for (size_t i = 0; i < ltemSz__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
+    for (size_t i = 0; i < ltemSz__streamCnt; i++)                                      // potential URC in rxBffr, see if a data handler will service
     {
         resultCode_t serviceRslt;
-        if (g_lqLTEM.streams[i] != NULL &&  (g_lqLTEM.asyncStreams[i]) != NULL)  // URC event handler in this stream, offer the data to the handler
+        if (g_lqLTEM.streams[i] != NULL &&  (g_lqLTEM.streams[i]->urcHndlr) != NULL)    // URC event handler in this stream, offer the data to the handler
         {
-            serviceRslt = (g_lqLTEM.asyncStreams[i]->urcHndlr)();
+            serviceRslt = (g_lqLTEM.streams[i]->urcHndlr)();
         }
-        if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
+        if (serviceRslt == resultCode__cancelled)                                       // not serviced, continue looking
         {
             continue;
         }
-        break;                                                                      // service attempted (might have errored), so this event is over
+        break;                                                                          // service attempted (might have errored), so this event is over
     }
 
     S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
