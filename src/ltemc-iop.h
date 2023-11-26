@@ -38,7 +38,7 @@ Also add information on how to contact you by electronic and paper mail.
 // #include "ltemc-nxp-sc16is.h"
 #include <stdint.h>
 
-#include <lq-bBuffer.h>
+#include <lq-bBuffer.h>                                         // RX buffer is a block-buffer type
 
 
 /**

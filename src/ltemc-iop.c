@@ -67,6 +67,8 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 #include <lqdiag.h>
 
+#include "ltemc.h"
+#include "ltemc-nxp-sc16is.h"
 #include "ltemc-iTypes.h"
 #include "ltemc-iop.h"
 
@@ -110,13 +112,13 @@ void IOP_create()
     bBuffer_t *rxBffrCtrl = calloc(1, sizeof(bBuffer_t));           // allocate space for RX buffer control struct
     if (rxBffrCtrl == NULL)
         return;
-    char *rxBffr = calloc(1, ltem__bufferSz_rx);                    // allocate space for raw buffer
+    char *rxBffr = calloc(1, ltemSz__bufferSz_rx);                    // allocate space for raw buffer
     if (rxBffr == NULL)
     {
         free(rxBffr);
         return;
     }
-    bbffr_init(rxBffrCtrl, rxBffr, ltem__bufferSz_rx);              // initialize as a circular block buffer
+    bbffr_init(rxBffrCtrl, rxBffr, ltemSz__bufferSz_rx);              // initialize as a circular block buffer
     g_lqLTEM.iop->rxBffr = rxBffrCtrl;                              // add into IOP struct
 }
 

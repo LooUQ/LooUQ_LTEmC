@@ -35,7 +35,7 @@ Also add information on how to contact you by electronic and paper mail.
 #include "platform-timing.h"
 #include <Arduino.h>
 
-platform_yieldCB_func_t platform_yieldCB_func;
+// platform_yieldCB_func_t platform_yieldCB_func;
 
 
 uint32_t pMillis()
@@ -47,8 +47,8 @@ uint32_t pMillis()
 void pYield()
 {
     yield();                            // allow for platform yield processing (ex: Arduino scheduler, ESPx, etc.)
-    if (platform_yieldCB_func)          // allow for device application yield processing
-        platform_yieldCB_func();
+    // if (platform_yieldCB_func)          // allow for device application yield processing
+    //     platform_yieldCB_func();
 }
 
 

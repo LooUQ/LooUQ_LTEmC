@@ -48,95 +48,72 @@ Also add information on how to contact you by electronic and paper mail.
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
 // #endif // __cplusplus
 
 
-#include <string.h>
-#include <stdlib.h>
-
-#include <lq-types.h>
-// #include <lq-str.h>                         // most LTEmC modules use LooUQ string functions
-// #include <lq-bBuffer.h>
-
-// #include "ltemc-types.h"
-// #include "ltemc.h"
-
-#include "ltemc-nxp-sc16is.h"                   // core LTEmC modules
-#include "ltemc-quectel-bg.h"
+#include "ltemc.h"
 #include "ltemc-iop.h"
 #include "ltemc-atcmd.h"
+#include "ltemc-network.h"
 
-#include "ltemc.h"
-#include "ltemc-network.h"                      // mandatory services modules
-#include "ltemc-files.h"
-#include "ltemc-tls.h"
 
-/** 
- *  @brief Streams 
- *  @details Structures for stream control/processing
- * ================================================================================================
+// #include <lq-types.h>
+// // #include <lq-str.h>                         // most LTEmC modules use LooUQ string functions
+// // #include <lq-bBuffer.h>
+
+// // #include "ltemc-types.h"
+// // #include "ltemc.h"
+// #include "ltemc-iSizes.h"
+
+// #include "ltemc-nxp-sc16is.h"                   // core LTEmC modules
+// #include "ltemc-quectel-bg.h"
+// #include "ltemc-iop.h"
+// #include "ltemc-atcmd.h"
+
+// #include "ltemc-network.h"                      // mandatory services modules
+// #include "ltemc-files.h"
+// #include "ltemc-tls.h"
+
+
+
+// /**
+//  * @brief Stream types supported by LTEmC 
+//  */
+// typedef enum streamType_tag
+// {
+//     streamType_UDP = 'U',
+//     streamType_TCP = 'T',
+//     streamType_SSLTLS = 'S',
+//     streamType_MQTT = 'M',
+//     streamType_HTTP = 'H',
+//     streamType_file = 'F',
+//     streamType_SCKT = 'K',
+//     streamType__ANY = 0
+// } streamType_t;
+
+
+// /** 
+//  *  @brief Typed numeric constants for stream peers subsystem (sockets, mqtt, http)
+//  */
+// enum streams__constants
+// {
+//     streams__ctrlMagic = 0x186F,
+//     streams__maxContextProtocols = 5,
+//     streams__typeCodeSz = 4,
+//     streams__urcPrefixesSz = 60
+// };
+
+
+/**
+ * @brief enum describing the last receive event serviced by the ISR
  */
-
-typedef enum streamType_tag
+typedef enum recvEvent_tag
 {
-    streamType_UDP = 'U',
-    streamType_TCP = 'T',
-    streamType_SSLTLS = 'S',
-    streamType_MQTT = 'M',
-    streamType_HTTP = 'H',
-    streamType_file = 'F',
-    streamType_SCKT = 'K',
-    streamType__ANY = 0
-} streamType_t;
-
-
-/** 
- *  @brief Typed numeric constants for stream peers subsystem (sockets, mqtt, http)
- */
-enum streams__constants
-{
-    streams__ctrlMagic = 0x186F,
-    streams__maxContextProtocols = 5,
-    streams__typeCodeSz = 4,
-    streams__urcPrefixesSz = 60
-};
-
-
-
-
-
-
-/**
- * @brief Generic "function" pointer
- * @details Used as placeholder for streams received data application callback. Each stream has a specialized callback function
- * to deliver data to the application (app), however there is a shared struct for the common stream header. When the stream 
- * control is init, the stream specific app receive function is cast to signature below, then cast back to stream specific
- * function signature at invoke.
- */
-typedef void (*genericAppRecv_func)(void);
-
-
-/**
- * @brief Stream internal function declarations
- * @details Each stream can have a URC handler (asynchronous events) and a data receiver (synchronous data transfer). These are
- * declared below (in that order).
- */
-typedef resultCode_t (*urcEvntHndlr_func)();                            // callback into stream specific URC handler (async recv)
-
-
-/**
- * @brief Data handler: generic function signature that can be a stream sync receiver or a general purpose ATCMD data mode handler
- */
-typedef void (*dataHndlr_func)();                                       // callback into stream data handler (sync transfer)
-
-
-
-// typedef void (*doWork_func)();                                       // module background worker
-// typedef void (*powerSaveCallback_func)(uint8_t newPowerSaveState);   // callback for return from a powersave sleep
-// typedef resultCode_t (*dataRxHndlr_func)();                             // rxBuffer to stream: this function parses and forwards to application via appRcvProto_func
-// typedef void (*appRcvProto_func)();                                  // prototype func() for stream recvData callback
-
-
+    recvEvent_none = 0,
+    recvEvent_data,
+    recvEvent_timeout
+} recvEvent_t;
 
 
 /** 
@@ -155,60 +132,55 @@ typedef enum streamCntxt_tag
     streamCntxt__none = 255
 } streamCntxt_t;
 
-typedef struct streamCtrlHdr_tag
-{
-    char streamType;                            // stream type
-    dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
-} streamCtrlHdr_t;
 
 
 
-// /*
-//  * ============================================================================================= */
-
-/**
- * @brief Adds a protocol stream to the LTEm streams table
- * @details ASSERTS that no stream is occupying the stream control's data context
- * 
- * @param streamCtrl The stream to add to the LTEm stream table
- */
-void LTEM_registerStream(streamCtrlHdr_t *streamHdr);
-
-
-/**
- * @brief Remove a stream from the LTEm streams table, excludes it from further processing
- * @details ASSERTS that the stream parameter matches the stream in the LTEm table
- * 
- * @param streamCtrl The stream to remove from the LTEm stream table
- */
-void ltem_deregisterStream(streamCtrlHdr_t *streamHdr);
-
-
-/**
- * @brief Get a stream control from data context, optionally filtering on stream type.
- * 
- * @param dataCntxt The data context for the stream 
- * @param streamType Protocol of the stream
- * @return streamCtrl_t* Pointer of a generic stream, can be cast (after type validation) to a specific protocol control
- */
-streamCtrlHdr_t* ltem_findStream(uint8_t dataCntxt, streamType_t streamType);
+// /**
+//  * @brief Generic "function" pointer
+//  * @details Used as placeholder for streams received data application callback. Each stream has a specialized callback function
+//  * to deliver data to the application (app), however there is a shared struct for the common stream header. When the stream 
+//  * control is init, the stream specific app receive function is cast to signature below, then cast back to stream specific
+//  * function signature at invoke.
+//  */
+// typedef void (*genericAppRecv_func)(void);
 
 
 
+// typedef void (*doWork_func)();                                       // module background worker
+// typedef void (*powerSaveCallback_func)(uint8_t newPowerSaveState);   // callback for return from a powersave sleep
+// typedef resultCode_t (*dataRxHndlr_func)();                             // rxBuffer to stream: this function parses and forwards to application via appRcvProto_func
+// typedef void (*appRcvProto_func)();                                  // prototype func() for stream recvData callback
 
 
+// /**
+//  * @brief Internal generic stream control matching protocol specific controls (for 1st set of fields)
+//  */
+// typedef struct streamCtrl_tag
+// {
+//     streamType_t streamType;                // stream type (cast to char from enum )
+//     dataCntxt_t dataCntxt;                  // stream context 
+//     int8_t asyncIndx;                       // index of matching struct containing async stream function pointers
+// //    appGenRcvr_func appRcvr;                // application receiver for incoming network data
+// } streamCtrl_t;
 
 
-
-
-
-
-
+// /**
+//  * @brief Asynchronous stream control, registered/deregistered with LTEmC on stream open/close
+//  */
+// typedef struct asyncCtrl_tag
+// {
+//     char streamType;                        // stream type; async currently is MQTT and sockets (HTTP/filesystem are synchronous)
+//     urcEvntHndlr_func urcHndlr;             // URC handler (invoke by eventMgr)
+//     dataHndlr_func dataRxHndlr;             // function to handle data streaming, initiated by eventMgr() or atcmd module
+// } asyncCtrl_t;
 
 
 /* Metric Type Definitions
  * ------------------------------------------------------------------------------------------------------------------------------*/
+
+/**
+ * @brief Metric counters maintained by LTEmC 
+ */
 typedef struct ltemMetrics_tag
 {
     // metrics
@@ -220,34 +192,13 @@ typedef struct ltemMetrics_tag
 
 
 /**
- * @brief enum describing the last receive event serviced by the ISR
- */
-typedef enum recvEvent_tag
-{
-    recvEvent_none = 0,
-    recvEvent_data,
-    recvEvent_timeout
-} recvEvent_t;
-
-
-typedef struct streamCtrlHdr_tag
-{
-    char streamType;                            // stream type
-    dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
-} streamCtrlHdr_t;
-
-
-
-/**
  * @brief Static char arrays to simplify passing string responses back to user application.
  */
 typedef struct ltemStatics_tag
 {
-    char dateTimeBffr[PSZ(ltem__dateTimeBffrSz)];   // reused by date/time functions for parsing formats
-    char reportBffr[PSZ(ltem__reportsBffrSz)];      // reused by *Rpt() functions
+    char dateTimeBffr[PSZ(ltemSz__dateTimeBffrSz)];   // reused by date/time functions for parsing formats
+    char reportBffr[PSZ(ltemSz__reportsBffrSz)];      // reused by *Rpt() functions
 } ltemStatics_t;
-
 
 
 /** 
@@ -271,8 +222,8 @@ typedef struct ltemDevice_tag
     ntwkSettings_t *ntwkSettings;                       // Settings to control radio and cellular network initialization
 	modemInfo_t *modemInfo;                             // Data structure holding persistent information about modem device
     ntwkOperator_t *ntwkOperator;                       // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
-    fileCtrl_t* fileCtrl;                               // static singleton stream for filesystem
-    streamCtrlHdr_t* streams[ltem__streamCnt];             // Data streams: protocols or file system
+    streamCtrl_t* streams[ltemSz__streamCnt];           // Data streams: data context protocols
+    asyncCtrl_t* asyncStreams[ltemSz__streamCnt];       // 
     ltemMetrics_t metrics;                              // metrics for operational analysis and reporting
     ltemStatics_t statics;                              // small collection of static buffers for composition and return of modem information
 } ltemDevice_t;
@@ -303,7 +254,30 @@ void NTWK_initRatOptions();
 void NTWK_applyPpdNetworkConfig();
 
 
+/**
+ * @brief Register a stream; aka add it from the active streams array
+ * 
+ * @param streamHdr 
+ */
+void STREAM_register(streamCtrl_t *streamHdr);
 
+
+/**
+ * @brief Deregister a stream; aka remove it from the active streams array
+ * 
+ * @param streamHdr 
+ */
+void STREAM_deregister(streamCtrl_t *streamHdr);
+
+
+/**
+ * @brief Find a stream using the data context number and type
+ * 
+ * @param dataCntxt 
+ * @param streamType 
+ * @return streamCtrlHdr_t* 
+ */
+streamCtrl_t* STREAM_find(uint8_t dataCntxt, streamType_t streamType);
 
 
 #ifdef __cplusplus

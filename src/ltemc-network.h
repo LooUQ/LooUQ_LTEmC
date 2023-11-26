@@ -313,7 +313,7 @@ bool ntwk_isReady(bool refresh);
  * @warning This command can take MINUTES to respond! It is generally considered a command used solely for diagnostics.
  * @return Char array-ptr with list of operators (raw format)
  */
-const char* ntwkDiagnostics_getOperators();
+const char* NTWKDIAGNOSTICS_getOperators();
 
 
 #ifdef __cplusplus

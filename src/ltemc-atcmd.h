@@ -33,7 +33,14 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_ATCMD_H__
 #define __LTEMC_ATCMD_H__
 
-#include "ltemc-iTypes.h"
+// #include "ltemc-iTypes.h"
+// #include <lq-bBuffer.h>
+//#include "ltemc-streams.h"
+
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma region Enum Declarations
+/* --------------------------------------------------------------------------------------------- */
 
 /**
  * @brief ATCMD Module Constants
@@ -49,7 +56,9 @@ enum atcmd__constants
     atcmd__dataModeTriggerSz = 13
 };
 
-
+/**
+ * @brief State model for a datamode control
+ */
 typedef enum dmState_tag
 {
     dmState_idle = 0,
@@ -75,25 +84,71 @@ typedef enum cmdParseRslt_tag
 
 
 /**
- * @brief Command response parser; parses and validates device response to AT commands
+ * @brief Stream types supported by LTEmC 
+ */
+typedef enum streamType_tag
+{
+    streamType_UDP = 'U',
+    streamType_TCP = 'T',
+    streamType_SSLTLS = 'S',
+    streamType_MQTT = 'M',
+    streamType_HTTP = 'H',
+    streamType_file = 'F',
+    streamType_SCKT = 'K',
+    streamType__ANY = 0
+} streamType_t;
+
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma endregion Enum Declarations
+/* --------------------------------------------------------------------------------------------- */
+
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma region Function Prototype Declarations
+/* --------------------------------------------------------------------------------------------- */
+
+/**
+ * @brief AT command RESPONSE parser
+ * @details Parses and validates device response to AT commands
  */
 typedef cmdParseRslt_t (*cmdResponseParser_func)(void);                 // command response parser
 
 
 /**
- * @brief ATCMD processor dataMode receiver. 
+ * @brief Stream URC event handler.
+ * @details Each stream MAY have a URC handler for ASYNCHRONOUS events. It MAY have a SYNCRONOUS handler invoked inline to command
+ * processing. These handlers processing incoming data from the RX buffer, parse it, and marshal the received data to the application.
+ */
+typedef resultCode_t (*urcEvntHndlr_func)();                            // callback into stream specific URC handler (async recv)
+
+
+/**
+ * @brief DATA-MODE receiver (ATCMD processor). 
  * @details Each stream type will have one function (possibly multiple functions) that match this prototype and a capable of 
  * processing the stream coming in from LTEm device via the block buffer and can forward to the application.
  */
 typedef resultCode_t (*dmRcvr_func)(void);                              // data mode buffer receiver (processes data stream)
-
-
-/** @brief application data receiver (in stream header) cast to specific stream
- *  @details stream type has a concrete data receive type tailored to the specifics of the stream (defined in stream's .h)
- *  Example: MQTT receiver conveys topic, file receiver includes handle
+/**
+ * @brief Data handler: generic function signature that can be a stream sync receiver or a general purpose ATCMD data mode handler
  */
-typedef void (*appRcvr_func)(void);
+typedef void (*dataHndlr_func)();                                       // callback into stream data handler (sync transfer)
 
+
+/** @brief Generic APPLICATION callback data receiver (in stream header) cast to a stream specific receiver signature.
+ *  @details Each stream type has a concrete data receive type tailored to the specifics of the stream (defined in <stream>.h)
+ *  Examples: MQTT receiver conveys topic, file receiver includes handle
+ */
+typedef void (*appGenRcvr_func)(void);
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma endregion Function Prototype Declarations
+/* --------------------------------------------------------------------------------------------- */
+
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma region Structure Declarations
+/* --------------------------------------------------------------------------------------------- */
 
 /**
  * @brief Control structure configuring ATCMD dataMode
@@ -106,7 +161,7 @@ typedef struct dataMode_tag                                         // the comma
     uint16_t contextKey;                                            // unique identifier for data flow, could be dataContext(proto), handle(files), etc.
     char trigger[atcmd__dataModeTriggerSz];                         // char sequence that signals the transition to data mode, data mode starts at the following character
     dmRcvr_func dataHndlr;                                          // data handler function (TX/RX)
-    appRcvr_func appRecvCB;
+    appGenRcvr_func appRecvCB;
     char* txDataLoc;                                                // location of data buffer (TX only)
     uint16_t txDataSz;                                              // size of TX data or RX request
     bool runParserAfterDataMode;                                    // true = invoke AT response parser after successful datamode. Data mode error always skips parser
@@ -142,7 +197,7 @@ typedef struct atcmd_tag
     char respToken[PSZ(atcmd__respTokenSz)];                        // buffer to hold a token string grabbed from response
     cmdParseRslt_t parserResult;                                    // last parser invoke result returned
     bool preambleFound;                                             // true if parser found preamble
-    char errorDetail[PSZ(ltem__errorDetailSz)];                     // BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
+    char errorDetail[PSZ(ltemSz__errorDetailSz)];                   // BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
 
     uint32_t execDuration;                                          // duration of command's execution in milliseconds
     resultCode_t resultCode;                                        // consumer API result value (HTTP style), success=200, timeout=408, unmapped BGx errors are offset by 1000
@@ -157,7 +212,37 @@ typedef struct atcmd_tag
 
 } atcmd_t;
 
+/**
+ * @brief Internal generic stream control matching protocol specific controls (for 1st set of fields)
+ */
+typedef struct streamCtrl_tag
+{
+    streamType_t streamType;                // stream type (cast to char from enum )
+    dataCntxt_t dataCntxt;                  // stream context 
+    uint8_t asyncIndx;                      // index of matching struct containing async stream function pointers
+//    appGenRcvr_func appRcvr;                // application receiver for incoming network data
+} streamCtrl_t;
 
+
+/**
+ * @brief Asynchronous stream control, registered/deregistered with LTEmC on stream open/close
+ */
+typedef struct asyncCtrl_tag
+{
+    char streamType;                        // stream type; async currently is MQTT and sockets (HTTP/filesystem are synchronous)
+    urcEvntHndlr_func urcHndlr;             // URC handler (invoke by eventMgr)
+    dataHndlr_func dataRxHndlr;             // function to handle data streaming, initiated by eventMgr() or atcmd module
+} asyncCtrl_t;
+
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma endregion Structure Declarations
+/* --------------------------------------------------------------------------------------------- */
+
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma region Function Declarations
+/* --------------------------------------------------------------------------------------------- */
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -219,7 +304,7 @@ cmdParseRslt_t ATCMD_getParserResult();
  * @param [in] applRecvDataCB Handler function to receive/parse incoming data 
  * @param [in] runParser If true, registered command response parser is invoked after successful data mode processing
  */
-void ATCMD_configDataMode(uint16_t contextKey, const char* trigger, dataHndlr_func dataHndlr, char* txDataLoc, uint16_t txDataSz, appRcvProto_func applRecvDataCB, bool skipParser);
+void ATCMD_configDataMode(uint16_t contextKey, const char* trigger, dataHndlr_func dataHndlr, char* txDataLoc, uint16_t txDataSz, appGenRcvr_func applRecvDataCB, bool skipParser);
 
 
 
@@ -319,6 +404,28 @@ void ATCMD_exitDataMode();
 void ATCMD_exitTransparentMode();
 
 
+/**
+ * @brief Set parameters for standard AT-Cmd response parser
+ * @details LTEmC internal function, not static as it is used by several LTEmC modules
+ *           Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). 
+ *           Note: If no stop condition is specified, finale, tokensReqd, and lengthReqd are all omitted, the parser will return with 
+ *                 the first block of characters received.
+ *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getValue()
+ *           and atcmd_getResponse() functions respectively.
+ * @param [in] preamble - C-string containing the expected phrase that starts response. 
+ * @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
+ * @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
+ * @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
+ * @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
+ * @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
+ */
+void ATCMD_configureResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, const char *pFinale, uint16_t lengthReqd);
+
+
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma region RESPONSE Parsers
+/* --------------------------------------------------------------------------------------------- */
 
 /**
  * @brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
@@ -338,10 +445,6 @@ void ATCMD_exitTransparentMode();
  * @return Parse status result
  */
 cmdParseRslt_t ATCMD_stdResponseParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, uint8_t valueIndx, const char *finale, uint16_t lengthReqd);
-
-
-/* Response Parsers
- * --------------------------------------------------------------------------------------------- */
 
 
 /**
@@ -367,23 +470,6 @@ resultCode_t ATCMD_rxDataHndlr();
 */
 cmdParseRslt_t ATCMD_okResponseParser();
 
-/**
- * @brief Set parameters for standard AT-Cmd response parser
- * @details LTEmC internal function, not static as it is used by several LTEmC modules
- *           Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). 
- *           Note: If no stop condition is specified, finale, tokensReqd, and lengthReqd are all omitted, the parser will return with 
- *                 the first block of characters received.
- *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getValue()
- *           and atcmd_getResponse() functions respectively.
- * @param [in] preamble - C-string containing the expected phrase that starts response. 
- * @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
- * @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
- * @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
- * @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
- * @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
- */
-void ATCMD_configureResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, const char *pFinale, uint16_t lengthReqd);
-
 // /**
 //  *  \brief Awaits exclusive access to QBG module command interface.
 //  *  \param timeoutMS [in] - Number of milliseconds to wait for a lock.
@@ -397,9 +483,13 @@ void ATCMD_configureResponseParser(const char *pPreamble, bool preambleReqd, con
 //  */
 // bool ATCMD_isLockActive();
 
+#pragma endregion ATCMD Response Parsers
+/* --------------------------------------------------------------------------------------------- */
 
-/* LTEmC INTERNAL prompt parsers 
- * ------------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma region PROMPT Parsers
+/* --------------------------------------------------------------------------------------------- */
 
 /**
  *	\brief Base parser looking for a simple prompt string.
@@ -417,12 +507,48 @@ cmdParseRslt_t ATCMD_txDataPromptParser();
 cmdParseRslt_t ATCMD_connectPromptParser();
 
 #pragma endregion
-/* ------------------------------------------------------------------------------------------------
- * End ATCMD LTEmC Internal Functions */
+/* --------------------------------------------------------------------------------------------- */
 
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma region STREAM Registration Functions
+/* --------------------------------------------------------------------------------------------- */
+
+
+/**
+ * @brief Register a stream; aka add it from the active streams array
+ * 
+ * @param streamHdr 
+ */
+void STREAM_register(streamCtrl_t *streamHdr);
+
+
+/**
+ * @brief Deregister a stream; aka remove it from the active streams array
+ * 
+ * @param streamHdr 
+ */
+void STREAM_deregister(streamCtrl_t *streamHdr);
+
+
+/**
+ * @brief Find a stream using the data context number and type
+ * 
+ * @param dataCntxt 
+ * @param streamType 
+ * @return streamCtrlHdr_t* 
+ */
+streamCtrl_t* STREAM_find(uint8_t dataCntxt, streamType_t streamType);
+
+
+#pragma endregion
+/* --------------------------------------------------------------------------------------------- */
 
 
 #ifdef __cplusplus
 }
 #endif
+#pragma endregion Function Declarations
+/* --------------------------------------------------------------------------------------------- */
+
 #endif  // !__LTEMC_ATCMD_H__

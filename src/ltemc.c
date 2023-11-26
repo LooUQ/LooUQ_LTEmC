@@ -35,21 +35,25 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
 
-#include "ltemc-iTypes.h"
+
 #include "ltemc.h"
+#include "ltemc-iTypes.h"
 
-
-// /* LTEmC Global Singleton Instance
-// ------------------------------------------------------------------------------------------------- */
-// ltemDevice_t g_lqLTEM;
+#include "ltemc-atcmd.h"
+#include "ltemc-quectel-bg.h"
+#include "ltemc-network.h"
 
 
 #define MODULERDY_TIMEOUT 8000
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+
+
+/* LTEmC Global Singleton Instance
+------------------------------------------------------------------------------------------------- */
+ltemDevice_t g_lqLTEM;
 
 
 /* BGx module initialization commands (start script)
@@ -94,7 +98,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
         g_lqLTEM.platformSpi = spi_createFromIndex(g_lqLTEM.pinConfig.spiIndx, g_lqLTEM.pinConfig.spiCsPin);
     #endif
 
-    g_lqLTEM.modemSettings =  calloc(1, sizeof(modemSettings_t));
+    g_lqLTEM.ntwkSettings =  calloc(1, sizeof(ntwkSettings_t));
     ASSERT(g_lqLTEM.modemSettings != NULL);
 
     g_lqLTEM.modemInfo = calloc(1, sizeof(modemInfo_t));
@@ -109,8 +113,8 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     ASSERT(g_lqLTEM.atcmd != NULL);
     ATCMD_reset(true);                                          // initialize atcmd control values
 
-    g_lqLTEM.fileCtrl = calloc(1, sizeof(fileCtrl_t));
-    ASSERT(g_lqLTEM.fileCtrl != NULL);
+    // g_lqLTEM.fileCtrl = calloc(1, sizeof(fileCtrl_t));
+    // ASSERT(g_lqLTEM.fileCtrl != NULL);
 
     ntwk_create();
 
@@ -408,7 +412,7 @@ const char* ltem_getUtcDateTime(char format)
     char* dtSrc;
     uint8_t len;
 
-    memset(&g_lqLTEM.statics.dateTimeBffr, 0, ltem__dateTimeBffrSz);            // return empty string if failure
+    memset(&g_lqLTEM.statics.dateTimeBffr, 0, ltemSz__dateTimeBffrSz);            // return empty string if failure
 
     char* destPtr = &g_lqLTEM.statics.dateTimeBffr;
     char* dtDbg  = &g_lqLTEM.statics.dateTimeBffr;
@@ -547,7 +551,7 @@ modemInfo_t* ltem_getModemInfo()
 
         if (IS_SUCCESS(ATCMD_awaitResult()))
         {
-            strncpy(g_lqLTEM.modemInfo->imei, ATCMD_getResponseData(), ntwk__imeiSz);
+            strncpy(g_lqLTEM.modemInfo->imei, ATCMD_getResponseData(), ltem__imeiSz);
         }
     }
 
@@ -562,7 +566,7 @@ modemInfo_t* ltem_getModemInfo()
             if ((eol = strstr(ATCMD_getResponseData(), "\r\n")) != NULL)
             {
                 uint8_t sz = eol - ATCMD_getResponseData();
-                memcpy(g_lqLTEM.modemInfo->fwver, ATCMD_getResponseData(), MIN(sz, ntwk__dvcFwVerSz));
+                memcpy(g_lqLTEM.modemInfo->fwver, ATCMD_getResponseData(), MIN(sz, ltem__dvcFwVerSz));
             }
         }
     }
@@ -602,7 +606,7 @@ modemInfo_t* ltem_getModemInfo()
             char* responseAt = ATCMD_getResponseData();
             if (strlen(responseAt) && (delimAt = memchr(responseAt, '\r', strlen(responseAt))))
             {
-                memcpy(g_lqLTEM.modemInfo->iccid, responseAt, MIN(delimAt - responseAt, ntwk__iccidSz));
+                memcpy(g_lqLTEM.modemInfo->iccid, responseAt, MIN(delimAt - responseAt, ltem__iccidSz));
             }
         }
     }
@@ -755,12 +759,12 @@ void ltem_eventMgr()
 
     /* Invoke each stream's URC handler (if stream has one), it will service or return with a cancelled if not handled
      */
-    for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
+    for (size_t i = 0; i < ltemSz__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
     {
         resultCode_t serviceRslt;
-        if (g_lqLTEM.streams[i] != NULL &&  (g_lqLTEM.urcEvntHndlrs[i]) != NULL)  // URC event handler in this stream, offer the data to the handler
+        if (g_lqLTEM.streams[i] != NULL &&  (g_lqLTEM.asyncStreams[i]) != NULL)  // URC event handler in this stream, offer the data to the handler
         {
-            serviceRslt = (g_lqLTEM.urcEvntHndlrs[i])();
+            serviceRslt = (g_lqLTEM.asyncStreams[i]->urcHndlr)();
         }
         if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
         {
@@ -772,85 +776,6 @@ void ltem_eventMgr()
     S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
 }
 
-
-void ltem_addStream(streamCtrl_t *streamCtrl)
-{
-    DPRINT_V(PRNT_INFO, "Registering Stream\r\n");
-    streamCtrl_t* prev = ltem_getStreamFromCntxt(streamCtrl->dataCntxt, streamType__ANY);
-
-    if (prev != NULL)
-        return;
-
-    for (size_t i = 0; i < ltem__streamCnt; i++)
-    {
-        if (g_lqLTEM.streams[i] == NULL)
-        {
-            g_lqLTEM.streams[i] = streamCtrl;
-            switch (streamCtrl->streamType)
-            {
-                // case streamType_file:
-                //     g_lqLTEM.urcEvntHndlrs[i] = file_urcHandler;         // file module has no URC events
-                //     break;
-                
-                // case streamType_HTTP:
-                //     g_lqLTEM.urcEvntHndlrs[i] = HTTP_urcHandler;
-                //     break;
-
-                case streamType_MQTT:
-                    g_lqLTEM.urcEvntHndlrs[i] = MQTT_urcHandler;
-                    break;
-
-                case streamType_SCKT:
-                    g_lqLTEM.urcEvntHndlrs[i] = SCKT_urcHandler;
-                    break;
-            }
-            return;
-        }
-    }
-}
-
-
-void ltem_deleteStream(streamCtrl_t *streamCtrl)
-{
-    for (size_t i = 0; i < ltem__streamCnt; i++)
-    {
-        if (g_lqLTEM.streams[i]->dataCntxt == streamCtrl->dataCntxt)
-        {
-            ASSERT(memcmp(g_lqLTEM.streams[i], streamCtrl, sizeof(streamCtrl_t)) == 0);     // compare the common fields
-            g_lqLTEM.streams[i] = NULL;
-            return;
-        }
-    }
-}
-
-
-streamCtrl_t* ltem_getStreamFromCntxt(uint8_t dataCntxt, streamType_t streamType);
-{
-    for (size_t i = 0; i < ltem__streamCnt; i++)
-    {
-        if (g_lqLTEM.streams[i] != NULL && g_lqLTEM.streams[i]->dataCntxt == context)
-        {
-            if (streamType == streamType__ANY)
-            {
-                return g_lqLTEM.streams[i];
-            }
-            else if (g_lqLTEM.streams[i]->streamType == streamType)
-            {
-                return g_lqLTEM.streams[i];
-            }
-            else if (streamType == streamType_SCKT)
-            {
-                if (g_lqLTEM.streams[i]->streamType == streamType_UDP ||
-                    g_lqLTEM.streams[i]->streamType == streamType_TCP ||
-                    g_lqLTEM.streams[i]->streamType == streamType_SSLTLS)
-                {
-                    return g_lqLTEM.streams[i];
-                }
-            }
-        }
-    }
-    return NULL;
-}
 
 /**
  * @brief Notify host application of significant events. Application may ignore, display, save status, whatever. 
@@ -871,13 +796,13 @@ void ltem_setEventNotifCallback(appEvntNotify_func eventNotifCallback)
     g_lqLTEM.appEvntNotifyCB = eventNotifCallback;
 }
 
-/**
- * @brief Registers the address (void*) of your application yield callback handler.
- */
-void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
-{
-    platform_yieldCB_func = yieldCallback;
-}
+// /**
+//  * @brief Registers the address (void*) of your application yield callback handler.
+//  */
+// void ltem_setYieldCallback(platform_yieldCB_func yieldCallback)
+// {
+//     platform_yieldCB_func = yieldCallback;
+// }
 
 
 #pragma endregion

@@ -73,7 +73,7 @@ void ATCMD_reset(bool releaseLock)
 
     memset(g_lqLTEM.atcmd->cmdStr, 0, atcmd__cmdBufferSz);
     memset(g_lqLTEM.atcmd->rawResponse, 0, atcmd__respBufferSz);
-    memset(g_lqLTEM.atcmd->errorDetail, 0, ltem__errorDetailSz);
+    memset(g_lqLTEM.atcmd->errorDetail, 0, ltemSz__errorDetailSz);
     g_lqLTEM.atcmd->resultCode = 0;
     g_lqLTEM.atcmd->invokedAt = 0;
     // g_lqLTEM.atcmd->retValue = 0;
@@ -91,7 +91,7 @@ void ATCMD_reset(bool releaseLock)
 /**
  * @brief Setup automatic data mode switch/servicing.
  */
-void ATCMD_configDataMode(uint16_t contextKey, const char *trigger, dataHndlr_func dataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
+void ATCMD_configDataMode(uint16_t contextKey, const char *trigger, dataHndlr_func dataHndlr, char *dataLoc, uint16_t dataSz, appGenRcvr_func appRecvCB, bool runParser)
 {
     ASSERT(strlen(trigger) > 0); // verify 3rd party setup (stream)
     ASSERT(rxDataHndlr != NULL); //
@@ -104,7 +104,7 @@ void ATCMD_configDataMode(uint16_t contextKey, const char *trigger, dataHndlr_fu
     g_lqLTEM.atcmd->dataMode.dataHndlr = dataHndlr;
     g_lqLTEM.atcmd->dataMode.txDataLoc = dataLoc;
     g_lqLTEM.atcmd->dataMode.txDataSz = dataSz;
-    g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
+    g_lqLTEM.atcmd->dataMode.appRecvCB = appRecvCB;
     g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = runParser;
 }
 
@@ -654,7 +654,7 @@ cmdParseRslt_t ATCMD_stdResponseParser(const char *pPreamble, bool preambleReqd,
     char *pErrorLoctn;
     if ((pErrorLoctn = strstr(workPtr, "+CM")) || (pErrorLoctn = strstr(workPtr, "ERROR")))
     {
-        for (size_t i = 0; i < ltem__errorDetailSz; i++)                        // copy raw chars: unknown incoming format, stop at line end
+        for (size_t i = 0; i < ltemSz__errorDetailSz; i++)                        // copy raw chars: unknown incoming format, stop at line end
         {
             if ((pErrorLoctn[i] == '\r' || pErrorLoctn[i] == '\n'))
                 break;
@@ -834,21 +834,103 @@ static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, ui
     }
 }
 
+#pragma endregion
 
-// /**
-//  * @brief register a stream peer with IOP to control communications. Typically performed by protocol open.
-//  */
-// void ATCMD_registerStream(uint8_t streamIndx, iopStreamCtrl_t *streamCtrl)
-// {
-//     g_lqLTEM.atcmd->streamPeers[streamIndx] = streamCtrl;
-// }
+/* --------------------------------------------------------------------------------------------- */
+#pragma region Stream Registration 
+/* --------------------------------------------------------------------------------------------- */
 
+void ATCMD_registerStream(streamCtrl_t *streamCtrl)
+{
+    DPRINT_V(PRNT_INFO, "Registering Stream\r\n");
+    streamCtrl_t* stream = ltem_findStreamFromCntxt(streamCtrl->dataCntxt, streamType__ANY);
+
+    if (stream != NULL)
+        return;
+
+    for (size_t i = 0; i < ltemSz__streamCnt; i++)
+    {
+        if (g_lqLTEM.streams[i] == NULL)
+        {
+            g_lqLTEM.streams[i] = streamCtrl;
+            switch (streamCtrl->streamType)
+            {
+                // case streamType_file:
+                //     g_lqLTEM.urcEvntHndlrs[i] = file_urcHandler;         // file module has no URC events
+                //     break;
+                
+                // case streamType_HTTP:
+                //     g_lqLTEM.urcEvntHndlrs[i] = HTTP_urcHandler;
+                //     break;
+
+                // case streamType_MQTT:
+                //     g_lqLTEM.urcEvntHndlrs[i] = MQTT_urcHandler;
+                //     break;
+
+                // case streamType_SCKT:
+                //     g_lqLTEM.urcEvntHndlrs[i] = SCKT_urcHandler;
+                //     break;
+            }
+            return;
+        }
+    }
+}
+
+
+void ATCMD_deregisterStream(streamCtrl_t *streamCtrl)
+{
+    for (size_t i = 0; i < ltemSz__streamCnt; i++)
+    {
+        if (g_lqLTEM.streams[i]->dataCntxt == streamCtrl->dataCntxt)
+        {
+            ASSERT(memcmp(g_lqLTEM.streams[i], streamCtrl, sizeof(streamCtrl_t)) == 0);     // compare the common fields
+            g_lqLTEM.streams[i] = NULL;
+            return;
+        }
+    }
+}
+
+
+uint8_t ATCMD_getStreamIndex(uint8_t dataCntxt, streamType_t streamType)
+{
+    for (size_t i = 0; i < ltemSz__streamCnt; i++)
+    {
+        if (g_lqLTEM.streams[i] != NULL && g_lqLTEM.streams[i]->dataCntxt == dataCntxt)
+        {
+            if (streamType == streamType__ANY)
+            {
+                return g_lqLTEM.streams[i];
+            }
+            else if (g_lqLTEM.streams[i]->streamType == streamType)
+            {
+                return g_lqLTEM.streams[i];
+            }
+            else if (streamType == streamType_SCKT)
+            {
+                if (g_lqLTEM.streams[i]->streamType == streamType_UDP ||
+                    g_lqLTEM.streams[i]->streamType == streamType_TCP ||
+                    g_lqLTEM.streams[i]->streamType == streamType_SSLTLS)
+                {
+                    return g_lqLTEM.streams[i];
+                }
+            }
+        }
+    }
+    return NULL;
+}
+
+
+/* --------------------------------------------------------------------------------------------- */
+#pragma endregion
+/* --------------------------------------------------------------------------------------------- */
+
+#pragma region OBSOLETE_MAYBE
 // /**
 //  * @brief Parse recv'd data (in command RX buffer) for async event preambles that need to be handled immediately.
 //  * @details AT cmd uses this to examine new buffer contents for +URC events that may arrive in command response
 //  *           Declared in ltemc-internal.h
 //  */
-// void S__rxParseForUrc(const char* urcTarget)
+// void S__parseForUrcReceived(const char* urcTarget)
 // {
 //     char *foundAt;
 //     // /* SSL/TLS data received
@@ -894,7 +976,6 @@ static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, ui
 //     //     g_lqLTEM.iop->rxCBuffer->head - (endPtr - urcBffr);                                     // remove URC from rxBuffer
 //     //     memset(g_lqLTEM.iop->urcDetectBuffer, 0, IOP__urcDetectBufferSz);
 //     // }
-
 //     // /* MQTT message receive
 //     // */
 //     // else if (g_lqLTEM.iop->mqttMap && (foundAt = strstr(urcBffr, "+QMTRECV: ")))
@@ -904,15 +985,11 @@ static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, ui
 //     //     char *cntxtIdPtr = urcBffr + urcLen;
 //     //     char *endPtr = NULL;
 //     //     uint8_t cntxtId = (uint8_t)strtol(cntxtIdPtr, &endPtr, 10);
-
 //     //     // action
 //     //     ASSERT(g_lqLTEM.iop->rxStreamCtrl == NULL);                                // ASSERT: not inside another stream recv
-
 //     //     /* this chunk, contains both meta data for receive followed by actual data, need to copy the data chunk to start of rxDataBuffer for this context */
-
 //     //     g_lqLTEM.iop->rxStreamCtrl = g_lqLTEM.iop->streamPeers[cntxtId];                                // put IOP in datamode for context
 //     //     rxDataBufferCtrl_t *dBufPtr = &g_lqLTEM.iop->rxStreamCtrl->recvBufCtrl;                         // get reference to context specific data RX buffer
-
 //     //     /* need to fixup core/cmd and data buffers for mixed content in receive
 //     //      * moving post prefix received from core/cmd buffer to context data buffer
 //     //      * preserving prefix text for overflow detection (prefix & trailer text must be in same buffer)
@@ -920,12 +997,10 @@ static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, ui
 //     //     char *urcStartPtr = memchr(g_lqLTEM.iop->rxCBuffer->prevHead, '+', g_lqLTEM.iop->rxCBuffer->head - g_lqLTEM.iop->rxCBuffer->prevHead);
 //     //     memcpy(dBufPtr->pages[dBufPtr->iopPg]._buffer, urcStartPtr, g_lqLTEM.iop->rxCBuffer->head - urcStartPtr);
 //     //     dBufPtr->pages[dBufPtr->iopPg].head += g_lqLTEM.iop->rxCBuffer->head - urcStartPtr;
-
 //     //     // clean-up
 //     //     g_lqLTEM.iop->rxCBuffer->head = urcStartPtr;                                                    // drop recv'd from cmd\core buffer, processed here
 //     //     memset(g_lqLTEM.iop->urcDetectBuffer, 0, IOP__urcDetectBufferSz);
 //     // }
-
 //     // /* MQTT connection reset by server
 //     // */
 //     // else if (g_lqLTEM.iop->mqttMap &&
@@ -943,7 +1018,6 @@ static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, ui
 //     //     g_lqLTEM.iop->rxCBuffer->head - (endPtr - urcBffr);                                     // remove URC from rxBuffer
 //     //     memset(g_lqLTEM.iop->urcDetectBuffer, 0, IOP__urcDetectBufferSz);
 //     // }
-
 //     // /* PDP context closed by network
 //     // */
 //     // else if ((foundAt = strstr(urcBffr, "+QIURC: \"pdpdeact\",")))
@@ -967,5 +1041,4 @@ static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, ui
 //     //     g_lqLTEM.iop->rxCBuffer->head - (endPtr - urcBffr);                                     // remove URC from rxBuffer
 //     // }
 // }
-
-#pragma endregion
+#pragma endregion 

@@ -93,7 +93,7 @@ void ntwk_setOperatorScanSeq(const char* scanSequence)
     */
     if (strlen(scanSequence) > 0)
     {
-        strcpy(g_lqLTEM.modemSettings->scanSequence, scanSequence);
+        strcpy(g_lqLTEM.ntwkSettings->scanSequence, scanSequence);
         if (ltem_getDeviceState() == deviceState_ready)
         {
             if (!ATCMD_tryInvoke("AT+QCFG=\"nwscanseq\",%s", scanSequence))
@@ -113,7 +113,7 @@ void ntwk_setOperatorScanMode(ntwkScanMode_t scanMode)
     */
    if (strstr(ltem_getModuleType(), "BG9") != NULL)                         // BG96, BG95 only
    {
-        g_lqLTEM.modemSettings->scanMode = scanMode; 
+        g_lqLTEM.ntwkSettings->scanMode = scanMode; 
         if (ltem_getDeviceState() == deviceState_ready)
         {
             if (!ATCMD_tryInvoke("AT+QCFG=\"nwscanmode\",%d", scanMode))
@@ -131,7 +131,7 @@ void ntwk_setIotMode(ntwkIotMode_t iotMode)
 {
     /* AT+QCFG="iotopmode",<mode>
     */
-    g_lqLTEM.modemSettings->iotMode = iotMode; 
+    g_lqLTEM.ntwkSettings->iotMode = iotMode; 
     if (ltem_getDeviceState() == deviceState_ready)
     {
         if (!ATCMD_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode))
@@ -147,9 +147,9 @@ void ntwk_setIotMode(ntwkIotMode_t iotMode)
  */
 void ntwk_setRatOptions()
 {
-    ntwk_setOperatorScanSeq(g_lqLTEM.modemSettings->scanSequence);
-    ntwk_setOperatorScanMode(g_lqLTEM.modemSettings->scanMode);
-    ntwk_setIotMode(g_lqLTEM.modemSettings->iotMode);
+    ntwk_setOperatorScanSeq(g_lqLTEM.ntwkSettings->scanSequence);
+    ntwk_setOperatorScanMode(g_lqLTEM.ntwkSettings->scanMode);
+    ntwk_setIotMode(g_lqLTEM.ntwkSettings->iotMode);
 }
 
 
@@ -158,7 +158,7 @@ resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t proto
     ASSERT(g_lqLTEM.ntwkOperator != NULL);                                              // ASSERT g_lqLTEM.ntwkOperator has been initialized
     ASSERT_W(protoType == pdpProtocol_IPV4, "OnlyIPV4SupportedCurrently");              // warn on not IPv4
 
-    snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
+    snprintf(g_lqLTEM.ntwkSettings->pdpNtwkConfig, sizeof(g_lqLTEM.ntwkSettings->pdpNtwkConfig), "AT+QICSGP=%d,%d,\"%s\"\r", pdpContextId, protoType, apn);
     if (g_lqLTEM.deviceState == deviceState_ready)
     {
         NTWK_applyPpdNetworkConfig();
@@ -175,9 +175,9 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
 {
     resultCode_t rslt;
 
-    snprintf(g_lqLTEM.modemSettings->pdpNtwkConfig, sizeof(g_lqLTEM.modemSettings->pdpNtwkConfig), "AT+QICSGP=%d,1,\"%s\",\"%s\",\"%s\",%d", pdpContextId, apn, userName, pw, authMethod);
+    snprintf(g_lqLTEM.ntwkSettings->pdpNtwkConfig, sizeof(g_lqLTEM.ntwkSettings->pdpNtwkConfig), "AT+QICSGP=%d,1,\"%s\",\"%s\",\"%s\",%d", pdpContextId, apn, userName, pw, authMethod);
 
-    if(!ATCMD_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+    if(!ATCMD_tryInvoke(g_lqLTEM.ntwkSettings->pdpNtwkConfig))
         return resultCode__locked;
 
     return ATCMD_awaitResult();
@@ -189,9 +189,9 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
  */
 void NTWK_applyPpdNetworkConfig()
 {
-    if(strlen(g_lqLTEM.modemSettings->pdpNtwkConfig) > 0)
+    if(strlen(g_lqLTEM.ntwkSettings->pdpNtwkConfig) > 0)
     {
-        if (ATCMD_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+        if (ATCMD_tryInvoke(g_lqLTEM.ntwkSettings->pdpNtwkConfig))
         {
             resultCode_t _rslt;
             if (IS_NOTSUCCESS__RSLT(ATCMD_awaitResult()))
@@ -441,20 +441,20 @@ bool ntwk_isReady(bool refresh)
 /** 
  *  @brief Development/diagnostic function to retrieve visible operators from cell radio.
  */
-const char* ntwkDiagnostics_getOperators()
+const char* NTWKDIAGNOSTICS_getOperators()
 {
     /* AT+COPS=? */
-    ASSERT_W(false, "ntwkDiagnostics_getOperators() blocks and is SLOW!");
+    ASSERT_W(false, "NTWKDIAGNOSTICS_getOperators() blocks and is SLOW!");
 
-    memset(g_lqLTEM.statics.reportBffr, 0, ltem__reportsBffrSz);
+    memset(g_lqLTEM.statics.reportBffr, 0, ltemSz__reportsBffrSz);
 
-    memset(g_lqLTEM.statics.reportBffr, 0, ltem__reportsBffrSz);
+    memset(g_lqLTEM.statics.reportBffr, 0, ltemSz__reportsBffrSz);
     if (ATCMD_tryInvoke("AT+COPS=?"))
     {
         ATCMD_ovrrdTimeout(SEC_TO_MS(240));
         if (IS_SUCCESS(ATCMD_awaitResult()))
         {
-            strncpy(g_lqLTEM.statics.reportBffr, ATCMD_getResponseData() + 9, MIN(ltem__reportsBffrSz, ATCMD_getResponseData() - 9));
+            strncpy(g_lqLTEM.statics.reportBffr, ATCMD_getResponseData() + 9, MIN(ltemSz__reportsBffrSz, ATCMD_getResponseData() - 9));
         }
     }
     return g_lqLTEM.statics.reportBffr;

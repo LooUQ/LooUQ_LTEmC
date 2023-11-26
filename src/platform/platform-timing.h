@@ -38,16 +38,9 @@ Also add information on how to contact you by electronic and paper mail.
 
 // yield callback allows host application to be signalled when the LTEm1 is awaiting network events
 
-typedef void (*platform_yieldCB_func_t)();
+typedef void (*platform_yieldCB_func)();
 
-extern platform_yieldCB_func_t platform_yieldCB_func;
-
-
-// typedef struct lTiming_tag
-// {
-//     yieldCB_func_t yieldCB_func;        ///< Callback (CB) to host application when driver code is waiting for network events, allows for background\watchdog\etc.
-//     bool cancellationRequest;           ///< For RTOS implementations, token to request cancellation of background operation.
-// } lTiming_t;
+// extern platform_yieldCB_func platform_yieldCB_func;
 
 
 #ifdef __cplusplus
@@ -58,25 +51,37 @@ extern "C"
 #include <stdint.h>
 #endif // __cplusplus
 
-/* transition to new names 
-
-// uint32_t lMillis();
-// void lYield();
-
-// // platform implementation should support task switching here
-// void lDelay(uint32_t delay_ms);
-
-// bool lTimerExpired(uint32_t timerBase, uint32_t timerTimeout);
-*/
-
-
+/**
+ * @brief Get millisecond timer current state.
+ * @details LTEmC is designed for portability by minimizing hardware interactions and utilizing common framework facilities. It uses
+ * a milliseconds timer count for all timing functions.
+ * 
+ * @return uint32_t The current "tick" count of the system
+ */
 uint32_t pMillis();
+
+
+/**
+ * @brief Invoked by LTEmC long-running functions to allow for host processing while waiting for a LTEmC result.
+ */
 void pYield();
 
-// platform implementation should support task switching here
+
+/**
+ * @brief LTEmC sparingly uses a platform implementation of delay or it can be implemented in the timing abstraction.
+ * 
+ * @param delay_ms Number of milliseconds to pause program flow
+ */
 void pDelay(uint32_t delay_ms);
 
-bool pElapsed(uint32_t timerBase, uint32_t timerTimeout);
+
+/**
+ * @brief Simple get timespan function based on millisecond timer (counter)
+ * @param timerStart 
+ * @param timerTimeout 
+ * @return True indicates that the timeout has occured, false the period has NOT elapsed.
+ */
+bool pElapsed(uint32_t timerStart, uint32_t timerTimeout);
 
 
 #ifdef __cplusplus

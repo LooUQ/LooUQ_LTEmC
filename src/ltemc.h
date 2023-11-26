@@ -34,89 +34,46 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_H__
 #define __LTEMC_H__
 
-#define LTEmC_VERSION "3.0.1"
-
-// #undef __cplusplus
-
-// #include <lq-types.h>                           // LooUQ embedded device library typedefs, common across products/libraries
-// #include <lq-diagnostics.h>                     // ASSERT and diagnostic data collection
-// #include "ltemc-types.h"                        // type definitions for LTEm device driver: LTEmC
-// #include "lq-platform.h"                        // platform abstractions (arduino, etc.)
-// #include "ltemc-atcmd.h"                        // command processor interface
-// #include "ltemc-mdminfo.h"                      // modem information
-// #include "ltemc-network.h"                      // cellular provider and packet network 
-// #ifdef __cplusplus
-// extern "C"
-// {
-// #endif // __cplusplus
-
-// Internal static buffers you may need to change for your application. Contact LooUQ for details.
-// #define IOP_RX_COREBUF_SZ 256
-// #define IOP_TX_BUFFER_SZ 1460
-
-#include <lq-types.h>                           // LooUQ embedded device library typedefs, common across products/libraries
-#include <lqdiag.h>                             // PRINTDBG and ASSERT diagnostic data collection
-
-#include "ltemc-platform.h"                     // platform abstractions (arduino, etc.)
-#include "ltemc-atcmd.h"                        // command processor interface
-#include "ltemc-network.h"                      // cellular provider and packet network 
+#include <lq-types.h>                   // LooUQ embedded device library typedefs, common across products/libraries
+#include <lqdiag.h>                     // PRINTDBG and ASSERT diagnostic data collection
+#include "ltemc-platform.h"             // platform abstractions (arduino, etc.)
 
 
 /* Add the following LTEmC feature sets as required for your project's main .cpp or .c file 
  * ----------------------------------------------------------------------------------------------- */
-// #include "ltemc-gnss.h"                         // GNSS/GPS location services
-// #include "ltemc-sckt.h"                         // tcp/udp socket communications
-// #include "ltemc-tls"                            // SSL/TLS support
-// #include "ltemc-http"                           // HTTP(S) support: GET/POST requests
-// #include "ltemc-mqtt"                           // MQTT(S) support
-// #include "ltemc-filesys.h"                      // use of BGx module file system functionality
-// #include "ltemc-gpio.h"                         // use of BGx module GPIO expansion functionality
-/* ----------------------------------------------------------------------------------- */
+// #include "ltemc-sckt.h"              // tcp/udp socket communications
+// #include "ltemc-tls"                 // SSL/TLS support
+// #include "ltemc-http"                // HTTP(S) support: GET/POST requests
+// #include "ltemc-mqtt"                // MQTT(S) support
+// #include "ltemc-gnss.h"              // GNSS/GPS location services
+// #include "ltemc-geo.h"               // Location geo-fencing services
+// #include "ltemc-filesys.h"           // use of BGx module file system functionality
+// #include "ltemc-gpio.h"              // use of BGx module GPIO expansion functionality (LTEm3F)
+/* ---------------------------------------------------------------------------------------------- */
 
-
-
-
-/* Set the PRODUCT code here for all modules to use in LooUQ-Diagnostics
+/**
+ * @brief LTEmC Version and product code 
  */
-#define PRODUCT "LM" 
+#define LTEmC_VERSION "4.1.0"
+#define PRODUCT "LM"                    // For use in LooUQ-Diagnostics
 
 
 /**
- * @brief LTEmC system constants
- * @details Field sizes, resource allocations/counts, etc.  
+ * @brief LTEmC internal object size definitions
+ * @note It is recommended that LooUQ be consulted prior to any changes 
  */
-enum ltem__constants
+enum ltemSz__constants
 {
-    ltem__bufferSz_rx = 2000,
-    ltem__bufferSz_tx = 1000,
-    ltem__swVerSz = 12,
-    ltem__errorDetailSz = 18,
-    ltem__moduleTypeSz = 8,
-    ltem__streamCnt = 4,                    // 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
-    ltem__reportsBffrSz = 160,
-    ltem__dateTimeBffrSz = 24,
-    ltem__hostUrlSz = 192,
+    ltemSz__bufferSz_rx = 2000,         // Receive buffer from module, holds command responses, async event notifications, and syncronous data
+    // ltemSz__moduleTypeSz = 8,
+    ltemSz__streamCnt = 4,              // 3 concurrent streams; BGx support 6 SSL/TLS capable data contexts
+    ltemSz__asyncStreamCnt = 2,         // number of async streams (these require background handlers registration)
+    ltemSz__errorDetailSz = 18,         // max length of error detail reported 
+    ltemSz__dateTimeBffrSz = 24,        // max length of the date/time buffer
+    ltemSz__reportsBffrSz = 160,        // max length of the static reporting composition buffer
 
-    ltem__imeiSz = 15,
-    ltem__iccidSz = 24,
-    ltem__dvcMfgSz = 18,
-    ltem__dvcModelSz = 18,
-    ltem__dvcFwVerSz = 20,
+    ltem__fileStreamPos = (ltemSz__streamCnt - 1)
 };
-
-
-
-
-/** 
- *  \brief Enum describing the current device/module state
- */
-typedef enum deviceState_tag
-{
-    deviceState_powerOff = 0,        // BGx is powered off, in this state all components on the LTEm1 are powered down.
-    deviceState_powerOn = 1,         // BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
-    deviceState_ready = 2,           // BGx is powered ON and ready for application/services.
-    deviceState_error = 99           // error or invalid state detected.
-} deviceState_t;
 
 
 /** 
@@ -133,6 +90,35 @@ typedef enum dataCntxt_tag
     dataCntxt__cnt = 6,
     dataCntxt__none = 255
 } dataCntxt_t;
+
+
+/**
+ * @brief LTEmC system constants
+ * @details Field sizes, resource allocations/counts, etc.  
+ */
+enum ltem__constants
+{
+    ltem__imeiSz = 15,
+    ltem__iccidSz = 24,
+    ltem__dvcMfgSz = 18,
+    ltem__dvcModelSz = 18,
+    ltem__swVerSz = 12,
+    ltem__dvcFwVerSz = 20,
+    ltem__hostUrlSz = 192
+};
+
+
+/** 
+ *  \brief Enum describing the current device/module state
+ */
+typedef enum deviceState_tag
+{
+    deviceState_powerOff = 0,        // BGx is powered off, in this state all components on the LTEm1 are powered down.
+    deviceState_powerOn = 1,         // BGx is powered ON, while powered on the BGx may not be able to interact fully with the host application.
+    deviceState_ready = 2,           // BGx is powered ON and ready for application/services.
+    deviceState_error = 99           // error or invalid state detected.
+} deviceState_t;
+
 
 
 /** 

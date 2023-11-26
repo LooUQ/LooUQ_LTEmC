@@ -44,11 +44,9 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 // LTEmC Includes
-#include <ltemc-iTypes.h>
 #include <ltemc.h>
+#include <ltemc-atcmd.h>                        // normally not exposed to user applications, but this test targets ATCMD module
 
-// test controls
-bBuffer_t* rxBffrPtr;
 
 uint16_t loopCnt = 0;
 uint16_t cycle_interval = 2000;
