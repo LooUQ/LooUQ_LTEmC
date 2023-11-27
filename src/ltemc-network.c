@@ -41,6 +41,7 @@ Also add information on how to contact you by electronic and paper mail.
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "ltemc-iTypes.h"
@@ -55,7 +56,7 @@ extern ltemDevice_t g_lqLTEM;
 
 
 // local static functions
-static cmdParseRslt_t S__contextStatusCompleteParser(void * atcmd, const char *response);
+static cmdParseRslt_t S__contextStatusCompleteParser(void);
 static char *S__grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
 static void S__clearOperatorInfo();
 
@@ -153,7 +154,7 @@ void ntwk_setRatOptions()
 }
 
 
-resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t protoType, const char *apn)
+resultCode_t ntwk_configPdpNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn)
 {
     ASSERT(g_lqLTEM.ntwkOperator != NULL);                                              // ASSERT g_lqLTEM.ntwkOperator has been initialized
     ASSERT_W(protoType == pdpProtocol_IPV4, "OnlyIPV4SupportedCurrently");              // warn on not IPv4
@@ -218,7 +219,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
     do 
     {
         if (!ATCMD_tryInvoke("AT+COPS?"))                                   // get PROVIDER cellular carrier
-            return resultCode__locked;
+            return g_lqLTEM.ntwkOperator;
 
         if (IS_SUCCESS(ATCMD_awaitResult()))
         {
@@ -231,8 +232,10 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
                 uint8_t ntwkMode = (uint8_t)strtol(pContinue + 1, &pContinue, 10);
                 if (ntwkMode == 8)
                     strcpy(g_lqLTEM.ntwkOperator->iotMode, "M1");
-                else
+                else if (ntwkMode == 9)
                     strcpy(g_lqLTEM.ntwkOperator->iotMode, "NB1");
+                else
+                    strcpy(g_lqLTEM.ntwkOperator->iotMode, "GSM");
             }
         }
         if (!STREMPTY(g_lqLTEM.ntwkOperator->name))
@@ -253,7 +256,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
         ATCMD_ovrrdTimeout(SEC_TO_MS(20));
 
         if (!ATCMD_tryInvoke("AT+QIACT?"))
-            return resultCode__locked;
+            return NULL;
 
         if (IS_SUCCESS(ATCMD_awaitResult()))
         {
@@ -342,7 +345,7 @@ bool ntwk_getPdpContextState(uint8_t cntxtId)
 ntwkOperator_t *ntwk_getOperatorInfo()
 {
     if (strlen(g_lqLTEM.ntwkOperator->name))
-        return &g_lqLTEM.ntwkOperator;
+        return g_lqLTEM.ntwkOperator;
     return NULL;
 }
 
@@ -378,7 +381,7 @@ packetNetwork_t *ntwk_getPacketNetwork(uint8_t pdpContextId)
 const char* ntwk_getNetworkInfo()
 {
     if (!ATCMD_tryInvoke("AT+QNWINFO"))
-        return resultCode__locked;
+        return "";
 
     if (IS_SUCCESS(ATCMD_awaitResult()))
     {
@@ -480,9 +483,8 @@ static void S__clearOperatorInfo()
  *   @brief Tests for the completion of a network APN context activate action.
  *   @return standard action result integer (http result).
 */
-static cmdParseRslt_t S__contextStatusCompleteParser(void *atcmd, const char *response)
+static cmdParseRslt_t S__contextStatusCompleteParser(void)
 {
-    DPRINT_V(0, "<S__contextStatusCompleteParser()> response=%s\r\n", response);
     return ATCMD_stdResponseParser("+QIACT: ", false, "", 2, 2, NULL, 0);
 }
 

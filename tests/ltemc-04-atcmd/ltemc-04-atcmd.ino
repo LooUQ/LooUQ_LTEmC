@@ -104,8 +104,9 @@ void loop()
                 DPRINT(PRNT_INFO, "Got %d chars\r", strlen(response));
                 DPRINT(PRNT_WHITE, "Resp:");
                 DPRINT(PRNT_CYAN, "%s\r", response);
-                                                                                                // test response v. expected 
-                char *validResponse = "\r\nQuectel\r\nBG";                                      // near beginning (depends on BGx echo)
+                
+                // test response v. expected 
+                const char *validResponse = "\r\nQuectel\r\nBG";                                // near beginning (depends on BGx echo)
                 if (!strstr(response, validResponse))
                     indicateFailure("Expected cmd response missing... failed."); 
 

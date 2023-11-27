@@ -465,14 +465,14 @@ void SC16IS7xx_read(void* dest, uint8_t dest_len);
  *	@param src [in] - The source data to write
  *	@param src_len [in] - The length of the source
  */
-void SC16IS7xx_write(const void * src, uint8_t src_len);
+void SC16IS7xx_write(uint8_t const volatile * src, uint8_t src_len);
 
 
 /**
  *	@brief Clear FIFO contents
  *  @param resetAction [in] - What to reset TX, RX or both
  */
-void SC16IS7xx_resetFifo(sc16IS7xx_FifoResetAction_t resetAction);
+void SC16IS7xx_resetFIFO(sc16IS7xx_FifoResetAction_t resetAction);
 
 
 /**

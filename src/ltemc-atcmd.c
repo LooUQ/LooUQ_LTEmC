@@ -80,11 +80,11 @@ void ATCMD_reset(bool releaseLock)
     g_lqLTEM.atcmd->execDuration = 0;
 
     // command side
-    g_lqLTEM.iop->txSrc = &g_lqLTEM.atcmd->cmdStr;                          // IOP pointer to current "talker"
-    g_lqLTEM.iop->txPending = 0;
+    g_lqLTEM.iop->txSrc = &g_lqLTEM.atcmd->cmdStr;                              // IOP pointer to current "talker"
+    g_lqLTEM.iop->txPendingCnt = 0;
 
     // response side
-    // g_lqLTEM.atcmd->response = g_lqLTEM.atcmd->rawResponse;                 // reset data component of response to full-response
+    // g_lqLTEM.atcmd->response = g_lqLTEM.atcmd->rawResponse;                  // reset data component of response to full-response
 }
 
 
@@ -145,7 +145,10 @@ cmdResponseParser_func ATCMD_ovrrdParser(cmdResponseParser_func newParser)
 bool ATCMD_tryInvoke(const char *cmdTemplate, ...)
 {
     if (!pMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))
+    {
+        g_lqLTEM.atcmd->resultCode = resultCode__locked;
         return false;
+    }
     // if (g_lqLTEM.atcmd->isOpenLocked)
     //     return false;
 
@@ -168,6 +171,7 @@ bool ATCMD_tryInvoke(const char *cmdTemplate, ...)
     DPRINT_V(0, "<ATCMD_tryInvoke> cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
 
     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+    g_lqLTEM.atcmd->resultCode = resultCode__invoked;
     return true;
 }
 
@@ -189,18 +193,18 @@ void ATCMD_close()
 resultCode_t ATCMD_awaitResult()
 {
     S__restoreCmdDefaultOptions();                                              // restore default options if not overriden
-    resultCode_t rslt = resultCode__unknown;                                    // resultCode_t result;
+    g_lqLTEM.atcmd->resultCode = resultCode__unknown;                           // resultCode_t result;
 
     do
     {
-        rslt = S__readResult();
+        S__readResult();
         if (g_lqLTEM.cancellationRequest)                                       // test for cancellation (RTOS or IRQ)
         {
             g_lqLTEM.atcmd->resultCode = resultCode__cancelled;
             break;
         }
         pYield();                                                               // give back control momentarily before next loop pass
-    } while (rslt == resultCode__unknown);
+    } while (g_lqLTEM.atcmd->resultCode == resultCode__unknown);
 
     #if _DEBUG == 0                                                             // debug for debris in rxBffr
     ASSERT_W(bbffr_getOccupied(g_lqLTEM.iop->rxBffr) == 0, "RxBffr Dirty");

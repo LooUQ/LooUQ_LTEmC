@@ -41,7 +41,8 @@ enum file__constants_tag                            // file system constant valu
     file__fileListMaxCnt = 32,                      // max number of returned filesystem directory list
     file__openFileItemSz = 28,                      // 
     file__openFileMaxCnt = 10,                      // max number of files allowed to be concurrently open
-    
+    file__dataContext = 9,                          // outside range of module (SSL/TLS) data contexts 
+    file__emptyFileHandle = 255,                    // for fileCtrl.fileHandle, signals empty for dataMode handler
     file__dataOffset_info = 7,                      // +QFLDS and +QFLST
     file__dataOffset_open = 9,                      // +QFOPEN: "filename",<handle>,<mode>
     file__handleSearchMax = 20,                     // 

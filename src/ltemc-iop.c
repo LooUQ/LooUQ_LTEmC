@@ -65,7 +65,7 @@ Also add information on how to contact you by electronic and paper mail.
 //#define ENABLE_DIAGPRINT                        // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE                // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
+// #include <lqdiag.h>
 
 #include "ltemc.h"
 #include "ltemc-nxp-sc16is.h"
@@ -135,9 +135,9 @@ void IOP_attachIrq()
         platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, IOP_interruptCallbackISR);
     }
 
-    SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);            // ensure FIFO state is empty, UART will not refire interrupt if pending
+    SC16IS7xx_resetFIFO(SC16IS7xx_FIFO_resetActionRxTx);            // ensure FIFO state is empty, UART will not refire interrupt if pending
     g_lqLTEM.iop->txSrc = NULL;
-    g_lqLTEM.iop->txPending = 0;
+    g_lqLTEM.iop->txPendingCnt = 0;
     g_lqLTEM.iop->isrEnabled = true;
 }
 
@@ -167,11 +167,11 @@ void IOP_startTx(const char *sendData, uint16_t sendSz)
     if (txLevel == SC16IS7xx__FIFO_bufferSz)
     {
         g_lqLTEM.iop->txSrc = sendData;
-        g_lqLTEM.iop->txPending = sendSz;
+        g_lqLTEM.iop->txPendingCnt = sendSz;
 
-        uint8_t immediateSz = MIN(g_lqLTEM.iop->txPending, SC16IS7xx__FIFO_bufferSz);
+        uint8_t immediateSz = MIN(g_lqLTEM.iop->txPendingCnt, SC16IS7xx__FIFO_bufferSz);
         g_lqLTEM.iop->txSrc += immediateSz;
-        g_lqLTEM.iop->txPending -= immediateSz;
+        g_lqLTEM.iop->txPendingCnt -= immediateSz;
         SC16IS7xx_write(sendData, immediateSz);
     }
 }
@@ -183,7 +183,7 @@ void IOP_startTx(const char *sendData, uint16_t sendSz)
 void IOP_forceTx(const char *sendData, uint16_t sendSz)
 {
     ASSERT(sendSz <= SC16IS7xx__FIFO_bufferSz);
-    SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionTx);
+    SC16IS7xx_resetFIFO(SC16IS7xx_FIFO_resetActionTx);
     pDelay(1);
     SC16IS7xx_write(sendData, SC16IS7xx__FIFO_bufferSz);
 }
@@ -284,7 +284,7 @@ void IOP_interruptCallbackISR()
             uint8_t lnStatus = SC16IS7xx_readReg(SC16IS7xx_LSR_regAddr);
             DPRINT(PRNT_ERROR, "rxERR(%02X)-lvl=%d ", lnStatus, rxLevel);
             DPRINT(PRNT_WARN, "bffrO=%d ", bbffr_getOccupied(g_lqLTEM.iop->rxBffr));
-            SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);                            // buffer is shot, clear to attempt recovery
+            SC16IS7xx_resetFIFO(SC16IS7xx_FIFO_resetActionRxTx);                            // buffer is shot, clear to attempt recovery
         }
 
         // RX - read data from UART to rxBuffer
@@ -319,18 +319,18 @@ void IOP_interruptCallbackISR()
         // TX - write data to UART from txBuffer
         if (iirVal.IRQ_SOURCE == 1)                                                         // priority 3 -- transmit THR (threshold) : TX ready for more data
         {
-            DPRINT(PRNT_dYELLOW, "-txP(%d) ", g_lqLTEM.iop->txPending);
+            DPRINT(PRNT_dYELLOW, "-txP(%d) ", g_lqLTEM.iop->txPendingCnt);
 
-            if (g_lqLTEM.iop->txPending > 0)
+            if (g_lqLTEM.iop->txPendingCnt > 0)
             {
-                ASSERT(g_lqLTEM.iop->txPending < UINT16_MAX);
+                ASSERT(g_lqLTEM.iop->txPendingCnt < UINT16_MAX);
                 ASSERT(g_lqLTEM.iop->txSrc != NULL);
 
                 txLevel = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
 
-                uint8_t blockSz = MIN(g_lqLTEM.iop->txPending, txLevel);                        // send what bridge buffer allows
+                uint8_t blockSz = MIN(g_lqLTEM.iop->txPendingCnt, txLevel);                        // send what bridge buffer allows
                 SC16IS7xx_write(g_lqLTEM.iop->txSrc, blockSz);
-                g_lqLTEM.iop->txPending -= blockSz;
+                g_lqLTEM.iop->txPendingCnt -= blockSz;
                 g_lqLTEM.iop->txSrc += blockSz;
             }
         }

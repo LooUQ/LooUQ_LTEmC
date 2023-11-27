@@ -49,6 +49,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
 
 #include <ltemc.h>
+// #include <ltemc-network.h>
 
 
 // test controls
@@ -73,9 +74,18 @@ void setup()
     ltem_start(resetAction_swReset);                                // ... and start it
 
     DPRINT(PRNT_WHITE, "LTEmC Ver: %s\r\n", ltem_getSwVersion());
+
+    modemInfo = ltem_getModemInfo();
+    DPRINT(PRNT_CYAN, "\rModem Information\r\n");
+    DPRINT(PRNT_CYAN, "IMEI = %s \r\n", modemInfo->imei);
+    DPRINT(PRNT_CYAN, "ICCID = %s \r\n", modemInfo->iccid);
+    DPRINT(PRNT_CYAN, "Firmware = %s \r\n", modemInfo->fwver);
+    DPRINT(PRNT_CYAN, "Mfg/Model = %s \r\n", modemInfo->model);
+
     lastCycle = cycle_interval;
 }
 
+ntwkOperator_t* ntwkOperator;
 
 void loop() 
 {
@@ -84,12 +94,9 @@ void loop()
         lastCycle = millis();
         loopCnt++;
 
-        modemInfo = ltem_getModemInfo();
-        DPRINT(PRNT_CYAN, "\rModem Information\r\n");
-        DPRINT(PRNT_CYAN, "IMEI = %s \r\n", modemInfo->imei);
-        DPRINT(PRNT_CYAN, "ICCID = %s \r\n", modemInfo->iccid);
-        DPRINT(PRNT_CYAN, "Firmware = %s \r\n", modemInfo->fwver);
-        DPRINT(PRNT_CYAN, "Mfg/Model = %s \r\n", modemInfo->model);
+
+        ntwkOperator = ntwk_awaitOperator(2);
+
 
         DPRINT(PRNT_INFO, "\rRSSI = %d dBm \r\n", ltem_signalRSSI());
         DPRINT(0,"\r\nLoop=%d \r\n", loopCnt);

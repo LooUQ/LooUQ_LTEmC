@@ -76,7 +76,7 @@ int8_t qbg_initCmdsCnt = sizeof(qbg_initCmds)/sizeof(const char* const);
 ------------------------------------------------------------------------------------------------ */
 // static bool S__initLTEmDevice();
 static void S__ltemUrcHandler();
-static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
+static cmdParseRslt_t S__iccidCompleteParser(void);
 
 
 
@@ -900,7 +900,7 @@ static void S__ltemUrcHandler()
 /**
  * @brief Action response parser for iccid value request.
  */
-static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem)
+static cmdParseRslt_t S__iccidCompleteParser(void)
 {
     return ATCMD_stdResponseParser("+ICCID: ", true, "", 0, 0, "\r\n\r\nOK\r\n", 20);
 }

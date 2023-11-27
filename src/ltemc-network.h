@@ -197,7 +197,6 @@ resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoTyp
  * @param [in] cntxtId The context ID to operate on. Typically 0 or 1
  * @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
  * @param [in] apn The APN name if required by network carrier.
- *  
  */
 resultCode_t ntwk_configPdpNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn);
 

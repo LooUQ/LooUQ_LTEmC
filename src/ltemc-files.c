@@ -277,18 +277,19 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
     ASSERT(g_lqLTEM.fileCtrl->appRecvDataCB);                                   // assert that there is a app func registered to receive read data
     ASSERT(bbffr_getCapacity(g_lqLTEM.iop->rxBffr) > (requestSz + 128));        // ensure ample space in buffer for I/O
 
-    ATCMD_configDataMode(0, "CONNECT", S__filesRxHndlr, NULL, 0, g_lqLTEM.streams[3]->dataRxHndlr, false);
+    FILE_CTRL->fileHandle = fileHandle;                                         // stuff into fileCtrl (temporary) for dataRxHandler to reference
+    ATCMD_configDataMode(0, "CONNECT", S__filesRxHndlr, NULL, 0, S__filesRxHndlr, false);
     ATCMD_ovrrdTimeout(2000);
 
     if (readSz > 0)
-    {
-        if (!ATCMD_tryInvoke("AT+QFREAD=%d,%d", fileHandle, requestSz))
-            return resultCode__locked;
-    }
+        ATCMD_tryInvoke("AT+QFREAD=%d,%d", fileHandle, requestSz);
     else
+        ATCMD_tryInvoke("AT+QFREAD=%d", fileHandle);
+
+    if (ATCMD_getResult() != resultCode__invoked)
     {
-        if (!ATCMD_tryInvoke("AT+QFREAD=%d", fileHandle))
-            return resultCode__locked;
+        FILE_CTRL->fileHandle = file__emptyFileHandle;                          // clear temporary fileHandle cache, handler will not trigger to use it
+        return resultCode__locked;
     }
 
     resultCode_t _rslt;
@@ -428,7 +429,9 @@ static appGenRcvr_func* S__createFileCtrl()
     fileCtrl_t* fileCtrl = calloc(1, sizeof(ntwkOperator_t));               // once added, fileCtrl cannot be freed
     ASSERT(fileCtrl != NULL);                                               // heap exhausted if assert fails
 
-    g_lqLTEM.streams[ltem__fileStreamPos] = (streamCtrl_t*)fileCtrl;
+    g_lqLTEM.streams[ltem__fileStreamPos] = (streamCtrl_t*)fileCtrl;        // streamCtrl 
+    FILE_CTRL->dataCntxt = file__dataContext;                               // shortcut, cast as fileCtrl
+    FILE_CTRL->fileHandle = file__emptyFileHandle;
     return (streamCtrl_t*)fileCtrl;
 }
 

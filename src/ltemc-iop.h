@@ -64,19 +64,19 @@ enum IOP__Constants
  */
 typedef struct iop_tag
 {
-    volatile char* txSrc;                   // source pointer to TX pending data
-    volatile uint16_t txPending;            // outstanding char count for TX
+    const uint8_t volatile * txSrc;                    // source pointer to TX pending data, composed data is not altered by IOP
+    volatile uint16_t txPendingCnt;         // outstanding char count for TX
     volatile bool dmActive;                 // interaction with BGx is now in data mode
     volatile uint16_t dmTxEvents;           // number of TX blocks sent during data mode
     volatile bool isrEnabled;               // flag to signal ISR to run normally (true), or return immediately
 
     uint8_t irqAttached;
-    bBuffer_t *rxBffr;                      // receive buffer
-    char txEot;                             // if not NULL, char to output on empty TX FIFO; clears automatically on use.
+    bBuffer_t *rxBffr;                              // receive buffer
+    char txEot;                                     // if not NULL, char to output on empty TX FIFO; clears automatically on use.
  
-    volatile uint32_t isrInvokeCnt;         // number of times the ISR function has been invoked
-    volatile uint32_t lastTxAt;             // tick count when TX send started, used for response timeout detection
-    volatile uint32_t lastRxAt;             // tick count when RX buffer fill level was known to have change
+    uint32_t isrInvokeCnt;                          // number of times the ISR function has been invoked
+    uint32_t lastTxAt;                              // tick count when TX send started, used for response timeout detection
+    uint32_t lastRxAt;                              // tick count when RX buffer fill level was known to have change
 } iop_t;
 
 

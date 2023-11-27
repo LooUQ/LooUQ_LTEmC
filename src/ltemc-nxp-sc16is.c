@@ -145,7 +145,7 @@ bool SC16IS7xx_awaitReady()
     {
         if (SC16IS7xx_ping())
         {
-            SC16IS7xx_resetUART();
+            SC16IS7xx_resetFIFO(SC16IS7xx_FIFO_resetActionRxTx);
             return true;
         }
         pDelay(10);
@@ -201,7 +201,8 @@ void SC16IS7xx_read(void *dest, uint8_t dest_len)
 /**
  *	@brief Write through the SC16IS741A bridge
  */
-void SC16IS7xx_write(const void *src, uint8_t src_len)
+//void SC16IS7xx_write(const void *src, uint8_t src_len)
+void SC16IS7xx_write(uint8_t const volatile * src, uint8_t src_len)
 {
     union __SC16IS7xx_reg_addr_byte__ reg_addr = {0};
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
@@ -213,7 +214,7 @@ void SC16IS7xx_write(const void *src, uint8_t src_len)
 /**
  *	@brief Perform reset on bridge FIFO
  */
-void SC16IS7xx_resetFifo(sc16IS7xx_FifoResetAction_t resetAction)
+void SC16IS7xx_resetFIFO(sc16IS7xx_FifoResetAction_t resetAction)
 {
     // fcr is a RdOnly register, flush and FIFO enable are both in this register
     SC16IS7xx_writeReg(SC16IS7xx_FCR_regAddr, resetAction |= SC16IS7xx__FCR_IOP_FIFO_ENABLE);
@@ -281,9 +282,9 @@ void SC16IS7xx_flushTx(char flushChar, uint16_t sendCnt)
  */
 void SC16IS74__displayFifoStatus(const char *dispMsg)
 {
-    DIAGPRINT(PRNT_GRAY, "%s...\r\n", dispMsg);
+    DPRINT(PRNT_GRAY, "%s...\r\n", dispMsg);
     uint8_t bufFill = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
-    DIAGPRINT(PRNT_GRAY, "  -- RX buf level=%d\r\n", bufFill);
+    DPRINT(PRNT_GRAY, "  -- RX buf level=%d\r\n", bufFill);
     bufFill = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
-    DIAGPRINT(PRNT_GRAY, "  -- TX buf level=%d\r\n", bufFill);
+    DPRINT(PRNT_GRAY, "  -- TX buf level=%d\r\n", bufFill);
 }

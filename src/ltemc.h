@@ -37,6 +37,7 @@ Also add information on how to contact you by electronic and paper mail.
 #include <lq-types.h>                   // LooUQ embedded device library typedefs, common across products/libraries
 #include <lqdiag.h>                     // PRINTDBG and ASSERT diagnostic data collection
 #include "ltemc-platform.h"             // platform abstractions (arduino, etc.)
+#include "ltemc-network.h"              // include network in the core modem functionality
 
 
 /* Add the following LTEmC feature sets as required for your project's main .cpp or .c file 
