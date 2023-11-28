@@ -131,10 +131,10 @@ void ltem_destroy()
 {
 	ltem_stop(false);
 
-	gpio_pinClose(g_lqLTEM.pinConfig.irqPin);
-	gpio_pinClose(g_lqLTEM.pinConfig.powerkeyPin);
-	gpio_pinClose(g_lqLTEM.pinConfig.resetPin);
-	gpio_pinClose(g_lqLTEM.pinConfig.statusPin);
+	platform_closePin(g_lqLTEM.pinConfig.irqPin);
+	platform_closePin(g_lqLTEM.pinConfig.powerkeyPin);
+	platform_closePin(g_lqLTEM.pinConfig.resetPin);
+	platform_closePin(g_lqLTEM.pinConfig.statusPin);
 
     ip_destroy();
     free(g_lqLTEM.atcmd);

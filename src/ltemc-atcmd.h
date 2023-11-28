@@ -133,7 +133,7 @@ typedef resultCode_t (*dmRcvr_func)(void);                              // data 
 /**
  * @brief Data handler: generic function signature that can be a stream sync receiver or a general purpose ATCMD data mode handler
  */
-typedef void (*dataHndlr_func)();                                       // callback into stream data handler (sync transfer)
+typedef void (*dataHndlr_func)(void);                                   // callback into stream data handler (sync transfer)
 
 
 /** @brief Generic APPLICATION callback data receiver (in stream header) cast to a stream specific receiver signature.
@@ -174,11 +174,11 @@ typedef struct dataMode_tag                                         // the comma
  */
 typedef struct atcmdParserConfig_tag 
 {
-    char *preamble;
+    const char *preamble;
     bool preambleReqd;
-    char *delimeters;
+    const char *delimeters;
     uint8_t tokensReqd;
-    char *finale;
+    const char *finale;
     uint16_t lengthReqd;
 } atcmdParserConfig_t;
 
@@ -354,14 +354,14 @@ bool ATCMD_wasPreambleFound();
  * @param tokenIndx 
  * @return Pointer to token from LTEm internal buffer
  */
-char* ATCMD_getToken(uint8_t tokenIndx);
+char * ATCMD_getToken(uint8_t tokenIndx);
 
 
 /**
  * @brief Returns the BGx reported CME/CMS error code. Use this function to get details on a resultCode_t = 500
  * @return Pointer to a error value reported by the BGx module. Note that not all BGx errors have a detailed descriptor.
  */
-char *ATCMD_getErrorDetail();
+const char * ATCMD_getErrorDetail();
 
 
 /**

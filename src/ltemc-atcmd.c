@@ -39,6 +39,7 @@ Also add information on how to contact you by electronic and paper mail.
 
 #include <stdarg.h>
 
+#include "ltemc-nxp-sc16is.h"
 #include "ltemc-iTypes.h"
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -338,9 +339,9 @@ cmdParseRslt_t ATCMD_getParserResult()
 /**
  * @brief Returns the BGx module error code or 0 if no error. Use this function to get details on a resultCode_t = 500
  */
-char *ATCMD_getErrorDetail()
+const char * ATCMD_getErrorDetail()
 {
-    return &g_lqLTEM.atcmd->errorDetail;
+    return g_lqLTEM.atcmd->errorDetail;
 }
 
 
@@ -903,11 +904,11 @@ uint8_t ATCMD_getStreamIndex(uint8_t dataCntxt, streamType_t streamType)
         {
             if (streamType == streamType__ANY)
             {
-                return g_lqLTEM.streams[i];
+                return i;
             }
             else if (g_lqLTEM.streams[i]->streamType == streamType)
             {
-                return g_lqLTEM.streams[i];
+                return i;
             }
             else if (streamType == streamType_SCKT)
             {
@@ -915,7 +916,7 @@ uint8_t ATCMD_getStreamIndex(uint8_t dataCntxt, streamType_t streamType)
                     g_lqLTEM.streams[i]->streamType == streamType_TCP ||
                     g_lqLTEM.streams[i]->streamType == streamType_SSLTLS)
                 {
-                    return g_lqLTEM.streams[i];
+                    return i;
                 }
             }
         }

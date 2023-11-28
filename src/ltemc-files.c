@@ -73,7 +73,7 @@ appGenRcvr_func* file_setAppReceiver(fileReceiver_func fileReceiver)
 resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
 {
     resultCode_t rslt;
-    char *workPtr;
+    const char *workPtr;
 
     // if (!ATCMD_awaitLock(ATCMD__defaultTimeout))
     //     return resultCode__locked;                                    // failed to get lock
@@ -141,7 +141,7 @@ resultCode_t file_getFilelist(const char* namePattern, fileListResult_t *fileLis
 
         // parse response >>  +QFLST: <filename>,<file_size>
         uint8_t lineNm = 0;
-        char *workPtr = ATCMD_getResponseData();
+        const char *workPtr = ATCMD_getResponseData();
 
         for (size_t i = 0; i < file__fileListMaxCnt; i++)
         {
@@ -170,7 +170,7 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
     ASSERT(FILE_CTRL != NULL);                                  // file services have been initialized (set receive callback)
 
     resultCode_t rslt;
-    char *workPtr;
+    const char *workPtr;
     do
     {
         if (!ATCMD_tryInvoke("AT+QFOPEN=\"%s\",%d", filename, openMode))
@@ -207,8 +207,8 @@ resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
     if (!ATCMD_tryInvoke("AT+QFOPEN?"))
         return resultCode__locked;
 
-    char* workPtr;
-    char* eolPtr;
+    const char* workPtr;
+    const char* eolPtr;
     memset(fileInfo, 0, fileInfoSz);                                            // init for c-str behavior
 
     resultCode_t _rslt;
@@ -374,7 +374,7 @@ resultCode_t file_getPosition(uint16_t fileHandle, uint32_t* filePtr)
  */
 resultCode_t file_truncate(uint16_t fileHandle)
 {
-    if (!ATCMD_tryInvokeAdv("AT+QFTUCAT=%d", fileHandle))
+    if (!ATCMD_tryInvoke("AT+QFTUCAT=%d", fileHandle))
         return resultCode__locked;
 
     return ATCMD_awaitResult();

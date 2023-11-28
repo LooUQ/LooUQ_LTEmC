@@ -465,7 +465,7 @@ void SC16IS7xx_read(void* dest, uint8_t dest_len);
  *	@param src [in] - The source data to write
  *	@param src_len [in] - The length of the source
  */
-void SC16IS7xx_write(uint8_t const volatile * src, uint8_t src_len);
+void SC16IS7xx_write(const char * src, uint8_t src_len);
 
 
 /**

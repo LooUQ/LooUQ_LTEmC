@@ -202,7 +202,7 @@ void SC16IS7xx_read(void *dest, uint8_t dest_len)
  *	@brief Write through the SC16IS741A bridge
  */
 //void SC16IS7xx_write(const void *src, uint8_t src_len)
-void SC16IS7xx_write(uint8_t const volatile * src, uint8_t src_len)
+void SC16IS7xx_write(const char * src, uint8_t src_len)
 {
     union __SC16IS7xx_reg_addr_byte__ reg_addr = {0};
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
@@ -249,10 +249,11 @@ void SC16IS7xx_flushTx(char flushChar, uint16_t sendCnt)
 {
     char buffer[2] = {0}; 
     buffer[0] = flushChar;
+    const char * bufferPtr = &buffer;
 
     for (uint16_t i = 0; i < sendCnt; i++)
     {
-        SC16IS7xx_write(&buffer, 1);
+        SC16IS7xx_write(bufferPtr, 1);
         pDelay(5);
     }
 }
