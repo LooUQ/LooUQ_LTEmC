@@ -46,8 +46,6 @@ Also add information on how to contact you by electronic and paper mail.
 
 #ifdef ARDUINO
 
-#include <Arduino.h>
-
 typedef enum {
     gpioValue_low = LOW,
     gpioValue_high = HIGH

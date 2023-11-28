@@ -47,8 +47,9 @@
 #define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
 #define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
 
-#include <ltemc.h>
+#include <Arduino.h>
 
+#include <ltemc.h>
 
 // test controls
 uint16_t loopCnt = 0;
@@ -83,14 +84,14 @@ void loop()
         lastCycle = millis();
         loopCnt++;
 
-        modemInfo = mdminfo_ltem();
+        modemInfo = ltem_getModemInfo();
         DPRINT(PRNT_CYAN, "\rModem Information\r\n");
         DPRINT(PRNT_CYAN, "IMEI = %s \r\n", modemInfo->imei);
         DPRINT(PRNT_CYAN, "ICCID = %s \r\n", modemInfo->iccid);
         DPRINT(PRNT_CYAN, "Firmware = %s \r\n", modemInfo->fwver);
         DPRINT(PRNT_CYAN, "Mfg/Model = %s \r\n", modemInfo->model);
 
-        DPRINT(PRNT_INFO, "\rRSSI = %d dBm \r\n",mdminfo_signalRSSI());
+        DPRINT(PRNT_INFO, "\rRSSI = %d dBm \r\n", ltem_signalRSSI());
         DPRINT(0,"\r\nLoop=%d \r\n", loopCnt);
     }
 }
