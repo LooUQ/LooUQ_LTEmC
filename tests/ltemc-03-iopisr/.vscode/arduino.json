@@ -1,7 +1,0 @@
-{
-    "configuration": "opt=debug,usbstack=arduino,debug=on",
-    "board": "adafruit:samd:adafruit_feather_m0_express",
-    "port": "COM13",
-    "sketch": "ltemc-03-iopisr.ino",
-    "output": "./build"
-}
