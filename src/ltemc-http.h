@@ -89,6 +89,14 @@ typedef enum httpState_tag
 } httpState_t;
 
 
+typedef enum httpRequestType_tag
+{
+    httpRequestType_GET = 'G',
+    httpRequestType_POST = 'P',
+    httpRequestType_none = 0
+} httpRequestType_t;
+
+
 typedef struct httpCtrl_tag
 {
     char streamType;                            /// stream type
@@ -103,8 +111,8 @@ typedef struct httpCtrl_tag
     char hostUrl[host__urlSz];                  /// URL or IP address of host
     uint16_t hostPort;                          /// IP port number host is listening on (allows for 65535/0)
     bool returnResponseHdrs;                    /// if set true, response headers are included in the returned response
-    char *cstmHdrs;                             /// custom header content, optional buffer provided by application
-    uint16_t cstmHdrsSz;                        /// size of custom header buffer
+    char *cstmHdrsBffr;                         /// custom header content, optional buffer provided by application
+    uint16_t cstmHdrsBffrSz;                    /// size of custom header buffer
     char requestType[http__rqstTypeSz];         /// type of current/last request: 'G'=GET, 'P'=POST
     httpState_t requestState;                   /// current state machine variable for HTTP request
     uint16_t bgxError;                          /// BGx sprecific error code returned from GET/POST
@@ -142,12 +150,19 @@ void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t host
 
 
 /**
+ *	@brief Signals custom headers (GET) or custom request (POST file).
+ *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ */
+void http_enableCustomRequest(httpCtrl_t *httpCtrl);
+
+
+/**
  *	@brief Registers custom headers (char) buffer with HTTP control.
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
  *	@param [in] headerBuf pointer to header buffer  created by application
  *  @param [in] headerBufSz size of the header buffer
  */
-void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *hdrBuffer, uint16_t hdrBufferSz);
+void http_setCustomRequestBuffer(httpCtrl_t *httpCtrl, char *hdrBuffer, uint16_t hdrBufferSz);
 
 
 /**
@@ -198,22 +213,48 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool retur
 
 
 /**
- *	@brief Retrieves page results from a previous GET or POST.
+ *	@brief Sends contents of a file (LTEM filesystem) as POST to remote.
 
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ *  @param [in] filename C-string containing the name of the file to create from page content.
  *  @return HTTP status of read.
  */
-uint16_t http_readPage(httpCtrl_t *httpCtrl);
+uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, bool returnResponseHdrs, const char* filename);
 
 
 /**
  *	@brief Retrieves page results from a previous GET or POST.
 
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ *  @return HTTP status of read.
+ */
+resultCode_t http_readPage(httpCtrl_t *httpCtrl);
+
+
+/**
+ *	@brief Retrieves page results from a previous GET or POST storing in file (LTEM filesystem).
+
+ *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
  *  @param [in] filename C-string containing the name of the file to create from page content.
  *  @return HTTP status of read.
  */
-uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename);
+resultCode_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename);
+
+
+/**
+ * @brief Creates a base HTTP request that can be appended with custom headers.
+ * @note This creates a BASE request that can be appended with custom headers of your choosing, the request must be followed 
+ * by an empty line "\r\n" when forming the complete HTTP stream sent to the server.
+ * 
+ * @param reqstType Enum directing the type of request to create
+ * @param host Text containing the host section of the request URL
+ * @param relativeUrl Text containing the relative URL to the host (excludes query string)
+ * @param contentLength Total expected length of the request body 
+ * @param reqstBffr Char buffer to hold the request
+ * @param reqstBffrSz Size of the buffer
+ * @return resultCode_t With the status code representing the outcome of the operation. 
+ */
+resultCode_t http_createRequest(httpRequestType_t reqstType, const char* host, const char* relativeUrl, const char* cstmHdrs, uint16_t contentLength, char* reqstBffr, uint16_t reqstBffrSz);
 
 
 /**
@@ -224,13 +265,6 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename);
  */
 void http_cancelPage(httpCtrl_t *httpCtrl);
 
-
-// future support for fileSystem destinations, requires file_ module still under development planned for v2.1
-/*
-resultCode_t http_getFileResponse(void *httpSession, const char* url, const char* filename);
-resultCode_t http_postFileResponse(void *httpSession, const char* url, const char* filename);
-resultCode_t http_readFileResponse(httpCtrl_t *httpCtrl, char *response, uint16_t responseSz);
-*/
 
 #ifdef __cplusplus
 }

@@ -134,8 +134,6 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
     if (!ATCMD_awaitLock(g_lqLTEM.atcmd->timeout)) // attempt to acquire new atCmd lock for this instance
         return false;
 
-    g_lqLTEM.atcmd->invokedAt = pMillis();
-
     // TEMPORARY
     memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
     DPRINT_V(0, "<atcmd_tryInvoke> cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
@@ -162,8 +160,6 @@ void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
     vsnprintf(cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
     strcat(g_lqLTEM.atcmd->cmdStr, "\r");
 
-    g_lqLTEM.atcmd->invokedAt = pMillis();
-
     // TEMPORARY
     memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, atcmd__cmdBufferSz);
 
@@ -187,6 +183,7 @@ void atcmd_close()
 resultCode_t atcmd_awaitResult()
 {
     resultCode_t rslt = resultCode__unknown; // resultCode_t result;
+    g_lqLTEM.atcmd->invokedAt = pMillis();
     do
     {
         rslt = S__readResult();
@@ -522,6 +519,7 @@ static resultCode_t S__readResult()
 
 #define OK_COMPLETED_STRING "OK\r\n"
 #define OK_COMPLETED_LENGTH 4
+#define CMx_COMPLETED_LENGTH 17
 #define ERROR_COMPLETED_STRING "ERROR\r\n"
 #define ERROR_VALUE_OFFSET 7
 #define FAIL_COMPLETED_STRING "FAIL\r\n"
@@ -544,18 +542,25 @@ cmdParseRslt_t ATCMD_okResponseParser()
  */
 resultCode_t atcmd_stdTxDataHndlr()
 {
-    IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz);
-
+    IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz);     // send of datamode content
     g_lqLTEM.atcmd->dataMode.dmState = dmState_active;
 
     uint32_t startTime = pMillis();
     while (pMillis() - startTime < g_lqLTEM.atcmd->timeout)
     {
-        uint16_t trlrIndx = bbffr_find(g_lqLTEM.iop->rxBffr, "OK", 0, 0, true);
+        uint16_t trlrIndx = bbffr_find(g_lqLTEM.iop->rxBffr, "OK", 0, 0, false);
         if (BBFFR_ISFOUND(trlrIndx))
         {
-            bbffr_skipTail(g_lqLTEM.iop->rxBffr, OK_COMPLETED_LENGTH);          // OK + line-end
+            bbffr_pop(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->rawResponse, trlrIndx);
+            bbffr_skipTail(g_lqLTEM.iop->rxBffr, OK_COMPLETED_LENGTH);                      // OK + line-end
             return resultCode__success;
+        }
+        trlrIndx = bbffr_find(g_lqLTEM.iop->rxBffr, "+CM", 0, 0, false);
+        if (BBFFR_ISFOUND(trlrIndx))
+        {
+            bbffr_pop(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->rawResponse, trlrIndx);
+            bbffr_skipTail(g_lqLTEM.iop->rxBffr, CMx_COMPLETED_LENGTH);                     // +CM? ERROR: ### + line-end
+            return resultCode__partialContent;
         }
         pDelay(1);
     }

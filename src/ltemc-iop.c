@@ -160,16 +160,19 @@ void IOP_startTx(const char *sendData, uint16_t sendSz)
     ASSERT(sendData != NULL && *sendData != '\0' && sendSz > 0);
 
     uint8_t txLevel = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);       // check TX buffer status for flow, empty buffer is TX idle
+    uint8_t immediateSz = 0;
+    DPRINT(PRNT_RED, "\r\ntxLevel=%d >> ", SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr));
     if (txLevel == SC16IS7xx__FIFO_bufferSz)
     {
         g_lqLTEM.iop->txSrc = sendData;
         g_lqLTEM.iop->txPending = sendSz;
 
-        uint8_t immediateSz = MIN(g_lqLTEM.iop->txPending, SC16IS7xx__FIFO_bufferSz);
+        immediateSz = MIN(g_lqLTEM.iop->txPending, SC16IS7xx__FIFO_bufferSz);
         g_lqLTEM.iop->txSrc += immediateSz;
         g_lqLTEM.iop->txPending -= immediateSz;
         SC16IS7xx_write(sendData, immediateSz);
     }
+    DPRINT(PRNT_RED, "txLevel=%d (sent=%d)\r\n", SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr), immediateSz);
 }
 
 
@@ -324,7 +327,7 @@ void IOP_interruptCallbackISR()
 
                 txLevel = SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
 
-                uint8_t blockSz = MIN(g_lqLTEM.iop->txPending, txLevel);                        // send what bridge buffer allows
+                uint8_t blockSz = MIN(g_lqLTEM.iop->txPending, txLevel);                    // send what bridge buffer allows
                 SC16IS7xx_write(g_lqLTEM.iop->txSrc, blockSz);
                 g_lqLTEM.iop->txPending -= blockSz;
                 g_lqLTEM.iop->txSrc += blockSz;

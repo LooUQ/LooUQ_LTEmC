@@ -89,9 +89,9 @@ void IOP_forceTx(const char *sendData, uint16_t sendSz);
  */
 uint32_t IOP_getRxIdleDuration();
 
-uint8_t IOP_getRxOccupied();
+uint8_t IOP_getRxLevel();
 
-uint8_t IOP_getTxPending();
+uint8_t IOP_getTxLevel();
 
 
 // /**

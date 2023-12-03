@@ -108,7 +108,6 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
 
 resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
 {
-
     resultCode_t rslt;
     do
     {
@@ -122,17 +121,21 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
         {
             fileList->namePattern[0] = '*';
             fileList->namePattern[1] = '\0';
-            atcmd_invokeReuseLock("AT+QFLST");
+            atcmd_invokeReuseLock("AT+QFLST ");
         }
         else
         {
+            memset(fileList->namePattern, 0, sizeof(fileList->namePattern));
             strncpy(fileList->namePattern, filename, MIN(strlen(filename), file__filenameSz));
             atcmd_invokeReuseLock("AT+QFLST=\"%s\"", fileList->namePattern);
         }
         rslt = atcmd_awaitResult();
         if (rslt != resultCode__success)
+        {
+            if (memcmp(atcmd_getErrorDetail(), "+CME ERROR: 417", 15) == 0)
+                rslt = resultCode__notFound;
             break;
-
+        }
         // parse response >>  +QFLST: <filename>,<file_size>
         uint8_t lineNm = 0;
         char *workPtr = atcmd_getResponse();
@@ -201,13 +204,16 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
  */
 resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
 {
-    if (atcmd_tryInvoke("AT+QFOPEN?"))
+    resultCode_t rslt;
+
+    if (atcmd_tryInvoke("AT+QFOPEN? "))
     {
         char* workPtr;
         char* eolPtr;
         memset(fileInfo, 0, fileInfoSz);                            // init for c-str behavior
 
-        if (atcmd_awaitResult() == resultCode__success)
+        rslt = atcmd_awaitResultWithOptions(2000, NULL);
+        if (IS_SUCCESS(rslt))
         {
             workPtr = atcmd_getResponse();                          // ptr to response
             while (memcmp(workPtr, "+QFOPEN: ", file__dataOffset_open) == 0)
@@ -222,6 +228,7 @@ resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
             }
             return resultCode__success;
         }
+        return rslt;
     }
     return resultCode__conflict;
 }
@@ -248,7 +255,7 @@ resultCode_t file_closeAll()
 {
     char openList[file__openFileItemSz * file__openFileMaxCnt];
 
-    if (file_getOpenFiles(openList, file__openFileItemSz * file__openFileMaxCnt))
+    if (IS_SUCCESS(file_getOpenFiles(openList, sizeof(openList))))
     {
         char *workPtr = openList;
         while (*workPtr != 0)
@@ -273,7 +280,7 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
     ASSERT(g_lqLTEM.fileCtrl->appRecvDataCB);                                   // assert that there is a app func registered to receive read data
     ASSERT(bbffr_getCapacity(g_lqLTEM.iop->rxBffr) > (requestSz + 128));        // ensure ample space in buffer for I/O
 
-    atcmd_configDataMode(0, "CONNECT", S__filesRxHndlr, NULL, 0, g_lqLTEM.fileCtrl->appRecvDataCB, false);
+    atcmd_configDataMode(fileHandle, "CONNECT", S__filesRxHndlr, NULL, 0, g_lqLTEM.fileCtrl->appRecvDataCB, false);
 
     DPRINT(PRNT_CYAN, "Read file=1, reqst=%d\r\n", requestSz);
 
@@ -303,30 +310,25 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
 resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz, fileWriteResult_t *writeResult)
 {
     resultCode_t rslt;
-    char *workPtr;
+    // char *workPtr;
 
     if (!ATCMD_awaitLock(atcmd__defaultTimeout))
         return resultCode__conflict;                                                            // failed to get lock
 
     do
     {
-        atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, writeData, writeSz, NULL, false);
-        atcmd_invokeReuseLock("AT+QFWRITE=%d,%d", fileHandle, writeSz);
-        rslt = atcmd_awaitResult();
-        if (rslt == resultCode__success)                                                        // "CONNECT" prompt result
-        {
-            atcmd_reset(false);                                                                 // clear CONNECT event from atcmd results
-            // atcmd_sendCmdData(writeData, writeSz);
-        }
+        atcmd_configDataMode(0, "CONNECT\r\n", atcmd_stdTxDataHndlr, writeData, writeSz, NULL, false);
+        atcmd_invokeReuseLock("AT+QFWRITE=%d,%d,1", fileHandle, writeSz);
+        rslt = atcmd_awaitResultWithOptions(SEC_TO_MS(2), NULL);
 
-        rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__writeStatusParser);       // wait for "+QFWRITE result
-        if (rslt == resultCode__success)
+        char* resultTrailer = strchr(atcmd_getRawResponse(), '+');
+        if (memcmp(resultTrailer, "+QFWRITE: ", 10) == 0)
         {
-            writeResult->writtenSz = strtol(atcmd_getResponse(), &workPtr, 10);
-            writeResult->fileSz = strtol(++workPtr, NULL, 10);
+            writeResult->writtenSz = strtol(resultTrailer + 10, &resultTrailer, 10);
+            writeResult->fileSz = strtol(++resultTrailer, NULL, 10);
+            rslt = resultCode__success;
         }
     } while (0);
-
     atcmd_close();
     return rslt;
 }
@@ -443,7 +445,7 @@ static resultCode_t S__filesRxHndlr()
     uint16_t readSz = strtol(wrkBffr + 8, NULL, 10);
     uint16_t availableSz = readSz;
     g_lqLTEM.atcmd->retValue = 0;
-    DPRINT_V(PRNT_CYAN, "S__filesRxHndlr() fHandle=%d available=%d\r", g_lqLTEM.fileCtrl->handle, availableSz);
+    DPRINT_V(PRNT_CYAN, "S__filesRxHndlr() fHandle=%d available=%d\r", g_lqLTEM.atcmd->dataMode.contextKey, availableSz);
 
     uint32_t readTimeout = pMillis();
     uint16_t occupiedCnt;
@@ -463,7 +465,7 @@ static resultCode_t S__filesRxHndlr()
         char* streamPtr;
         uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readSz);                                // get address from rxBffr
         DPRINT_V(PRNT_CYAN, "S__filesRxHndlr() ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
-        ((fileReceiver_func)(*g_lqLTEM.fileCtrl->appRecvDataCB))(g_lqLTEM.fileCtrl->handle, streamPtr, blockSz);    // forward to application
+        ((fileReceiver_func)(*g_lqLTEM.fileCtrl->appRecvDataCB))(g_lqLTEM.atcmd->dataMode.contextKey, streamPtr, blockSz);    // forward to application
         bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                         // commit POP
         readSz -= blockSz;
     } while (readSz > 0);

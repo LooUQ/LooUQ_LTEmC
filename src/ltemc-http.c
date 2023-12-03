@@ -51,6 +51,7 @@ static uint16_t S__setUrl(const char *host, const char *relative);
 static cmdParseRslt_t S__httpGetStatusParser();
 static cmdParseRslt_t S__httpPostStatusParser();
 static cmdParseRslt_t S__httpReadFileStatusParser();
+static cmdParseRslt_t S__httpPostFileStatusParser();
 static resultCode_t S__httpRxHndlr();
 
 
@@ -79,10 +80,11 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func
     httpCtrl->useTls = false;
     httpCtrl->timeoutSec = http__defaultTimeoutBGxSec;
     httpCtrl->defaultBlockSz = bbffr_getCapacity(g_lqLTEM.iop->rxBffr) / 4;
-    httpCtrl->cstmHdrs = NULL;
-    httpCtrl->cstmHdrsSz = 0;
+    httpCtrl->cstmHdrsBffr = NULL;
+    httpCtrl->cstmHdrsBffrSz = 0;
     httpCtrl->httpStatus = 0xFFFF;
 }
+
 
 /**
  *	@brief Set host connection characteristics. 
@@ -105,7 +107,7 @@ void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t host
 /**
  *	@brief Registers custom headers (char) buffer with HTTP control.
  */
-void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t headerBufSz)
+void http_setCustomRequestBuffer(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t headerBufSz)
 {
     ASSERT(strlen(httpCtrl->hostUrl));                                                // host connection initialized
     ASSERT(headerBuf != NULL);                                                        // valid header buffer pointer 
@@ -113,8 +115,8 @@ void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t heade
     ASSERT_W(headerBufSz > (strlen(httpCtrl->hostUrl) + http__customHdrSmallWarning), "CustomHdr diminutive buffer sz");
 
     memset(headerBuf, 0, headerBufSz);
-    httpCtrl->cstmHdrs = headerBuf;
-    httpCtrl->cstmHdrsSz = headerBufSz;
+    httpCtrl->cstmHdrsBffr = headerBuf;
+    httpCtrl->cstmHdrsBffrSz = headerBufSz;
 }
 
 
@@ -129,29 +131,29 @@ void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
 
     if (headerMap & httpHeaderMap_accept > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(httpCtrl->cstmHdrs) + 13 < httpCtrl->cstmHdrsSz)                     // 13 = strlen("Accept: */*\r\n")
-            strcat(httpCtrl->cstmHdrs, "Accept: */*\r\n");
+        if (strlen(httpCtrl->cstmHdrsBffr) + 13 < httpCtrl->cstmHdrsBffrSz)                     // 13 = strlen("Accept: */*\r\n")
+            strcat(httpCtrl->cstmHdrsBffr, "Accept: */*\r\n");
         else
             addedHdrsFit = false;
     }
     if (headerMap & httpHeaderMap_userAgent > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(httpCtrl->cstmHdrs) + 25 < httpCtrl->cstmHdrsSz)
-            strcat(httpCtrl->cstmHdrs, "User-Agent: QUECTEL_BGx\r\n");
+        if (strlen(httpCtrl->cstmHdrsBffr) + 25 < httpCtrl->cstmHdrsBffrSz)
+            strcat(httpCtrl->cstmHdrsBffr, "User-Agent: QUECTEL_BGx\r\n");
         else
             addedHdrsFit = false;
     }
     if (headerMap & httpHeaderMap_connection > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(httpCtrl->cstmHdrs) + 24 < httpCtrl->cstmHdrsSz)
-            strcat(httpCtrl->cstmHdrs, "Connection: Keep-Alive\r\n");
+        if (strlen(httpCtrl->cstmHdrsBffr) + 24 < httpCtrl->cstmHdrsBffrSz)
+            strcat(httpCtrl->cstmHdrsBffr, "Connection: Keep-Alive\r\n");
         else
             addedHdrsFit = false;
     }
     if (headerMap & httpHeaderMap_contentType > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(httpCtrl->cstmHdrs) + 40 < httpCtrl->cstmHdrsSz)
-            strcat(httpCtrl->cstmHdrs, "Content-Type: application/octet-stream\r\n");
+        if (strlen(httpCtrl->cstmHdrsBffr) + 40 < httpCtrl->cstmHdrsBffrSz)
+            strcat(httpCtrl->cstmHdrsBffr, "Content-Type: application/octet-stream\r\n");
         else
             addedHdrsFit = false;
     }
@@ -166,8 +168,8 @@ void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText)
     ASSERT(httpCtrl->cstmHdrs != NULL);
     ASSERT(strlen(httpCtrl->cstmHdrs) + strlen(hdrText) + 2 < httpCtrl->cstmHdrsSz);
 
-    strcat(httpCtrl->cstmHdrs, hdrText);
-    strcat(httpCtrl->cstmHdrs, "\r\n");
+    strcat(httpCtrl->cstmHdrsBffr, hdrText);
+    strcat(httpCtrl->cstmHdrsBffr, "\r\n");
 }
 
 
@@ -189,9 +191,9 @@ void http_addBasicAuthHdr(httpCtrl_t *http, const char *user, const char *pw)
 
     ASSERT(strlen(http->cstmHdrs) + 19 + strlen(b64str) < http->cstmHdrsSz);
 
-    strcat(http->cstmHdrs, "Authentication: ");
-    strcat(http->cstmHdrs, b64str);
-    strcat(http->cstmHdrs, "\r\n");
+    strcat(http->cstmHdrsBffr, "Authentication: ");
+    strcat(http->cstmHdrsBffr, b64str);
+    strcat(http->cstmHdrsBffr, "\r\n");
 }
 
 
@@ -261,7 +263,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
 
         /* If custom headers, need to both set flag here and include in request stream below
          */
-        atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",%d", httpCtrl->cstmHdrs ? 1 : 0);
+        atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",%d", httpCtrl->cstmHdrsBffr ? 1 : 0);
         rslt = atcmd_awaitResult();
         if (rslt != resultCode__success)
         {
@@ -270,13 +272,13 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         }
 
         // char httpRequestCmd[http__getRequestLength];
-        if (httpCtrl->cstmHdrs)
+        if (httpCtrl->cstmHdrsBffrSz > 0)
         {
             char *hostName = strchr(httpCtrl->hostUrl, ':');
             hostName = hostName ? hostName + 3 : httpCtrl->hostUrl;
 
             char cstmRequest[http__getRequestCustomSz];
-            snprintf(cstmRequest, sizeof(cstmRequest), "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrs);
+            snprintf(cstmRequest, sizeof(cstmRequest), "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrsBffr);
             DPRINT(PRNT_dMAGENTA, "CustomHdrs\r\n");
             DPRINT_V(PRNT_dMAGENTA, "%s\r\n", cstmRequest);
 
@@ -376,11 +378,11 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
 
         // char httpRequestCmd[http__postRequestLength];
         uint16_t httpRequestLen = postDataSz;                                                           // requestLen starts with postDataSz
-        httpRequestLen += (httpCtrl->cstmHdrsSz > 0) ? (httpCtrl->cstmHdrsSz + 2) : 0;                  // add the custom headers + 2 char for EOL after hdrs
+        httpRequestLen += (httpCtrl->cstmHdrsBffrSz > 0) ? (httpCtrl->cstmHdrsBffrSz + 2) : 0;          // add the custom headers + 2 char for EOL after hdrs
 
         atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, postData, postDataSz, NULL, true);
 
-        if (httpCtrl->cstmHdrsSz)
+        if (httpCtrl->cstmHdrsBffrSz)
         {
             atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", httpRequestLen, httpCtrl->timeoutSec);
         }
@@ -418,8 +420,107 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
     }   // awaitLock()
 
     return resultCode__timeout;
-}   /* http_post() */
+}  // http_post()
 
+
+/**
+ *	@brief Sends contents of a file (LTEM filesystem) as POST to remote.
+ */
+uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, bool returnResponseHdrs, const char* filename)
+{
+    httpCtrl->requestState = httpState_idle;
+    httpCtrl->httpStatus = resultCode__unknown;
+    strcpy(httpCtrl->requestType, "POST");
+    resultCode_t rslt;
+
+    if (ATCMD_awaitLock(httpCtrl->timeoutSec))
+    {
+        if (returnResponseHdrs)
+        {
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs));
+
+            rslt = atcmd_awaitResult();
+            if (rslt != resultCode__success)
+            {
+                atcmd_close();
+                return rslt;
+            }
+        }
+
+        if (httpCtrl->useTls)
+        {
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt);
+            rslt = atcmd_awaitResult();
+            if (rslt != resultCode__success)
+            {
+                atcmd_close();
+                return rslt;
+            }
+        }
+
+        /* SET URL FOR REQUEST
+        * set BGx HTTP URL: AT+QHTTPURL=<urlLength>,timeoutSec  (BGx default timeout is 60, if not specified)
+        * wait for CONNECT prompt, then output <URL>, /r/n/r/nOK
+        * 
+        * NOTE: there is only 1 URL in the BGx at a time
+        *---------------------------------------------------------------------------------------------------------------*/
+
+        rslt = S__setUrl(httpCtrl->hostUrl, relativeUrl);
+        if (rslt != resultCode__success)
+        {
+            DPRINT(PRNT_WARN, "Failed set URL rslt=%d\r\n", rslt);
+            atcmd_close();
+            return rslt;
+        }
+
+        /* POST file is a "custom" request need set flag for custom request/headers
+         */
+        atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",1");
+        rslt = atcmd_awaitResult();
+        if (rslt != resultCode__success)
+        {
+            atcmd_close();
+            return rslt;
+        }
+
+        /* INVOKE HTTP ** POST ** METHOD
+        * BGx responds with OK immediately upon acceptance of cmd, then later (up to timeout) with "+QHTTPPOST: " string
+        * After "OK" we switch IOP to data mode and return. S_httpDoWork() handles the parsing of the page response and
+        * if successful, the issue of the AT+QHTTPREAD command to start the page data stream
+        * 
+        * This allows other application tasks to be performed while waiting for page. No LTEm commands can be invoked
+        * but non-LTEm tasks like reading sensors can continue.
+        *---------------------------------------------------------------------------------------------------------------*/
+        atcmd_reset(false);                                                                             // reset atCmd control struct WITHOUT clearing lock
+        atcmd_invokeReuseLock("AT+QHTTPPOSTFILE=\"%s\",15", filename);
+
+        rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpPostFileStatusParser);
+        if (rslt == resultCode__success)
+        {
+            if (rslt == resultCode__success && atcmd_getValue() == 0)                                   // wait for "+QHTTPPOST trailer: rslt=200, postErr=0
+            {
+                httpCtrl->httpStatus = S__parseResponseForHttpStatus(httpCtrl, atcmd_getResponse());
+                if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
+                {
+                    httpCtrl->requestState = httpState_requestComplete;                                 // update httpState, got GET/POST response
+                    DPRINT(PRNT_MAGENTA, "Post(file) Request dCntxt:%d, status=%d\r\n", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+                }
+            }
+            else
+            {
+                httpCtrl->requestState = httpState_idle;
+                httpCtrl->httpStatus = rslt;
+                DPRINT(PRNT_WARN, "Closed failed POST(file) request, status=%d (%s)\r\n", httpCtrl->httpStatus, atcmd_getErrorDetail());
+            }
+        }
+        else
+            httpCtrl->httpStatus = resultCode__internalError;
+        atcmd_close();
+        return httpCtrl->httpStatus;
+    }   // awaitLock()
+
+    return resultCode__timeout;
+}  // http_postFile()
 
 
 /**
@@ -474,6 +575,36 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
 
 
 /**
+ * @brief Creates a base HTTP request that can be appended with custom headers.
+ */
+resultCode_t http_createRequest(httpRequestType_t reqstType, const char* host, const char* relativeUrl, const char* cstmHdrs, uint16_t contentLength, char* reqstBffr, uint16_t reqstBffrSz)
+{
+    ASSERT(strlen(host));
+    ASSERT(strlen(relativeUrl));
+
+    memset(reqstBffr, 0, reqstBffrSz);
+    char workBffr[12];
+
+    if (reqstType == httpRequestType_GET)
+        strcat(reqstBffr, "GET ");
+    else if (reqstType == httpRequestType_POST)
+        strcat(reqstBffr, "POST ");
+    else
+        return resultCode__badRequest;
+
+    strcat(reqstBffr, relativeUrl);
+    strcat(reqstBffr, " HTTP/1.1\r\nHost: ");
+    strcat(reqstBffr, host);
+    strcat(reqstBffr, "\r\nAccept: */*\r\nUser-Agent: QUECTEL_MODULE\r\nConnection: keep-alive\r\nContent-Type: text/plain\r\n");
+    strcat(reqstBffr, cstmHdrs);
+    strcat(reqstBffr, "Content-Length: ");
+    snprintf(workBffr, sizeof(workBffr), "%d\r\n\r\n", ((reqstType == httpRequestType_GET) ? 0 : contentLength));
+    strcat(reqstBffr, workBffr);
+    return resultCode__success;
+}
+
+
+/**
  * @brief Not currently implemented
  */
 void http_cancelPage(httpCtrl_t *httpCtrl)
@@ -500,27 +631,10 @@ static resultCode_t S__setUrl(const char *host, const char *relative)
     if (strlen(relative) > 0)                                                                   // need to concat relative/query
     {
         strcat(url, relative);
-
-        // char hostSuffix = host[strlen(url) - 1];                                                // being flexible on host suffix and relative prefix when joining 
-        // if (hostSuffix != '/' &&                                                                // need to supply '/' to join
-        //     relative[0] != '/')                      
-        // {
-        //     strcat(url, "/");
-        //     strcat(url, relative);
-        // }
-        // else if (hostSuffix == '/' &&                                                           // both have '/', need to trim to join
-        //     relative[0] == '/')                      
-        // {
-        //     strcat(url, relative + 1);                                                          // skip 1st char '/' 
-        // }
-        // else
-        // {
-        //     strcat(url, relative);                                                              // host suffix is not '/' and relative prefix is '/'
-        // }
     }
     DPRINT(PRNT_dMAGENTA, "URL(%d)=\"%s\" \r\n", strlen(url), url);
     
-    atcmd_configDataMode(0, "CONNECT", atcmd_stdTxDataHndlr, url, strlen(url), NULL, false);        // setup for URL dataMode transfer 
+    atcmd_configDataMode(0, "CONNECT\r\n", atcmd_stdTxDataHndlr, url, strlen(url), NULL, false);   // setup for URL dataMode transfer 
     atcmd_invokeReuseLock("AT+QHTTPURL=%d,5", strlen(url));
     rslt = atcmd_awaitResult();
     return rslt;
@@ -639,6 +753,13 @@ static cmdParseRslt_t S__httpReadFileStatusParser()
 {
     // +QHTTPPOST: <err>[,<httprspcode>[,<content_length>]] 
     return atcmd_stdResponseParser("+QHTTPREADFILE: ", true, ",", 0, 1, "\r\n", 0);
+}
+
+
+static cmdParseRslt_t S__httpPostFileStatusParser() 
+{
+    // +QHTTPPOST: <err>[,<httprspcode>[,<content_length>]] 
+    return atcmd_stdResponseParser("+QHTTPPOSTFILE: ", true, ",", 0, 1, "\r\n", 0);
 }
 
 #pragma endregion
