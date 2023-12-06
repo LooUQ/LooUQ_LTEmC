@@ -57,7 +57,8 @@ enum BGX__constants
     BGX__powerOnDelay = 500,
     BGX__powerOffDelay = 800,
     BGX__resetDelay = 800,
-    BGX__baudRate = 115200
+    BGX__baudRate = 115200,
+    BGX__startVerifyResponseSz = 17
 };
 
 

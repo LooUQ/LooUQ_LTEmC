@@ -221,13 +221,31 @@ bool ltem_start(resetAction_t resetAction)
     pDelay(500);
     bbffr_reset(g_lqLTEM.iop->rxBffr);                                      // clean out start messages from RX buffer
 
-    if (!QBG_setOptions())
+
+    uint8_t initTries = 0;
+    while (initTries <= 1)
     {
-        ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault");     // send notification, maybe app can recover
-        DPRINT(PRNT_DEFAULT, "\r");
+        if (QBG_setOptions())
+            DPRINT_V(PRNT_CYAN, "BGx options set\r\n");
+            if (ltem_ping())
+                break;
+        else
+        {
+            ltem_notifyApp(appEvent_fault_hardFault, "BGx set options failed");         // send notification, maybe app can recover
+            DPRINT(PRNT_DEFAULT, "BGx set options failed\r");
+        }
+        initTries++;
     }
-    else
-        DPRINT_V(PRNT_CYAN, "BGx options set\r\n");
+    DPRINT_V(PRNT_CYAN, "BGx start verified\r\n");
+
+
+
+    // if (QBG_verifyStart())
+    // else
+    // {
+    //     ltem_notifyApp(appEvent_fault_hardFault, "BGx start verification failed");  // send notification, maybe app can recover
+    //     DPRINT(PRNT_DEFAULT, "BGx start verification failed\r");
+    // }
 
     // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
     // DPRINT_V(PRNT_CYAN, "ltem_start(): rat options set");
@@ -316,24 +334,52 @@ void ltem_enterPcm()
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
  */
-resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t mode)
+resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t rfMode)
 {
-    DPRINT_V(0, "<ltem_setRfPriorityMode()> mode=%d\r\n", mode);
+    ASSERT(rfMode == 0 || rfMode == 1);
+
+    DPRINT_V(0, "<ltem_setRfPriorityMode()> rfMode=%d\r\n", rfMode);
     DPRINT_V(0, "<ltem_setRfPriorityMode()> module:%s\r\n", g_lqLTEM.modemInfo->model);
 
-    if (memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) == 0 || memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) == 0)
+    //  only applicable to single-RF modules
+    if (memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) != 0 && memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) != 0)
+        return resultCode__badRequest;
+
+    uint8_t targetLoadedState = (rfMode == ltemRfPriorityMode_wwan) ? ltemRfPriorityState_wwanLoaded : ltemRfPriorityState_gnssLoaded;
+    if (targetLoadedState == ltem_getRfPriorityState())
+        return resultCode__success;                                                 // already at destination
+
+    if (rfMode == ltemRfPriorityMode_gnss)                                          // test for requesting GNSS priority but GNSS not ON
     {
-        DPRINT_V(0, "<ltem_setRfPriorityMode()> invoking\r\n");
-        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d", mode))
+        bool gnssActive = false;
+        if (atcmd_tryInvoke("AT+QGPS?"))
         {
-            DPRINT_V(0, "<ltem_setRfPriorityMode()> invoked\r\n");
             resultCode_t rslt = atcmd_awaitResult();
-            DPRINT_V(0, "<ltem_setRfPriorityMode()> response:%s\r\n", atcmd_getRawResponse());
-            return rslt;
+            if (IS_SUCCESS(rslt))
+            {
+                gnssActive = strtol(atcmd_getToken(0), NULL, 10) == 1;
+            }
         }
-        return resultCode__conflict;
+        if (!gnssActive)
+            return resultCode__badRequest;
     }
-    return resultCode__preConditionFailed;                                          //  only applicable to single-RF modules
+
+    /* Pre-checks completed
+     * ----------------------------------------------------------- */
+    uint32_t waitStart = pMillis();
+
+    while (!IS_ELAPSED(waitStart, SEC_TO_MS(2)))
+    {
+        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\",%d", rfMode))                  // set mode
+        {
+            resultCode_t rslt = atcmd_awaitResult();
+            if (IS_NOTSUCCESS(rslt))
+                return rslt;
+        }
+        if (targetLoadedState == ltem_getRfPriorityState())                         // check for stack loaded (state)
+            return resultCode__success;
+    }
+    return resultCode__timeout;
 }
 
 
@@ -701,15 +747,16 @@ deviceState_t ltem_getDeviceState()
 
 
 /**
- *	@brief Test for responsive BGx.
+ *	@brief Test for responsive and initialized BGx.
  */
 bool ltem_ping()
 {
-    resultCode_t rslt;
-    if (atcmd_tryInvoke("AT"))
+    if (atcmd_tryInvoke("AT+CGMI"))                        // get manufacturer: "Quectel"
     {
-        rslt = atcmd_awaitResult();
-        return rslt != resultCode__timeout;
+        if (IS_SUCCESS(atcmd_awaitResult()))
+        {
+            return strlen(atcmd_getRawResponse()) == BGX__startVerifyResponseSz;
+        }
     }
     return false;
 }

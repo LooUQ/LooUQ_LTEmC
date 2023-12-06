@@ -298,9 +298,9 @@ typedef struct modemInfo_tag
 */
 typedef struct packetNetwork_tag
 {
-    bool isActive;
     uint8_t pdpContextId;                           // context ID recognized by the carrier (valid are 1 to 16)
     pdpProtocol_t pdpProtocol;                      // IPv4, IPv6, etc.
+    char protoName[ntwk__pdpProtoSz];               // text for protocol
 	char ipAddress[ntwk__ipAddressSz];              // The IP address obtained from the carrier for this context. The IP address of the modem.
 } packetNetwork_t;
 

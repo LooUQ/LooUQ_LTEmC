@@ -52,9 +52,9 @@ extern ltemDevice_t g_lqLTEM;
 
 
 // local static functions
-static cmdParseRslt_t S__contextStatusCompleteParser(void * atcmd, const char *response);
-static char *S__grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
 static void S__clearOperatorInfo();
+static cmdParseRslt_t S__contextStatusCompleteParser(void * atcmd, const char *response);
+// static char *S__grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
 
 
 /* public tcpip functions
@@ -227,20 +227,15 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
             atcmd_invokeReuseLock("AT+COPS?");                              // get PROVIDER cellular carrier
             if (atcmd_awaitResult() == resultCode__success)
             {
-                char *pContinue;
-                pContinue = strchr(atcmd_getResponse(), '"');
-                if (pContinue != NULL)
-                {
-                    pContinue = S__grabToken(pContinue + 1, '"', g_lqLTEM.ntwkOperator->name, ntwk__operatorNameSz);
-
-                    uint8_t ntwkMode = (uint8_t)strtol(pContinue + 1, &pContinue, 10);
-                    if (ntwkMode == 8)
-                        strcpy(g_lqLTEM.ntwkOperator->iotMode, "M1");
-                    else if (ntwkMode == 9)
-                        strcpy(g_lqLTEM.ntwkOperator->iotMode, "NB1");
-                    else
-                        strcpy(g_lqLTEM.ntwkOperator->iotMode, "GSM");
-                }
+                uint8_t toCopy = strlen(atcmd_getToken(2)) - 2;
+                strncpy(g_lqLTEM.ntwkOperator->name, atcmd_getToken(2) + 1, toCopy);
+                uint8_t ntwkMode = (uint8_t)strtol(atcmd_getToken(3), NULL, 10);
+                if (ntwkMode == 8)
+                    strcpy(g_lqLTEM.ntwkOperator->iotMode, "M1");
+                else if (ntwkMode == 9)
+                    strcpy(g_lqLTEM.ntwkOperator->iotMode, "NB1");
+                else
+                    strcpy(g_lqLTEM.ntwkOperator->iotMode, "GSM");
             }
             if (!STREMPTY(g_lqLTEM.ntwkOperator->name))
                 break;
@@ -260,42 +255,15 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
             char *pContinue;
             uint8_t ntwkIndx = 0;
 
-            atcmd_invokeReuseLock("AT+QIACT?");
+            atcmd_invokeReuseLock("AT+CGPADDR");
             if (atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(20), NULL) == resultCode__success)
             {
-                pContinue = strstr(atcmd_getResponse(), "+QIACT: ");
-                while (pContinue != NULL && ntwkIndx < ntwk__pdpContextCnt)
-                {
-                    g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpContextId = strtol(pContinue + 8, &pContinue, 10);
-                    g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].isActive = *(++pContinue) == '1';
-                    // only supported protocol now is IPv4, alias IP
-                    g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpProtocol = pdpProtocol_IPV4;
-                    pContinue = strstr(pContinue, "+QIACT: ");
-                    if (pContinue == NULL)
-                        break;
-                    ntwkIndx++;
-                }
+                g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpContextId = strtol(atcmd_getToken(0), NULL, 10);
+                g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpProtocol = pdpProtocol_IPV4;
+                strcpy(g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].protoName, "IP");
+                strcpy(g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].ipAddress, atcmd_getToken(1));
             }
-            // get IP addresses
-            for (size_t i = 0; i <= ntwkIndx; i++)
-            {
-                if (g_lqLTEM.ntwkOperator->packetNetworks[i].isActive)
-                {
-                    atcmd_invokeReuseLock("AT+CGPADDR=%d", g_lqLTEM.ntwkOperator->packetNetworks[i].pdpContextId);
-                    if (atcmd_awaitResult() == resultCode__success)
-                    {
-                        pContinue = strstr(atcmd_getResponse(), "+CGPADDR: ");
-                        pContinue = strchr(pContinue + 10, ',') + 1;
-                        char *pLineEnd = strchr(pContinue, '\r');
-                        strncpy(g_lqLTEM.ntwkOperator->packetNetworks[i].ipAddress, pContinue, MIN(pLineEnd - pContinue, ntwk__ipAddressSz));
-                    }
-                }
-                else
-                {
-                    strcpy(g_lqLTEM.ntwkOperator->packetNetworks[i].ipAddress, "0.0.0.0");
-                }
-            }
-            g_lqLTEM.ntwkOperator->pdpCntxtCnt = ++ntwkIndx;
+            g_lqLTEM.ntwkOperator->pdpCntxtCnt = 1;                                 // future determination
         }
     }
     atcmd_close();
@@ -383,13 +351,15 @@ const char* ntwk_getNetworkInfo()
     {
         if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
         {
-            if (strstr(g_lqLTEM.atcmd->rawResponse, "+QNWINFO: "))                          // clean up extra content/EOL
+            char * copyFrom = strstr(g_lqLTEM.atcmd->rawResponse, "+QNWINFO: ");
+            if (copyFrom)                          // clean up extra content/EOL
             {
-                void* eol = memchr(g_lqLTEM.atcmd->rawResponse, '\r', atcmd__respBufferSz - 10);
+                copyFrom += sizeof("+QNWINFO: ") - 1;
+                char* eol = memchr(copyFrom, '\r', atcmd__respBufferSz - 10);
                 if (eol)
                 {
-                    memcpy(g_lqLTEM.statics.reportBffr, g_lqLTEM.atcmd->rawResponse, (eol - (void*)g_lqLTEM.atcmd->rawResponse));
-                    return g_lqLTEM.statics.reportBffr + 10;
+                    memcpy(g_lqLTEM.statics.reportBffr, copyFrom, eol - copyFrom);
+                    return g_lqLTEM.statics.reportBffr;
                 }
             }
         }
@@ -492,30 +462,30 @@ static cmdParseRslt_t S__contextStatusCompleteParser(void *atcmd, const char *re
 }
 
 
-/**
- *  @brief Scans a C-String (char array) for the next delimeted token and null terminates it.
- * 
- *  @param [in] source - Original char array to scan.
- *  @param [in] delimeter - Character separating tokens (passed as integer value).
- *  @param [out] tokenBuf - Pointer to where token should be copied to.
- *  @param [in] tokenBufSz - Size of buffer to receive token.
- * 
- *  @return Pointer to the location in the source string immediately following the token.
-*/
-static char *S__grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz) 
-{
-    char *delimAt;
-    if (source == NULL)
-        return false;
+// /**
+//  *  @brief Scans a C-String (char array) for the next delimeted token and null terminates it.
+//  * 
+//  *  @param [in] source - Original char array to scan.
+//  *  @param [in] delimeter - Character separating tokens (passed as integer value).
+//  *  @param [out] tokenBuf - Pointer to where token should be copied to.
+//  *  @param [in] tokenBufSz - Size of buffer to receive token.
+//  * 
+//  *  @return Pointer to the location in the source string immediately following the token.
+// */
+// static char *S__grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz) 
+// {
+//     char *delimAt;
+//     if (source == NULL)
+//         return false;
 
-    delimAt = strchr(source, delimiter);
-    uint8_t tokenSz = delimAt - source;
-    if (tokenSz == 0)
-        return NULL;
+//     delimAt = strchr(source, delimiter);
+//     uint8_t tokenSz = delimAt - source;
+//     if (tokenSz == 0)
+//         return NULL;
 
-    memset(tokenBuf, 0, tokenBufSz);
-    memcpy(tokenBuf, source, MIN(tokenSz, tokenBufSz-1));
-    return delimAt + 1;
-}
+//     memset(tokenBuf, 0, tokenBufSz);
+//     memcpy(tokenBuf, source, MIN(tokenSz, tokenBufSz-1));
+//     return delimAt + 1;
+// }
 
 #pragma endregion

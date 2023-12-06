@@ -50,6 +50,7 @@
 #include <Arduino.h>
 
 #include <ltemc.h>
+#include <ltemc-gnss.h>
 
 // test controls
 uint16_t loopCnt = 0;
@@ -66,7 +67,7 @@ void setup()
         Serial.begin(115200);
         delay(5000);                // just give it some time
     #endif
-    DPRINT(PRNT_DEFAULT,"\n\n*** ltemc-05-modeminfo started ***\n\n");
+    DPRINT(PRNT_RED,"\n\n*** ltemc-05-modeminfo started ***\n\n");
     //lqDiag_setNotifyCallback(applEvntNotify);                       // configure ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);              // create LTEmC modem, no yield req'd for testing
@@ -79,20 +80,52 @@ void setup()
 
 void loop() 
 {
+    ntwkOperator_t * ntwk;
+
     if (ELAPSED(lastCycle, cycle_interval))
     {
         lastCycle = millis();
         loopCnt++;
 
         modemInfo = ltem_getModemInfo();
-        DPRINT(PRNT_CYAN, "\rModem Information\r\n");
+        DPRINT(PRNT_CYAN, "\rModem Information\r\n-------------------------\r\n");
         DPRINT(PRNT_CYAN, "IMEI = %s \r\n", modemInfo->imei);
         DPRINT(PRNT_CYAN, "ICCID = %s \r\n", modemInfo->iccid);
         DPRINT(PRNT_CYAN, "Firmware = %s \r\n", modemInfo->fwver);
-        DPRINT(PRNT_CYAN, "Mfg/Model = %s \r\n", modemInfo->model);
+        DPRINT(PRNT_CYAN, "Manufacturer = %s \r\n", modemInfo->mfg);
+        DPRINT(PRNT_CYAN, "Model = %s \r\n", modemInfo->model);
 
-        DPRINT(PRNT_INFO, "\rRSSI = %d dBm \r\n", ltem_signalRSSI());
-        DPRINT(0,"\r\nLoop=%d \r\n", loopCnt);
+        DPRINT(PRNT_GREEN, "\r\nNetwork Information\r\n-------------------------\r\n");
+        ntwk = ntwk_awaitOperator(0);
+        DPRINT(PRNT_GREEN, "Operator = %s \r\n", ntwk->name);
+        DPRINT(PRNT_GREEN, "IoT Mode = %s \r\n", ntwk->iotMode);
+        DPRINT(PRNT_GREEN, "\r\nPacket Ntwk Count = %d \r\n", ntwk->pdpCntxtCnt);
+        if (ntwk->pdpCntxtCnt > 0)
+        {
+            DPRINT(PRNT_GREEN, "-- Network #1\r\n");
+            DPRINT(PRNT_GREEN, "      CntxtID = %d \r\n", ntwk->packetNetworks[0].pdpContextId);
+            DPRINT(PRNT_GREEN, "     Protocol = %s (%d)\r\n", ntwk->packetNetworks[0].protoName, ntwk->packetNetworks[0].pdpProtocol);
+            DPRINT(PRNT_GREEN, "      IP Addr = %s \r\n", ntwk->packetNetworks[0].ipAddress);
+        }
+
+        DPRINT(PRNT_INFO, "\r\n  Ntwk Info = %s \r\n", ntwk_getNetworkInfo());
+        DPRINT(PRNT_INFO, " Raw Signal = %d \r\n", ltem_signalRaw());
+        DPRINT(PRNT_INFO, "Signal RSSI = %d dBm \r\n", ltem_signalRSSI());
+
+        if (memcmp(modemInfo->model, "BG77", 4) == 0 || memcmp(modemInfo->model, "BG95", 4) == 0)
+        {
+            DPRINT(PRNT_MAGENTA, "\r\n%s module has single RF path, RF priority is controlled by LTEmC\r\n", modemInfo->model);
+            gnss_on();
+            if (loopCnt % 2 == 1)
+                DPRINT(PRNT_MAGENTA, "Setting RF Priority to WWAN (rslt=%d)\r\n", ltem_setRfPriorityMode(ltemRfPriorityMode_wwan));
+            else
+                DPRINT(PRNT_MAGENTA, "Setting RF Priority to GNSS (rslt=%d)\r\n", ltem_setRfPriorityMode(ltemRfPriorityMode_gnss));
+        }
+        else
+            DPRINT(PRNT_MAGENTA, "\r\n%s module is dual RF path, RF priority is not applicable\r\n", modemInfo->model);
+
+
+        DPRINT(0,"\r\nLoop=%d \r\n==================================================\r\n", loopCnt);
     }
 }
 
