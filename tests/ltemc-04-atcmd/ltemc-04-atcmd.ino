@@ -2,7 +2,7 @@
 #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
+//#include <lqdiag.h>
 
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */

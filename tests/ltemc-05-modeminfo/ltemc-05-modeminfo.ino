@@ -107,6 +107,7 @@ void loop()
             DPRINT(PRNT_GREEN, "     Protocol = %s (%d)\r\n", ntwk->packetNetworks[0].protoName, ntwk->packetNetworks[0].pdpProtocol);
             DPRINT(PRNT_GREEN, "      IP Addr = %s \r\n", ntwk->packetNetworks[0].ipAddress);
         }
+        DPRINT(PRNT_dGREEN, "\r\nNetwork ready state=%d\r\n", ntwk_isReady(true));
 
         DPRINT(PRNT_INFO, "\r\n  Ntwk Info = %s \r\n", ntwk_getNetworkInfo());
         DPRINT(PRNT_INFO, " Raw Signal = %d \r\n", ltem_signalRaw());

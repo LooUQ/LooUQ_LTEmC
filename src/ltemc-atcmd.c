@@ -27,12 +27,15 @@ Also add information on how to contact you by electronic and paper mail.
 
 **************************************************************************** */
 
-
+#include <lq-embed.h>
+#define LOG_LEVEL LOGLEVEL_DBG
+//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
 #define SRCFILE "ATC"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+
 // #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 // #define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
+// #include <lqdiag.h>
 
 #include <stdarg.h>
 #include "ltemc-internal.h"
@@ -89,7 +92,7 @@ void atcmd_reset(bool releaseLock)
 /**
  *	@brief Setup automatic data mode switch/servicing.
  */
-void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_func rxDataHndlr, char *dataLoc, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
+void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_func rxDataHndlr, const char *dataPtr, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
 {
     ASSERT(strlen(trigger) > 0); // verify 3rd party setup (stream)
     ASSERT(rxDataHndlr != NULL); //
@@ -100,7 +103,7 @@ void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_
     g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
     g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
-    g_lqLTEM.atcmd->dataMode.txDataLoc = dataLoc;
+    g_lqLTEM.atcmd->dataMode.txDataLoc = dataPtr;
     g_lqLTEM.atcmd->dataMode.txDataSz = dataSz;
     g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
     g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = runParser;

@@ -28,11 +28,15 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
+#include <lq-embed.h>
+#define LOG_LEVEL LOGLEVEL_DBG
+//#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
 #define SRCFILE "HTT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
-#define ENABLE_ASSERT
-#include <lqdiag.h>
+//#define ENABLE_ASSERT
+// #include <lqdiag.h>
 
 #include "ltemc-internal.h"
 #include "ltemc-http.h"
@@ -45,13 +49,15 @@ extern ltemDevice_t g_lqLTEM;
 
 /* Local Static Functions
 ------------------------------------------------------------------------------------------------------------------------- */
-// static void S_httpDoWork();
-static uint16_t S__parseResponseForHttpStatus(httpCtrl_t *httpCtrl, const char *responseTail);
+static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest, bool returnResponseHdrs);
+static resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequest_t* request, const char *postData, uint16_t postDataSz, bool returnResponseHdrs);
+
 static uint16_t S__setUrl(const char *host, const char *relative);
 static cmdParseRslt_t S__httpGetStatusParser();
 static cmdParseRslt_t S__httpPostStatusParser();
 static cmdParseRslt_t S__httpReadFileStatusParser();
 static cmdParseRslt_t S__httpPostFileStatusParser();
+static uint16_t S__parseResponseForHttpStatus(httpCtrl_t *httpCtrl, const char *responseTail);
 static resultCode_t S__httpRxHndlr();
 
 
@@ -71,7 +77,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
     httpCtrl->dataCntxt = dataCntxt;
     httpCtrl->streamType = streamType_HTTP;
-    httpCtrl->appRecvDataCB = recvCallback;
+    httpCtrl->appRecvDataCB = (appRcvProto_func)recvCallback;
     httpCtrl->dataRxHndlr = S__httpRxHndlr;
 
     httpCtrl->requestState = httpState_idle;
@@ -80,8 +86,8 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func
     httpCtrl->useTls = false;
     httpCtrl->timeoutSec = http__defaultTimeoutBGxSec;
     httpCtrl->defaultBlockSz = bbffr_getCapacity(g_lqLTEM.iop->rxBffr) / 4;
-    httpCtrl->cstmHdrsBffr = NULL;
-    httpCtrl->cstmHdrsBffrSz = 0;
+    // httpCtrl->cstmHdrsBffr = NULL;
+    // httpCtrl->cstmHdrsBffrSz = 0;
     httpCtrl->httpStatus = 0xFFFF;
 }
 
@@ -105,95 +111,132 @@ void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t host
 
 
 /**
- *	@brief Registers custom headers (char) buffer with HTTP control.
+ * @brief Creates a base HTTP request that can be appended with custom headers.
  */
-void http_setCustomRequestBuffer(httpCtrl_t *httpCtrl, char *headerBuf, uint16_t headerBufSz)
+httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* host, const char* relativeUrl, char* reqstBffr, uint16_t reqstBffrSz)
 {
-    ASSERT(strlen(httpCtrl->hostUrl));                                                // host connection initialized
-    ASSERT(headerBuf != NULL);                                                        // valid header buffer pointer 
-    // Warn on small header buffer, less than likely use for 1 or 2 small headers
-    ASSERT_W(headerBufSz > (strlen(httpCtrl->hostUrl) + http__customHdrSmallWarning), "CustomHdr diminutive buffer sz");
+    ASSERT(strlen(host));
+    ASSERT(strlen(relativeUrl));
 
-    memset(headerBuf, 0, headerBufSz);
-    httpCtrl->cstmHdrsBffr = headerBuf;
-    httpCtrl->cstmHdrsBffrSz = headerBufSz;
+    httpRequest_t httpRqst = { .requestBuffer = reqstBffr, .requestBuffersz = reqstBffrSz, .contentLen = 0, .headersLen = 0};
+    memset(reqstBffr, 0, reqstBffrSz);
+
+    if (COMPARES(memcmp(host, "http", 4)) || COMPARES(memcmp(host, "HTTP", 4)))         // allow for proto in host URL
+    {
+        host = (host, ':', strlen(host)) + 3;
+    }
+
+    if (reqstType == httpRequestType_GET)
+        strcat(reqstBffr, "GET ");
+    else if (reqstType == httpRequestType_POST)
+        strcat(reqstBffr, "POST ");
+    else
+    {
+        strcat(reqstBffr, "INVALID_TYPE");
+        return httpRqst;
+    }
+
+    strcat(reqstBffr, relativeUrl);
+    strcat(reqstBffr, " HTTP/1.1\r\nHost: ");
+    strcat(reqstBffr, host);
+
+    httpRqst.requestBuffer == reqstBffr;
+    return httpRqst;
 }
 
 
 /**
- *	@brief Adds common http headers to the custom headers buffer. REQUIRES previous enable of custom headers and buffer registration.
+ * @brief Adds common HTTP headers to a custom headers buffer.
  */
-void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap)
+void http_addCommonHdrs(httpRequest_t* request, httpHeaderMap_t headerMap)
 {
-    ASSERT(httpCtrl->cstmHdrs != NULL);
-
-    bool addedHdrsFit = true;
+    ASSERT(headerMap > 0);
+    ASSERT(request->contentLen == 0);                                                       // headers section still open to additions
+    ASSERT(*(request->requestBuffer + strlen(request->requestBuffer) - 2) = '\r');          // existing request ends in \r\n
+    ASSERT(strlen(request->requestBuffer) + http__commandHdrSz < request->requestBuffersz); // 102 all buffers below could fit
 
     if (headerMap & httpHeaderMap_accept > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(httpCtrl->cstmHdrsBffr) + 13 < httpCtrl->cstmHdrsBffrSz)                     // 13 = strlen("Accept: */*\r\n")
-            strcat(httpCtrl->cstmHdrsBffr, "Accept: */*\r\n");
-        else
-            addedHdrsFit = false;
+        strcat(request->requestBuffer, "Accept: */*\r\n");                                  // 13 = "Accept: */*\r\n" 
     }
     if (headerMap & httpHeaderMap_userAgent > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(httpCtrl->cstmHdrsBffr) + 25 < httpCtrl->cstmHdrsBffrSz)
-            strcat(httpCtrl->cstmHdrsBffr, "User-Agent: QUECTEL_BGx\r\n");
-        else
-            addedHdrsFit = false;
+        strcat(request->requestBuffer, "User-Agent: QUECTEL_MODULE\r\n");                   // 28 = "User-Agent: QUECTEL_BGx\r\n"
     }
     if (headerMap & httpHeaderMap_connection > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(httpCtrl->cstmHdrsBffr) + 24 < httpCtrl->cstmHdrsBffrSz)
-            strcat(httpCtrl->cstmHdrsBffr, "Connection: Keep-Alive\r\n");
-        else
-            addedHdrsFit = false;
+        strcat(request->requestBuffer, "Connection: Keep-Alive\r\n");                       // 24 = "Connection: Keep-Alive\r\n"
     }
     if (headerMap & httpHeaderMap_contentType > 0 || headerMap == httpHeaderMap_all)
     {
-        if (strlen(httpCtrl->cstmHdrsBffr) + 40 < httpCtrl->cstmHdrsBffrSz)
-            strcat(httpCtrl->cstmHdrsBffr, "Content-Type: application/octet-stream\r\n");
-        else
-            addedHdrsFit = false;
+        strcat(request->requestBuffer, "Content-Type: application/octet-stream\r\n");       // 40 = "Content-Type: application/octet-stream\r\n"
     }
-
-    ASSERT(addedHdrsFit);
-}
-
-
-
-void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText)
-{
-    ASSERT(httpCtrl->cstmHdrs != NULL);
-    ASSERT(strlen(httpCtrl->cstmHdrs) + strlen(hdrText) + 2 < httpCtrl->cstmHdrsSz);
-
-    strcat(httpCtrl->cstmHdrsBffr, hdrText);
-    strcat(httpCtrl->cstmHdrsBffr, "\r\n");
 }
 
 
 /**
- *	@brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
+ * @brief Adds a basic authorization header to a headers buffer.
  */
-void http_addBasicAuthHdr(httpCtrl_t *http, const char *user, const char *pw)
+void http_addBasicAuthHdr(httpRequest_t* request, const char *user, const char *pw)
 {
-    ASSERT(http->cstmHdrs != NULL);
-
     char toEncode[80];
     char b64str[120];
+
+    ASSERT(user != NULL);
+    ASSERT(pw != NULL);
+    ASSERT(request->contentLen == 0);                                                           // headers section still open to additions
+    ASSERT(*(request->requestBuffer + strlen(request->requestBuffer) - 2) = '\r');              // existing request ends in \r\n
 
     strcat(toEncode, user);
     strcat(toEncode, ":");
     strcat(toEncode, pw);
-    // endcode to Base64 string
-    binToB64(b64str, toEncode, strlen(toEncode));
+    binToB64(b64str, toEncode, strlen(toEncode));                                               // endcode credentials to Base64 string
+    ASSERT(strlen(request->requestBuffer) + strlen(b64str) + 20 < request->requestBuffersz);    // "Authentication: " + "\r\n" = length 20
 
-    ASSERT(strlen(http->cstmHdrs) + 19 + strlen(b64str) < http->cstmHdrsSz);
+    strcat(request->requestBuffer, "Authentication: ");
+    strcat(request->requestBuffer, b64str);
+    strcat(request->requestBuffer, "\r\n");                                                     // new header ends in correct EOL
+}
 
-    strcat(http->cstmHdrsBffr, "Authentication: ");
-    strcat(http->cstmHdrsBffr, b64str);
-    strcat(http->cstmHdrsBffr, "\r\n");
+
+/**
+ * @brief Helper to compose a generic header and add it to the headers collection being composed.
+ */
+void http_addHeader(httpRequest_t* request, const char *key, const char *val)
+{
+    ASSERT(key != NULL);
+    ASSERT(val != NULL);
+    ASSERT(request->contentLen == 0);                                                           // headers section still open to additions
+    ASSERT(*(request->requestBuffer + strlen(request->requestBuffer) - 2) = '\r');              // existing request ends in \r\n
+
+    uint8_t newHdrSz = strlen(key) + 2 + strlen(val) + 2;                                       // <key>: <val>\r\n
+    ASSERT(strlen(request->requestBuffer) + newHdrSz < request->requestBuffersz);               // new header fits
+
+    strcat(request->requestBuffer, key);
+    strcat(request->requestBuffer, ": ");
+    strcat(request->requestBuffer, val);
+    strcat(request->requestBuffer, "\r\n");                                                    // new header ends in correct EOL
+}
+
+
+/**
+ * @brief Helper to compose a generic header and add it to the headers collection being composed.
+ */
+void http_addPostData(httpRequest_t* request, const char *postData, uint16_t postDataSz)
+{
+    ASSERT(postData != NULL);
+    ASSERT(*(request->requestBuffer + strlen(request->requestBuffer) - 2) = '\r');              // existing request ends in \r\n
+
+    if (request->contentLen == 0)                                                              // finalize/close headers to additional changes
+    {
+        strcat(request->requestBuffer, "Content-Length:     0\r\n\r\n");
+        request->headersLen = strlen(request->requestBuffer);
+    
+        ASSERT(request->headersLen + postDataSz < request->requestBuffersz);                    // request w/ headers + postDataSz fits
+    }
+
+    memcpy(request->requestBuffer + request->headersLen + request->contentLen, postData, postDataSz);
+    request->contentLen += postDataSz;
 }
 
 
@@ -202,10 +245,30 @@ void http_addBasicAuthHdr(httpCtrl_t *http, const char *user, const char *pw)
  * --------------------------------------------------------------------------------------------- */
 
 /**
- *	@brief Perform HTTP GET operation. Results are internally buffered on the LTEm, see http_read().
+ *	@brief Perform HTTP GET request. 
  *  -----------------------------------------------------------------------------------------------
  */
 resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs)
+{
+    return S__httpGET(httpCtrl, relativeUrl, NULL, returnResponseHdrs);
+}
+
+
+/**
+ *	@brief Performs a custom (headers) GET request.
+ *  -----------------------------------------------------------------------------------------------
+ */
+resultCode_t http_getCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest, bool returnResponseHdrs)
+{
+    return S__httpGET(httpCtrl, relativeUrl, customRequest, returnResponseHdrs);
+}
+
+
+/**
+ *	@brief Performs HTTP GET web request.
+ *  -----------------------------------------------------------------------------------------------
+ */
+static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest, bool returnResponseHdrs)
 {
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
@@ -261,29 +324,19 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
 
-        /* If custom headers, need to both set flag here and include in request stream below
+        /* If custom headers, need to both set flag and include in request stream below
          */
-        atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",%d", httpCtrl->cstmHdrsBffr ? 1 : 0);
-        rslt = atcmd_awaitResult();
-        if (rslt != resultCode__success)
+        if (customRequest == NULL || customRequest->headersLen == 0)
         {
-            atcmd_close();
-            return rslt;
-        }
-
-        // char httpRequestCmd[http__getRequestLength];
-        if (httpCtrl->cstmHdrsBffrSz > 0)
-        {
-            char *hostName = strchr(httpCtrl->hostUrl, ':');
-            hostName = hostName ? hostName + 3 : httpCtrl->hostUrl;
-
-            char cstmRequest[http__getRequestCustomSz];
-            snprintf(cstmRequest, sizeof(cstmRequest), "%s %s HTTP/1.1\r\nHost: %s\r\n%s\r\n", httpCtrl->requestType, relativeUrl, hostName, httpCtrl->cstmHdrsBffr);
-            DPRINT(PRNT_dMAGENTA, "CustomHdrs\r\n");
-            DPRINT_V(PRNT_dMAGENTA, "%s\r\n", cstmRequest);
-
-            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, cstmRequest, strlen(cstmRequest), NULL, true);
-            atcmd_invokeReuseLock("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, strlen(cstmRequest));
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",1");
+            rslt = atcmd_awaitResult();
+            if (rslt != resultCode__success)
+            {
+                atcmd_close();
+                return rslt;
+            }
+            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, customRequest->requestBuffer, customRequest->headersLen, NULL, true);
+            atcmd_invokeReuseLock("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, customRequest->headersLen);
         }
         else
         {
@@ -313,12 +366,31 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
 }   /* http_get() */
 
 
+/**
+ *	@brief Performs a HTTP POST page web request.
+ *  -----------------------------------------------------------------------------------------------
+ */
+resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, const char *postData, uint16_t postDataSz, bool returnResponseHdrs)
+{
+    return S__httpPOST(httpCtrl, relativeUrl, NULL, postData, postDataSz, returnResponseHdrs);
+}
+
 
 /**
  *	@brief Performs a HTTP POST page web request.
  *  -----------------------------------------------------------------------------------------------
  */
-resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool returnResponseHdrs, const char *postData, uint16_t postDataSz)
+resultCode_t http_postCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest, bool returnResponseHdrs)
+{
+    return S__httpPOST(httpCtrl, relativeUrl, customRequest, NULL, 0, returnResponseHdrs);
+}
+
+
+/**
+ *	@brief Performs a HTTP POST page web request.
+ *  -----------------------------------------------------------------------------------------------
+ */
+resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequest_t* customRequest, const char *postData, uint16_t postDataSz, bool returnResponseHdrs)
 {
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
@@ -374,23 +446,37 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
         * This allows other application tasks to be performed while waiting for page. No LTEm commands can be invoked
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
-        atcmd_reset(false);                                                                             // reset atCmd control struct WITHOUT clearing lock
+        // atcmd_reset(false);                                                                             // reset atCmd control struct WITHOUT clearing lock
 
-        // char httpRequestCmd[http__postRequestLength];
-        uint16_t httpRequestLen = postDataSz;                                                           // requestLen starts with postDataSz
-        httpRequestLen += (httpCtrl->cstmHdrsBffrSz > 0) ? (httpCtrl->cstmHdrsBffrSz + 2) : 0;          // add the custom headers + 2 char for EOL after hdrs
-
-        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, postData, postDataSz, NULL, true);
-
-        if (httpCtrl->cstmHdrsBffrSz)
+        /* If custom headers, need to both set flag and include in request stream below
+         */
+        if (customRequest != NULL)
         {
-            atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", httpRequestLen, httpCtrl->timeoutSec);
+            atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",1");
+            rslt = atcmd_awaitResult();
+            if (rslt != resultCode__success)
+            {
+                atcmd_close();
+                return rslt;
+            }
+
+            // fixup content-length header value
+            char contentLengthVal[5];
+            snprintf(contentLengthVal, sizeof(contentLengthVal), "%5d", customRequest->contentLen);
+            char* contentLengthPtr = customRequest->requestBuffer + customRequest->headersLen - 9;      // backup over the /r/n/r/n and content-length value
+            memcpy(contentLengthPtr, contentLengthVal, 5);
+
+            uint16_t dataLen = customRequest->headersLen + customRequest->contentLen;
+            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, customRequest->requestBuffer, dataLen, NULL, true);
+            atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", strlen(postData), httpCtrl->timeoutSec);
         }
         else
         {
-            atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", postDataSz, httpCtrl->timeoutSec);
+            uint16_t dataLength = strlen(postData);
+            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, postData, dataLength, NULL, true);
+            atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", strlen(postData), httpCtrl->timeoutSec);
         }
-
+        
         rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpPostStatusParser);
         if (rslt == resultCode__success)
         {
@@ -426,7 +512,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
 /**
  *	@brief Sends contents of a file (LTEM filesystem) as POST to remote.
  */
-uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, bool returnResponseHdrs, const char* filename)
+uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char* filename, bool returnResponseHdrs)
 {
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
@@ -473,7 +559,7 @@ uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, bool retur
             return rslt;
         }
 
-        /* POST file is a "custom" request need set flag for custom request/headers
+        /* POST file IS a "custom" request need set flag for custom request/headers
          */
         atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",1");
         rslt = atcmd_awaitResult();
@@ -575,40 +661,11 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
 
 
 /**
- * @brief Creates a base HTTP request that can be appended with custom headers.
- */
-resultCode_t http_createRequest(httpRequestType_t reqstType, const char* host, const char* relativeUrl, const char* cstmHdrs, uint16_t contentLength, char* reqstBffr, uint16_t reqstBffrSz)
-{
-    ASSERT(strlen(host));
-    ASSERT(strlen(relativeUrl));
-
-    memset(reqstBffr, 0, reqstBffrSz);
-    char workBffr[12];
-
-    if (reqstType == httpRequestType_GET)
-        strcat(reqstBffr, "GET ");
-    else if (reqstType == httpRequestType_POST)
-        strcat(reqstBffr, "POST ");
-    else
-        return resultCode__badRequest;
-
-    strcat(reqstBffr, relativeUrl);
-    strcat(reqstBffr, " HTTP/1.1\r\nHost: ");
-    strcat(reqstBffr, host);
-    strcat(reqstBffr, "\r\nAccept: */*\r\nUser-Agent: QUECTEL_MODULE\r\nConnection: keep-alive\r\nContent-Type: text/plain\r\n");
-    strcat(reqstBffr, cstmHdrs);
-    strcat(reqstBffr, "Content-Length: ");
-    snprintf(workBffr, sizeof(workBffr), "%d\r\n\r\n", ((reqstType == httpRequestType_GET) ? 0 : contentLength));
-    strcat(reqstBffr, workBffr);
-    return resultCode__success;
-}
-
-
-/**
- * @brief Not currently implemented
+ * @brief Clear state for a request to abandon read
  */
 void http_cancelPage(httpCtrl_t *httpCtrl)
 {
+    ASSERT(false);                  // not implemented
 }
 
 
@@ -628,17 +685,39 @@ static resultCode_t S__setUrl(const char *host, const char *relative)
     char url[240] = {0};
     
     strcpy(url, host);
-    if (strlen(relative) > 0)                                                                   // need to concat relative/query
+    if (strlen(relative) > 0)                                                                       // need to concat relative/query
     {
         strcat(url, relative);
     }
-    DPRINT(PRNT_dMAGENTA, "URL(%d)=\"%s\" \r\n", strlen(url), url);
+    DPRINT(PRNT_dMAGENTA, "URL(%d)=%s", strlen(url), url);
+    DPRINT(PRNT_dMAGENTA, "\r\n");                                                                  // separate line-end if URL truncates in trace
     
-    atcmd_configDataMode(0, "CONNECT\r\n", atcmd_stdTxDataHndlr, url, strlen(url), NULL, false);   // setup for URL dataMode transfer 
+    atcmd_configDataMode(0, "CONNECT\r\n", atcmd_stdTxDataHndlr, url, strlen(url), NULL, false);    // setup for URL dataMode transfer 
     atcmd_invokeReuseLock("AT+QHTTPURL=%d,5", strlen(url));
     rslt = atcmd_awaitResult();
     return rslt;
 }
+
+
+// /**
+//  * @brief Set the content length header, if customHeaders and not already set.
+//  * @note Requires 25 char of free space in request headers buffer
+//  * 
+//  * @param requestHeaders Char buffer holding the custom request headers
+//  * @param requestHeadersSz Size of the buffer
+//  * @param contentLength Size of content; 0 for GET requests, strlen(postData) for POST requests
+//  */
+// static void S__setContentLength(char requestHeaders, uint16_t requestHeadersSz, uint16_t contentLength)
+// {
+//     ASSERT(strlen(requestHeaders) + 25 < requestHeadersSz);
+
+//     if (strstr(requestHeaders, "Content-Length: ") == NULL)                                         // already present
+//     {
+//         char workBffr[80];
+//         snprintf(workBffr, sizeof(workBffr), "Content-Length: %d\r\n\r\n", contentLength);
+//         strcat(requestHeaders, workBffr);
+//     }
+// }
 
 
 /**

@@ -48,7 +48,7 @@ enum http__constants
     http__useDefaultTimeout = 0,
     http__defaultTimeoutBGxSec = 60,
     http__rqstTypeSz = 5,                           /// GET or POST
-    http__customHdrSmallWarning = 40,
+    http__commandHdrSz = 105,
     http__readToFileNameSzMax = 80,
     http__readToFileTimeoutSec = 180,               // Total number of seconds for read to file allowed (atcmd processing)
     http__readToFileInterPcktTimeoutSec = 20        // BGx inter-packet timeout (max interval between two packets)
@@ -80,6 +80,9 @@ typedef enum httpHeaderMap_tag              // bit-map to indicate headers to cr
 } httpHeaderMap_t;
 
 
+/**
+ * @brief Internal state of the request/read cycle.
+ */
 typedef enum httpState_tag
 {
     httpState_idle = 0,
@@ -89,12 +92,27 @@ typedef enum httpState_tag
 } httpState_t;
 
 
+/**
+ * @brief Request types supported by LTEmC.
+ */
 typedef enum httpRequestType_tag
 {
     httpRequestType_GET = 'G',
     httpRequestType_POST = 'P',
     httpRequestType_none = 0
 } httpRequestType_t;
+
+
+/**
+ * @brief Request (custom requests) object.
+ */
+typedef struct httpRequest_tag
+{
+    char * requestBuffer;
+    uint16_t requestBuffersz;
+    uint16_t headersLen;
+    uint16_t contentLen;
+} httpRequest_t;
 
 
 typedef struct httpCtrl_tag
@@ -111,8 +129,8 @@ typedef struct httpCtrl_tag
     char hostUrl[host__urlSz];                  /// URL or IP address of host
     uint16_t hostPort;                          /// IP port number host is listening on (allows for 65535/0)
     bool returnResponseHdrs;                    /// if set true, response headers are included in the returned response
-    char *cstmHdrsBffr;                         /// custom header content, optional buffer provided by application
-    uint16_t cstmHdrsBffrSz;                    /// size of custom header buffer
+    // char *cstmHdrsBffr;                         /// custom header content, optional buffer provided by application
+    // uint16_t cstmHdrsBffrSz;                    /// size of custom header buffer
     char requestType[http__rqstTypeSz];         /// type of current/last request: 'G'=GET, 'P'=POST
     httpState_t requestState;                   /// current state machine variable for HTTP request
     uint16_t bgxError;                          /// BGx sprecific error code returned from GET/POST
@@ -150,83 +168,127 @@ void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t host
 
 
 /**
- *	@brief Signals custom headers (GET) or custom request (POST file).
- *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ * @brief Creates a base HTTP request that can be appended with custom headers.
+ * @note This creates a BASE request that can be appended with custom headers of your choosing, the request must be followed 
+ * by an empty line "\r\n" when forming the complete HTTP stream sent to the server.
+ * 
+ * @param reqstType Enum directing the type of request to create
+ * @param [in] host Text containing the host section of the request URL
+ * @param [in] relativeUrl Text containing the relative URL to the host (excludes query string)
+ * @param [in] contentLength Total expected length of the request body 
+ * @param [in] reqstBffr Char buffer to hold the request
+ * @param [in] reqstBffrSz Size of the buffer
+ * @return httpRequest_t object containing the components for a custom HTTP(S) request.
  */
-void http_enableCustomRequest(httpCtrl_t *httpCtrl);
+httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* host, const char* relativeUrl, char* requestBuffer, uint16_t requestBufferSz);
+
+// resultCode_t http_createRequest(httpRequestType_t reqstType, const char* host, const char* relativeUrl, const char* cstmHdrs, uint16_t contentLength, char* reqstBffr, uint16_t reqstBffrSz);
 
 
 /**
- *	@brief Registers custom headers (char) buffer with HTTP control.
- *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *	@param [in] headerBuf pointer to header buffer  created by application
- *  @param [in] headerBufSz size of the header buffer
+ * @brief Adds common http headers to a custom headers buffer.
+ * 
+ * @param [in] requestBuffer Char buffer (array) to use for composition and headers store.
+ * @param [in] requestBufferSz Size of buffer.
+ * @param [in] headerMap Bitmap for which standard headers to use.
  */
-void http_setCustomRequestBuffer(httpCtrl_t *httpCtrl, char *hdrBuffer, uint16_t hdrBufferSz);
+void http_addCommonHdrs(httpRequest_t* request, httpHeaderMap_t headerMap);
 
 
 /**
- *	@brief Adds common http headers to the custom headers buffer. REQUIRES previous enable of custom headers and buffer registration.
- *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *	@param [in] headerMap Bitmap for which standard headers to use.
- */
-void http_addCommonHdrs(httpCtrl_t *httpCtrl, httpHeaderMap_t headerMap);
-
-
-/**
- *	@brief Adds a basic authorization header to the custom headers buffer, requires previous custom headers buffer registration.
+ * @brief Adds a basic authorization header to a headers buffer.
  *
- *  @param [in] http Pointer to the control block for HTTP communications.
- *	@param [in] user User name.
- *  @param [in] pw Password/secret for header.
+ * @param [in] requestBuffer Char buffer (array) to use for composition and headers store.
+ * @param [in] requestBufferSz Size of buffer.
+ * @param [in] user User name.
+ * @param [in] pw Password/secret for header.
  */
-void http_addBasicAuthHdr(httpCtrl_t *httpCtrl, const char *user, const char *pw);
+void http_addBasicAuthHdr(httpRequest_t* request, const char *user, const char *pw);
 
 
-void http_addCustomHdr(httpCtrl_t *httpCtrl, const char *hdrText);
+/**
+ * @brief Helper to compose a generic header and add it to the headers collection being composed.
+ * 
+ * @param [in] requestBuffer Char buffer (array) to use for composition and headers store.
+ * @param [in] requestBufferSz Size of buffer.
+ * @param [in] key Header's key value
+ * @param [in] val Header's value
+ */
+void http_addHeader(httpRequest_t* request, const char *key, const char *val);
 
+
+/**
+ * @brief Add full or partial post data content.
+ * @note This function closes request header section, no additional headers can be added to request
+ * once this function has been called with the referenced requestBuffer. 
+ * 
+ * @param [in] requestBuffer The char buffer to contain the HTTP POST request being constructed.
+ * @param [in] requestBufferSz The size of the request char buffer.
+ * @param [in] postData Character data to be appended to the request.
+ */
+void http_addPostData(httpRequest_t* request, const char *postData, uint16_t postDataSz);
 
 /* ------------------------------------------------------------------------------------------------
  *  Request and Response Section 
  * --------------------------------------------------------------------------------------------- */
 
+resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs);
+
 /**
  *	@brief Perform HTTP GET operation. Results are internally buffered on the LTEm, see http_read().
+ *  @note If customHeaders is provided, this REPLACES the headers normally supplied by the BGx module
+ *  and the only headers sent with the request is the headers provided in the customHeaders parameter.
+ *
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
  *	@param [in] relativeUrl The URL to GET (starts with \ and doesn't include the host part)
+ *  @param [in] customHeaders If provided (not NULL or empty) GET will include contents as a custom header array.
  *  @param [in] returnResponseHdrs Set to true for page result to include response headers at the start of the page
- *  @return true if GET request sent successfully
+ *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
-resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs);
+resultCode_t http_getCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest, bool returnResponseHdrs);
 
 
 /**
  *	@brief Performs a HTTP POST page web request.
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *	@param [in] relativeUrl URL, relative to the host. If none, can be provided as "" or "/" ()
- *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data
- *  @param [in] postData Pointer to char buffer with POST content
- *  @param [in] postDataSz Size of the POST content reference by *postData
- *  @return true if POST request completed
+ *	@param [in] relativeUrl URL, relative to the host. If none, can be provided as "" or "/".
+ *  @param [in] customHeaders If provided (not NULL or empty) GET will include contents as a custom header array.
+ *  @param [in] postData Pointer to char buffer with POST content.
+ *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data.
+ *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
-resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs, const char* postData, uint16_t dataSz);
+resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, const char* postData, uint16_t postDataSz, bool returnResponseHdrs);
+
+
+/**
+ *	@brief Performs a HTTP POST page web request.
+ *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
+ *	@param [in] relativeUrl URL, relative to the host. If none, can be provided as "" or "/".
+ *  @param [in] customHeaders If provided (not NULL or empty) GET will include contents as a custom header array.
+ *  @param [in] postData Pointer to char buffer with POST content.
+ *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data.
+ *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
+ */
+resultCode_t http_postCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest, bool returnResponseHdrs);
 
 
 /**
  *	@brief Sends contents of a file (LTEM filesystem) as POST to remote.
 
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *  @param [in] filename C-string containing the name of the file to create from page content.
- *  @return HTTP status of read.
+ *	@param [in] relativeUrl URL, relative to the host. If none, can be provided as "" or "/".
+ *  @param [in] filename C-string containing the name of the file containing the request/headers/body content.
+ *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data
+ *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
-uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, bool returnResponseHdrs, const char* filename);
+resultCode_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char* filename, bool returnResponseHdrs);
 
 
 /**
  *	@brief Retrieves page results from a previous GET or POST.
 
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *  @return HTTP status of read.
+ *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
 resultCode_t http_readPage(httpCtrl_t *httpCtrl);
 
@@ -236,25 +298,9 @@ resultCode_t http_readPage(httpCtrl_t *httpCtrl);
 
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
  *  @param [in] filename C-string containing the name of the file to create from page content.
- *  @return HTTP status of read.
+ *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
 resultCode_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename);
-
-
-/**
- * @brief Creates a base HTTP request that can be appended with custom headers.
- * @note This creates a BASE request that can be appended with custom headers of your choosing, the request must be followed 
- * by an empty line "\r\n" when forming the complete HTTP stream sent to the server.
- * 
- * @param reqstType Enum directing the type of request to create
- * @param host Text containing the host section of the request URL
- * @param relativeUrl Text containing the relative URL to the host (excludes query string)
- * @param contentLength Total expected length of the request body 
- * @param reqstBffr Char buffer to hold the request
- * @param reqstBffrSz Size of the buffer
- * @return resultCode_t With the status code representing the outcome of the operation. 
- */
-resultCode_t http_createRequest(httpRequestType_t reqstType, const char* host, const char* relativeUrl, const char* cstmHdrs, uint16_t contentLength, char* reqstBffr, uint16_t reqstBffrSz);
 
 
 /**

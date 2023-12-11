@@ -28,10 +28,13 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#include <lq-embed.h>
+#define LOG_LEVEL LOGLEVEL_DBG
+//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
+
+#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
 
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
@@ -43,14 +46,12 @@
     // #define HOST_FEATHER_LTEM3F
 #endif
 
-#define PDP_DATA_CONTEXT 1
-#define PDP_APN_NAME "hologram"
-
-#include <lq-SAMDutil.h>                // allows read of reset cause
-
 #include <ltemc.h>
 #include <ltemc-tls.h>
 #include <ltemc-http.h>
+
+#define PDP_DATA_CONTEXT 1
+#define PDP_APN_NAME "hologram"
 
 // #define ASSERT(expected_true, failMsg)  if(!(expected_true))  appNotifyCB(255, failMsg)
 // #define ASSERT_NOTEMPTY(string, failMsg)  if(string[0] == '\0') appNotifyCB(255, failMsg)
@@ -84,23 +85,23 @@ void setup() {
     //lqDiag_setNotifyCallback(appEvntNotify);
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
-    ltem_setProviderScanMode(ntwkScanMode_lteonly);
-    ltem_setIotMode(ntwkIotMode_m1);
-    ltem_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
+    ntwk_setOperatorScanMode(ntwkScanMode_lteonly);
+    ntwk_setIotMode(ntwkIotMode_M1);
+    ntwk_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
     ltem_start(resetAction_swReset);
 
-    providerInfo_t *provider;
+    ntwkOperator_t *ntwkOperator;
     while(true)
     {
-        provider = ntwk_awaitProvider(PERIOD_FROM_SECONDS(15));
-        if (STREMPTY(provider->name))
+        ntwkOperator = ntwk_awaitOperator(PERIOD_FROM_SECONDS(15));
+        if (STREMPTY(ntwkOperator->name))
             DPRINT(PRNT_WARN, "Searching for provider...");
         else
             break;
     }
-    if (strlen(provider->name) > 0)
+    if (ntwk_isReady(false))
     {
-        DPRINT(PRNT_INFO, "Connected to %s using %s, %d networks available.\r", provider->name, provider->iotMode, provider->networkCnt);
+        DPRINT(PRNT_INFO, "Connected to %s using %s\r\n", ntwkOperator->name, ntwkOperator->iotMode);
     }
 
     /* Basic connectivity established, moving on to HTTPS setup */
@@ -135,6 +136,35 @@ void setup() {
     http_initControl(&httpCtrlP, dataCntxt_1, httpRecvCB);
     http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
     DPRINT(PRNT_dGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
+
+
+
+
+#define OPM_PROJECT_KEY "LQCloud-OrgKey: 5Zul5eB3Qn1gkEtDFCEs9dn0IXexhr3x\r\n"
+#define OPM_HOST_URL "https://devices-dev-pelogical.azurewebsites.net"
+
+
+    httpCtrl_t httpCtrl_opMetrics;
+    char opmRequestBffr;
+    char relativeUrl[] = "/opmetrics/opmrpt/1234567890ABCDEF";
+    resultCode_t rslt;
+    
+    //setup for HTTP POST action
+    http_initControl(&httpCtrl_opMetrics, dataCntxt_1, httpRecvCB);
+    http_setConnection(&httpCtrl_opMetrics, "https://devices-dev-pelogical.azurewebsites.net", 443);
+    DPRINT(PRNT_dMAGENTA, "OpMetrics Reporting Host=%s\r\n", httpCtrl_opMetrics.hostUrl);
+    httpRequest_t opmRequest = http_createRequest(httpRequestType_POST, OPM_HOST_URL, relativeUrl, &opmRequestBffr, sizeof(opmRequestBffr));
+    http_addCommonHdrs(&opmRequest, httpHeaderMap_all);
+    http_addHeader(&opmRequest, "LQCloud-OrgKey", "5Zul5eB3Qn1gkEtDFCEs9dn0IXexhr3x");
+    char postData[] = "Hello LQCloud, this is what I see...";
+    http_addPostData(&opmRequest, postData, strlen(postData));
+
+    rslt = http_postCustomRequest(&httpCtrl_opMetrics, relativeUrl, &opmRequest, false);
+    if (IS_SUCCESS(rslt))
+    {
+        Serial.printf("*** POST opMRpt POST successful to host: %s\r\n", httpCtrl_opMetrics.hostUrl);
+    }
+
 }
 
 resultCode_t rslt;
@@ -169,7 +199,7 @@ void loop()
             char postData[] = "{ \"field1\": 1, \"field2\": \"field2\" }";
 
             // resultCode_t http_post(httpCtrl_t *httpCtrl, const char* url, const char* postData, uint16_t dataSz);
-            rslt = http_post(&httpCtrlP, "/anything", http__noResponseHeaders, postData, strlen(postData));
+            rslt = http_post(&httpCtrlP, "/anything", postData, strlen(postData), http__noResponseHeaders);
             if (rslt == resultCode__success)
             {
                 httpCtrl = &httpCtrlP;

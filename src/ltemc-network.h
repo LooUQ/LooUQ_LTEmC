@@ -76,7 +76,7 @@ void ntwk_setIotMode(ntwkIotMode_t mode);
 
 
 /**
- *	@brief Build default data context configuration for modem to use on startup.
+ * @brief Build default data context configuration for modem to use on startup.
  * @param [in] cntxtId The context ID to operate on. Typically 0 or 1
  * @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
  * @param [in] apn The APN name if required by network carrier.
@@ -85,7 +85,7 @@ resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoTyp
 
 
 /**
- *	@brief Configure PDP Context.
+ * @brief Configure PDP Context.
  * @param [in] cntxtId The context ID to operate on. Typically 0 or 1
  * @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
  * @param [in] apn The APN name if required by network carrier.
@@ -95,8 +95,9 @@ resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t proto
 
 
 /**
- *	@brief Configure PDP Context requiring authentication.
+ * @brief Configure PDP Context requiring authentication.
  * @details Only IPV4 is supported 
+ * 
  * @param [in] pdpContextId The PDP context to work with, typically 0 or 1.
  * @param [in] apn The APN name if required by network carrier.
  * @param [in] userName String with user name
@@ -104,6 +105,14 @@ resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t proto
  * @param [in] authMethod Enum specifying the type of authentication expected by network
  */
 resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn, const char *pUserName, const char *pPW, pdpCntxtAuthMethods_t authMethod);
+
+
+/**
+ * @brief Get network registration information.
+ * 
+ * @return const char* Preconfigured PDP network registration parameters text content.
+ */
+const char * ntwk_getNetworkConfig();
 
 
 /**

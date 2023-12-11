@@ -33,7 +33,9 @@ Also add information on how to contact you by electronic and paper mail.
 
 #define LTEmC_VERSION "3.0.1"
 
-// #undef __cplusplus
+#include <lq-diagnostics.h>
+#include <lq-logging.h>
+
 
 // #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
 // #include <lq-diagnostics.h>                     /// ASSERT and diagnostic data collection
@@ -53,7 +55,7 @@ Also add information on how to contact you by electronic and paper mail.
 
 #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
 #include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
-#include <lqdiag.h>                             /// PRINTDBG and ASSERT diagnostic data collection
+//#include <lqdiag.h>                             /// PRINTDBG and ASSERT diagnostic data collection
 
 #include "ltemc-platform.h"                     /// platform abstractions (arduino, etc.)
 #include "ltemc-atcmd.h"                        /// command processor interface

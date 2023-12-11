@@ -29,15 +29,17 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 Also add information on how to contact you by electronic and paper mail.
 
 **************************************************************************** */
-
-
 // https://www.nxp.com/docs/en/data-sheet/SC16IS740_750_760.pdf
 
-#define SRCFILE "NXP" // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+
+#include <lq-embed.h>
+#define LOG_LEVEL LOGLEVEL_OFF
+//#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
+#define SRCFILE "NXP"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+
 // #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
 // #define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
 
 #include "ltemc-internal.h"
 #include "ltemc-platform.h"
