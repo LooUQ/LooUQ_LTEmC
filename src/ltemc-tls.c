@@ -38,8 +38,8 @@ Also add information on how to contact you by electronic and paper mail.
 #define ENABLE_ASSERT
 //#include <lqdiag.h>
 
+#include "ltemc-internal.h"
 #include "ltemc-tls.h"
-#include "ltemc-atcmd.h"
 
 
 bool tls_configure(uint8_t dataCntxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
@@ -96,7 +96,7 @@ tlsOptions_t tlsGetOptions(uint8_t dataCntxt)
     {   
         if (atcmd_awaitResult() == resultCode__success)
         {
-            DIAGPRINT(PRNT_DEFAULT, "%s", atcmd_getLastResponse());
+            DPRINT(PRNT_DEFAULT, "%s", atcmd_getLastResponse());
             // strncpy(result.version, atResult.response);
         }
         atcmd_close();

@@ -89,8 +89,8 @@ typedef struct fileCtrl_tag
     /*
      * NOTE: Does NOT follow exact struct field layout of the other streams, shares 1st field to validate type before casting 
      */
-    uint8_t handle;
-    dataRxHndlr_func dataRxHndlr;               // function to handle data streaming, initiated by atcmd dataMode (RX only)
+    uint8_t fileHandle;                         // the file sourcing data
+    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by atcmd dataMode (RX only)
     appRcvProto_func appRecvDataCB;
 } fileCtrl_t;
 
@@ -126,7 +126,7 @@ typedef struct ltemDevice_tag
     modemSettings_t *modemSettings;             // Settings to control radio and cellular network initialization
 	modemInfo_t *modemInfo;                     // Data structure holding persistent information about modem device
     ntwkOperator_t *ntwkOperator;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
-    streamCtrl_t* streams[ltem__streamCnt];     // Data streams: protocols or file system
+    streamCtrl_t* streams[ltem__streamCnt];     // Data streams: protocols
     fileCtrl_t* fileCtrl;
 
     ltemMetrics_t metrics;                      // metrics for operational analysis and reporting

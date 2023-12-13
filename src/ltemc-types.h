@@ -65,8 +65,8 @@ enum ltem__constants
     ltem__errorDetailSz = 18,
     ltem__moduleTypeSz = 8,
 
-    ltem__streamCnt = 4,            // 6 SSL/TLS capable data contexts + file system allowable, 4 concurrent seams reasonable
-    //ltem__urcHandlersCnt = 4        // max number of concurrent protocol URC handlers (today only http, mqtt, sockets, filesystem)
+    // 6 SSL/TLS capable data contexts, (only MQTT and SCKT (sockets) have async behaviors)
+    ltem__streamCnt = 6,
 
     ltem__reportsBffrSz = 80,
     ltem__dateTimeBffrSz = 24
@@ -362,17 +362,17 @@ typedef enum streamType_tag
 
 
 // function prototypes
-typedef resultCode_t (*urcEvntHndlr_func)();        // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
-typedef resultCode_t (*dataRxHndlr_func)();         // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
-typedef void (*appRcvProto_func)();                 // prototype func() for stream recvData callback
+typedef resultCode_t (*urcEvntHndlr_func)();            // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
+typedef resultCode_t (*dataHndlr_func)(void * ctrl);    // function to marshall data between module and LTEmC
+typedef void (*appRcvProto_func)();                     // prototype func() for stream recvData callback
 
 
 typedef struct streamCtrl_tag
 {
-    char streamType;                                // stream type
-    dataCntxt_t dataCntxt;                          // integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;                   // function to handle data streaming, initiated by eventMgr() or atcmd module
-    urcEvntHndlr_func urcHndlr;                     // function to handle data streaming, initiated by eventMgr() or atcmd module
+    char streamType;                                    // stream type
+    dataCntxt_t dataCntxt;                              // integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataHndlr_func dataHndlr;                           // function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcHndlr;                         // function to handle data streaming, initiated by eventMgr() or atcmd module
 } streamCtrl_t;
 
 
@@ -453,10 +453,11 @@ typedef enum dmState_tag
 
 typedef struct dataMode_tag
 {
-    dmState_t dmState;
-    uint16_t contextKey;                                // unique identifier for data flow, could be dataContext(proto), handle(files), etc.
+    dmState_t dmState;                                  // data mode state
+    void * ctrlStruct;                                  // optional control pointer for parent process
+    //uint16_t contextKey;                                // unique identifier for data flow, could be dataContext(proto), handle(files), etc.
     char trigger[atcmd__dataModeTriggerSz];             // char sequence that signals the transition to data mode, data mode starts at the following character
-    dataRxHndlr_func dataHndlr;                         // data handler function (TX/RX)
+    dataHndlr_func dataHndlr;                           // data handler function (TX/RX)
     char* txDataLoc;                                    // location of data buffer (TX only)
     uint16_t txDataSz;                                  // size of TX data or RX request
     bool runParserAfterDataMode;                        // true = invoke AT response parser after successful datamode. Data mode error always skips parser

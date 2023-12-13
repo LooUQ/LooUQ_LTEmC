@@ -48,7 +48,8 @@ extern ltemDevice_t g_lqLTEM;
 ------------------------------------------------------------------------------------------------- */
 static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, uint8_t tkBffrLen);
 static resultCode_t S__readResult();
-static void S__rxParseForUrc();
+static bool S__cleanRxBffr();
+//static void S__rxParseForUrc();
 
 #pragma region Public Functions
 /*-----------------------------------------------------------------------------------------------*/
@@ -92,17 +93,18 @@ void atcmd_reset(bool releaseLock)
 /**
  *	@brief Setup automatic data mode switch/servicing.
  */
-void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataRxHndlr_func rxDataHndlr, const char *dataPtr, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
+// void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataHndlr_func dataHndlr, const char *dataPtr, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
+void atcmd_configDataMode(void * ctrlStruct, const char * trigger, dataHndlr_func dataHndlr, const char * dataPtr, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
 {
     ASSERT(strlen(trigger) > 0); // verify 3rd party setup (stream)
-    ASSERT(rxDataHndlr != NULL); //
+    ASSERT(dataHndlr != NULL); //
 
     memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
 
     g_lqLTEM.atcmd->dataMode.dmState = dmState_enabled;
-    g_lqLTEM.atcmd->dataMode.contextKey = contextKey;
+    g_lqLTEM.atcmd->dataMode.ctrlStruct = ctrlStruct;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
-    g_lqLTEM.atcmd->dataMode.dataHndlr = rxDataHndlr;
+    g_lqLTEM.atcmd->dataMode.dataHndlr = dataHndlr;
     g_lqLTEM.atcmd->dataMode.txDataLoc = dataPtr;
     g_lqLTEM.atcmd->dataMode.txDataSz = dataSz;
     g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
@@ -137,10 +139,13 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
     if (!ATCMD_awaitLock(g_lqLTEM.atcmd->timeout)) // attempt to acquire new atCmd lock for this instance
         return false;
 
+
     // TEMPORARY
     memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
     DPRINT_V(0, "<atcmd_tryInvoke> cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
 
+    if (S__cleanRxBffr())
+        DPRINT_V(PRNT_WARN, "Debris cleaned from RX buffer\r\n");
     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
     return true;
 }
@@ -166,7 +171,9 @@ void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
     // TEMPORARY
     memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, atcmd__cmdBufferSz);
 
-    IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+    if (S__cleanRxBffr())
+        DPRINT_V(PRNT_WARN, "Debris cleaned from RX buffer\r\n");
+   IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
 }
 
 
@@ -197,17 +204,6 @@ resultCode_t atcmd_awaitResult()
         }
         pYield(); // give back control momentarily before next loop pass
     } while (rslt == resultCode__unknown);
-
-    #if _DEBUG == 0 // debug for debris in rxBffr
-    ASSERT_W(bbffr_getOccupied(g_lqLTEM.iop->rxBffr) == 0, "RxBffr Dirty");
-    #else
-    if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) > 0)
-    {
-        char dbg[81] = {0};
-        bbffr_pop(g_lqLTEM.iop->rxBffr, dbg, 80);
-        DPRINT(PRNT_YELLOW, "*!* %s", dbg);
-    }
-    #endif
 
     // reset options back to default values
     g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
@@ -431,7 +427,7 @@ static resultCode_t S__readResult()
                 g_lqLTEM.iop->dmActive = true;
                 g_lqLTEM.iop->dmTxEvents = 0;
 
-                resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)();
+                resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)(g_lqLTEM.atcmd->dataMode.ctrlStruct);
                 DPRINT(PRNT_MAGENTA, "DataHandler rslt=%d\r\n", dataRslt);
                 if (dataRslt == resultCode__success)
                 {
@@ -453,7 +449,7 @@ static resultCode_t S__readResult()
         }
 
         uint8_t respLen = strlen(g_lqLTEM.atcmd->rawResponse);                              // response so far
-        uint8_t popSz = MIN(atcmd__respBufferSz - respLen, bbffr_getOccupied(g_lqLTEM.iop->rxBffr));
+        uint8_t popSz = MIN(atcmd__respBufferSz - respLen - 1, bbffr_getOccupied(g_lqLTEM.iop->rxBffr));
         ASSERT((respLen + popSz) < atcmd__respBufferSz);                                    // ensure don't overflow
 
         if (g_lqLTEM.atcmd->parserResult == cmdParseRslt_pending && 
@@ -470,8 +466,9 @@ static resultCode_t S__readResult()
     if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_error)                         // check error bit
     {
         if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_moduleError)               // BGx ERROR or CME/CMS
-            g_lqLTEM.atcmd->resultCode = resultCode__cmError;
-
+        {
+            g_lqLTEM.atcmd->resultCode = resultCode__extendedCodesBase + strtol(atcmd_getToken(0), NULL, 10);
+        }
         else if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_countShort)           // did not find expected tokens
             g_lqLTEM.atcmd->resultCode = resultCode__notFound;
 
@@ -773,13 +770,22 @@ static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, ui
 }
 
 
-// /**
-//  *	@brief register a stream peer with IOP to control communications. Typically performed by protocol open.
-//  */
-// void ATCMD_registerStream(uint8_t streamIndx, iopStreamCtrl_t *streamCtrl)
-// {
-//     g_lqLTEM.atcmd->streamPeers[streamIndx] = streamCtrl;
-// }
+/**
+ * @brief Clean out any prior command debris from rx buffer. 
+ * @details Targets typical patterns for removal, rather than reseting (clearing) the RX buffer.
+ */
+static bool S__cleanRxBffr()
+{
+    if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "OK\r\n", 0, 0, true)))                  // likely timeout from previous cmd
+    {
+        bbffr_skipTail(g_lqLTEM.iop->rxBffr, 4);
+        return true;
+    }
+
+    // potential other cleaning actions
+    return false;
+}
+
 
 // /**
 //  *  @brief Parse recv'd data (in command RX buffer) for async event preambles that need to be handled immediately.

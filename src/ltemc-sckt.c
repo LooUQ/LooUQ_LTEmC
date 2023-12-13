@@ -210,7 +210,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
     resultCode_t rslt;
 
-    atcmd_configDataMode(scktCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, data, dataSz, NULL, false);
+    atcmd_configDataMode(scktCtrl, "> ", atcmd_stdTxDataHndlr, data, dataSz, NULL, false);
     atcmd_configDataModeEot(0x1A);
 
     if (atcmd_tryInvoke("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz))
@@ -344,12 +344,12 @@ static void S__scktUrcHndlr()
             uint16_t irdRqstSz = bbffr_getVacant(g_lqLTEM.iop->rxBffr) / 2;     // request up to half of available buffer space
             if (isUdpTcp)
             {
-                atcmd_configDataMode(scktCtrl->dataCntxt, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
+                atcmd_configDataMode(scktCtrl, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
                 atcmd_tryInvoke("AT+QIRD=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             else
             {
-                atcmd_configDataMode(scktCtrl->dataCntxt, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
+                atcmd_configDataMode(scktCtrl, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
                 atcmd_tryInvoke("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             atcmd_awaitResult();
@@ -383,7 +383,8 @@ static resultCode_t S__scktRxHndlr()
 
     char wrkBffr[32] = {0};
     char *wrkPtr = wrkBffr;
-    streamCtrl_t* streamCtrl = ltem_getStreamFromCntxt(g_lqLTEM.atcmd->dataMode.contextKey, streamType__ANY);
+
+    streamCtrl_t* streamCtrl = (streamCtrl_t*)g_lqLTEM.atcmd->dataMode.ctrlStruct;
 
     ASSERT(streamCtrl->streamType == streamType_UDP ||                                                          // assert that the stream config is consistent
            streamCtrl->streamType == streamType_TCP || 

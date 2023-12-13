@@ -31,11 +31,10 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_H__
 #define __LTEMC_H__
 
-#define LTEmC_VERSION "3.0.1"
+#define LTEmC_VERSION "3.1.0d"
 
-#include <lq-diagnostics.h>
 #include <lq-logging.h>
-
+#include <lq-diagnostics.h>
 
 // #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
 // #include <lq-diagnostics.h>                     /// ASSERT and diagnostic data collection
@@ -302,7 +301,7 @@ void ltem_deleteStream(streamCtrl_t *streamCtrl);
  * @param streamType Protocol of the stream
  * @return streamCtrl_t* Pointer of a generic stream, can be cast (after type validation) to a specific protocol control
  */
-streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType);
+streamCtrl_t* ltem_findStream(uint8_t context);
 
 
 /**

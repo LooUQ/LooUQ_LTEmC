@@ -181,7 +181,7 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
         rslt = atcmd_awaitResult();
         if (rslt != resultCode__success)
         {
-            if (rslt == resultCode__cmError)
+            if (rslt >= resultCode__extendedCodesBase)
             {
                 uint16_t errDetail = atcmd_getErrorDetailCode();
                 if (errDetail == fileErr__detail_fileAlreadyOpen)
@@ -299,7 +299,7 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
     resultCode_t rslt = atcmd_awaitResultWithOptions(2000, NULL);               // dataHandler will be invoked by atcmd module and return a resultCode
     if (rslt == resultCode__success)
     {
-        g_lqLTEM.fileCtrl->handle = fileHandle;
+        g_lqLTEM.fileCtrl->fileHandle = fileHandle;
         *readSz = (uint32_t)atcmd_getValue();
         if (*readSz < requestSz)
             rslt = resultCode__noContent;                                       // content exhausted    
@@ -448,7 +448,8 @@ static resultCode_t S__filesRxHndlr()
     uint16_t readSz = strtol(wrkBffr + 8, NULL, 10);
     uint16_t availableSz = readSz;
     g_lqLTEM.atcmd->retValue = 0;
-    DPRINT_V(PRNT_CYAN, "S__filesRxHndlr() fHandle=%d available=%d\r", g_lqLTEM.atcmd->dataMode.contextKey, availableSz);
+    uint8_t fileHandle = ((fileCtrl_t*)g_lqLTEM.atcmd->dataMode.ctrlStruct)->fileHandle;
+    DPRINT_V(PRNT_CYAN, "S__filesRxHndlr() fHandle=%d available=%d\r", fileHandle, availableSz);
 
     uint32_t readTimeout = pMillis();
     uint16_t occupiedCnt;
@@ -468,7 +469,8 @@ static resultCode_t S__filesRxHndlr()
         char* streamPtr;
         uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readSz);                                // get address from rxBffr
         DPRINT_V(PRNT_CYAN, "S__filesRxHndlr() ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
-        ((fileReceiver_func)(*g_lqLTEM.fileCtrl->appRecvDataCB))(g_lqLTEM.atcmd->dataMode.contextKey, streamPtr, blockSz);    // forward to application
+        uint8_t fileHandle = ((fileCtrl_t*)g_lqLTEM.atcmd->dataMode.ctrlStruct)->fileHandle;
+        ((fileReceiver_func)(*g_lqLTEM.fileCtrl->appRecvDataCB))(fileHandle, streamPtr, blockSz);    // forward to application
         bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                         // commit POP
         readSz -= blockSz;
     } while (readSz > 0);

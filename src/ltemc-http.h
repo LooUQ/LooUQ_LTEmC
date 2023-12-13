@@ -42,16 +42,17 @@ enum http__constants
     // http__getRequestLength = 128,
     // http__postRequestLength = 128,
 
-    http__getRequestCustomSz = 256,
-    http__noResponseHeaders = 0, 
+    http__noReturnResponseHeaders = 0, 
     http__returnResponseHeaders = 1, 
     http__useDefaultTimeout = 0,
     http__defaultTimeoutBGxSec = 60,
-    http__rqstTypeSz = 5,                           /// GET or POST
-    http__commandHdrSz = 105,
+    http__rqstTypeSz = 5,                               // GET or POST
+    http__commonHeadersSz = 105,                        // For custom requests, the combined length of all the "common" headers 
     http__readToFileNameSzMax = 80,
-    http__readToFileTimeoutSec = 180,               // Total number of seconds for read to file allowed (atcmd processing)
-    http__readToFileInterPcktTimeoutSec = 20        // BGx inter-packet timeout (max interval between two packets)
+    http__readToFileTimeoutSec = 180,                   // Total number of seconds for read to file allowed (atcmd processing)
+    http__readToFileInterPcktTimeoutSec = 20,           // BGx inter-packet timeout (max interval between two packets)
+
+    http__typicalCustomRequestHeaders = 275             // HTTP request with typical URL, common headers and space for one/two custom headers
 };
 
 
@@ -108,8 +109,8 @@ typedef enum httpRequestType_tag
  */
 typedef struct httpRequest_tag
 {
-    char * requestBuffer;
-    uint16_t requestBuffersz;
+    char * buffer;
+    uint16_t buffersz;
     uint16_t headersLen;
     uint16_t contentLen;
 } httpRequest_t;
@@ -119,7 +120,7 @@ typedef struct httpCtrl_tag
 {
     char streamType;                            /// stream type
     dataCntxt_t dataCntxt;                      /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;               /// function to handle data streaming, initiated by eventMgr() or atcmd module
+    dataHndlr_func dataRxHndlr;                 /// function to handle data streaming, initiated by eventMgr() or atcmd module
     urcEvntHndlr_func urcEvntHndlr;             /// function to determine if "potential" URC event is for an open stream and perform reqd actions
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
@@ -170,17 +171,17 @@ void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t host
 /**
  * @brief Creates a base HTTP request that can be appended with custom headers.
  * @note This creates a BASE request that can be appended with custom headers of your choosing, the request must be followed 
- * by an empty line "\r\n" when forming the complete HTTP stream sent to the server.
+ * by an empty line (CrLf) when forming the complete HTTP stream sent to the server.
  * 
- * @param reqstType Enum directing the type of request to create
- * @param [in] host Text containing the host section of the request URL
- * @param [in] relativeUrl Text containing the relative URL to the host (excludes query string)
- * @param [in] contentLength Total expected length of the request body 
- * @param [in] reqstBffr Char buffer to hold the request
- * @param [in] reqstBffrSz Size of the buffer
+ * @param reqstType Enum directing the type of request to create.
+ * @param [in] hostUrl Host name or IP address.
+ * @param [in] relativeUrl Text containing the relative URL to the host (excludes query string).
+ * @param [in] contentLength Total expected length of the request body.
+ * @param [in] reqstBffr Char buffer to hold the request.
+ * @param [in] reqstBffrSz Size of the buffer.
  * @return httpRequest_t object containing the components for a custom HTTP(S) request.
  */
-httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* host, const char* relativeUrl, char* requestBuffer, uint16_t requestBufferSz);
+httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* hostUrl, const char* relativeUrl, char* requestBuffer, uint16_t requestBufferSz);
 
 // resultCode_t http_createRequest(httpRequestType_t reqstType, const char* host, const char* relativeUrl, const char* cstmHdrs, uint16_t contentLength, char* reqstBffr, uint16_t reqstBffrSz);
 
@@ -214,8 +215,28 @@ void http_addBasicAuthHdr(httpRequest_t* request, const char *user, const char *
  * @param [in] key Header's key value
  * @param [in] val Header's value
  */
-void http_addHeader(httpRequest_t* request, const char *key, const char *val);
+void http_addHeader(httpRequest_t* request, const char *keyValue);
 
+
+/**
+ * @brief Helper to compose a generic header and add it to the headers collection being composed.
+ * 
+ * @param [in] requestBuffer Char buffer (array) to use for composition and headers store.
+ * @param [in] requestBufferSz Size of buffer.
+ * @param [in] key Header's key value
+ * @param [in] val Header's value
+ */
+void http_addHeaderKeyValue(httpRequest_t* request, const char *key, const char *value);
+
+
+/**
+ * @brief Close a request to further header changes. 
+ * @details Primarily used with POST file operations; adding post data automatically closes request.
+ * 
+ * @param [in] httpReqst HTTP request to get updated.
+ * @param [in] contentLength Size of POST body included in HTTP request.
+ */
+void http_closeHeaders(httpRequest_t* httpReqst, uint32_t contentLength);
 
 /**
  * @brief Add full or partial post data content.
@@ -225,8 +246,10 @@ void http_addHeader(httpRequest_t* request, const char *key, const char *val);
  * @param [in] requestBuffer The char buffer to contain the HTTP POST request being constructed.
  * @param [in] requestBufferSz The size of the request char buffer.
  * @param [in] postData Character data to be appended to the request.
+ * @return true The provided postData was added to the request.
+ * @return uint16_t The number of DROPPED chars due to insufficient room in request buffer.
  */
-void http_addPostData(httpRequest_t* request, const char *postData, uint16_t postDataSz);
+uint16_t http_addPostData(httpRequest_t* request, const char *postData, uint16_t postDataSz);
 
 /* ------------------------------------------------------------------------------------------------
  *  Request and Response Section 
@@ -311,6 +334,14 @@ resultCode_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename);
  */
 void http_cancelPage(httpCtrl_t *httpCtrl);
 
+
+/**
+ * @brief Translate a module specific HTTP error code into a standard HTTP response code.
+ * 
+ * @param [in] extendedResultCode BGx HTTP error code.
+ * @return resultCode_t Translated standard HTTP response code.
+ */
+resultCode_t http_translateExtended(uint16_t extendedResultCode);
 
 #ifdef __cplusplus
 }

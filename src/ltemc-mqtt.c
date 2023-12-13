@@ -256,13 +256,13 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
                     return resultCode__success;
                 }
                 case 1:
-                    return resultCode__badRequest;                                  // wrong parameter
+                    return resultCode__badRequest;                                          // wrong parameter
                 case 2:
-                    return resultCode__conflict;                                    // MQTT socket identifier is occupied
+                    return resultCode__conflict;                                            // MQTT socket identifier is occupied
                 case 4:
-                    return resultCode__notFound;                                    // failed to parse domain name
+                    return resultCode__notFound;                                            // failed to parse domain name
                 default:
-                    return resultCode__extendedBase + g_lqLTEM.atcmd->resultValue;  // everything else
+                    return resultCode__extendedCodesBase + g_lqLTEM.atcmd->resultValue;     // everything else
             }
         }
     }
@@ -288,7 +288,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
     rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), S__mqttConnectCompleteParser); // in autolock mode, so this will release lock
     DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
 
-    if (rslt == resultCode__success)                                                // COMMAND executed, outcome of CONNECTION may not be a success
+    if (rslt == resultCode__success)                                                    // COMMAND executed, outcome of CONNECTION may not be a success
     {
         const char* token = atcmd_getToken(2);
         g_lqLTEM.atcmd->resultValue = strtol(token, NULL, 10);
@@ -296,18 +296,18 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
         {
             case 0:
                 return resultCode__success;
-            case 1:                                                                 // Connection Refused: Unacceptable Protocol Version
+            case 1:                                                                     // Connection Refused: Unacceptable Protocol Version
                 return resultCode__methodNotAllowed;
-            case 2:                                                                 // Connection Refused: Identifier Rejected
+            case 2:                                                                     // Connection Refused: Identifier Rejected
                 return resultCode__forbidden;
-            case 3:                                                                 // Connection Refused: Server Unavailable (iotHub: user not found)
+            case 3:                                                                     // Connection Refused: Server Unavailable (iotHub: user not found)
                 return resultCode__notFound;
-            case 4:                                                                 // Connection Refused: Bad User Name or Password
+            case 4:                                                                     // Connection Refused: Bad User Name or Password
                 return resultCode__forbidden;
-            case 5:                                                                 // Connection Refused: Not Authorized
+            case 5:                                                                     // Connection Refused: Not Authorized
                 return resultCode__forbidden;
             default:
-                return resultCode__extendedBase + g_lqLTEM.atcmd->resultValue;      // everything else
+                return resultCode__extendedCodesBase + g_lqLTEM.atcmd->resultValue;     // everything else
         }
     }
     return resultCode__badRequest; // command rejected by BGx
@@ -397,16 +397,16 @@ resultCode_t mqtt_cancelTopic(mqttCtrl_t *mqttCtrl, mqttTopicCtrl_t *topicCtrl)
  */
 resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos, const char *message, uint16_t messageSz, uint8_t timeoutSec)
 {
-    ASSERT(messageSz <= 4096); // max msg length PUB=4096 (PUBEX=560)
+    ASSERT(messageSz <= 4096);                                                                          // max msg length PUB=4096 (PUBEX=560)
 
-    resultCode_t rslt = resultCode__conflict; // assume lock not obtainable, conflict
+    resultCode_t rslt = resultCode__locked;                                                             // assume lock not obtainable, conflict
     uint32_t timeoutMS = (timeoutSec == 0) ? mqtt__publishTimeout : PERIOD_FROM_SECONDS(timeoutSec);
 
-    mqttCtrl->sentMsgId++;                                          // keep sequence going regardless of MQTT QOS
-    uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId; // msgId not sent with QOS == 0, otherwise sent
+    mqttCtrl->sentMsgId++;                                                                              // keep sequence going regardless of MQTT QOS
+    uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId;                                     // msgId not sent with QOS == 0, otherwise sent
     // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
 
-    atcmd_configDataMode(mqttCtrl->dataCntxt, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, true); // send message with dataMode
+    atcmd_configDataMode(mqttCtrl, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, true);         // send message with dataMode
 
     if (atcmd_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
     {
@@ -710,7 +710,7 @@ static void S__mqttUrcHandler()
         uint16_t msgId = strtol(workPtr, &workPtr, 10);
 
         // find topic in ctrl, to get callback func
-        streamType_t *ctrlPtr = ltem_getStreamFromCntxt(dataCntxt, streamType_MQTT);
+        streamType_t *ctrlPtr = ltem_findStream(dataCntxt);
         ASSERT(ctrlPtr != NULL);
         mqttCtrl_t *mqttCtrl = (mqttCtrl_t *)ctrlPtr;
 
@@ -783,13 +783,51 @@ static void S__mqttUrcHandler()
             uint8_t cntxt = strtol(workPtr, &workPtr, 10);
             workPtr++;
 
-            streamCtrl_t *streamCtrl = ltem_getStreamFromCntxt(cntxt, streamType_MQTT);
+            streamCtrl_t *streamCtrl = ltem_findStream(cntxt);
             ASSERT(streamCtrl != NULL);
             ((mqttCtrl_t *)streamCtrl)->errCode = strtol(workPtr, NULL, 10);
             ((mqttCtrl_t *)streamCtrl)->state = mqttState_closed;
         }
     }
 }
+
+
+/**
+ * @brief Translate a module specific MQTT error code into a standard web/HTTP response code.
+ * 
+ * @param [in] extendedResultCode BGx MQTT error code.
+ * @return resultCode_t Translated standard web/HTTP response code.
+ */
+resultCode_t mqtt_translateExtended(uint16_t extendedResultCode)
+{
+    // switch (extendedResultCode)
+    // {
+    // case 1705:
+    // case 1730:
+    //     return resultCode__badRequest;          // 400
+
+    // case 1711:
+    // case 1712:
+    // case 1713:
+    // case 1714:
+    //     return resultCode__notFound;            // 404
+
+    // case 1702:
+    // case 1726:
+    // case 1727:
+    // case 1728:
+    //     return resultCode__timeout;             // 408
+
+    // case 1703:
+    // case 1704:
+    //     return resultCode__conflict;            // 409
+
+    // default:
+    //     return resultCode__internalError;       // 500
+    // }
+    return extendedResultCode;
+}
+
 
 #pragma endregion
 

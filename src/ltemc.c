@@ -754,11 +754,11 @@ deviceState_t ltem_getDeviceState()
  */
 bool ltem_ping()
 {
-    if (atcmd_tryInvoke("AT+CGMI"))                        // get manufacturer: "Quectel"
+    if (atcmd_tryInvoke("ATE0"))                        // get OK response (and ensure cmd echo is OFF)
     {
         if (IS_SUCCESS(atcmd_awaitResult()))
         {
-            return strlen(atcmd_getRawResponse()) == BGX__startVerifyResponseSz;
+            return strstr(atcmd_getRawResponse(), "OK\r\n") != NULL;
         }
     }
     return false;
@@ -782,6 +782,8 @@ void ltem_eventMgr()
      */
     for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
     {
+        // only MQTT and SCKT (sockets) are asynchronous and have URC handlers currently
+
         resultCode_t serviceRslt;
         if (g_lqLTEM.streams[i] != NULL &&  g_lqLTEM.streams[i]->urcHndlr != NULL)  // URC event handler in this stream, offer the data to the handler
         {
@@ -801,63 +803,84 @@ void ltem_eventMgr()
 void ltem_addStream(streamCtrl_t *streamCtrl)
 {
     DPRINT_V(PRNT_INFO, "Registering Stream\r\n");
-    streamCtrl_t* prev = ltem_getStreamFromCntxt(streamCtrl->dataCntxt, streamType__ANY);
 
-    if (prev != NULL)
+    ASSERT(streamCtrl->dataCntxt < ltem__streamCnt);
+
+    if (g_lqLTEM.streams[streamCtrl->dataCntxt] == streamCtrl)
         return;
 
-    for (size_t i = 0; i < ltem__streamCnt; i++)
-    {
-        if (g_lqLTEM.streams[i] == NULL)
-        {
-            g_lqLTEM.streams[i] = streamCtrl;
-            return;
-        }
-    }
+    ASSERT(g_lqLTEM.streams[streamCtrl->dataCntxt] == NULL);
+
+    g_lqLTEM.streams[streamCtrl->dataCntxt] = streamCtrl;
+
+    // streamCtrl_t* prev = ltem_getStreamFromCntxt(streamCtrl->dataCntxt, streamType__ANY);
+    // if (prev != NULL)
+    // {
+    //     ASSERT(prev->streamType == streamType);
+    //     return;
+    // }
+    // for (size_t i = 0; i < ltem__streamCnt; i++)
+    // {
+    //     if (g_lqLTEM.streams[i] == NULL)
+    //     {
+    //         g_lqLTEM.streams[i] = streamCtrl;
+    //         return;
+    //     }
+    // }
 }
 
 
 void ltem_deleteStream(streamCtrl_t *streamCtrl)
 {
-    for (size_t i = 0; i < ltem__streamCnt; i++)
-    {
-        if (g_lqLTEM.streams[i]->dataCntxt == streamCtrl->dataCntxt)
-        {
-            ASSERT(memcmp(g_lqLTEM.streams[i], streamCtrl, sizeof(streamCtrl_t)) == 0);     // compare the common fields
-            g_lqLTEM.streams[i] = NULL;
-            return;
-        }
-    }
+    DPRINT_V(PRNT_INFO, "Deregistering Stream\r\n");
+
+    ASSERT(streamCtrl->dataCntxt < ltem__streamCnt);
+    ASSERT(streamCtrl->streamType == g_lqLTEM.streams[streamCtrl->dataCntxt]->streamType);
+
+    g_lqLTEM.streams[streamCtrl->dataCntxt] = NULL;
+
+    // if (prev == NULL)
+    //     return;
+    // ASSERT(prev->streamType == streamType);
+    // for (size_t i = 0; i < ltem__streamCnt; i++)
+    // {
+    //     if (g_lqLTEM.streams[i]->dataCntxt == streamCtrl->dataCntxt)
+    //     {
+    //         ASSERT(memcmp(g_lqLTEM.streams[i], streamCtrl, sizeof(streamCtrl_t)) == 0);     // compare the common fields
+    //         g_lqLTEM.streams[i] = NULL;
+    //         return;
+    //     }
+    // }
 }
 
 
-streamCtrl_t* ltem_getStreamFromCntxt(uint8_t context, streamType_t streamType)
+streamCtrl_t* ltem_findStream(uint8_t context)
 {
-    for (size_t i = 0; i < ltem__streamCnt; i++)
-    {
-        if (g_lqLTEM.streams[i] != NULL && g_lqLTEM.streams[i]->dataCntxt == context)
-        {
-            if (streamType == streamType__ANY)
-            {
-                return g_lqLTEM.streams[i];
-            }
-            else if (g_lqLTEM.streams[i]->streamType == streamType)
-            {
-                return g_lqLTEM.streams[i];
-            }
-            else if (streamType == streamType__SCKT)
-            {
-                if (g_lqLTEM.streams[i]->streamType == streamType_UDP ||
-                    g_lqLTEM.streams[i]->streamType == streamType_TCP ||
-                    g_lqLTEM.streams[i]->streamType == streamType_SSLTLS)
-                {
-                    return g_lqLTEM.streams[i];
-                }
-            }
-        }
-    }
-    return NULL;
+    return g_lqLTEM.streams[context];
+
+    // for (size_t i = 0; i < ltem__streamCnt; i++)
+    // {
+    //     if (g_lqLTEM.streams[i] != NULL && g_lqLTEM.streams[i]->dataCntxt == context)
+    //     {
+    //         if (streamType == streamType__ANY ||
+    //             g_lqLTEM.streams[i]->streamType == streamType)
+    //         {
+    //             return g_lqLTEM.streams[i];
+    //         }
+    //         else if (streamType == streamType__SCKT)
+    //         {
+    //             if (g_lqLTEM.streams[i]->streamType == streamType_UDP ||
+    //                 g_lqLTEM.streams[i]->streamType == streamType_TCP ||
+    //                 g_lqLTEM.streams[i]->streamType == streamType_SSLTLS)
+    //             {
+    //                 return g_lqLTEM.streams[i];
+    //             }
+    //         }
+    //     }
+    // }
+    // return NULL;
 }
+
 
 /**
  *	@brief Notify host application of significant events. Application may ignore, display, save status, whatever. 

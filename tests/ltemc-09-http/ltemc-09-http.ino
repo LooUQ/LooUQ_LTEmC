@@ -36,6 +36,7 @@
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
 
+
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
 #ifdef ARDUINO_ARCH_ESP32
@@ -72,7 +73,7 @@ static char webPageBuf[1024];
 //char cstmHdrs[256];                           // if you use custom HTTP headers then create a buffer to hold them
 
 void setup() {
-    #ifdef DIAGPRINT_SERIAL
+    #if defined(DIAGPRINT_SERIAL) || defined(LOG_SERIAL)
         Serial.begin(115200);
         #if (SERIAL_OPT > 0)
         while (!Serial) {}      // force wait for serial ready
@@ -81,7 +82,7 @@ void setup() {
         #endif
     #endif
 
-    DPRINT(PRNT_RED, "\rLTEmC test9-HTTP\r");
+    DPRINT(PRNT_RED, "\rLTEmC-09 HTTP Examples\r");
     //lqDiag_setNotifyCallback(appEvntNotify);
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
@@ -137,34 +138,34 @@ void setup() {
     http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
     DPRINT(PRNT_dGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
 
-
-
-
-#define OPM_PROJECT_KEY "LQCloud-OrgKey: 5Zul5eB3Qn1gkEtDFCEs9dn0IXexhr3x\r\n"
-#define OPM_HOST_URL "https://devices-dev-pelogical.azurewebsites.net"
-
+    #define OPM_PROJECT_KEY "LQCloud-OrgKey: 5Zul5eB3Qn1gkEtDFCEs9dn0IXexhr3x\r\n"
+    #define OPM_HOST_URL "https://devices-dev-pelogical.azurewebsites.net"
+    #define OPM_BODY_SZ 50
 
     httpCtrl_t httpCtrl_opMetrics;
-    char opmRequestBffr;
+    char opmRequestBffr[http__typicalCustomRequestHeaders + OPM_BODY_SZ];
     char relativeUrl[] = "/opmetrics/opmrpt/1234567890ABCDEF";
     resultCode_t rslt;
     
-    //setup for HTTP POST action
+    //setup for custom HTTP POST action
     http_initControl(&httpCtrl_opMetrics, dataCntxt_1, httpRecvCB);
     http_setConnection(&httpCtrl_opMetrics, "https://devices-dev-pelogical.azurewebsites.net", 443);
     DPRINT(PRNT_dMAGENTA, "OpMetrics Reporting Host=%s\r\n", httpCtrl_opMetrics.hostUrl);
-    httpRequest_t opmRequest = http_createRequest(httpRequestType_POST, OPM_HOST_URL, relativeUrl, &opmRequestBffr, sizeof(opmRequestBffr));
+
+    httpRequest_t opmRequest = http_createRequest(httpRequestType_POST, OPM_HOST_URL, relativeUrl, opmRequestBffr, sizeof(opmRequestBffr));
     http_addCommonHdrs(&opmRequest, httpHeaderMap_all);
-    http_addHeader(&opmRequest, "LQCloud-OrgKey", "5Zul5eB3Qn1gkEtDFCEs9dn0IXexhr3x");
-    char postData[] = "Hello LQCloud, this is what I see...";
-    http_addPostData(&opmRequest, postData, strlen(postData));
+    http_addHeader(&opmRequest, "LQCloud-OrgKey: 5Zul5eB3Qn1gkEtDFCEs9dn0IXexhr3x");
+
+    char postData1[] = "Hello LQCloud, this is what I see...";
+    http_addPostData(&opmRequest, postData1, strlen(postData1));
+
+    char postData2[] = "Good things, but a little too much!";
+    uint8_t dropped = http_addPostData(&opmRequest, postData2, strlen(postData2));
+    if (dropped)
+        DPRINT(PRNT_WARN, "\"%s\" didn't all fit! Dropped=%d bytes\r\n", postData2, dropped);
 
     rslt = http_postCustomRequest(&httpCtrl_opMetrics, relativeUrl, &opmRequest, false);
-    if (IS_SUCCESS(rslt))
-    {
-        Serial.printf("*** POST opMRpt POST successful to host: %s\r\n", httpCtrl_opMetrics.hostUrl);
-    }
-
+    DPRINT(0,"*** opMetrics POST result=%d\r\n", rslt);
 }
 
 resultCode_t rslt;
@@ -185,21 +186,23 @@ void loop()
         {
             // resultCode_t http_get(httpCtrl_t *httpCtrl, const char* url)   
             // default HTTP timeout is 60 seconds
-            rslt = http_get(&httpCtrlG, "/points/44.7582,-85.6022", http__noResponseHeaders);
+            rslt = http_get(&httpCtrlG, "/points/44.7582,-85.6022", http__noReturnResponseHeaders);
             if (rslt == resultCode__success)
             {
                 httpCtrl = &httpCtrlG;
                 DPRINT(PRNT_INFO, "GET invoked successfully\r");
             }
             else
-                DPRINT(PRNT_WARN, "HTTP GET failed, status=%d\r", rslt);
+            {
+                DPRINT(PRNT_WARN, "HTTP GET failed, raw-result=%d, std-result=%d\r", rslt, http_translateExtended(rslt));
+            }
         }
         else
         {
             char postData[] = "{ \"field1\": 1, \"field2\": \"field2\" }";
 
             // resultCode_t http_post(httpCtrl_t *httpCtrl, const char* url, const char* postData, uint16_t dataSz);
-            rslt = http_post(&httpCtrlP, "/anything", postData, strlen(postData), http__noResponseHeaders);
+            rslt = http_post(&httpCtrlP, "/anything", postData, strlen(postData), http__noReturnResponseHeaders);
             if (rslt == resultCode__success)
             {
                 httpCtrl = &httpCtrlP;

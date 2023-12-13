@@ -39,6 +39,11 @@ Also add information on how to contact you by electronic and paper mail.
 #include <platform/lq-platform_gpio.h>
 #include <platform/lq-platform_timing.h>
 #include <platform/lq-platform_spi.h>
+
+#ifdef ARDUINO_ARCH_SAMD
+#include <platform/lq-arduinoSAMD_util.h>
+#endif
+
 // #include "platform/lq-platform_debug.h"
 
 

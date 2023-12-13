@@ -63,7 +63,7 @@ void atcmd_reset(bool releaseLock);
  * @param [in] applRecvDataCB Handler function to receive/parse incoming data 
  * @param [in] runParser If true, registered command response parser is invoked after successful data mode processing
  */
-void atcmd_configDataMode(uint16_t contextKey, const char* trigger, dataRxHndlr_func rxDataHndlr, const char* txDataPtr, uint16_t txDataSz, appRcvProto_func applRecvDataCB, bool skipParser);
+void atcmd_configDataMode(void* ctrlStruct, const char* trigger, dataHndlr_func dataHndlr, const char* txDataPtr, uint16_t txDataSz, appRcvProto_func applRecvDataCB, bool skipParser);
 
 
 // /**

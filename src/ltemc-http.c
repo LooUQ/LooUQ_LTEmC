@@ -58,7 +58,7 @@ static cmdParseRslt_t S__httpPostStatusParser();
 static cmdParseRslt_t S__httpReadFileStatusParser();
 static cmdParseRslt_t S__httpPostFileStatusParser();
 static uint16_t S__parseResponseForHttpStatus(httpCtrl_t *httpCtrl, const char *responseTail);
-static resultCode_t S__httpRxHndlr();
+static resultCode_t S__httpRxProvider();
 
 
 /* Public Functions
@@ -78,7 +78,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func
     httpCtrl->dataCntxt = dataCntxt;
     httpCtrl->streamType = streamType_HTTP;
     httpCtrl->appRecvDataCB = (appRcvProto_func)recvCallback;
-    httpCtrl->dataRxHndlr = S__httpRxHndlr;
+    httpCtrl->dataRxHndlr = S__httpRxProvider;
 
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
@@ -113,17 +113,17 @@ void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t host
 /**
  * @brief Creates a base HTTP request that can be appended with custom headers.
  */
-httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* host, const char* relativeUrl, char* reqstBffr, uint16_t reqstBffrSz)
+httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* hostUrl, const char* relativeUrl, char* reqstBffr, uint16_t reqstBffrSz)
 {
-    ASSERT(strlen(host));
+    ASSERT(strlen(hostUrl));
     ASSERT(strlen(relativeUrl));
 
-    httpRequest_t httpRqst = { .requestBuffer = reqstBffr, .requestBuffersz = reqstBffrSz, .contentLen = 0, .headersLen = 0};
+    httpRequest_t httpReqst = { .buffer = reqstBffr, .buffersz = reqstBffrSz, .contentLen = 0, .headersLen = 0 };
     memset(reqstBffr, 0, reqstBffrSz);
 
-    if (COMPARES(memcmp(host, "http", 4)) || COMPARES(memcmp(host, "HTTP", 4)))         // allow for proto in host URL
+    if (COMPARES(memcmp(hostUrl, "http", 4)) || COMPARES(memcmp(hostUrl, "HTTP", 4)))         // allow for proto in host URL
     {
-        host = (host, ':', strlen(host)) + 3;
+        hostUrl = memchr(hostUrl, ':', strlen(hostUrl)) + 3;
     }
 
     if (reqstType == httpRequestType_GET)
@@ -133,110 +133,151 @@ httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* host, 
     else
     {
         strcat(reqstBffr, "INVALID_TYPE");
-        return httpRqst;
+        return httpReqst;
     }
 
     strcat(reqstBffr, relativeUrl);
     strcat(reqstBffr, " HTTP/1.1\r\nHost: ");
-    strcat(reqstBffr, host);
+    strcat(reqstBffr, hostUrl);
+    strcat(reqstBffr, "\r\n");
 
-    httpRqst.requestBuffer == reqstBffr;
-    return httpRqst;
+    httpReqst.buffer == reqstBffr;
+    httpReqst.headersLen = strlen(httpReqst.buffer);                                      // update object
+    return httpReqst;
 }
 
 
 /**
  * @brief Adds common HTTP headers to a custom headers buffer.
  */
-void http_addCommonHdrs(httpRequest_t* request, httpHeaderMap_t headerMap)
+void http_addCommonHdrs(httpRequest_t* httpReqst, httpHeaderMap_t headerMap)
 {
     ASSERT(headerMap > 0);
-    ASSERT(request->contentLen == 0);                                                       // headers section still open to additions
-    ASSERT(*(request->requestBuffer + strlen(request->requestBuffer) - 2) = '\r');          // existing request ends in \r\n
-    ASSERT(strlen(request->requestBuffer) + http__commandHdrSz < request->requestBuffersz); // 102 all buffers below could fit
+    ASSERT(httpReqst->contentLen == 0);                                                     // headers section still open to additions
+    ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                       // existing request ends in \r\n
+    ASSERT(httpReqst->headersLen + http__commonHeadersSz < httpReqst->buffersz);            // "all" headers could fit
 
     if (headerMap & httpHeaderMap_accept > 0 || headerMap == httpHeaderMap_all)
     {
-        strcat(request->requestBuffer, "Accept: */*\r\n");                                  // 13 = "Accept: */*\r\n" 
+        strcat(httpReqst->buffer, "Accept: */*\r\n");                                       // 13 = "Accept: */*\r\n" 
     }
     if (headerMap & httpHeaderMap_userAgent > 0 || headerMap == httpHeaderMap_all)
     {
-        strcat(request->requestBuffer, "User-Agent: QUECTEL_MODULE\r\n");                   // 28 = "User-Agent: QUECTEL_BGx\r\n"
+        strcat(httpReqst->buffer, "User-Agent: QUECTEL_MODULE\r\n");                        // 28 = "User-Agent: QUECTEL_BGx\r\n"
     }
     if (headerMap & httpHeaderMap_connection > 0 || headerMap == httpHeaderMap_all)
     {
-        strcat(request->requestBuffer, "Connection: Keep-Alive\r\n");                       // 24 = "Connection: Keep-Alive\r\n"
+        strcat(httpReqst->buffer, "Connection: Keep-Alive\r\n");                            // 24 = "Connection: Keep-Alive\r\n"
     }
     if (headerMap & httpHeaderMap_contentType > 0 || headerMap == httpHeaderMap_all)
     {
-        strcat(request->requestBuffer, "Content-Type: application/octet-stream\r\n");       // 40 = "Content-Type: application/octet-stream\r\n"
+        strcat(httpReqst->buffer, "Content-Type: application/octet-stream\r\n");            // 40 = "Content-Type: application/octet-stream\r\n"
     }
+    httpReqst->headersLen = strlen(httpReqst->buffer);                                      // update object
 }
 
 
 /**
  * @brief Adds a basic authorization header to a headers buffer.
  */
-void http_addBasicAuthHdr(httpRequest_t* request, const char *user, const char *pw)
+void http_addBasicAuthHdr(httpRequest_t* httpReqst, const char *user, const char *pw)
 {
     char toEncode[80];
     char b64str[120];
 
     ASSERT(user != NULL);
     ASSERT(pw != NULL);
-    ASSERT(request->contentLen == 0);                                                           // headers section still open to additions
-    ASSERT(*(request->requestBuffer + strlen(request->requestBuffer) - 2) = '\r');              // existing request ends in \r\n
+    ASSERT(httpReqst->contentLen == 0);                                                     // headers section still open to additions
+    ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                       // existing request ends in \r\n
 
     strcat(toEncode, user);
     strcat(toEncode, ":");
     strcat(toEncode, pw);
-    binToB64(b64str, toEncode, strlen(toEncode));                                               // endcode credentials to Base64 string
-    ASSERT(strlen(request->requestBuffer) + strlen(b64str) + 20 < request->requestBuffersz);    // "Authentication: " + "\r\n" = length 20
+    binToB64(b64str, toEncode, strlen(toEncode));                                           // endcode credentials to Base64 string
+    ASSERT(httpReqst->headersLen + strlen(b64str) + 20 < httpReqst->buffersz);              // "Authentication: " + "\r\n" = length 20
 
-    strcat(request->requestBuffer, "Authentication: ");
-    strcat(request->requestBuffer, b64str);
-    strcat(request->requestBuffer, "\r\n");                                                     // new header ends in correct EOL
+    strcat(httpReqst->buffer, "Authentication: ");
+    strcat(httpReqst->buffer, b64str);
+    strcat(httpReqst->buffer, "\r\n");                                                      // new header ends in correct EOL
+    httpReqst->headersLen = strlen(httpReqst->buffer);                                      // update object
+}
+
+
+void http_addHeader(httpRequest_t* httpReqst, const char * keyValue)
+{
+    ASSERT(keyValue != NULL);
+    ASSERT(strnstr(keyValue, ": ", 42) != NULL);                                            // check for HTTP header key/value delimiter, assume key length <= 40
+    ASSERT(httpReqst->contentLen == 0);                                                     // headers section still open to additions
+    ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                       // existing request ends in \r\n
+
+    uint8_t newHdrSz = strlen(keyValue);
+    bool missingEOL = false;
+    if (memchr(keyValue, '\r', newHdrSz) == NULL)
+    {
+        newHdrSz += 2;                                                                      // need add EOL (\r\n)
+        missingEOL = true;
+    }
+    ASSERT(httpReqst->headersLen + newHdrSz < httpReqst->buffersz);                         // new header fits
+    
+    strcat(httpReqst->buffer, keyValue);
+    if (missingEOL)
+        strcat(httpReqst->buffer, "\r\n");                                                  // add missing EOL
+    httpReqst->headersLen = strlen(httpReqst->buffer);                                      // update object
 }
 
 
 /**
  * @brief Helper to compose a generic header and add it to the headers collection being composed.
  */
-void http_addHeader(httpRequest_t* request, const char *key, const char *val)
+void http_addHeaderKeyValue(httpRequest_t* httpReqst, const char *key, const char *value)
 {
     ASSERT(key != NULL);
-    ASSERT(val != NULL);
-    ASSERT(request->contentLen == 0);                                                           // headers section still open to additions
-    ASSERT(*(request->requestBuffer + strlen(request->requestBuffer) - 2) = '\r');              // existing request ends in \r\n
+    ASSERT(value != NULL);
+    ASSERT(httpReqst->contentLen == 0);                                                     // headers section still open to additions
+    ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                       // existing request ends in \r\n
 
-    uint8_t newHdrSz = strlen(key) + 2 + strlen(val) + 2;                                       // <key>: <val>\r\n
-    ASSERT(strlen(request->requestBuffer) + newHdrSz < request->requestBuffersz);               // new header fits
+    uint8_t newHdrSz = strlen(key) + 2 + strlen(value) + 2;                                 // <key>: <val>\r\n
+    ASSERT(httpReqst->headersLen + newHdrSz < httpReqst->buffersz);                         // new header fits
 
-    strcat(request->requestBuffer, key);
-    strcat(request->requestBuffer, ": ");
-    strcat(request->requestBuffer, val);
-    strcat(request->requestBuffer, "\r\n");                                                    // new header ends in correct EOL
+    strcat(httpReqst->buffer, key);
+    strcat(httpReqst->buffer, ": ");
+    strcat(httpReqst->buffer, value);
+    strcat(httpReqst->buffer, "\r\n");                                                      // new header ends in correct EOL
+    httpReqst->headersLen = strlen(httpReqst->buffer);                                      // update object
+}
+
+
+void http_closeHeaders(httpRequest_t* httpReqst, uint32_t contentLength)
+{
+    if (httpReqst->contentLen == 0)                                                         // finalize/close headers to additional changes
+    {
+        char wrkBffr[40];
+        snprintf(wrkBffr, sizeof(wrkBffr), "Content-Length: %d\r\n\r\n", contentLength);
+        strcat(httpReqst->buffer, wrkBffr);
+        httpReqst->headersLen = strlen(httpReqst->buffer);
+    }
 }
 
 
 /**
  * @brief Helper to compose a generic header and add it to the headers collection being composed.
  */
-void http_addPostData(httpRequest_t* request, const char *postData, uint16_t postDataSz)
+uint16_t http_addPostData(httpRequest_t* httpReqst, const char *postData, uint16_t postDataSz)
 {
     ASSERT(postData != NULL);
-    ASSERT(*(request->requestBuffer + strlen(request->requestBuffer) - 2) = '\r');              // existing request ends in \r\n
+    ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                       // existing request ends in \r\n
 
-    if (request->contentLen == 0)                                                              // finalize/close headers to additional changes
+    if (httpReqst->contentLen == 0)                                                         // finalize/close headers to additional changes
     {
-        strcat(request->requestBuffer, "Content-Length:     0\r\n\r\n");
-        request->headersLen = strlen(request->requestBuffer);
-    
-        ASSERT(request->headersLen + postDataSz < request->requestBuffersz);                    // request w/ headers + postDataSz fits
+        strcat(httpReqst->buffer, "Content-Length:     0\r\n\r\n");
+        httpReqst->headersLen = strlen(httpReqst->buffer);
     }
 
-    memcpy(request->requestBuffer + request->headersLen + request->contentLen, postData, postDataSz);
-    request->contentLen += postDataSz;
+    uint16_t availableSz = httpReqst->buffersz - (httpReqst->headersLen + httpReqst->contentLen);
+    uint16_t copySz = MIN(availableSz, postDataSz);
+    memcpy(httpReqst->buffer + httpReqst->headersLen + httpReqst->contentLen, postData, copySz);
+    httpReqst->contentLen += copySz;                                                        // update reqst object content offset
+    return postDataSz - copySz;                                                             // 0=it all fit, otherwise how many got dropped
 }
 
 
@@ -277,15 +318,12 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
 
     if (ATCMD_awaitLock(httpCtrl->timeoutSec))
     {
-        if (returnResponseHdrs)
+        atcmd_invokeReuseLock("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs));
+        rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, NULL);
+        if (rslt != resultCode__success)
         {
-            atcmd_invokeReuseLock("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs));
-            rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, NULL);
-            if (rslt != resultCode__success)
-            {
-                atcmd_close();
-                return rslt;
-            }
+            atcmd_close();
+            return rslt;
         }
 
         if (httpCtrl->useTls)
@@ -324,18 +362,18 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
 
-        /* If custom headers, need to both set flag and include in request stream below
-         */
-        if (customRequest == NULL || customRequest->headersLen == 0)
+        uint8_t reqstHdrs = (customRequest != NULL && customRequest->headersLen == 0);
+        atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",%d", reqstHdrs);
+        rslt = atcmd_awaitResult();
+        if (rslt != resultCode__success)
         {
-            atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",1");
-            rslt = atcmd_awaitResult();
-            if (rslt != resultCode__success)
-            {
-                atcmd_close();
-                return rslt;
-            }
-            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, customRequest->requestBuffer, customRequest->headersLen, NULL, true);
+            atcmd_close();
+            return rslt;
+        }
+
+        if (customRequest != NULL && customRequest->headersLen == 0)
+        {
+            atcmd_configDataMode(httpCtrl, "CONNECT", atcmd_stdTxDataHndlr, customRequest->buffer, customRequest->headersLen, NULL, true);
             atcmd_invokeReuseLock("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, customRequest->headersLen);
         }
         else
@@ -356,7 +394,7 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
         else
         {
             httpCtrl->requestState = httpState_idle;
-            httpCtrl->httpStatus = atcmd_getValue();
+            httpCtrl->httpStatus = rslt;
             DPRINT(PRNT_WARN, "Closed failed GET request, status=%d %s\r\n", httpCtrl->httpStatus, atcmd_getErrorDetail());
         }
         atcmd_close();
@@ -399,16 +437,12 @@ resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequ
 
     if (ATCMD_awaitLock(httpCtrl->timeoutSec))
     {
-        if (returnResponseHdrs)
+        atcmd_invokeReuseLock("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs));
+        rslt = atcmd_awaitResult();
+        if (rslt != resultCode__success)
         {
-            atcmd_invokeReuseLock("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs));
-
-            rslt = atcmd_awaitResult();
-            if (rslt != resultCode__success)
-            {
-                atcmd_close();
-                return rslt;
-            }
+            atcmd_close();
+            return rslt;
         }
 
         if (httpCtrl->useTls)
@@ -438,42 +472,30 @@ resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequ
             return rslt;
         }
 
-        /* INVOKE HTTP ** POST ** METHOD
-        * BGx responds with OK immediately upon acceptance of cmd, then later (up to timeout) with "+QHTTPPOST: " string
-        * After "OK" we switch IOP to data mode and return. S_httpDoWork() handles the parsing of the page response and
-        * if successful, the issue of the AT+QHTTPREAD command to start the page data stream
-        * 
-        * This allows other application tasks to be performed while waiting for page. No LTEm commands can be invoked
-        * but non-LTEm tasks like reading sensors can continue.
-        *---------------------------------------------------------------------------------------------------------------*/
-        // atcmd_reset(false);                                                                             // reset atCmd control struct WITHOUT clearing lock
+        atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",%d", customRequest != NULL);
+        rslt = atcmd_awaitResult();
+        if (rslt != resultCode__success)
+        {
+            atcmd_close();
+            return rslt;
+        }
 
-        /* If custom headers, need to both set flag and include in request stream below
-         */
         if (customRequest != NULL)
         {
-            atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",1");
-            rslt = atcmd_awaitResult();
-            if (rslt != resultCode__success)
-            {
-                atcmd_close();
-                return rslt;
-            }
-
             // fixup content-length header value
-            char contentLengthVal[5];
+            char contentLengthVal[6];
             snprintf(contentLengthVal, sizeof(contentLengthVal), "%5d", customRequest->contentLen);
-            char* contentLengthPtr = customRequest->requestBuffer + customRequest->headersLen - 9;      // backup over the /r/n/r/n and content-length value
+            char* contentLengthPtr = customRequest->buffer + customRequest->headersLen - 9;      // backup over the /r/n/r/n and content-length value
             memcpy(contentLengthPtr, contentLengthVal, 5);
 
             uint16_t dataLen = customRequest->headersLen + customRequest->contentLen;
-            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, customRequest->requestBuffer, dataLen, NULL, true);
-            atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", strlen(postData), httpCtrl->timeoutSec);
+            atcmd_configDataMode(httpCtrl, "CONNECT", atcmd_stdTxDataHndlr, customRequest->buffer, dataLen, NULL, true);
+            atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", dataLen, httpCtrl->timeoutSec);
         }
         else
         {
             uint16_t dataLength = strlen(postData);
-            atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", atcmd_stdTxDataHndlr, postData, dataLength, NULL, true);
+            atcmd_configDataMode(httpCtrl, "CONNECT", atcmd_stdTxDataHndlr, postData, dataLength, NULL, true);
             atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", strlen(postData), httpCtrl->timeoutSec);
         }
         
@@ -623,10 +645,9 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
     bBuffer_t* rxBffr = g_lqLTEM.iop->rxBffr;                                   // for better readability
     char* workPtr;
 
+    atcmd_configDataMode(httpCtrl, "CONNECT", S__httpRxProvider, NULL, 0, httpCtrl->appRecvDataCB, false);
     if (atcmd_tryInvoke("AT+QHTTPREAD=%d", httpCtrl->timeoutSec))
     {
-        atcmd_configDataMode(httpCtrl->dataCntxt, "CONNECT", S__httpRxHndlr, NULL, 0, httpCtrl->appRecvDataCB, false);
-        // atcmd_setStreamControl("CONNECT", (streamCtrl_t*)httpCtrl);
         return atcmd_awaitResult();                                             // dataHandler will be invoked by atcmd module and return a resultCode
     }
     return resultCode__conflict;
@@ -654,7 +675,7 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
             else
                 return resultCode__internalError;
         }
-        return resultCode__extendedBase + rslt;
+        return rslt;
     }
     return resultCode__conflict;
 }
@@ -699,25 +720,43 @@ static resultCode_t S__setUrl(const char *host, const char *relative)
 }
 
 
-// /**
-//  * @brief Set the content length header, if customHeaders and not already set.
-//  * @note Requires 25 char of free space in request headers buffer
-//  * 
-//  * @param requestHeaders Char buffer holding the custom request headers
-//  * @param requestHeadersSz Size of the buffer
-//  * @param contentLength Size of content; 0 for GET requests, strlen(postData) for POST requests
-//  */
-// static void S__setContentLength(char requestHeaders, uint16_t requestHeadersSz, uint16_t contentLength)
-// {
-//     ASSERT(strlen(requestHeaders) + 25 < requestHeadersSz);
+/**
+ * @brief Translate a module specific HTTP error code into a standard HTTP response code.
+ * 
+ * @param [in] extendedResultCode BGx HTTP error code.
+ * @return resultCode_t Translated standard HTTP response code.
+ */
+resultCode_t http_translateExtended(uint16_t extendedResultCode)
+{
+    if (extendedResultCode < resultCode__extendedCodesBase)
+        return extendedResultCode;
+        
+    switch (extendedResultCode)
+    {
+        case 1705:
+        case 1730:
+            return resultCode__badRequest;          // 400
 
-//     if (strstr(requestHeaders, "Content-Length: ") == NULL)                                         // already present
-//     {
-//         char workBffr[80];
-//         snprintf(workBffr, sizeof(workBffr), "Content-Length: %d\r\n\r\n", contentLength);
-//         strcat(requestHeaders, workBffr);
-//     }
-// }
+        case 1711:
+        case 1712:
+        case 1713:
+        case 1714:
+            return resultCode__notFound;            // 404
+
+        case 1702:
+        case 1726:
+        case 1727:
+        case 1728:
+            return resultCode__timeout;             // 408
+
+        case 1703:
+        case 1704:
+            return resultCode__conflict;            // 409
+
+        default:
+            return resultCode__internalError;       // 500
+    }
+}
 
 
 /**
@@ -743,12 +782,12 @@ static uint16_t S__parseResponseForHttpStatus(httpCtrl_t *httpCtrl, const char *
 /**
  * @brief Handles the READ data flow from the BGx (via rxBffr) to app
  */
-static resultCode_t S__httpRxHndlr()
+static resultCode_t S__httpRxProvider()
 {
     char wrkBffr[32];
     uint16_t pageRslt = 0;
 
-    httpCtrl_t *httpCtrl = (httpCtrl_t*)ltem_getStreamFromCntxt(g_lqLTEM.atcmd->dataMode.contextKey, streamType_HTTP);
+    httpCtrl_t *httpCtrl = (httpCtrl_t*)g_lqLTEM.atcmd->dataMode.ctrlStruct;
     ASSERT(httpCtrl != NULL);                                                                           // ASSERT data mode and stream context are consistent
 
     uint8_t popCnt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);

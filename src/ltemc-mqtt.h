@@ -179,7 +179,7 @@ typedef struct mqttCtrl_tag
 {
     char streamType;                            // stream type
     dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataRxHndlr_func dataRxHndlr;               // function to handle data streaming, initiated by eventMgr() or atcmd module
+    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
     urcEvntHndlr_func urcEvntHndlr;             // function to determine if "potential" URC event is for an open stream and perform reqd actions
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
@@ -407,7 +407,13 @@ uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl);
 uint16_t mqtt_getErrCode(mqttCtrl_t *mqttCtrl);
 
 
-// bool mqtt_recover(mqttCtrl_t *mqtt);
+/**
+ * @brief Translate a module specific MQTT error code into a standard web/HTTP response code.
+ * 
+ * @param [in] extendedResultCode BGx MQTT error code.
+ * @return resultCode_t Translated standard HTTP response code.
+ */
+resultCode_t mqtt_translateExtended(uint16_t extendedResultCode);
 
 
 #ifdef __cplusplus
