@@ -133,7 +133,8 @@ typedef resultCode_t (*dmRcvr_func)(void);                              // data 
 /**
  * @brief Data handler: generic function signature that can be a stream sync receiver or a general purpose ATCMD data mode handler
  */
-typedef void (*dataHndlr_func)(void);                                   // callback into stream data handler (sync transfer)
+//typedef void (*dataHndlr_func)(void);                                   // callback into stream data handler (sync transfer)
+typedef resultCode_t (*dataHndlr_func)(void);                                   // callback into stream data handler (sync transfer)
 
 
 /** @brief Generic APPLICATION callback data receiver (in stream header) cast to a stream specific receiver signature.
@@ -192,7 +193,9 @@ typedef struct atcmd_tag
     uint16_t timeout;                                               // period in MS until command processor should give up and timeout wait for results
     cmdResponseParser_func responseParserFunc;                      // parser function to analyze AT cmd response
     dataMode_t dataMode;                                            // controls for automatic data mode servicing - both TX (out) and RX (in). Std functions or extensions supported.
-    uint32_t invokedAt;                                             // Tick value at the command invocation, used for timeout detection.
+    uint32_t ownerTaskKey;                                          // for RTOS applications, holds owner task handle with priority over LTEm for a block of actions
+    bool ownerLTEmBackground;                                       // for LTEm internal operations; allows override for background processes to complete LTEm actions
+    uint32_t execStart;                                             // Tick value at the command invocation, used for timeout detection.
     
     char rawResponse[PSZ(atcmd__respBufferSz)];                     // response buffer, allows for post cmd execution review of received text (0-filled).
     char respToken[PSZ(atcmd__respTokenSz)];                        // buffer to hold a token string grabbed from response
@@ -210,7 +213,6 @@ typedef struct atcmd_tag
     // bool isOpenLocked;                                           // True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
     // char* response;                                              // PTR variable section of response.
     // int32_t retValue;                                            // (deprecated) optional signed int value extracted from response
-
 } atcmd_t;
 
 /**
@@ -299,9 +301,6 @@ cmdParseRslt_t ATCMD_getParserResult();
 void ATCMD_configDataMode(uint16_t contextKey, const char* trigger, dataHndlr_func dataHndlr, char* txDataLoc, uint16_t txDataSz, appGenRcvr_func applRecvDataCB, bool skipParser);
 
 
-
-
-
 /**
  * @brief Resets atCmd struct (BGx AT command structure) and optionally releases lock.
  * @param [in] releaseLock If false, clears ATCMD internal state, but leaves the command lock state unchanged
@@ -314,6 +313,33 @@ void ATCMD_reset(bool releaseLock);
  */
 void ATCMD_close();
 
+
+/**
+ * @brief Set task/thread owner for exclusive use of LTEm (public command actions)
+ * 
+ * @param ownerHandle Task/thread owning LTEm resources until owner cleared
+ */
+void ATCMD_setOwner(uint32_t ownerHandle);
+
+
+/**
+ * @brief Get configured task/thread owner with exclusive use of the LTEm API
+ * 
+ * @return uint32_t Task/thread handle with ownership of LTEm resources
+ */
+uint32_t ATCMD_getOwner();
+
+
+/**
+ * @brief Clears configured task/thread owner with exclusive use of the LTEm API.
+ * @note No warning or error is signalled if no owner currently configured.
+ */
+void ATCMD_clearOwner();
+
+
+/* ================================================================================================
+ * Return information about last AT-command execution
+ * ============================================================================================= */
 
 /**
  * @brief Returns the atCmd result code or 0 if command is pending completion

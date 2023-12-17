@@ -76,7 +76,7 @@ void ATCMD_reset(bool releaseLock)
     memset(g_lqLTEM.atcmd->rawResponse, 0, atcmd__respBufferSz);
     memset(g_lqLTEM.atcmd->errorDetail, 0, ltemSz__errorDetailSz);
     g_lqLTEM.atcmd->resultCode = 0;
-    g_lqLTEM.atcmd->invokedAt = 0;
+    g_lqLTEM.atcmd->execStart = 0;
     // g_lqLTEM.atcmd->retValue = 0;
     g_lqLTEM.atcmd->execDuration = 0;
 
@@ -145,19 +145,21 @@ cmdResponseParser_func ATCMD_ovrrdParser(cmdResponseParser_func newParser)
  */
 bool ATCMD_tryInvoke(const char *cmdTemplate, ...)
 {
-    if (!pMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))
+    if (g_lqLTEM.atcmd->ownerTaskKey > 0 &&                                     // LTEm owner priority exists
+        g_lqLTEM.atcmd->ownerTaskKey != pGetTaskHandle()                        // current task is not owner
+        && !g_lqLTEM.atcmd->ownerLTEmBackground)                                // current task is not performing a LTEm background process
     {
         g_lqLTEM.atcmd->resultCode = resultCode__locked;
         return false;
     }
-    // if (g_lqLTEM.atcmd->isOpenLocked)
-    //     return false;
-
+    if (!pMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))            // non-owner priority, command scope LTEm lock (exclusive through command complete)
+    {
+        g_lqLTEM.atcmd->resultCode = resultCode__locked;
+        return false;
+    }
     ATCMD_reset(true);                                                          // clear atCmd control
 
-    // char *cmdStr = g_lqLTEM.atcmd->cmdStr;
     va_list ap;
-
     va_start(ap, cmdTemplate);
     vsnprintf(g_lqLTEM.atcmd->cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
     strcat(g_lqLTEM.atcmd->cmdStr, "\r");
@@ -165,7 +167,7 @@ bool ATCMD_tryInvoke(const char *cmdTemplate, ...)
     if (pMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))             // attempt to acquire new atCmd lock for this instance
         return false;
 
-    g_lqLTEM.atcmd->invokedAt = pMillis();
+    g_lqLTEM.atcmd->execStart = pMillis();
 
     // TEMPORARY
     memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
@@ -184,7 +186,7 @@ void ATCMD_close()
 {
     pMutexGive(mutexTableIndex_atcmd);
     // g_lqLTEM.atcmd->isOpenLocked = false;
-    g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->invokedAt;
+    g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->execStart;
 }
 
 
@@ -226,6 +228,43 @@ resultCode_t ATCMD_awaitResult()
     return g_lqLTEM.atcmd->resultCode;
 }
 
+/**
+ * @brief Set task/thread owner for exclusive use of LTEm (public command actions)
+ * 
+ * @param ownerHandle Task/thread owning LTEm resources until owner cleared
+ */
+void ATCMD_setOwner(uint32_t ownerHandle)
+{
+    g_lqLTEM.atcmd->ownerTaskKey = ownerHandle;
+    g_lqLTEM.atcmd->ownerLTEmBackground = false;
+}
+
+
+/**
+ * @brief Get configured task/thread owner with exclusive use of the LTEm API
+ * 
+ * @return uint32_t Task/thread handle with ownership of LTEm resources
+ */
+uint32_t ATCMD_getOwner()
+{
+    return g_lqLTEM.atcmd->ownerTaskKey;
+}
+
+
+/**
+ * @brief Clears configured task/thread owner with exclusive use of the LTEm API.
+ * @note No warning or error is signalled if no owner currently configured.
+ */
+void ATCMD_clearOwner()
+{
+    g_lqLTEM.atcmd->ownerTaskKey = 0;
+    g_lqLTEM.atcmd->ownerLTEmBackground = false;
+}
+
+
+/* ================================================================================================
+ * Get command execution information
+ =============================================================================================== */
 
 // /**
 //  * @brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
@@ -241,7 +280,6 @@ resultCode_t ATCMD_awaitResult()
 //         g_lqLTEM.atcmd->responseParserFunc = cmdResponseParser;
 //     else
 //         g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
-
 //     return ATCMD_awaitResult();
 // }
 
@@ -530,7 +568,7 @@ static resultCode_t S__readResult()
 
     if (g_lqLTEM.atcmd->parserResult == cmdParseRslt_pending)                      // still pending, check for timeout error
     {
-        if (IS_ELAPSED(g_lqLTEM.atcmd->invokedAt, g_lqLTEM.atcmd->timeout))
+        if (IS_ELAPSED(g_lqLTEM.atcmd->execStart, g_lqLTEM.atcmd->timeout))
         {
             g_lqLTEM.atcmd->resultCode = resultCode__timeout;
             // g_lqLTEM.atcmd->isOpenLocked = false;                                   // close action to release action lock
@@ -555,7 +593,7 @@ static resultCode_t S__readResult()
         pMutexGive(mutexTableIndex_atcmd);
         // if (g_lqLTEM.atcmd->autoLock)                                               // if the individual cmd is controlling lock state
         //     g_lqLTEM.atcmd->isOpenLocked = false;                                   // equivalent to ATCMD_close()
-        g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->invokedAt;
+        g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->execStart;
         g_lqLTEM.atcmd->resultCode = resultCode__success;
         g_lqLTEM.metrics.cmdInvokeCnt++;
     }

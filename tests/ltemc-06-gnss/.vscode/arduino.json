@@ -1,7 +1,0 @@
-{
-    "sketch": "ltemc-06-gnss.ino",
-    "configuration": "opt=debug,usbstack=arduino,debug=on",
-    "board": "adafruit:samd:adafruit_feather_m0_express",
-    "output": "./build",
-    "port": "COM13"
-}

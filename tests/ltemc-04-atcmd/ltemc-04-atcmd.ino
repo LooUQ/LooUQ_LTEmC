@@ -142,7 +142,7 @@ void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 }
 
 
-void indicateFailure(char failureMsg[])
+void indicateFailure(const char* failureMsg)
 {
 	DPRINT(PRNT_ERROR, "\r\n** %s \r", failureMsg);
     DPRINT(PRNT_ERROR, "** Test Assertion Failed. \r");

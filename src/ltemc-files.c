@@ -44,9 +44,9 @@ Also add information on how to contact you by electronic and paper mail.
 
 /* Local Static Functions
 ------------------------------------------------------------------------------------------------------------------------- */
+static appGenRcvr_func* S__createFileCtrl(fileReceiver_func fileReceiver);
 static cmdParseRslt_t S__writeStatusParser();
 static resultCode_t S__filesRxHndlr();
-static appGenRcvr_func* S__createFileCtrl();
 
 /**
  * @brief Set the data callback function for filedata.
@@ -57,7 +57,7 @@ appGenRcvr_func* file_setAppReceiver(fileReceiver_func fileReceiver)
 
     if (FILE_CTRL->streamType == streamType_none)   // file ctrl pinned to last stream slot
     {
-        return S__createFileCtrl();
+        return S__createFileCtrl(fileReceiver);
 
         // g_lqLTEM.fileCtrl->streamType = streamType_file;                        // init singleton fileCtrl
         // g_lqLTEM.fileCtrl->dataRxHndlr = S__filesRxHndlr;
@@ -73,7 +73,8 @@ appGenRcvr_func* file_setAppReceiver(fileReceiver_func fileReceiver)
 resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
 {
     resultCode_t rslt;
-    const char *workPtr;
+    const char* response;
+    char *workPtr;
 
     // if (!ATCMD_awaitLock(ATCMD__defaultTimeout))
     //     return resultCode__locked;                                    // failed to get lock
@@ -87,9 +88,10 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
             break;
 
         // parse response >>  +QFLDS: <freesize>,<total_size>
-        workPtr = ATCMD_getResponseData() + file__dataOffset_info;    // skip past +QFLDS:
-        fsInfo->freeSz = strtol(workPtr, &workPtr, 10);
-        fsInfo->totalSz = strtol(++workPtr, &workPtr, 10);      // incr past comma, then grab total fileSystem size
+        response = ATCMD_getResponseData() + file__dataOffset_info;     // skip past +QFLDS:
+        fsInfo->freeSz = strtol(response, &workPtr, 10);
+        workPtr++;
+        fsInfo->totalSz = strtol(workPtr, NULL, 10);                    // incr past comma, then grab total fileSystem size
 
         // now get file collection info
         if (!ATCMD_tryInvoke("AT+QFLDS"))
@@ -100,9 +102,10 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
 
         // parse response
         // +QFLDS: <freesize>,<total_size>
-        workPtr = ATCMD_getResponseData() + file__dataOffset_info;    // skip past +QFLDS:
-        fsInfo->filesSz = strtol(workPtr, &workPtr, 10);
-        fsInfo->filesCnt = strtol(++workPtr, &workPtr, 10);     // incr past comma, then grab total fileSystem size
+        response = ATCMD_getResponseData() + file__dataOffset_info;     // skip past +QFLDS:
+        fsInfo->filesSz = strtol(response, &workPtr, 10);
+        workPtr++;
+        fsInfo->filesCnt = strtol(workPtr, NULL, 10);                   // incr past comma, then grab total fileSystem size
     } while (DO_ONCE);
 
     return rslt;
@@ -141,15 +144,17 @@ resultCode_t file_getFilelist(const char* namePattern, fileListResult_t *fileLis
 
         // parse response >>  +QFLST: <filename>,<file_size>
         uint8_t lineNm = 0;
-        const char *workPtr = ATCMD_getResponseData();
+
+        const char* response = ATCMD_getResponseData();
+        char* workPtr;
 
         for (size_t i = 0; i < file__fileListMaxCnt; i++)
         {
-            workPtr += 9;
-            uint8_t len = strchr(workPtr, '"') - workPtr;
-            strncpy(fileList->files[i].filename, workPtr, len);
-            workPtr += len + 2;
-            fileList->files[i].fileSz = strtol(workPtr, &workPtr, 10);
+            response += 9;
+            uint8_t len = strchr(response, '"') - response;
+            strncpy(fileList->files[i].filename, response, len);
+            response += len + 2;
+            fileList->files[i].fileSz = strtol(response, &workPtr, 10);
 
             workPtr += 2;
             if (*workPtr != '+')
@@ -278,7 +283,7 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
     ASSERT(bbffr_getCapacity(g_lqLTEM.iop->rxBffr) > (requestSz + 128));        // ensure ample space in buffer for I/O
 
     FILE_CTRL->fileHandle = fileHandle;                                         // stuff into fileCtrl (temporary) for dataRxHandler to reference
-    ATCMD_configDataMode(0, "CONNECT", S__filesRxHndlr, NULL, 0, S__filesRxHndlr, false);
+    ATCMD_configDataMode(0, "CONNECT\r\n", S__filesRxHndlr, NULL, 0, FILE_CTRL->appRcvr, false);
     ATCMD_ovrrdTimeout(2000);
 
     if (readSz > 0)
@@ -424,10 +429,12 @@ void file_getTsFilename(char* tsFilename, uint8_t fnSize, const char* suffix)
  * 
  * @return appGenRcvr_func* pointer to the created control structure
  */
-static appGenRcvr_func* S__createFileCtrl()
+static appGenRcvr_func* S__createFileCtrl(fileReceiver_func fileReceiver)
 {
     fileCtrl_t* fileCtrl = calloc(1, sizeof(ntwkOperator_t));               // once added, fileCtrl cannot be freed
     ASSERT(fileCtrl != NULL);                                               // heap exhausted if assert fails
+
+    fileCtrl->appRcvr = fileReceiver;                                       // callback to application for data receive
 
     g_lqLTEM.streams[ltem__fileStreamPos] = (streamCtrl_t*)fileCtrl;        // streamCtrl 
     FILE_CTRL->dataCntxt = file__dataContext;                               // shortcut, cast as fileCtrl
@@ -448,7 +455,7 @@ static cmdParseRslt_t S__writeStatusParser()
  *
  * @return number of bytes read
  */
-static resultCode_t S__filesRxHndlr()
+static resultCode_t S__filesRxHndlr(void)
 {
     char wrkBffr[32] = {0};
 
