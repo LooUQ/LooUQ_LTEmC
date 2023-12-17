@@ -763,3 +763,9 @@ static cmdParseRslt_t S__httpPostFileStatusParser()
 }
 
 #pragma endregion
+
+
+void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char * httpCstmHdrs, uint16_t httpCstmHdrsSz)
+{
+
+}

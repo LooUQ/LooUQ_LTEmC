@@ -155,6 +155,7 @@ void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t host
  */
 void http_enableCustomRequest(httpCtrl_t *httpCtrl);
 
+void http_enableCustomHdrs(httpCtrl_t *httpCtrl, char * httpCstmHdrs, uint16_t httpCstmHdrsSz);
 
 /**
  *	@brief Registers custom headers (char) buffer with HTTP control.
