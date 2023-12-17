@@ -48,6 +48,7 @@ enum http__constants
     http__defaultTimeoutBGxSec = 60,
     http__rqstTypeSz = 5,                               // GET or POST
     http__commonHeadersSz = 105,                        // For custom requests, the combined length of all the "common" headers 
+    http__maxHeaderKeySz = 48,                          // maximum length for a custom header key size to use with http_addHeader()
     http__readToFileNameSzMax = 80,
     http__readToFileTimeoutSec = 180,                   // Total number of seconds for read to file allowed (atcmd processing)
     http__readToFileInterPcktTimeoutSec = 20,           // BGx inter-packet timeout (max interval between two packets)

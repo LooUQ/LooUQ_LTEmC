@@ -29,8 +29,9 @@
  *****************************************************************************/
 
 #include <lq-embed.h>
-#define LOG_LEVEL LOGLEVEL_DBG
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LOG_LEVEL LOGLEVEL_WARN
+//#define DISABLE_ASSERT                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
+#define ASSERT_ACTION_STOP 
 
 #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
@@ -75,15 +76,13 @@ static char webPageBuf[1024];
 void setup() {
     #if defined(DIAGPRINT_SERIAL) || defined(LOG_SERIAL)
         Serial.begin(115200);
-        #if (SERIAL_OPT > 0)
-        while (!Serial) {}      // force wait for serial ready
-        #else
         delay(5000);            // just give it some time
-        #endif
     #endif
 
-    DPRINT(PRNT_RED, "\rLTEmC-09 HTTP Examples\r");
+    LOG_NOTICE("\r\nLTEmC-09 HTTP Examples\r\n");
     //lqDiag_setNotifyCallback(appEvntNotify);
+
+    ASSERT(false);
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
     ntwk_setOperatorScanMode(ntwkScanMode_lteonly);

@@ -206,7 +206,7 @@ void http_addBasicAuthHdr(httpRequest_t* httpReqst, const char *user, const char
 void http_addHeader(httpRequest_t* httpReqst, const char * keyValue)
 {
     ASSERT(keyValue != NULL);
-    ASSERT(strnstr(keyValue, ": ", 42) != NULL);                                            // check for HTTP header key/value delimiter, assume key length <= 40
+    ASSERT(strnstr(keyValue, ": ", http__maxHeaderKeySz) != NULL);                          // check for HTTP header key/value delimiter, assume key length <= 40
     ASSERT(httpReqst->contentLen == 0);                                                     // headers section still open to additions
     ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                       // existing request ends in \r\n
 
