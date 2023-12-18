@@ -28,11 +28,10 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-#define SRCFILE "MQT"            // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "MQT"             // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT         // expand DIAGPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
 
 #include "ltemc-iTypes.h"
 #include "ltemc-mqtt.h"
@@ -267,7 +266,7 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
         case 4:
             return resultCode__notFound;
         default:
-            return resultCode__extendedBase + rsltVal;
+            return resultCode__extendedCodesBase + rsltVal;
         }
     }
     return resultCode__internalError;
@@ -315,7 +314,7 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
             case 3:
                 return resultCode__notFound;                                    // user/server not found
             default:
-                return resultCode__extendedBase + rsltVal;
+                return resultCode__extendedCodesBase + rsltVal;
         }
     }
     return resultCode__badRequest; // command rejected by BGx

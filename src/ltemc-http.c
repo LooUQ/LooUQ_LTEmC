@@ -31,11 +31,13 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-#define SRCFILE "HTT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "HTT"                        // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
+
+#include <stdio.h>
+#include <string.h>
 
 #include "ltemc-iTypes.h"
 #include "ltemc-http.h"
@@ -63,7 +65,7 @@ static resultCode_t S__httpRxHndlr();
 /**
  *	@brief Create a HTTP(s) control structure to manage web communications. 
  */
-void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func recvCallback)
+void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_func recvCallback)
 {
     ASSERT(httpCtrl != NULL && recvCallback != NULL);
     ASSERT(dataCntxt < dataCntxt__cnt);
@@ -73,7 +75,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
     httpCtrl->dataCntxt = dataCntxt;
     httpCtrl->streamType = streamType_HTTP;
-    httpCtrl->appRecvDataCB = recvCallback;
+    httpCtrl->appRcvr = recvCallback;
     httpCtrl->dataRxHndlr = S__httpRxHndlr;
 
     httpCtrl->requestState = httpState_idle;
@@ -504,7 +506,7 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
 
     if (ATCMD_tryInvoke("AT+QHTTPREAD=%d", httpCtrl->timeoutSec))
     {
-        ATCMD_configDataMode(httpCtrl->dataCntxt, "CONNECT", S__httpRxHndlr, NULL, 0, httpCtrl->appRecvDataCB, false);
+        ATCMD_configDataMode(httpCtrl->dataCntxt, "CONNECT", S__httpRxHndlr, NULL, 0, httpCtrl->appRcvr, false);
         // ATCMD_setStreamControl("CONNECT", (streamCtrl_t*)httpCtrl);
         return ATCMD_awaitResult();                                             // dataHandler will be invoked by atcmd module and return a resultCode
     }
@@ -534,7 +536,7 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename, uint32_
         if (strlen(ATCMD_getRawResponse()) > sizeof("AT+QHTTPREADFILE: ") && *ATCMD_getResponseData() == '0')
             return resultCode__success;
     }
-    return resultCode__extendedBase + _rslt;
+    return resultCode__extendedCodesBase + _rslt;
 }
 
 
@@ -620,7 +622,8 @@ static resultCode_t S__httpRxHndlr()
     char wrkBffr[32];
     uint16_t pageRslt = 0;
 
-    httpCtrl_t *httpCtrl = (httpCtrl_t*)ltem_getStreamFromCntxt(g_lqLTEM.atcmd->dataMode.contextKey, streamType_HTTP);
+    // httpCtrl_t *httpCtrl = (httpCtrl_t*)ltem_getStreamFromCntxt(g_lqLTEM.atcmd->dataMode.contextKey, streamType_HTTP);
+    httpCtrl_t *httpCtrl = (httpCtrl_t*)g_lqLTEM.streams[g_lqLTEM.atcmd->dataMode.contextKey];
     ASSERT(httpCtrl != NULL);                                                                           // ASSERT data mode and stream context are consistent
 
     uint8_t popCnt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
@@ -648,7 +651,7 @@ static resultCode_t S__httpRxHndlr()
             DPRINT(PRNT_CYAN, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r\n", streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
 
             // forward to application
-            ((httpRecv_func)(*httpCtrl->appRecvDataCB))(httpCtrl->dataCntxt, streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
+            ((httpRecv_func)(*httpCtrl->appRcvr))(httpCtrl->dataCntxt, streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
             bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                             // commit POP
         }
 

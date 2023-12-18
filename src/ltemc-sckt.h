@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-sckt.h
   @brief Modem socket (UDP/TCP) communication functions/services.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -32,7 +32,6 @@ Also add information on how to contact you by electronic and paper mail.
 #define __LTEMC_SCKT_H__
 
 #include <lq-types.h>
-#include <lq-bBuffer.h>
 #include "ltemc-iTypes.h"
 
 
@@ -88,7 +87,7 @@ typedef struct scktCtrl_tag
     dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
     
     dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
-    appRecv_func appRecvDataCB;             // callback into host application with data (cast from generic func* to stream specific function)
+    scktRecv_func appRecvCB;                    // callback into host application with data (cast from generic func* to stream specific function)
     
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 

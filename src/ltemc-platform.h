@@ -35,11 +35,13 @@ Also add information on how to contact you by electronic and paper mail.
 #define __LTEMC_PLATFORM_H__
 
 
-#include "platform/ltemcPlatform-pins.h"
-#include "platform/platform-gpio.h"
-#include "platform/platform-timing.h"
-#include "platform/platform-spi.h"
-#include "platform/platform-signal.h"
+#include "ltemc-pins.h"
+
+// from loouq-embedLib
+#include <platform/lq-platform_gpio.h>
+#include <platform/lq-platform_timing.h>
+#include <platform/lq-platform_spi.h>
+#include <platform/lq-platform_signal.h>
 
 // #include "platform/lqPlatform-debug.h"
 

@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-quectel-bg.c
   @brief BGx module functions/services.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -30,15 +30,14 @@ Also add information on how to contact you by electronic and paper mail.
 
 **************************************************************************** */
 
-#define SRCFILE "BGX"                           // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "BGX"                            // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 //#define ENABLE_DIAGPRINT                        // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE                // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
 
 #include "ltemc-iTypes.h"
 #include "ltemc-quectel-bg.h"
-#include "platform\platform-gpio.h"
+#include <platform\lq-platform_gpio.h>
 
 extern ltemDevice_t g_lqLTEM;
 

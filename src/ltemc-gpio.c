@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-gpio.c
   @brief Modem GPIO/ADC expansion features/services.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -31,11 +31,10 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-#define SRCFILE "PIO"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "PIO"                        // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 //#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
 
 #include "ltemc-iTypes.h"
 #include "ltemc-gpio.h"

@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file
+  @file ltemc-files.c
   @brief Modem filesystem storage features/services.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -28,11 +28,12 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-#define SRCFILE "FIL"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "FIL"                        // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 //#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
+
+#include <string.h>
 
 #include "ltemc-files.h"
 
@@ -186,7 +187,7 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
         rslt = ATCMD_awaitResult();
         if (rslt != resultCode__success)
         {
-            if (rslt == resultCode__cmError)
+            if (rslt >= resultCode__extendedCodesBase)
             {
                 uint16_t errDetail = ATCMD_getErrorDetailCode();
                 if (errDetail == fileErr__fileAlreadyOpen || errDetail == fileErr__fileAlreadyOpen)
@@ -276,13 +277,12 @@ resultCode_t file_closeAll()
 }
 
 
-
 resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz)
 {
-    ASSERT(g_lqLTEM.fileCtrl->appRecvDataCB);                                   // assert that there is a app func registered to receive read data
-    ASSERT(bbffr_getCapacity(g_lqLTEM.iop->rxBffr) > (requestSz + 128));        // ensure ample space in buffer for I/O
+    ASSERT(g_lqLTEM.streams[ltemSz__streamCnt - 1]->appRcvr);                                       // assert that there is a app func registered to receive read data
+    ASSERT(bbffr_getCapacity(g_lqLTEM.iop->rxBffr) > (requestSz + 128));                            // ensure ample space in buffer for I/O
 
-    FILE_CTRL->fileHandle = fileHandle;                                         // stuff into fileCtrl (temporary) for dataRxHandler to reference
+    FILE_CTRL->fileHandle = fileHandle;                                                             // stuff into fileCtrl (temporary) for dataRxHandler to reference
     ATCMD_configDataMode(0, "CONNECT\r\n", S__filesRxHndlr, NULL, 0, FILE_CTRL->appRcvr, false);
     ATCMD_ovrrdTimeout(2000);
 

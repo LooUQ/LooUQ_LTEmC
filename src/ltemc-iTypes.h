@@ -1,6 +1,6 @@
 /** ***************************************************************************
-  @file 
-  @brief LTEm public API typedef/function prototype declarations.
+  @file ltemc-iTypes.h
+  @brief LTEmC internal type/function declarations.
 
   @author Greg Terrell, LooUQ Incorporated
 
@@ -76,33 +76,21 @@ Also add information on how to contact you by electronic and paper mail.
 // #include "ltemc-tls.h"
 
 
-
-// /**
-//  * @brief Stream types supported by LTEmC 
-//  */
-// typedef enum streamType_tag
-// {
-//     streamType_UDP = 'U',
-//     streamType_TCP = 'T',
-//     streamType_SSLTLS = 'S',
-//     streamType_MQTT = 'M',
-//     streamType_HTTP = 'H',
-//     streamType_file = 'F',
-//     streamType_SCKT = 'K',
-//     streamType__ANY = 0
-// } streamType_t;
-
-
-// /** 
-//  *  @brief Typed numeric constants for stream peers subsystem (sockets, mqtt, http)
-//  */
-// enum streams__constants
-// {
-//     streams__ctrlMagic = 0x186F,
-//     streams__maxContextProtocols = 5,
-//     streams__typeCodeSz = 4,
-//     streams__urcPrefixesSz = 60
-// };
+/**
+ * @brief Stream types supported by LTEmC 
+ */
+typedef enum streamType_tag
+{
+    streamType_none = 0,
+    streamType_UDP = 'U',
+    streamType_TCP = 'T',
+    streamType_SSLTLS = 'S',
+    streamType_MQTT = 'M',
+    streamType_HTTP = 'H',
+    streamType_file = 'F',
+    streamType_SCKT = 'K',
+    streamType__ANY = '*'
+} streamType_t;
 
 
 /**
@@ -115,22 +103,6 @@ typedef enum recvEvent_tag
     recvEvent_timeout
 } recvEvent_t;
 
-
-/** 
- *  @brief Enum of the available streamCntxt indexes for BGx (only SSL/TLS capable contexts are supported).
- */
-typedef enum streamCntxt_tag
-{
-    streamCntxt_0 = 0,
-    streamCntxt_1 = 1,
-    streamCntxt_2 = 2,
-    streamCntxt_3 = 3,
-    streamCntxt_4 = 4,
-    streamCntxt_5 = 5,
-    streamCntxt__cnt = 6,
-    streamCntxt_file = 9,
-    streamCntxt__none = 255
-} streamCntxt_t;
 
 
 
@@ -152,27 +124,37 @@ typedef enum streamCntxt_tag
 // typedef void (*appRcvProto_func)();                                  // prototype func() for stream recvData callback
 
 
-// /**
-//  * @brief Internal generic stream control matching protocol specific controls (for 1st set of fields)
-//  */
-// typedef struct streamCtrl_tag
-// {
-//     streamType_t streamType;                // stream type (cast to char from enum )
-//     dataCntxt_t dataCntxt;                  // stream context 
-//     int8_t asyncIndx;                       // index of matching struct containing async stream function pointers
-// //    appGenRcvr_func appRcvr;                // application receiver for incoming network data
-// } streamCtrl_t;
 
 
 // /**
-//  * @brief Asynchronous stream control, registered/deregistered with LTEmC on stream open/close
+//  * @brief DATA-MODE receiver (ATCMD processor). 
+//  * @details Each stream type will have one function (possibly multiple functions) that match this prototype and a capable of 
+//  * processing the stream coming in from LTEm device via the block buffer and can forward to the application.
 //  */
-// typedef struct asyncCtrl_tag
-// {
-//     char streamType;                        // stream type; async currently is MQTT and sockets (HTTP/filesystem are synchronous)
-//     urcEvntHndlr_func urcHndlr;             // URC handler (invoke by eventMgr)
-//     dataHndlr_func dataRxHndlr;             // function to handle data streaming, initiated by eventMgr() or atcmd module
-// } asyncCtrl_t;
+// typedef resultCode_t (*dmRcvr_func)(void);                              // data mode buffer receiver (processes data stream)
+
+// /**
+//  * @brief Data handler: generic function signature that can be a stream sync receiver or a general purpose ATCMD data mode handler
+//  */
+// //typedef void (*dataHndlr_func)(void);                                   // callback into stream data handler (sync transfer)
+// typedef resultCode_t (*dataHndlr_func)(void);                                   // callback into stream data handler (sync transfer)
+
+
+
+
+
+/**
+ * @brief Internal generic stream control matching protocol specific controls (for 1st set of fields)
+ */
+typedef struct streamCtrl_tag
+{
+    dataCntxt_t dataCntxt;                  // stream context 
+    streamType_t streamType;                // stream type (cast to char from enum )
+    urcEvntHndlr_func urcHndlr;             // URC handler (invoke by eventMgr)
+    dataHndlr_func dataRxHndlr;             // function to handle data streaming, initiated by eventMgr() or atcmd module
+    appGenRcvr_func appRcvr;                // application receiver for incoming network data
+} streamCtrl_t;
+
 
 
 /* Metric Type Definitions
@@ -253,6 +235,10 @@ void NTWK_initRatOptions();
 void NTWK_applyPpdNetworkConfig();
 
 
+/* --------------------------------------------------------------------------------------------- */
+#pragma region STREAM Registration Functions
+/* --------------------------------------------------------------------------------------------- */
+
 /**
  * @brief Register a stream; aka add it from the active streams array
  * 
@@ -277,6 +263,10 @@ void STREAM_deregister(streamCtrl_t *streamHdr);
  * @return streamCtrlHdr_t* 
  */
 streamCtrl_t* STREAM_find(uint8_t dataCntxt, streamType_t streamType);
+
+
+#pragma endregion
+/* --------------------------------------------------------------------------------------------- */
 
 
 #ifdef __cplusplus

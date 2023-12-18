@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-nxp-sc16is.c
   @brief UART control and transfer functions/services.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -30,11 +30,10 @@ Also add information on how to contact you by electronic and paper mail.
 
 // https://www.nxp.com/docs/en/data-sheet/SC16IS740_750_760.pdf
 
-#define SRCFILE "NXP" // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "NXP"                        // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 // #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
 // #define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
 
 #include "ltemc-iTypes.h"
 #include "ltemc-platform.h"
@@ -42,10 +41,10 @@ Also add information on how to contact you by electronic and paper mail.
 
 extern ltemDevice_t g_lqLTEM;
 
-#define REG_MODIFY(REG_NAME, MODIFY_ACTION)                     \
-    REG_NAME REG_NAME##_reg = {0};                              \
-    REG_NAME##_reg.reg = SC16IS7xx_readReg(REG_NAME##_regAddr); \
-    MODIFY_ACTION                                               \
+#define REG_MODIFY(REG_NAME, MODIFY_ACTION)                         \
+    REG_NAME REG_NAME##_reg = {0};                                  \
+    REG_NAME##_reg.reg = SC16IS7xx_readReg(REG_NAME##_regAddr);     \
+    MODIFY_ACTION                                                   \
     SC16IS7xx_writeReg(REG_NAME##_regAddr, REG_NAME##_reg.reg);
 
 #pragma region Public Functions

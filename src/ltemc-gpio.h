@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-gpio..c
   @brief Modem GPIO/ADC expansion features/services.
 
   @author Greg Terrell, LooUQ Incorporated

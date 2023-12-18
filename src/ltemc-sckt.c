@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-sckt.c
   @brief Modem socket (UDP/TCP) communication functions/services.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -28,14 +28,15 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-#define SRCFILE "SKT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "SKT"                        // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 //#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
 
+#include <string.h>
+
+#include "ltemc-iTypes.h"
 #include "ltemc-sckt.h"
-// #include "ltemc-atcmd.h"
 
 
 extern ltemDevice_t g_lqLTEM;
@@ -79,7 +80,7 @@ void SCKT_urcHandler();                                                 // parse
 /**
  *	@brief Create a socket data control(TCP/UDP/SSL).
  */
-void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t protocol, appRecv_func recvCallback)
+void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t protocol, scktRecv_func appRecvCB)
 {
     ASSERT(dataCntxt < dataCntxt__cnt);
 
@@ -92,7 +93,7 @@ void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t 
     scktCtrl->flushing = false;
     scktCtrl->statsRxCnt = 0;
     scktCtrl->statsTxCnt = 0;
-    scktCtrl->appRecvDataCB = recvCallback;
+    scktCtrl->appRecvCB = appRecvCB;
 
     g_lqLTEM.streams[dataCntxt] = (streamCtrl_t*)scktCtrl;
 }
@@ -351,12 +352,12 @@ void SCKT_urcHandler()
             uint16_t irdRqstSz = bbffr_getVacant(g_lqLTEM.iop->rxBffr) / 2;     // request up to half of available buffer space
             if (isUdpTcp)
             {
-                ATCMD_configDataMode(scktCtrl->dataCntxt, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
+                ATCMD_configDataMode(scktCtrl->dataCntxt, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvCB, false);
                 ATCMD_tryInvoke("AT+QIRD=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             else
             {
-                ATCMD_configDataMode(scktCtrl->dataCntxt, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
+                ATCMD_configDataMode(scktCtrl->dataCntxt, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvCB, false);
                 ATCMD_tryInvoke("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             ATCMD_awaitResult();
@@ -445,7 +446,7 @@ static resultCode_t S__scktRxHndlr()
         DPRINT(PRNT_CYAN, "scktRxHndlr() ptr=%p, blkSz=%d, availSz=%d\r", streamPtr, blockSz, irdSz);
 
         irdSz -= blockSz;
-        ((scktAppRecv_func)(*scktCtrl->appRecvDataCB))(scktCtrl->dataCntxt, streamPtr, blockSz, irdSz == 0);    // forward to application
+        ((scktAppRecv_func)(*scktCtrl->appRecvCB))(scktCtrl->dataCntxt, streamPtr, blockSz, irdSz == 0);        // forward to application
         bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                     // commit POP
 
         if (irdSz == 0)                                                                                         // done with data

@@ -31,11 +31,10 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-#define SRCFILE "GEO"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "GEO"                        // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 //#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
 
 
 #include <stdio.h>

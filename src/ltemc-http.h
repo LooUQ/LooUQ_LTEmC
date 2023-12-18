@@ -99,7 +99,7 @@ typedef enum httpState_tag
 /**
  * @brief HTTP application data receiver prototype
  */
-typedef void (*httpRecv_func)(dataCntxt_t dataCntxt, char* dataPtr, uint16_t dataSz, bool isFinal);  // stream callback to deliver data to application
+typedef void (*httpAppRcvr_func)(dataCntxt_t dataCntxt, char* dataPtr, uint16_t dataSz, bool isFinal);  // stream callback to deliver data to application
 
 
 typedef struct httpCtrl_tag
@@ -107,6 +107,7 @@ typedef struct httpCtrl_tag
     char streamType;                            // stream type
     dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
     dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
+    httpAppRcvr_func appRcvr;
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */

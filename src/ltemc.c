@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc.c
   @brief Driver application for control and use of the LooUQ LTEm cellular modem.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -31,11 +31,13 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-#define SRCFILE "LTE"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+#define LQ_SRCFILE "LTE"                        // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+//#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 
+#include <stdio.h>
+#include <string.h>
 
 #include "ltemc.h"
 #include "ltemc-iTypes.h"
@@ -99,13 +101,13 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     #endif
 
     g_lqLTEM.ntwkSettings =  calloc(1, sizeof(ntwkSettings_t));
-    ASSERT(g_lqLTEM.modemSettings != NULL);
+    ASSERT(g_lqLTEM.ntwkSettings != NULL);
 
     g_lqLTEM.modemInfo = calloc(1, sizeof(modemInfo_t));
     ASSERT(g_lqLTEM.modemInfo != NULL);
 
     g_lqLTEM.ntwkOperator =  calloc(1, sizeof(ntwkOperator_t));
-    ASSERT(g_lqLTEM.operatorInfo != NULL);
+    ASSERT(g_lqLTEM.ntwkOperator != NULL);
 
     IOP_create();
     

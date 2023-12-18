@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc.h
   @brief Driver application for control and use of the LooUQ LTEm cellular modem.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -34,10 +34,19 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_H__
 #define __LTEMC_H__
 
-#include <lq-types.h>                   // LooUQ embedded device library typedefs, common across products/libraries
-#include <lqdiag.h>                     // PRINTDBG and ASSERT diagnostic data collection
+/**
+ * @brief LTEmC Version and product code 
+ */
+#define LTEmC_VERSION "4.1.0"
+#define LQ_PRODUCT "LM"                    // For use in LooUQ-Diagnostics
+
+
+
+#include <lq-types.h>                   // LooUQ embedded device library, types common across products/libraries
+#include <lq-logging.h>                 // LooUQ embedLib logging features
+#include <lq-diagnostics.h>             // LooUQ embedLib diagnostics (includes ASSERT functionality)
 #include "ltemc-platform.h"             // platform abstractions (arduino, etc.)
-#include "ltemc-network.h"              // include network in the core modem functionality
+#include "ltemc-network.h"              // network in the core modem functionality
 
 
 /* Add the following LTEmC feature sets as required for your project's main .cpp or .c file 
@@ -52,12 +61,6 @@ Also add information on how to contact you by electronic and paper mail.
 // #include "ltemc-gpio.h"              // use of BGx module GPIO expansion functionality (LTEm3F)
 /* ---------------------------------------------------------------------------------------------- */
 
-/**
- * @brief LTEmC Version and product code 
- */
-#define LTEmC_VERSION "4.1.0"
-#define PRODUCT "LM"                    // For use in LooUQ-Diagnostics
-
 
 /**
  * @brief LTEmC internal object size definitions
@@ -67,7 +70,7 @@ enum ltemSz__constants
 {
     ltemSz__bufferSz_rx = 2000,         // Receive buffer from module, holds command responses, async event notifications, and syncronous data
     // ltemSz__moduleTypeSz = 8,
-    ltemSz__streamCnt = 4,              // 3 concurrent streams; BGx support 6 SSL/TLS capable data contexts
+    ltemSz__streamCnt = 6,              // 3 concurrent streams; BGx support 6 SSL/TLS capable data contexts
     ltemSz__asyncStreamCnt = 2,         // number of async streams (these require background handlers registration)
     ltemSz__errorDetailSz = 18,         // max length of error detail reported 
     ltemSz__dateTimeBffrSz = 24,        // max length of the date/time buffer
@@ -158,6 +161,22 @@ typedef struct modemInfo_tag
 	char fwver[PSZ(ltem__dvcFwVerSz)];       // Firmware version of the device
     char swver[PSZ(ltem__swVerSz)];          // software driver version
 } modemInfo_t;
+
+
+
+/**
+ * @brief Data handler: generic function signature that can be a stream sync receiver or a general purpose ATCMD data mode handler
+ */
+typedef resultCode_t (*dataHndlr_func)(void);
+
+
+
+/** @brief Generic APPLICATION callback data receiver (in stream header) cast to a stream specific receiver signature.
+ *  @details Each stream type has a concrete data receive type tailored to the specifics of the stream (defined in <stream>.h)
+ *  Examples: MQTT receiver conveys topic, file receiver includes handle
+ */
+typedef void (*appGenRcvr_func)(void);
+
 
 
 #ifdef __cplusplus

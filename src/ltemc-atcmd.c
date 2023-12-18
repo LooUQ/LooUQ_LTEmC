@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-atcmd.c
   @brief Modem command/response and data transfer functions.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -31,16 +31,18 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-#define SRCFILE "ATC"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "ATC"                        // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+
 // #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 // #define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
 
+#include <stdio.h>
+#include <string.h>
 #include <stdarg.h>
 
-#include "ltemc-nxp-sc16is.h"
 #include "ltemc-iTypes.h"
+#include "ltemc-nxp-sc16is.h"
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
@@ -69,7 +71,7 @@ void ATCMD_reset(bool releaseLock)
 
     // request side of action
     if (releaseLock)
-        pMutexGive(mutexTableIndex_atcmd);
+        lqMutexGive(mutexTableIndex_atcmd);
         // g_lqLTEM.atcmd->isOpenLocked = false; // reset current lock
 
     memset(g_lqLTEM.atcmd->cmdStr, 0, atcmd__cmdBufferSz);
@@ -94,8 +96,8 @@ void ATCMD_reset(bool releaseLock)
  */
 void ATCMD_configDataMode(uint16_t contextKey, const char *trigger, dataHndlr_func dataHndlr, char *dataLoc, uint16_t dataSz, appGenRcvr_func appRecvCB, bool runParser)
 {
-    ASSERT(strlen(trigger) > 0); // verify 3rd party setup (stream)
-    ASSERT(rxDataHndlr != NULL); //
+    ASSERT(strlen(trigger) > 0);                                        // verify 3rd party setup (stream)
+    ASSERT(dataHndlr != NULL);                                          // data handler is required, appRecvCB is optional
 
     memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
 
@@ -146,13 +148,13 @@ cmdResponseParser_func ATCMD_ovrrdParser(cmdResponseParser_func newParser)
 bool ATCMD_tryInvoke(const char *cmdTemplate, ...)
 {
     if (g_lqLTEM.atcmd->ownerTaskKey > 0 &&                                     // LTEm owner priority exists
-        g_lqLTEM.atcmd->ownerTaskKey != pGetTaskHandle()                        // current task is not owner
+        g_lqLTEM.atcmd->ownerTaskKey != lqGetTaskHandle()                        // current task is not owner
         && !g_lqLTEM.atcmd->ownerLTEmBackground)                                // current task is not performing a LTEm background process
     {
         g_lqLTEM.atcmd->resultCode = resultCode__locked;
         return false;
     }
-    if (!pMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))            // non-owner priority, command scope LTEm lock (exclusive through command complete)
+    if (!lqMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))            // non-owner priority, command scope LTEm lock (exclusive through command complete)
     {
         g_lqLTEM.atcmd->resultCode = resultCode__locked;
         return false;
@@ -164,7 +166,7 @@ bool ATCMD_tryInvoke(const char *cmdTemplate, ...)
     vsnprintf(g_lqLTEM.atcmd->cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
     strcat(g_lqLTEM.atcmd->cmdStr, "\r");
 
-    if (pMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))             // attempt to acquire new atCmd lock for this instance
+    if (lqMutexTake(mutexTableIndex_atcmd, g_lqLTEM.atcmd->timeout))             // attempt to acquire new atCmd lock for this instance
         return false;
 
     g_lqLTEM.atcmd->execStart = pMillis();
@@ -184,7 +186,7 @@ bool ATCMD_tryInvoke(const char *cmdTemplate, ...)
  */
 void ATCMD_close()
 {
-    pMutexGive(mutexTableIndex_atcmd);
+    lqMutexGive(mutexTableIndex_atcmd);
     // g_lqLTEM.atcmd->isOpenLocked = false;
     g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->execStart;
 }
@@ -327,7 +329,7 @@ const char* ATCMD_getRawResponse()
  */
 const char* ATCMD_getResponseData()
 {
-    ASSERT(g_lqLTEM.atcmd->response != NULL);
+    ASSERT(g_lqLTEM.atcmd->rawResponse != NULL);
 
     char* delimPtr = memchr(g_lqLTEM.atcmd->rawResponse, ':', atcmd__respBufferSz);        // looking for ": "
     if (*(delimPtr + 1) == ' ')
@@ -421,9 +423,9 @@ void ATCMD_exitDataMode()
  */
 void ATCMD_exitTransparentMode()
 {
-    lDelay(1000);
+    pDelay(1000);
     IOP_startTx("+++", 3); // send +++, gaurded by 1 second of quiet
-    lDelay(1000);
+    pDelay(1000);
 }
 
 #pragma endregion
@@ -456,10 +458,6 @@ void ATCMD_configureResponseParser(const char *pPreamble, bool preambleReqd, con
     g_lqLTEM.atcmd->parserConfig.lengthReqd = lengthReqd;
 }
 
-
-
-
-
 #pragma region LTEmC Internal Functions
 /*-----------------------------------------------------------------------------------------------*/
 
@@ -489,7 +487,7 @@ void ATCMD_configureResponseParser(const char *pPreamble, bool preambleReqd, con
 //  */
 // bool ATCMD_isLockActive()
 // {
-//     return pMutexCount(mutexTableIndex_atcmd) == 0;
+//     return lqMutexCount(mutexTableIndex_atcmd) == 0;
 //     // return g_lqLTEM.atcmd->isOpenLocked;
 // }
 
@@ -555,7 +553,7 @@ static resultCode_t S__readResult()
     if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_error)                         // check error bit
     {
         if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_moduleError)               // BGx ERROR or CME/CMS
-            g_lqLTEM.atcmd->resultCode = resultCode__cmError;
+            g_lqLTEM.atcmd->resultCode = resultCode__extendedCodesBase;
 
         else if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_countShort)           // did not find expected tokens
             g_lqLTEM.atcmd->resultCode = resultCode__notFound;
@@ -590,7 +588,7 @@ static resultCode_t S__readResult()
 
     if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_success)                        // success bit: parser completed with success (may have excessRecv warning)
     {
-        pMutexGive(mutexTableIndex_atcmd);
+        lqMutexGive(mutexTableIndex_atcmd);
         // if (g_lqLTEM.atcmd->autoLock)                                               // if the individual cmd is controlling lock state
         //     g_lqLTEM.atcmd->isOpenLocked = false;                                   // equivalent to ATCMD_close()
         g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->execStart;
@@ -656,7 +654,7 @@ void ATCMD_setOkResponseParser()
 /**
  * @brief Stardard TX (out) data handler used by dataMode.
  */
-resultCode_t ATCMD_stdTxDataHndlr()
+resultCode_t ATCMD_txOkDataHndlr()
 {
     IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz);
 
@@ -879,16 +877,17 @@ static void S__getToken(const char* preamble, uint8_t tokenIndx, char* token, ui
 
 #pragma endregion
 
+
 /* --------------------------------------------------------------------------------------------- */
 #pragma region Stream Registration 
 /* --------------------------------------------------------------------------------------------- */
 
-void ATCMD_registerStream(streamCtrl_t *streamCtrl)
+void STREAM_register(streamCtrl_t *streamCtrl)
 {
     DPRINT_V(PRNT_INFO, "Registering Stream\r\n");
-    streamCtrl_t* stream = ltem_findStreamFromCntxt(streamCtrl->dataCntxt, streamType__ANY);
+    streamCtrl_t* prev = ltem_findStreamFromCntxt(streamCtrl->dataCntxt, streamType__ANY);
 
-    if (stream != NULL)
+    if (prev != NULL)
         return;
 
     for (size_t i = 0; i < ltemSz__streamCnt; i++)
@@ -898,21 +897,16 @@ void ATCMD_registerStream(streamCtrl_t *streamCtrl)
             g_lqLTEM.streams[i] = streamCtrl;
             switch (streamCtrl->streamType)
             {
-                // case streamType_file:
-                //     g_lqLTEM.urcEvntHndlrs[i] = file_urcHandler;         // file module has no URC events
-                //     break;
-                
-                // case streamType_HTTP:
-                //     g_lqLTEM.urcEvntHndlrs[i] = HTTP_urcHandler;
-                //     break;
+                // case streamType_file:                                    // file module has no URC events
+                // case streamType_HTTP:                                    // HTTP module has no URC events
 
-                // case streamType_MQTT:
-                //     g_lqLTEM.urcEvntHndlrs[i] = MQTT_urcHandler;
-                //     break;
+                case streamType_MQTT:
+                    // g_lqLTEM.streams[i]->urcHndlr = MQTT_urcHandler;
+                    break;
 
-                // case streamType_SCKT:
-                //     g_lqLTEM.urcEvntHndlrs[i] = SCKT_urcHandler;
-                //     break;
+                case streamType_SCKT:
+                    // g_lqLTEM.streams[i]->urcHndlr = SCKT_urcHandler;
+                    break;
             }
             return;
         }
@@ -920,7 +914,7 @@ void ATCMD_registerStream(streamCtrl_t *streamCtrl)
 }
 
 
-void ATCMD_deregisterStream(streamCtrl_t *streamCtrl)
+void STREAM_deregister(streamCtrl_t *streamCtrl)
 {
     for (size_t i = 0; i < ltemSz__streamCnt; i++)
     {
@@ -934,7 +928,7 @@ void ATCMD_deregisterStream(streamCtrl_t *streamCtrl)
 }
 
 
-uint8_t ATCMD_getStreamIndex(uint8_t dataCntxt, streamType_t streamType)
+streamCtrl_t* STREAM_find(uint8_t dataCntxt, streamType_t streamType)
 {
     for (size_t i = 0; i < ltemSz__streamCnt; i++)
     {
@@ -942,11 +936,11 @@ uint8_t ATCMD_getStreamIndex(uint8_t dataCntxt, streamType_t streamType)
         {
             if (streamType == streamType__ANY)
             {
-                return i;
+                return g_lqLTEM.streams[i];
             }
             else if (g_lqLTEM.streams[i]->streamType == streamType)
             {
-                return i;
+                return g_lqLTEM.streams[i];
             }
             else if (streamType == streamType_SCKT)
             {
@@ -954,14 +948,13 @@ uint8_t ATCMD_getStreamIndex(uint8_t dataCntxt, streamType_t streamType)
                     g_lqLTEM.streams[i]->streamType == streamType_TCP ||
                     g_lqLTEM.streams[i]->streamType == streamType_SSLTLS)
                 {
-                    return i;
+                    return g_lqLTEM.streams[i];
                 }
             }
         }
     }
     return NULL;
 }
-
 
 /* --------------------------------------------------------------------------------------------- */
 #pragma endregion

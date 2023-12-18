@@ -33,9 +33,8 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_ATCMD_H__
 #define __LTEMC_ATCMD_H__
 
-// #include "ltemc-iTypes.h"
+#include "ltemc-iTypes.h"
 // #include <lq-bBuffer.h>
-//#include "ltemc-streams.h"
 
 
 /* --------------------------------------------------------------------------------------------- */
@@ -83,23 +82,6 @@ typedef enum cmdParseRslt_tag
 } cmdParseRslt_t;
 
 
-/**
- * @brief Stream types supported by LTEmC 
- */
-typedef enum streamType_tag
-{
-    streamType_none = 0,
-    streamType_UDP = 'U',
-    streamType_TCP = 'T',
-    streamType_SSLTLS = 'S',
-    streamType_MQTT = 'M',
-    streamType_HTTP = 'H',
-    streamType_file = 'F',
-    streamType_SCKT = 'K',
-    streamType__ANY = '*'
-} streamType_t;
-
-
 /* --------------------------------------------------------------------------------------------- */
 #pragma endregion Enum Declarations
 /* --------------------------------------------------------------------------------------------- */
@@ -124,17 +106,17 @@ typedef cmdParseRslt_t (*cmdResponseParser_func)(void);                 // comma
 typedef resultCode_t (*urcEvntHndlr_func)();                            // callback into stream specific URC handler (async recv)
 
 
-/**
- * @brief DATA-MODE receiver (ATCMD processor). 
- * @details Each stream type will have one function (possibly multiple functions) that match this prototype and a capable of 
- * processing the stream coming in from LTEm device via the block buffer and can forward to the application.
- */
-typedef resultCode_t (*dmRcvr_func)(void);                              // data mode buffer receiver (processes data stream)
-/**
- * @brief Data handler: generic function signature that can be a stream sync receiver or a general purpose ATCMD data mode handler
- */
-//typedef void (*dataHndlr_func)(void);                                   // callback into stream data handler (sync transfer)
-typedef resultCode_t (*dataHndlr_func)(void);                                   // callback into stream data handler (sync transfer)
+// /**
+//  * @brief DATA-MODE receiver (ATCMD processor). 
+//  * @details Each stream type will have one function (possibly multiple functions) that match this prototype and a capable of 
+//  * processing the stream coming in from LTEm device via the block buffer and can forward to the application.
+//  */
+// typedef resultCode_t (*dmRcvr_func)(void);                              // data mode buffer receiver (processes data stream)
+// /**
+//  * @brief Data handler: generic function signature that can be a stream sync receiver or a general purpose ATCMD data mode handler
+//  */
+// //typedef void (*dataHndlr_func)(void);                                   // callback into stream data handler (sync transfer)
+// typedef resultCode_t (*dataHndlr_func)(void);                                   // callback into stream data handler (sync transfer)
 
 
 /** @brief Generic APPLICATION callback data receiver (in stream header) cast to a stream specific receiver signature.
@@ -162,7 +144,7 @@ typedef struct dataMode_tag                                         // the comma
     dmState_t dmState;                                              // current state of the data mode transition
     uint16_t contextKey;                                            // unique identifier for data flow, could be dataContext(proto), handle(files), etc.
     char trigger[atcmd__dataModeTriggerSz];                         // char sequence that signals the transition to data mode, data mode starts at the following character
-    dmRcvr_func dataHndlr;                                          // data handler function (TX/RX)
+    dataHndlr_func dataHndlr;                                       // data handler function (TX/RX)
     appGenRcvr_func appRecvCB;
     char* txDataLoc;                                                // location of data buffer (TX only)
     uint16_t txDataSz;                                              // size of TX data or RX request
@@ -214,19 +196,6 @@ typedef struct atcmd_tag
     // char* response;                                              // PTR variable section of response.
     // int32_t retValue;                                            // (deprecated) optional signed int value extracted from response
 } atcmd_t;
-
-/**
- * @brief Internal generic stream control matching protocol specific controls (for 1st set of fields)
- */
-typedef struct streamCtrl_tag
-{
-    dataCntxt_t dataCntxt;                  // stream context 
-    streamType_t streamType;                // stream type (cast to char from enum )
-    urcEvntHndlr_func urcHndlr;             // URC handler (invoke by eventMgr)
-    dataHndlr_func dataRxHndlr;             // function to handle data streaming, initiated by eventMgr() or atcmd module
-    appGenRcvr_func appRcvr;                // application receiver for incoming network data
-} streamCtrl_t;
-
 
 
 /* --------------------------------------------------------------------------------------------- */
@@ -523,41 +492,6 @@ cmdParseRslt_t ATCMD_txDataPromptParser();
  *	\brief Parser looking for BGx CONNECT data prompt.
  */
 cmdParseRslt_t ATCMD_connectPromptParser();
-
-#pragma endregion
-/* --------------------------------------------------------------------------------------------- */
-
-
-/* --------------------------------------------------------------------------------------------- */
-#pragma region STREAM Registration Functions
-/* --------------------------------------------------------------------------------------------- */
-
-
-/**
- * @brief Register a stream; aka add it from the active streams array
- * 
- * @param streamHdr 
- */
-void STREAM_register(streamCtrl_t *streamHdr);
-
-
-/**
- * @brief Deregister a stream; aka remove it from the active streams array
- * 
- * @param streamHdr 
- */
-void STREAM_deregister(streamCtrl_t *streamHdr);
-
-
-/**
- * @brief Find a stream using the data context number and type
- * 
- * @param dataCntxt 
- * @param streamType 
- * @return streamCtrlHdr_t* 
- */
-streamCtrl_t* STREAM_find(uint8_t dataCntxt, streamType_t streamType);
-
 
 #pragma endregion
 /* --------------------------------------------------------------------------------------------- */
