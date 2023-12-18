@@ -211,6 +211,16 @@ extern "C" {
 #endif
 
 
+/**
+ * @brief Dispatch an AT command to module and await its completion.
+ * 
+ * @param cmdTemplate Format string (std printf) to form the command sent to module.
+ * @param ... Variadic parameters to incorporate in the format string.
+ * @return resultCode The result of the action attempted reported as a HTTP status code.
+ */
+resultCode_t atcmd_dispatch(const char *cmdTemplate, ...);
+
+
 // /**
 //  * @brief Set the TX end-of-transmission (EOT) signally character
 //  * @details The EOT character is automatically sent by the IOP module when the TX side of the UART goes idle. Cleared automatically on send.
@@ -249,6 +259,29 @@ uint16_t ATCMD_ovrrdTimeout(uint16_t newTimeout);
  * @return The value of the existing timeout.
  */
 cmdResponseParser_func ATCMD_ovrrdParser(cmdResponseParser_func newParser);
+
+
+/**
+ * @brief Configure standard OK reponse parser for expected AT-Cmd response. 
+ * @details Alternative to the legacy custom parser wrapper for ATCMD_stdResponseParser() like below. The configure 
+ * approach supports dynamic adjustment without re-building source.
+ * 
+ *      static cmdParseRslt_t S__httpGetStatusParser() 
+ *        {
+ *          // +QHTTPGET: <err>[,<httprspcode>[,<content_length>]]
+ *          return ATCMD_stdResponseParser("+QHTTPGET: ", true, ",", 0, 1, "\r\n", 0);
+ *        }
+ * 
+ * @param [in] preamble - C-string containing the expected phrase that starts response. 
+ * @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
+ * @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
+ * @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
+ * @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
+ * @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
+ * @return Parse status result
+ */
+void ATCMD_configureResponseParser(const char *preamble, bool preambleReqd, const char *delimeters, uint8_t tokensReqd, const char *finale, uint16_t lengthReqd);
+
 
 /**
  * @brief Returns the atCmd parser result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
@@ -391,28 +424,17 @@ void ATCMD_exitDataMode();
 void ATCMD_exitTransparentMode();
 
 
-/**
- * @brief Set parameters for standard AT-Cmd response parser
- * @details LTEmC internal function, not static as it is used by several LTEmC modules
- *           Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). 
- *           Note: If no stop condition is specified, finale, tokensReqd, and lengthReqd are all omitted, the parser will return with 
- *                 the first block of characters received.
- *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getValue()
- *           and atcmd_getResponse() functions respectively.
- * @param [in] preamble - C-string containing the expected phrase that starts response. 
- * @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
- * @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
- * @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
- * @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
- * @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
- */
-void ATCMD_configureResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, const char *pFinale, uint16_t lengthReqd);
-
-
-
 /* --------------------------------------------------------------------------------------------- */
 #pragma region RESPONSE Parsers
 /* --------------------------------------------------------------------------------------------- */
+
+/**
+ * @brief No-parameter response parser that gets parser configuration from control structure.
+ * 
+ * @return cmdParseRslt_t 
+ */
+cmdParseRslt_t ATCMD_responseParser();
+
 
 /**
  * @brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 

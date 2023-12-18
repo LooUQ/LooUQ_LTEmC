@@ -140,6 +140,82 @@ cmdResponseParser_func ATCMD_ovrrdParser(cmdResponseParser_func newParser)
 }
 
 
+void ATCMD_configureResponseParser(const char *preamble, bool preambleReqd, const char *delimeters, uint8_t tokensReqd, const char *finale, uint16_t lengthReqd)
+{
+    memset(&g_lqLTEM.atcmd->parserConfig, 0, sizeof(atcmdParserConfig_t));
+    g_lqLTEM.atcmd->parserConfig.preamble = preamble;
+    g_lqLTEM.atcmd->parserConfig.preambleReqd = preambleReqd;
+    g_lqLTEM.atcmd->parserConfig.delimeters = delimeters;
+    g_lqLTEM.atcmd->parserConfig.tokensReqd = tokensReqd;
+    g_lqLTEM.atcmd->parserConfig.finale = finale;
+    g_lqLTEM.atcmd->parserConfig.lengthReqd = lengthReqd;
+}
+
+
+
+/**
+ * @brief Dispatch an AT command to module and await its completion.
+ */
+resultCode_t atcmd_dispatch(const char *cmdTemplate, ...)
+{
+    /* invoke phase
+     ----------------------------------------- */
+    // if (g_lqLTEM.atcmd->isOpenLocked)
+    //     return resultCode__locked;
+
+    // atcmd_reset(true);                                 // clear atCmd control
+    // g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto; // set automatic lock control mode
+
+    // char *cmdStr = g_lqLTEM.atcmd->cmdStr;
+    va_list ap;
+
+    va_start(ap, cmdTemplate);
+    vsnprintf(g_lqLTEM.atcmd->cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
+    strcat(g_lqLTEM.atcmd->cmdStr, "\r");
+
+    // if (!ATCMD_awaitLock(g_lqLTEM.atcmd->timeout)) // attempt to acquire new atCmd lock for this instance
+    //     return false;
+
+    // TEMPORARY SPI alters send buffer duplicates 
+    memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+
+    DPRINT_V(0, "<atcmd_tryInvoke> cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
+    IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+
+    /* await result phase
+     ----------------------------------------- */
+    resultCode_t rslt = resultCode__unknown; // resultCode_t result;
+    g_lqLTEM.atcmd->execStart = pMillis();
+    do
+    {
+        rslt = S__readResult();
+        if (g_lqLTEM.cancellationRequest) // test for cancellation (RTOS or IRQ)
+        {
+            g_lqLTEM.atcmd->resultCode = resultCode__cancelled;
+            break;
+        }
+        pYield(); // give back control momentarily before next loop pass
+    } while (rslt == resultCode__unknown);
+
+    #if _DEBUG == 0 // debug for debris in rxBffr
+    ASSERT_W(bbffr_getOccupied(g_lqLTEM.iop->rxBffr) == 0, "RxBffr Dirty");
+    #else
+    if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) > 0)
+    {
+        char dbg[81] = {0};
+        bbffr_pop(g_lqLTEM.iop->rxBffr, dbg, 80);
+        DPRINT(PRNT_YELLOW, "*!* %s", dbg);
+    }
+    #endif
+
+    // reset options back to default values
+    g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
+    g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
+
+    return g_lqLTEM.atcmd->resultCode;
+}
+
+
 
 
 /**
@@ -432,32 +508,6 @@ void ATCMD_exitTransparentMode()
 
 
 
-/**
- * @brief Set parameters for standard AT-Cmd response parser
- * @details LTEmC internal function, not static as it is used by several LTEmC modules
- *           Some AT-cmds will omit preamble under certain conditions; usually indicating an empty response (AT+QIACT? == no PDP active). 
- *           Note: If no stop condition is specified, finale, tokensReqd, and lengthReqd are all omitted, the parser will return with 
- *                 the first block of characters received.
- *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with ATCMD_getValue()
- *           and ATCMD_getResponse() functions respectively.
- * @param [in] preamble - C-string containing the expected phrase that starts response. 
- * @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
- * @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
- * @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
- * @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
- * @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
- */
-void ATCMD_configureResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, const char *pFinale, uint16_t lengthReqd)
-{
-    memset(&g_lqLTEM.atcmd->parserConfig, 0, sizeof(atcmdParserConfig_t));
-    g_lqLTEM.atcmd->parserConfig.preamble = pPreamble;
-    g_lqLTEM.atcmd->parserConfig.preambleReqd = preambleReqd;
-    g_lqLTEM.atcmd->parserConfig.delimeters = pDelimeters;
-    g_lqLTEM.atcmd->parserConfig.tokensReqd = tokensReqd;
-    g_lqLTEM.atcmd->parserConfig.finale = pFinale;
-    g_lqLTEM.atcmd->parserConfig.lengthReqd = lengthReqd;
-}
-
 #pragma region LTEmC Internal Functions
 /*-----------------------------------------------------------------------------------------------*/
 
@@ -673,6 +723,23 @@ resultCode_t ATCMD_txOkDataHndlr()
     }
     return resultCode__timeout;
 }
+
+
+cmdParseRslt_t ATCMD_responseParser()
+{
+    ASSERT(g_lqLTEM.atcmd->parserConfig.delimeters != NULL && strlen(g_lqLTEM.atcmd->parserConfig.delimeters) > 0);
+
+    const char * preamble = g_lqLTEM.atcmd->parserConfig.preamble;
+    bool preambleReqd = g_lqLTEM.atcmd->parserConfig.preambleReqd;
+    const char * delimeters = g_lqLTEM.atcmd->parserConfig.delimeters;
+    uint8_t tokensReqd = g_lqLTEM.atcmd->parserConfig.tokensReqd;
+    const char * finale = g_lqLTEM.atcmd->parserConfig.finale;
+    uint16_t lengthReqd = g_lqLTEM.atcmd->parserConfig.lengthReqd;
+
+    // valueIndx is deprecated, removal progressing; 0 will be remove soon
+    return ATCMD_stdResponseParser(preamble, preambleReqd, delimeters, tokensReqd, 0, finale, lengthReqd);
+}
+
 
 /**
  * @brief Stardard atCmd response parser, flexible response pattern match and parse.

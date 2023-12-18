@@ -81,7 +81,7 @@ void setup() {
         #endif
     #endif
 
-    DPRINT(PRNT_RED, "\rLTEmC 09-HTTP\r");
+    LOG_NOTICE("\rHTTP Examples (GET/POST)\r");
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
     ntwk_setOperatorScanMode(ntwkScanMode_lteonly);
