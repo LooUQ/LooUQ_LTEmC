@@ -82,7 +82,6 @@ void setup() {
     #endif
 
     DPRINT(PRNT_RED, "\rLTEmC 09-HTTP\r");
-    //lqDiag_setNotifyCallback(appEvntNotify);
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
     ntwk_setOperatorScanMode(ntwkScanMode_lteonly);

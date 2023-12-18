@@ -41,9 +41,9 @@ Also add information on how to contact you by electronic and paper mail.
 #include <platform/lq-platform_gpio.h>
 #include <platform/lq-platform_timing.h>
 #include <platform/lq-platform_spi.h>
-#include <platform/lq-platform_signal.h>
+#include <platform/lq-platform_task.h>
 
-// #include "platform/lqPlatform-debug.h"
+//#include "platform/lq-platform_diagnostics.h"
 
 
 #endif  /* !__LTEMC_LQPLATFORM_H__ */
