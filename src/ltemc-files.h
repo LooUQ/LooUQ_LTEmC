@@ -48,8 +48,7 @@ enum file
     file__dataOffset_info = 7,          /// +QFLDS and +QFLST
     file__dataOffset_open = 9,          /// +QFOPEN: "filename",<handle>,<mode>
     file__handleSearchMax = 20,
-    file__dataOffset_pos = 13,          /// +QFPOSITION: 
-    file__readTrailerSz = 6
+    file__dataOffset_pos = 13           /// +QFPOSITION: 
 };
 
 
@@ -131,17 +130,17 @@ typedef struct fileWriteResult_tag
 } fileWriteResult_t;
 
 
-/** 
- *  @brief typedef for the filesystem services data receiver function. Connects filesystem processing to the application (receive).
-*/
-typedef void (*fileReceiver_func)(uint16_t fileHandle, const char *fileData, uint16_t dataSz);
+// /** 
+//  *  @brief typedef for the filesystem services data receiver function. Connects filesystem processing to the application (receive).
+// */
+// typedef void (*genericAppRcvr_func)(uint8_t context, const char *fileData, uint16_t dataSz);
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void file_setAppReceiver(fileReceiver_func fileReceiver);
+void file_setAppReceiver(appRcvr_func fileReceiver);
 
 
 /**

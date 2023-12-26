@@ -31,7 +31,7 @@ Also add information on how to contact you by electronic and paper mail.
 #include <lq-embed.h>
 #define LOG_LEVEL LOGLEVEL_OFF
 //#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define SRCFILE "SKT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "SKT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 //#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
@@ -73,7 +73,7 @@ static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr)
 /**
  *	@brief Create a socket data control(TCP/UDP/SSL).
  */
-void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t protocol, scktAppRecv_func recvCallback)
+void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t protocol, scktAppRcvr_func appRcvrCB)
 {
     ASSERT(dataCntxt < dataCntxt__cnt);
 
@@ -86,7 +86,7 @@ void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t 
     scktCtrl->flushing = false;
     scktCtrl->statsRxCnt = 0;
     scktCtrl->statsTxCnt = 0;
-    scktCtrl->appRecvDataCB = recvCallback;
+    scktCtrl->appRcvrCB = appRcvrCB;
 
     g_lqLTEM.streams[dataCntxt] = (streamCtrl_t*)scktCtrl;
 }
@@ -210,7 +210,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
     resultCode_t rslt;
 
-    atcmd_configDataMode(scktCtrl, "> ", atcmd_stdTxDataHndlr, data, dataSz, NULL, false);
+    atcmd_configDataMode(scktCtrl, "> ", ATCMD_txHndlrDefault, data, dataSz, NULL, false);
     atcmd_configDataModeEot(0x1A);
 
     if (atcmd_tryInvoke("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz))
@@ -344,12 +344,12 @@ static void S__scktUrcHndlr()
             uint16_t irdRqstSz = bbffr_getVacant(g_lqLTEM.iop->rxBffr) / 2;     // request up to half of available buffer space
             if (isUdpTcp)
             {
-                atcmd_configDataMode(scktCtrl, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
+                atcmd_configDataMode(scktCtrl, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRcvrCB, false);
                 atcmd_tryInvoke("AT+QIRD=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             else
             {
-                atcmd_configDataMode(scktCtrl, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRecvDataCB, false);
+                atcmd_configDataMode(scktCtrl, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRcvrCB, false);
                 atcmd_tryInvoke("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             atcmd_awaitResult();
@@ -384,7 +384,7 @@ static resultCode_t S__scktRxHndlr()
     char wrkBffr[32] = {0};
     char *wrkPtr = wrkBffr;
 
-    streamCtrl_t* streamCtrl = (streamCtrl_t*)g_lqLTEM.atcmd->dataMode.ctrlStruct;
+    streamCtrl_t* streamCtrl = (streamCtrl_t*)g_lqLTEM.atcmd->dataMode.streamCtrl;
 
     ASSERT(streamCtrl->streamType == streamType_UDP ||                                                          // assert that the stream config is consistent
            streamCtrl->streamType == streamType_TCP || 
@@ -420,7 +420,7 @@ static resultCode_t S__scktRxHndlr()
         DPRINT(PRNT_CYAN, "scktRxHndlr() ptr=%p, blkSz=%d, availSz=%d\r", streamPtr, blockSz, irdSz);
 
         irdSz -= blockSz;
-        ((scktAppRecv_func)(*scktCtrl->appRecvDataCB))(scktCtrl->dataCntxt, streamPtr, blockSz, irdSz == 0);    // forward to application
+        ((scktAppRcvr_func)(*scktCtrl->appRcvrCB))(scktCtrl->dataCntxt, streamPtr, blockSz, irdSz == 0);    // forward to application
         bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                     // commit POP
 
         if (irdSz == 0)                                                                                         // done with data

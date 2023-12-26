@@ -65,7 +65,7 @@ enum http__constants
  *  @param [in] dataSz [in] The number of bytes available
  *  @param [in] isFinal Last invoke of the callback will indicate with isFinal = true.
  */
-typedef void (*httpRecv_func)(dataCntxt_t dataCntxt, char *data, uint16_t dataSz, bool isFinal);
+typedef void (*httpAppRcvr_func)(dataCntxt_t dataCntxt, char *data, uint16_t dataSz, bool isFinal);
 
 
 /** 
@@ -126,7 +126,7 @@ typedef struct httpCtrl_tag
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
-    appRcvProto_func appRecvDataCB;             /// callback into host application with data (cast from generic func* to stream specific function)
+    appRcvr_func appRcvrCB;                     /// callback into host application with data (cast from generic func* to stream specific function)
     bool useTls;                                /// flag indicating SSL/TLS applied to stream
     char hostUrl[host__urlSz];                  /// URL or IP address of host
     uint16_t hostPort;                          /// IP port number host is listening on (allows for 65535/0)
@@ -157,7 +157,7 @@ extern "C"
  *	@param [in] dataCntxt [in] The data context (0-5) to use for this communications.
  *  @param [in] recvCallback [in] Callback function to receive incoming page data.
  */
-void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func recvCallback);
+void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_func appRcvrCB);
 
 
 /**

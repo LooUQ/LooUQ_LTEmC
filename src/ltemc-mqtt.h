@@ -166,9 +166,9 @@ typedef enum mqttMsgSegment_tag
 typedef struct mqttTopicCtrl_tag
 {
     char topicName[PSZ(mqtt__topic_nameSz)];    // Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
-    char wildcard;                                  // Set to '#' if multilevel wildcard specified when subscribing to topic.
+    char wildcard;                              // Set to '#' if multilevel wildcard specified when subscribing to topic.
     uint8_t Qos;
-    appRcvProto_func appRecvDataCB;                 // callback into host application with data (cast from generic func* to stream specific function)
+    appRcvr_func appRcvrCB;                     // callback into host application with data (cast from generic func* to stream specific function)
 } mqttTopicCtrl_t;
 
 
@@ -216,7 +216,7 @@ typedef struct mqttCtrl_tag
  *  @param DataSz The size of the current block of data available at the streamPtr address for app consumption
  *  @param isFinal Will be true if the current block of data is the end of the received MQTT msg
  */
-typedef void (*mqttAppRecv_func)(dataCntxt_t dataCntxt, uint16_t msgId, mqttMsgSegment_t segment, char* dataPtr, uint16_t dataSz, bool isFinal);
+typedef void (*mqttAppRcvr_func)(dataCntxt_t dataCntxt, uint16_t msgId, mqttMsgSegment_t segment, char* dataPtr, uint16_t dataSz, bool isFinal);
 
 
 #ifdef __cplusplus
@@ -245,7 +245,7 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt);
  * @param [in] qos The MQTT defined quality-of-service for messages serviced in this topic (0=At most once, 1=At least once, 2=Exactly once)
  * @param [in] appTopicRecvCB Pointer to the application function to receive incoming messages for this topic
  */
-void mqtt_initTopicControl(mqttTopicCtrl_t* topicCtrl, const char* topic, uint8_t qos, mqttAppRecv_func appTopicRecvCB);
+void mqtt_initTopicControl(mqttTopicCtrl_t* topicCtrl, const char* topic, uint8_t qos, mqttAppRcvr_func appTopicRcvrCB);
 
 /**
  * @brief Set the remote server/broker connection values.

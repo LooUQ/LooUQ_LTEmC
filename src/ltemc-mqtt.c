@@ -31,7 +31,7 @@ Also add information on how to contact you by electronic and paper mail.
 #include <lq-embed.h>
 #define LOG_LEVEL LOGLEVEL_OFF
 //#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define SRCFILE "MQT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "MQT"                        // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #define ENABLE_DIAGPRINT         // expand DIAGPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE // expand DIAGPRINT and DIAGPRINT_V into debug output
@@ -93,7 +93,7 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt)
 /**
  *  @brief Initialize a MQTT topic subscription control structure.
  */
-void mqtt_initTopicControl(mqttTopicCtrl_t *topicCtrl, const char *topic, uint8_t qos, mqttAppRecv_func appTopicRecvCB)
+void mqtt_initTopicControl(mqttTopicCtrl_t *topicCtrl, const char *topic, uint8_t qos, mqttAppRcvr_func appTopicRcvrCB)
 {
     memset(topicCtrl, 0, sizeof(mqttTopicCtrl_t));
 
@@ -111,7 +111,7 @@ void mqtt_initTopicControl(mqttTopicCtrl_t *topicCtrl, const char *topic, uint8_
 
     memcpy(topicCtrl->topicName, topic, topicLen);
     topicCtrl->Qos = qos;
-    topicCtrl->appRecvDataCB = appTopicRecvCB;
+    topicCtrl->appRcvrCB = appTopicRcvrCB;
 }
 
 
@@ -406,7 +406,7 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
     uint16_t msgId = ((uint8_t)qos == 0) ? 0 : mqttCtrl->sentMsgId;                                     // msgId not sent with QOS == 0, otherwise sent
     // AT+QMTPUB=<tcpconnectID>,<msgID>,<qos>,<retain>,"<topic>"
 
-    atcmd_configDataMode(mqttCtrl, "> ", atcmd_stdTxDataHndlr, message, messageSz, NULL, true);         // send message with dataMode
+    atcmd_configDataMode(mqttCtrl, "> ", ATCMD_txHndlrDefault, message, messageSz, NULL, true);         // send message with dataMode
 
     if (atcmd_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
     {
@@ -740,7 +740,7 @@ static void S__mqttUrcHandler()
 
         // forward topic
         DPRINT(PRNT_dCYAN, "mqttUrcHndlr() topic ptr=%p blkSz=%d \r\n", workPtr, topicLen);
-        ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_topic, workPtr, topicLen, false);
+        ((mqttAppRcvr_func)topicCtrl->appRcvrCB)(dataCntxt, msgId, mqttMsgSegment_topic, workPtr, topicLen, false);
 
         // forward topic extension
         workPtr += topicLen + 1;
@@ -749,7 +749,7 @@ static void S__mqttUrcHandler()
         {
             extensionLen -= 3; // remove topic(w/extension) and message body delimiter
             DPRINT(PRNT_dCYAN, "mqttUrcHndlr() topicExt ptr=%p blkSz=%d \r\n", workPtr, extensionLen);
-            ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_topicExt, workPtr, extensionLen, false);
+            ((mqttAppRcvr_func)topicCtrl->appRcvrCB)(dataCntxt, msgId, mqttMsgSegment_topicExt, workPtr, extensionLen, false);
         }
 
         bool eomFound = false;
@@ -764,7 +764,7 @@ static void S__mqttUrcHandler()
             DPRINT(PRNT_dCYAN, "mqttUrcHndlr() msgBody ptr=%p blkSz=%d isFinal=%d\r\n", streamPtr, blockSz, eomFound);
 
             // signal new receive data available to host application
-            ((mqttAppRecv_func)topicCtrl->appRecvDataCB)(dataCntxt, msgId, mqttMsgSegment_msgBody, streamPtr, blockSz, eomFound);
+            ((mqttAppRcvr_func)topicCtrl->appRcvrCB)(dataCntxt, msgId, mqttMsgSegment_msgBody, streamPtr, blockSz, eomFound);
 
             bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true); // commit POP
         } while (!eomFound);

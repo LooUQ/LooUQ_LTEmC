@@ -63,7 +63,7 @@ void atcmd_reset(bool releaseLock);
  * @param [in] applRecvDataCB Handler function to receive/parse incoming data 
  * @param [in] runParser If true, registered command response parser is invoked after successful data mode processing
  */
-void atcmd_configDataMode(void* ctrlStruct, const char* trigger, dataHndlr_func dataHndlr, const char* txDataPtr, uint16_t txDataSz, appRcvProto_func applRecvDataCB, bool skipParser);
+void atcmd_configDataMode(void* ctrlStruct, const char* trigger, dataHndlr_func dataHndlr, const char* txDataPtr, uint16_t txDataSz, appRcvr_func applRecvDataCB, bool skipParser);
 
 
 // /**
@@ -162,6 +162,13 @@ int32_t atcmd_getValue();
 
 
 /**
+ *	@brief Returns the last dataMode RX read size.
+ *  @return uint16_t Length of last dataMode RX transfer.
+ */
+uint16_t atcmd_getRxLength();
+
+
+/**
  *	@brief Returns the atCmd parser result code, 0xFFFF or cmdParseRslt_pending if command is pending completion
  *  @return The PARSER result from the last interation of the parser execution. This is generally not applicable to end-user applications.
  */
@@ -240,19 +247,25 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *preamble, bool preambleReqd, 
 /**
  *	@brief Stardard TX (out) data handler used by dataMode. Sends data and checks for OK response.
  */
-resultCode_t atcmd_stdTxDataHndlr();
+resultCode_t ATCMD_txHndlrDefault();
+
+
+// /**
+//  *	@brief TX (out) data handler that performs a blind send of data.
+//  */
+// resultCode_t atcmd_txDataHndlrRaw();
+
+
+// /**
+//  *	@brief Stardard RX (in) data handler used by dataMode.
+//  */
+// resultCode_t atcmd_stdRxDataHndlr();
 
 
 /**
- *	@brief TX (out) data handler that performs a blind send of data.
+ * @brief Stream RX data handler accepting data length at RX buffer tail.
  */
-resultCode_t atcmd_txDataHndlrRaw();
-
-
-/**
- *	@brief Stardard RX (in) data handler used by dataMode.
- */
-resultCode_t atcmd_stdRxDataHndlr();
+resultCode_t ATCMD_rxHndlrWithLength();
 
 
 #ifdef __cplusplus

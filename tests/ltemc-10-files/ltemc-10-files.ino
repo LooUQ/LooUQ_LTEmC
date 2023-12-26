@@ -30,7 +30,6 @@
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 #define ENABLE_JLINKRTT
-#include <lqdiag.h>
 
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
@@ -42,13 +41,12 @@
     // #define HOST_FEATHER_LTEM3F
 #endif
 
-#include <lq-SAMDutil.h>                // allows read of reset cause
 
 #include <ltemc.h>
 #include <ltemc-files.h>
 
-// temporary for testing http_createRequest
-#include <ltemc-http.h>
+// // temporary for testing http_createRequest
+// #include <ltemc-http.h>
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
@@ -68,6 +66,12 @@ uint16_t fHandle1;
 uint16_t fHandle2;
 uint16_t fHandle3;
 char readData[256];
+
+
+#define START_OFFSET 0
+
+
+
 
 // for debugging access
 #include "ltemc-internal.h"
@@ -114,7 +118,12 @@ void setup() {
     // snprintf(relativeUrl, sizeof(relativeUrl), "/opmetrics/opmrpt/%s", ltem_getModemInfo()->imei);  // create relative URL
 
     // rslt = http_postFile(&httpCtrl_opMRpt, relativeUrl, false, "bmsOpMRpt");
-    while(1){}
+
+    rslt = file_open("231222T205529_ota.bin", fileOpenMode_rdOnly, &fHandle1);
+    DPRINT(PRNT_GREEN, "file_open() rslt=%d\r\n", rslt);
+
+    rslt = file_seek(fHandle1, START_OFFSET, fileSeekMode_fromBegin);
+    DPRINT(PRNT_GREEN, "file_seek() rslt=%d\r\n", rslt);
 }
 
 
@@ -122,89 +131,98 @@ const int testCnt = 6;
 uint16_t loopCnt = 1;
 uint32_t lastCycle;
 uint16_t bytesRead;
+uint32_t offset = 0;
 
 void loop() 
 {
-    char openlist[240] = {0};
-    fileListResult_t fileList;
-    rslt = file_getOpenFiles(openlist, sizeof(openlist));
-    DPRINT(PRNT_GREEN, "\r\nStart Loop\r\nOpen Files (starting test pattern=%d)\r%s\r\n", loopCnt % testCnt, openlist);
-
-    if (loopCnt % testCnt == 1)
+    rslt = file_read(fHandle1, 16, &bytesRead);
+    if (rslt != 200)
     {
-        DPRINT(0, "Creating testfile1\r\n");
-        rslt = file_open("testfile1", fileOpenMode_ovrRdWr, &fHandle1);
-        if (rslt != resultCode__success)
-            indicateFailure("Error opening testfile1", rslt);
-        file_close(fHandle1);
-
-        DPRINT(0, "Checking for non-existent file: missingFile\r\n");
-        rslt = file_getFilelist(&fileList, "missingFile");
-        DPRINT(0, "Missing file result=%d\r\n", rslt);
-
-        DPRINT(0, "Checking for present file: testfile1\r\n");
-        rslt = file_getFilelist(&fileList, "testfile1");
-        DPRINT(0, "Present file result=%d\r\n", rslt);
+        while (1) {}
     }
+    offset += 16;
+
+
+    // char openlist[240] = {0};
+    // fileListResult_t fileList;
+    // rslt = file_getOpenFiles(openlist, sizeof(openlist));
+    // DPRINT(PRNT_GREEN, "\r\nStart Loop\r\nOpen Files (starting test pattern=%d)\r%s\r\n", loopCnt % testCnt, openlist);
+
+    // if (loopCnt % testCnt == 1)
+    // {
+    //     DPRINT(0, "Creating testfile1\r\n");
+    //     rslt = file_open("testfile1", fileOpenMode_ovrRdWr, &fHandle1);
+    //     if (rslt != resultCode__success)
+    //         indicateFailure("Error opening testfile1", rslt);
+    //     file_close(fHandle1);
+
+    //     DPRINT(0, "Checking for non-existent file: missingFile\r\n");
+    //     rslt = file_getFilelist(&fileList, "missingFile");
+    //     DPRINT(0, "Missing file result=%d\r\n", rslt);
+
+    //     DPRINT(0, "Checking for present file: testfile1\r\n");
+    //     rslt = file_getFilelist(&fileList, "testfile1");
+    //     DPRINT(0, "Present file result=%d\r\n", rslt);
+    // }
     
-    if (loopCnt % testCnt == 2)
-    {
-        DPRINT(0, "Opening testfile1\r\n");
-        rslt = file_open("testfile1", fileOpenMode_rdWr, &fHandle1);
-        if (rslt != resultCode__success)
-            indicateFailure("Error opening testfile1", rslt);
-    }
+    // if (loopCnt % testCnt == 2)
+    // {
+    //     DPRINT(0, "Opening testfile1\r\n");
+    //     rslt = file_open("testfile1", fileOpenMode_rdWr, &fHandle1);
+    //     if (rslt != resultCode__success)
+    //         indicateFailure("Error opening testfile1", rslt);
+    // }
 
-    else if (loopCnt % testCnt == 3)
-    {
-        DPRINT(0, "Opening/writing/closing testfile2\r\n");
-        char src[80];
-        rslt = file_open("testfile2", fileOpenMode_ovrRdWr, &fHandle2);
-        DPRINT(PRNT_CYAN, "Test #3 OpenRslt=%d\r\n", rslt);
-        // pDelay(5);
-        strcpy(src, "0123456789");
-        rslt = file_write(fHandle2, src, strlen(src), &writeRslt);
-        DPRINT(PRNT_CYAN, "FileWrite #1 (rslt=%d): written=%d, filesz=%d\r\n", rslt, writeRslt.writtenSz, writeRslt.fileSz);
-        // pDelay(100);
-        strcpy(src, "abcdefghijklmnopqrstuvwxyz");
-        rslt = file_write(fHandle2, src, strlen(src), &writeRslt);
-        DPRINT(PRNT_CYAN, "FileWrite #2 (rslt=%d): written=%d, filesz=%d\r\n", rslt, writeRslt.writtenSz, writeRslt.fileSz);
-        rslt = file_close(fHandle2);
-    }
+    // else if (loopCnt % testCnt == 3)
+    // {
+    //     DPRINT(0, "Opening/writing/closing testfile2\r\n");
+    //     char src[80];
+    //     rslt = file_open("testfile2", fileOpenMode_ovrRdWr, &fHandle2);
+    //     DPRINT(PRNT_CYAN, "Test #3 OpenRslt=%d\r\n", rslt);
+    //     // pDelay(5);
+    //     strcpy(src, "0123456789");
+    //     rslt = file_write(fHandle2, src, strlen(src), &writeRslt);
+    //     DPRINT(PRNT_CYAN, "FileWrite #1 (rslt=%d): written=%d, filesz=%d\r\n", rslt, writeRslt.writtenSz, writeRslt.fileSz);
+    //     // pDelay(100);
+    //     strcpy(src, "abcdefghijklmnopqrstuvwxyz");
+    //     rslt = file_write(fHandle2, src, strlen(src), &writeRslt);
+    //     DPRINT(PRNT_CYAN, "FileWrite #2 (rslt=%d): written=%d, filesz=%d\r\n", rslt, writeRslt.writtenSz, writeRslt.fileSz);
+    //     rslt = file_close(fHandle2);
+    // }
 
-    else if (loopCnt % testCnt == 4)
-    {
-        DPRINT(0, "Opening/seeking/reading testfile2\r\n");
-        rslt = file_open("testfile2", fileOpenMode_rdWr, &fHandle2);
-        rslt = file_seek(fHandle2, 10, fileSeekMode_fromBegin);
-        rslt = file_read(fHandle2, 10, &bytesRead);
-        rslt = file_close(fHandle2);
-    }
+    // else if (loopCnt % testCnt == 4)
+    // {
+    //     DPRINT(0, "Opening/seeking/reading testfile2\r\n");
+    //     rslt = file_open("testfile2", fileOpenMode_rdWr, &fHandle2);
+    //     rslt = file_seek(fHandle2, 10, fileSeekMode_fromBegin);
+    //     rslt = file_read(fHandle2, 10, &bytesRead);
+    //     rslt = file_close(fHandle2);
+    // }
 
-    else if (loopCnt % testCnt == 5)
-    {
-        DPRINT(0, "Opening (create/overwrite)/seeking/writing/reading testfile3\r\n");
+    // else if (loopCnt % testCnt == 5)
+    // {
+    //     DPRINT(0, "Opening (create/overwrite)/seeking/writing/reading testfile3\r\n");
 
-        rslt = file_open("testfile3", fileOpenMode_ovrRdWr, &fHandle3);
-        ASSERT(fHandle3 != 0);
-        if (rslt == resultCode__success)
-        {
-            DPRINT(PRNT_CYAN, "testfile3 hndl=%d\r\n", fHandle3);
-            createFileImage(filedata3, 256);
-            DPRINT(PRNT_CYAN, "wr=%d\r\n", file_write(fHandle3, filedata3, 256, &writeRslt));
-            DPRINT(PRNT_CYAN, "sk=%d\r\n", file_seek(fHandle3, 0, fileSeekMode_fromBegin));
-            DPRINT(PRNT_CYAN, "rd=%d\r\n", file_read(fHandle3, 200, &bytesRead));
-        }
-    }
+    //     rslt = file_open("testfile3", fileOpenMode_ovrRdWr, &fHandle3);
+    //     ASSERT(fHandle3 != 0);
+    //     if (rslt == resultCode__success)
+    //     {
+    //         DPRINT(PRNT_CYAN, "testfile3 hndl=%d\r\n", fHandle3);
+    //         createFileImage(filedata3, 256);
+    //         DPRINT(PRNT_CYAN, "wr=%d\r\n", file_write(fHandle3, filedata3, 256, &writeRslt));
+    //         DPRINT(PRNT_CYAN, "sk=%d\r\n", file_seek(fHandle3, 0, fileSeekMode_fromBegin));
+    //         DPRINT(PRNT_CYAN, "rd=%d\r\n", file_read(fHandle3, 200, &bytesRead));
+    //     }
+    // }
 
-    else if (loopCnt % testCnt == 0)
-    {
-        DPRINT(0, "Closing all files\r\n");
-        file_closeAll();
-    }
+    // else if (loopCnt % testCnt == 0)
+    // {
+    //     DPRINT(0, "Closing all files\r\n");
+    //     file_closeAll();
+    // }
 
-    pDelay(1000);
-    DPRINT(PRNT_MAGENTA, "\r\nEnd Test Loop=%d\r\n", loopCnt);
+    pDelay(10);
+    // DPRINT(PRNT_MAGENTA, "\r\nEnd Test Loop=%d\r\n", loopCnt);
     loopCnt++;
 }
 
@@ -216,10 +234,13 @@ void fileReadReceiver(uint16_t fHandle, const char *fileData, uint16_t dataSz)
     {
         uint8_t lineSz = MIN(80, dataSz);
         memcpy(pBffr, fileData, lineSz);
-        DPRINT(PRNT_dGREEN, "fileRcvr: hndl=%d received>%s\r\n", fHandle, pBffr);
+        // DPRINT(PRNT_dGREEN, "fileRcvr: hndl=%d received>%s\r\n", fHandle, pBffr);
         fileData += lineSz;
         dataSz -= lineSz;
     }
+
+    DPRINT(PRNT_CYAN, "%08x - %02x %02x %02x %02x %02x %02x %02x %02x   ", offset, pBffr[0], pBffr[1], pBffr[2], pBffr[3], pBffr[4], pBffr[5], pBffr[6], pBffr[7]);
+    DPRINT(PRNT_CYAN, "%02x %02x %02x %02x %02x %02x %02x %02x \r\n", pBffr[8], pBffr[9], pBffr[10], pBffr[11], pBffr[12], pBffr[13], pBffr[14], pBffr[15]);
 }
 
 void createFileImage(char *fileData, uint16_t dataSz)

@@ -82,6 +82,9 @@ enum streams__constants
     streams__maxContextProtocols = 5,
     streams__typeCodeSz = 4,
     streams__urcPrefixesSz = 60,
+    streams__lengthWaitDuration = 10,
+    streams__contentLengthTrailerSz = 6,
+    streams__dataModeMaxPreambleSz = 20,
     host__urlSz = 192
 };
 
@@ -364,8 +367,8 @@ typedef enum streamType_tag
 // function prototypes
 typedef resultCode_t (*urcEvntHndlr_func)();            // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
 typedef resultCode_t (*dataHndlr_func)(void * ctrl);    // function to marshall data between module and LTEmC
-typedef void (*appRcvProto_func)();                     // prototype func() for stream recvData callback
-
+// typedef void (*appRcvrPrototype_func)();                // prototype/placeholder func() for stream recvData callback
+typedef void (*appRcvr_func)(uint16_t streamId, const char *fileData, uint16_t dataSz);        // generic app receive callback with simple context/data/dataSize
 
 typedef struct streamCtrl_tag
 {
@@ -437,6 +440,7 @@ typedef enum cmdParseRslt_tag
     cmdParseRslt_preambleMissing = 0x01,
     cmdParseRslt_countShort = 0x02,
     cmdParseRslt_moduleError = 0x04,
+    cmdParseRslt_timeoutError = 0x08,
 
     cmdParseRslt_success = 0x40,
     cmdParseRslt_error = 0x80,
@@ -447,25 +451,25 @@ typedef enum dmState_tag
 {
     dmState_idle = 0,
     dmState_enabled = 1,
-    dmState_active = 2
+    dmState_triggered = 2
 } dmState_t;
 
 
 typedef struct dataMode_tag
 {
     dmState_t dmState;                                  // data mode state
-    void * ctrlStruct;                                  // optional control pointer for parent process
-    //uint16_t contextKey;                                // unique identifier for data flow, could be dataContext(proto), handle(files), etc.
+    streamCtrl_t* streamCtrl;                           // optional control pointer for parent process
     char trigger[atcmd__dataModeTriggerSz];             // char sequence that signals the transition to data mode, data mode starts at the following character
     dataHndlr_func dataHndlr;                           // data handler function (TX/RX)
     char* txDataLoc;                                    // location of data buffer (TX only)
-    uint16_t txDataSz;                                  // size of TX data or RX request
+    uint16_t txDataSz;                                  // size of TX data
+    uint16_t rxDataSz;                                  // size of RX data (read)
     bool runParserAfterDataMode;                        // true = invoke AT response parser after successful datamode. Data mode error always skips parser
-    appRcvProto_func applRecvDataCB;                    // callback into app for received data delivery
+    appRcvr_func applRcvrCB;                            // callback into app for received data delivery
 } dataMode_t;
 
 
-typedef cmdParseRslt_t (*cmdResponseParser_func)();                             // AT response parser template
+typedef cmdParseRslt_t (*cmdResponseParser_func)();     // AT response parser template
 
 
 /** 

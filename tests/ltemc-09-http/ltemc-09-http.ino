@@ -72,6 +72,8 @@ httpCtrl_t *httpCtrl;                            // used for common READ
 
 static char webPageBuf[1024];
 //char cstmHdrs[256];                           // if you use custom HTTP headers then create a buffer to hold them
+resultCode_t rslt;
+
 
 void setup() {
     #if defined(DIAGPRINT_SERIAL) || defined(LOG_SERIAL)
@@ -81,8 +83,6 @@ void setup() {
 
     LOG_NOTICE("\r\nLTEmC-09 HTTP Examples\r\n");
     //lqDiag_setNotifyCallback(appEvntNotify);
-
-    ASSERT(false);
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
     ntwk_setOperatorScanMode(ntwkScanMode_lteonly);
@@ -137,6 +137,58 @@ void setup() {
     http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
     DPRINT(PRNT_dGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
 
+    
+
+
+    //Memfault check-in
+    #define OTA_CUSTOMREQUEST_SZ 384
+    #define OTA_CHECKIN_URL_SZ 256
+    #define OTA_FIRMWARE_URL_SZ 256
+    #define OTA_PAGE_SIZE 1024
+
+    #define OTA_QUERY_URL "https://device.memfault.com"
+    #define OTA_PROJECT_KEY "Memfault-Project-Key: 5Zul5eB3Qn1gkEtDFCEs9dn0IXexhr3x"
+
+    #define OTA_CUSTOMHDR_SZ (500)
+    #define OTA_RELEASE_QUERY_SZ (200)
+    #define OTA_RELEASE_QUERY_HW ("bms-gen2")
+    #define OTA_RELEASE_QUERY_SW ("application")
+    #define OTA_CONTENT_URL_SZ (200)
+    #define OTA_INTERVAL (MIN_TO_MS(5))
+    #define OTA_PAGE_SIZE (1024)
+
+    char otaCheckinReqstBffr[OTA_CUSTOMREQUEST_SZ];
+    char otaCheckinUrl[OTA_CHECKIN_URL_SZ];
+    char otaFirmwareUrl[OTA_FIRMWARE_URL_SZ];
+    char otaPage[OTA_PAGE_SIZE];
+    httpCtrl_t otaCheckinHttpCtrl;
+    httpRequest_t otaCheckinHttpReqst;
+
+    snprintf(otaCheckinUrl, sizeof(otaCheckinUrl), "/api/v0/releases/latest/url?device_serial=%s&hardware_version=%s&software_type=%s&current_version=%s",
+             "863740069733589",
+             OTA_RELEASE_QUERY_HW,
+             OTA_RELEASE_QUERY_SW,
+             "0.4.8");
+
+    http_initControl(&otaCheckinHttpCtrl, dataCntxt_1, httpRecvCB);                      // setup HTTP for OTA functions
+    http_setConnection(&otaCheckinHttpCtrl, OTA_QUERY_URL, 443);                         // set host target to query for releases
+
+    otaCheckinHttpReqst = http_createRequest(httpRequestType_GET, OTA_QUERY_URL, otaCheckinUrl, otaCheckinReqstBffr, sizeof(otaCheckinReqstBffr));
+    http_addCommonHdrs(&otaCheckinHttpReqst, httpHeaderMap_all);
+    http_addHeader(&otaCheckinHttpReqst, OTA_PROJECT_KEY);
+
+    DPRINT_V(PRNT_dMAGENTA, "[OTA Setup] Check-In URL=%s%s\r\n", otaCheckinHttpCtrl.hostUrl, otaCheckinUrl);
+
+    rslt = http_getCustomRequest(&otaCheckinHttpCtrl, otaCheckinUrl, &otaCheckinHttpReqst, false);
+    // rslt = http_get(&httpCtrlChkIn, otaReleaseQuery, false);
+    DPRINT(0, "\r\nOTA Check-In: HTTP status=%d\r\n", rslt);
+
+
+
+
+
+
+    //setup for custom HTTP POST action
     #define OPM_PROJECT_KEY "LQCloud-OrgKey: 5Zul5eB3Qn1gkEtDFCEs9dn0IXexhr3x\r\n"
     #define OPM_HOST_URL "https://devices-dev-pelogical.azurewebsites.net"
     #define OPM_BODY_SZ 50
@@ -144,9 +196,7 @@ void setup() {
     httpCtrl_t httpCtrl_opMetrics;
     char opmRequestBffr[http__typicalCustomRequestHeaders + OPM_BODY_SZ];
     char relativeUrl[] = "/opmetrics/opmrpt/1234567890ABCDEF";
-    resultCode_t rslt;
-    
-    //setup for custom HTTP POST action
+
     http_initControl(&httpCtrl_opMetrics, dataCntxt_1, httpRecvCB);
     http_setConnection(&httpCtrl_opMetrics, "https://devices-dev-pelogical.azurewebsites.net", 443);
     DPRINT(PRNT_dMAGENTA, "OpMetrics Reporting Host=%s\r\n", httpCtrl_opMetrics.hostUrl);
@@ -167,7 +217,6 @@ void setup() {
     DPRINT(0,"*** opMetrics POST result=%d\r\n", rslt);
 }
 
-resultCode_t rslt;
 char pageBffr[101] = {0};
 uint16_t pageChars = 0;
 

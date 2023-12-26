@@ -30,10 +30,10 @@ Also add information on how to contact you by electronic and paper mail.
 #include <lq-embed.h>
 #define LOG_LEVEL LOGLEVEL_DBG
 //#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define SRCFILE "ATC"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "ATC"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
-// #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-// #define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 // #include <lqdiag.h>
 
@@ -94,7 +94,7 @@ void atcmd_reset(bool releaseLock)
  *	@brief Setup automatic data mode switch/servicing.
  */
 // void atcmd_configDataMode(uint16_t contextKey, const char *trigger, dataHndlr_func dataHndlr, const char *dataPtr, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
-void atcmd_configDataMode(void * ctrlStruct, const char * trigger, dataHndlr_func dataHndlr, const char * dataPtr, uint16_t dataSz, appRcvProto_func applRecvDataCB, bool runParser)
+void atcmd_configDataMode(void * ctrlStruct, const char * trigger, dataHndlr_func dataHndlr, const char * dataPtr, uint16_t dataSz, appRcvr_func applRcvrCB, bool runParser)
 {
     ASSERT(strlen(trigger) > 0); // verify 3rd party setup (stream)
     ASSERT(dataHndlr != NULL); //
@@ -102,12 +102,13 @@ void atcmd_configDataMode(void * ctrlStruct, const char * trigger, dataHndlr_fun
     memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));
 
     g_lqLTEM.atcmd->dataMode.dmState = dmState_enabled;
-    g_lqLTEM.atcmd->dataMode.ctrlStruct = ctrlStruct;
+    g_lqLTEM.atcmd->dataMode.streamCtrl = ctrlStruct;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
     g_lqLTEM.atcmd->dataMode.dataHndlr = dataHndlr;
     g_lqLTEM.atcmd->dataMode.txDataLoc = dataPtr;
     g_lqLTEM.atcmd->dataMode.txDataSz = dataSz;
-    g_lqLTEM.atcmd->dataMode.applRecvDataCB = applRecvDataCB;
+    // g_lqLTEM.atcmd->dataMode.rxDataSz = 0;                               // automatic from memset
+    g_lqLTEM.atcmd->dataMode.applRcvrCB = applRcvrCB;
     g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = runParser;
 }
 
@@ -123,8 +124,8 @@ void atcmd_setDataModeEot(uint8_t eotChar)
  */
 bool atcmd_tryInvoke(const char *cmdTemplate, ...)
 {
-    if (g_lqLTEM.atcmd->isOpenLocked)
-        return false;
+    // if (g_lqLTEM.atcmd->isOpenLocked)
+    //     return false;
 
     atcmd_reset(true);                                 // clear atCmd control
     g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto; // set automatic lock control mode
@@ -156,7 +157,7 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
  */
 void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
 {
-    ASSERT(g_lqLTEM.atcmd->isOpenLocked); // function assumes re-use of existing lock
+    // ASSERT(g_lqLTEM.atcmd->isOpenLocked); // function assumes re-use of existing lock
 
     atcmd_reset(false); // clear out properties WITHOUT lock release
     g_lqLTEM.atcmd->autoLock = atcmd__setLockModeManual;
@@ -192,17 +193,20 @@ void atcmd_close()
  */
 resultCode_t atcmd_awaitResult()
 {
-    resultCode_t rslt = resultCode__unknown; // resultCode_t result;
+    resultCode_t rslt = resultCode__unknown;                                    // resultCode_t result;
     g_lqLTEM.atcmd->invokedAt = pMillis();
     do
     {
         rslt = S__readResult();
-        if (g_lqLTEM.cancellationRequest) // test for cancellation (RTOS or IRQ)
+        //DPRINT_V(0, "(atcmd_awaitResult) readResult=%d\r\n", rslt);
+
+        if (g_lqLTEM.cancellationRequest)                                       // test for cancellation (RTOS or IRQ)
         {
             g_lqLTEM.atcmd->resultCode = resultCode__cancelled;
             break;
         }
-        pYield(); // give back control momentarily before next loop pass
+        // pYield(); // give back control momentarily before next loop pass
+        pDelay(50);
     } while (rslt == resultCode__unknown);
 
     // reset options back to default values
@@ -218,6 +222,8 @@ resultCode_t atcmd_awaitResult()
  */
 resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser)
 {
+    DPRINT_V(0, "(atcmd_awaitResultWithOptions) entered\r\n");
+
     // set options
     if (timeoutMS != atcmd__noTimeoutChange)
     {
@@ -286,6 +292,15 @@ char* atcmd_getResponse()
 int32_t atcmd_getValue()
 {
     return g_lqLTEM.atcmd->retValue;
+}
+
+
+/**
+ *	@brief Returns the last dataMode RX read size.
+ */
+uint16_t atcmd_getRxLength()
+{
+    return g_lqLTEM.atcmd->dataMode.rxDataSz;
 }
 
 
@@ -380,29 +395,30 @@ void atcmd_exitTransparentMode()
  */
 bool ATCMD_awaitLock(uint16_t timeoutMS)
 {
-    uint32_t waitStart = pMillis();
+    return true;
 
-    do
-    {
-        if (!g_lqLTEM.atcmd->isOpenLocked) // if not existing lock
-        {
-            g_lqLTEM.atcmd->isOpenLocked = true; // ...acquired new lock
-            return true;
-        }
-        pYield();        // call back to platform yield() in case there is work there that can be done
-        ltem_eventMgr(); // process any new receives prior to starting cmd invoke
+    // uint32_t waitStart = pMillis();
+    // do
+    // {
+    //     if (!g_lqLTEM.atcmd->isOpenLocked) // if not existing lock
+    //     {
+    //         g_lqLTEM.atcmd->isOpenLocked = true; // ...acquired new lock
+    //         return true;
+    //     }
+    //     pYield();        // call back to platform yield() in case there is work there that can be done
+    //     ltem_eventMgr(); // process any new receives prior to starting cmd invoke
 
-    } while (pMillis() - waitStart < timeoutMS); // until timed out
-    return false;                                // timed out waiting for lock
+    // } while (pMillis() - waitStart < timeoutMS); // until timed out
+    // return false;                                // timed out waiting for lock
 }
 
 /**
  *	@brief Returns the current atCmd lock state
  */
-bool ATCMD_isLockActive()
-{
-    return g_lqLTEM.atcmd->isOpenLocked;
-}
+// bool ATCMD_isLockActive()
+// {
+//     return g_lqLTEM.atcmd->isOpenLocked;
+// }
 
 /**
  *	@brief Checks receive buffer for command response and sets atcmd structure data with result.
@@ -417,83 +433,102 @@ static resultCode_t S__readResult()
 
     if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) > 0)
     {
-        // chk for current command services a stream and there is a data mode handler registered
+        // chk if current command services a stream and a data mode handler is registered
         if (g_lqLTEM.atcmd->dataMode.dataHndlr != NULL)
         {
             // looking for streamPrefix phrase
             if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true)))
             {
-                g_lqLTEM.atcmd->dataMode.dmState = dmState_active;
+                g_lqLTEM.atcmd->dataMode.dmState = dmState_triggered;
                 g_lqLTEM.iop->dmActive = true;
                 g_lqLTEM.iop->dmTxEvents = 0;
 
-                resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)(g_lqLTEM.atcmd->dataMode.ctrlStruct);
-                DPRINT(PRNT_MAGENTA, "DataHandler rslt=%d\r\n", dataRslt);
+                DPRINT_V(PRNT_MAGENTA, "(S__readResult) trigger=%s fired, invoking handler\r\n", g_lqLTEM.atcmd->dataMode.trigger);
+                // memset(peekBffr, 0, sizeof(peekBffr));
+                // bbffr_peek(g_lqLTEM.iop->rxBffr, peekBffr, 14);
+                // DPRINT_V(PRNT_MAGENTA, "(S__readResult) [peek] post trigger=%s\r\n", peekBffr);
+
+
+                /* *** invoke dataMode handler ***
+                ------------------------------------------- */
+
+                DPRINT_V(PRNT_MAGENTA, "(S__readResult) invoke dataHndlr\r\n");
+                resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)(g_lqLTEM.atcmd->dataMode.streamCtrl);
+                DPRINT_V(PRNT_MAGENTA, "(S__readResult) dataHndlr:rslt=%d\r\n", dataRslt);
+                g_lqLTEM.atcmd->dataMode.dmState = dmState_idle;                                    // dataMode completed, go back to _idle
+
                 if (dataRslt == resultCode__success)
                 {
                     g_lqLTEM.atcmd->parserResult = cmdParseRslt_success;
                     g_lqLTEM.atcmd->resultCode = dataRslt;
-
                     if (g_lqLTEM.atcmd->dataMode.runParserAfterDataMode)
                         g_lqLTEM.atcmd->parserResult = cmdParseRslt_pending;
+                }
+                else if (dataRslt == resultCode__timeout)
+                {
+                    g_lqLTEM.atcmd->parserResult = cmdParseRslt_error & cmdParseRslt_timeoutError;
+                    g_lqLTEM.atcmd->resultCode = resultCode__timeout;
                 }
                 else
                 {
                     g_lqLTEM.atcmd->parserResult = cmdParseRslt_error;
                     g_lqLTEM.atcmd->resultCode = dataRslt;
                 }
-                DPRINT(PRNT_WHITE, "Exit dataMode rslt=%d\r", dataRslt);
                 g_lqLTEM.iop->dmActive = false;
-                memset(&g_lqLTEM.atcmd->dataMode, 0, sizeof(dataMode_t));                   // done with dataMode settings
             }
         }
 
-        uint8_t respLen = strlen(g_lqLTEM.atcmd->rawResponse);                              // response so far
+        uint8_t respLen = strlen(g_lqLTEM.atcmd->rawResponse);                                      // response so far
         uint8_t popSz = MIN(atcmd__respBufferSz - respLen - 1, bbffr_getOccupied(g_lqLTEM.iop->rxBffr));
-        ASSERT((respLen + popSz) < atcmd__respBufferSz);                                    // ensure don't overflow
+        ASSERT((respLen + popSz) < atcmd__respBufferSz);                                            // ensure don't overflow
 
-        if (g_lqLTEM.atcmd->parserResult == cmdParseRslt_pending && 
-           (g_lqLTEM.atcmd->dataMode.dmState == dmState_idle || g_lqLTEM.atcmd->dataMode.runParserAfterDataMode))
+        if (g_lqLTEM.atcmd->parserResult == cmdParseRslt_pending)
         {
-            bbffr_pop(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->rawResponse + respLen, popSz);  // pop new into response buffer for parsing
+            bbffr_pop(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->rawResponse + respLen, popSz);          // pop new into response buffer for parsing
+            DPRINT_V(PRNT_GRAY, "(S__readResult) rawResponse:\"%s\"\r\n", g_lqLTEM.atcmd->rawResponse);
 
-            g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();         /* *** parse for command response *** */
-
-            DPRINT_V(PRNT_GRAY, "prsr=%d \r", g_lqLTEM.atcmd->parserResult);
+            /* *** parse for command response ***
+             ------------------------------------------- */
+            DPRINT_V(PRNT_GRAY, "(S__readResult) invoke parser\r\n", g_lqLTEM.atcmd->parserResult);
+            g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();
+            DPRINT_V(PRNT_GRAY, "(S__readResult) parser:pRslt=%d \r\n", g_lqLTEM.atcmd->parserResult);
         }
     }
 
-    if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_error)                         // check error bit
+    if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_error)                                          // check error bit
     {
-        if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_moduleError)               // BGx ERROR or CME/CMS
+        if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_moduleError)                                // BGx ERROR or CME/CMS
         {
             g_lqLTEM.atcmd->resultCode = resultCode__extendedCodesBase + strtol(atcmd_getToken(0), NULL, 10);
         }
-        else if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_countShort)           // did not find expected tokens
+        else if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_countShort)                            // did not find expected tokens
+        {
             g_lqLTEM.atcmd->resultCode = resultCode__notFound;
-
+        }
         else
-            g_lqLTEM.atcmd->resultCode = resultCode__internalError;                // covering the unknown
-
-        atcmd_close();                                                             // close action to release action lock on any error
+        {
+            g_lqLTEM.atcmd->resultCode = resultCode__internalError;                                 // covering the unknown
+        }
+        atcmd_close();                                                                              // close action to release action lock on any error
     }
 
-    if (g_lqLTEM.atcmd->parserResult == cmdParseRslt_pending)                      // still pending, check for timeout error
+    if (g_lqLTEM.atcmd->parserResult == cmdParseRslt_pending)                                       // still pending, check for timeout error
     {
         if (IS_ELAPSED(g_lqLTEM.atcmd->invokedAt, g_lqLTEM.atcmd->timeout))
         {
             g_lqLTEM.atcmd->resultCode = resultCode__timeout;
-            g_lqLTEM.atcmd->isOpenLocked = false;                                   // close action to release action lock
+            g_lqLTEM.atcmd->isOpenLocked = false;                                                   // close action to release action lock
             g_lqLTEM.atcmd->execDuration = pMillis() - g_lqLTEM.atcmd->invokedAt;
 
-            if (ltem_getDeviceState() != deviceState_ready)                         // if action timed-out, verify not a device wide failure
+            if (ltem_getDeviceState() != deviceState_ready)                                         // if action timed-out, verify not a device wide failure
             {
                 ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not Ready");
                 ltem_notifyApp(appEvent_fault_hardLogic, g_lqLTEM.atcmd->CMDMIRROR);
             }
             else if (!SC16IS7xx_ping())
-                ltem_notifyApp(appEvent_fault_softLogic, "LTEm SPI Fault");         // UART bridge SPI not initialized correctly, IRQ not enabled
-
+            {
+                ltem_notifyApp(appEvent_fault_softLogic, "LTEm SPI Fault");                         // UART bridge SPI not initialized correctly, IRQ not enabled
+            }
             return resultCode__timeout;
         }
         return resultCode__unknown;
@@ -540,10 +575,13 @@ cmdParseRslt_t ATCMD_okResponseParser()
 /**
  *	@brief Stardard TX (out) data handler used by dataMode.
  */
-resultCode_t atcmd_stdTxDataHndlr()
+resultCode_t ATCMD_txHndlrDefault()
 {
+    DPRINT_V(PRNT_CYAN, "(ATCMD_txHndlrDefault) entered\r\n");
+    uint8_t triggerSz = strlen(g_lqLTEM.atcmd->dataMode.trigger);
+    bbffr_skipTail(g_lqLTEM.iop->rxBffr, triggerSz);                                        // clear out recv'd trigger from RX bffr
+
     IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz);     // send of datamode content
-    g_lqLTEM.atcmd->dataMode.dmState = dmState_active;
 
     uint32_t startTime = pMillis();
     while (pMillis() - startTime < g_lqLTEM.atcmd->timeout)
@@ -566,6 +604,66 @@ resultCode_t atcmd_stdTxDataHndlr()
     }
     return resultCode__timeout;
 }
+
+/**
+ * @brief Stream RX data handler accepting data length at RX buffer tail.
+ */
+resultCode_t ATCMD_rxHndlrWithLength()
+{
+    char wrkBffr[32] = {0};
+    uint16_t lengthEOLAt;
+    
+    uint32_t trailerWaitStart = pMillis();
+    do
+    {
+        lengthEOLAt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, streams__dataModeMaxPreambleSz, false);     // find EOL from CONNECT response
+        if (IS_ELAPSED(trailerWaitStart, streams__lengthWaitDuration))
+            return resultCode__timeout;
+
+    } while (!BBFFR_ISFOUND(lengthEOLAt));
+   
+    bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, lengthEOLAt + 2);                                              // pop data length and EOL from RX buffer
+
+
+    DPRINT_V(PRNT_MAGENTA, "(_rxHndlrWithLength) wrkBffr (w/header)=%s\r\n", wrkBffr);
+
+    uint8_t triggerSz = strnlen(g_lqLTEM.atcmd->dataMode.trigger, sizeof(g_lqLTEM.atcmd->dataMode.trigger));
+    uint16_t readLen = strtol(wrkBffr + triggerSz, NULL, 10);
+    g_lqLTEM.atcmd->dataMode.rxDataSz = readLen;                                                            // stash reported read length
+    uint16_t streamId = g_lqLTEM.atcmd->dataMode.streamCtrl->dataCntxt;
+    DPRINT_V(PRNT_CYAN, "(ATCMD_rxHndlrWithLength) streamId=%d readLen=%d\r\n",  streamId, readLen);
+
+    uint32_t readStart = pMillis();
+    uint16_t bffrOccupiedCnt;
+    do
+    {
+        bffrOccupiedCnt = bbffr_getOccupied(g_lqLTEM.iop->rxBffr);
+        if (IS_ELAPSED(readStart, g_lqLTEM.atcmd->timeout))
+        {
+            g_lqLTEM.atcmd->dataMode.rxDataSz = 0;                                                          // report as failed read, length unknown
+            DPRINT(PRNT_WARN, "(ATCMD_rxHndlrWithLength) bffr timeout: %d rcvd\r\n", bffrOccupiedCnt);
+            return resultCode__timeout;                                                                     // return timeout waiting for bffr fill
+        }
+    } while (bffrOccupiedCnt < readLen + streams__contentLengthTrailerSz);
+    
+    do                                                                                                      // *NOTE* depending on buffer wrap may take 2 ops
+    {
+        char* streamPtr;
+        uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readLen);                       // get contiguous block size from rxBffr
+        DPRINT_V(PRNT_CYAN, "(ATCMD_rxHndlrWithLength) ptr=%p, bSz=%d, rSz=%d\r\n", streamPtr, blockSz, readLen);
+        uint8_t streamId = g_lqLTEM.atcmd->dataMode.streamCtrl->dataCntxt;
+        (*g_lqLTEM.fileCtrl->appRecvDataCB)(streamId, streamPtr, blockSz);                                  // forward to application
+        bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                 // commit POP
+        readLen -= blockSz;
+    } while (readLen > 0);
+
+    if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= streams__contentLengthTrailerSz)                         // cleanup, remove trailer
+    {
+        bbffr_skipTail(g_lqLTEM.iop->rxBffr, streams__contentLengthTrailerSz);
+    }
+    return resultCode__success;
+}
+
 
 /**
  *	@brief Stardard atCmd response parser, flexible response pattern match and parse.

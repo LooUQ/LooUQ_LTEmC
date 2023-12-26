@@ -46,7 +46,7 @@ Also add information on how to contact you by electronic and paper mail.
  *  @param [in] isFinal True if this block of data is the last block in the current receive flow.
 */
 
-typedef void (*scktAppRecv_func)(dataCntxt_t dataCntxt, char* dataPtr, uint16_t dataSz, bool isFinal);
+typedef void (*scktAppRcvr_func)(dataCntxt_t dataCntxt, char* dataPtr, uint16_t dataSz, bool isFinal);
 
 
 
@@ -87,7 +87,7 @@ typedef struct scktCtrl_tag
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
     uint8_t pdpCntxt;
-    appRcvProto_func appRecvDataCB;             /// callback into host application with data (cast from generic func* to stream specific function)
+    appRcvr_func appRcvrCB;                     /// callback into host application with data (cast from generic func* to stream specific function)
     char hostUrl[SET_PROPLEN(sckt__urlHostSz)]; /// remote host URL/IP address
     uint16_t hostPort;
     uint16_t lclPort;
@@ -120,7 +120,7 @@ extern "C"
  *  @return socket result code similar to http status code, OK = 200
  */
 // void sckt_initControl(scktCtrl_t *scktCtrl, uint8_t pdpContextId, dataCntxt_t dataCntxt, protocol_t protocol, uint8_t *recvBuf, uint16_t recvBufSz, scktRecvFunc_t recvCallback);
-void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t protocol, scktAppRecv_func recvCallback);
+void sckt_initControl(scktCtrl_t *scktCtrl, dataCntxt_t dataCntxt, streamType_t protocol, scktAppRcvr_func appRcvrCB);
 
 
 /**

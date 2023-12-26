@@ -85,13 +85,11 @@ typedef enum recvEvent_tag
 
 typedef struct fileCtrl_tag
 {
-    char streamType;                            // stream type
-    /*
-     * NOTE: Does NOT follow exact struct field layout of the other streams, shares 1st field to validate type before casting 
-     */
-    uint8_t fileHandle;                         // the file sourcing data
-    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by atcmd dataMode (RX only)
-    appRcvProto_func appRecvDataCB;
+    char streamType;                                    // stream type
+    dataCntxt_t fileHandle;                             // the file sourcing data
+    dataHndlr_func dataHndlr;                           // function to handle data streaming, initiated by atcmd dataMode (RX only)
+
+    appRcvr_func appRecvDataCB;
 } fileCtrl_t;
 
 /**
@@ -99,8 +97,8 @@ typedef struct fileCtrl_tag
  */
 typedef struct ltemStatics_tag
 {
-    char dateTimeBffr[PSZ(ltem__dateTimeBffrSz)];   // reused by date/time functions for parsing formats
-    char reportBffr[PSZ(ltem__reportsBffrSz)];      // reused by *Rpt() functions
+    char dateTimeBffr[PSZ(ltem__dateTimeBffrSz)];       // reused by date/time functions for parsing formats
+    char reportBffr[PSZ(ltem__reportsBffrSz)];          // reused by *Rpt() functions
 } ltemStatics_t;
 
 

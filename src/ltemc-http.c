@@ -31,7 +31,7 @@ Also add information on how to contact you by electronic and paper mail.
 #include <lq-embed.h>
 #define LOG_LEVEL LOGLEVEL_DBG
 //#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define SRCFILE "HTT"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LQ_SRCFILE "HTT"                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
@@ -67,9 +67,9 @@ static resultCode_t S__httpRxProvider();
 /**
  *	@brief Create a HTTP(s) control structure to manage web communications. 
  */
-void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func recvCallback)
+void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_func rcvrCallback)
 {
-    ASSERT(httpCtrl != NULL && recvCallback != NULL);
+    ASSERT(httpCtrl != NULL);
     ASSERT(dataCntxt < dataCntxt__cnt);
 
     g_lqLTEM.streams[dataCntxt] = httpCtrl;
@@ -77,7 +77,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpRecv_func
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
     httpCtrl->dataCntxt = dataCntxt;
     httpCtrl->streamType = streamType_HTTP;
-    httpCtrl->appRecvDataCB = (appRcvProto_func)recvCallback;
+    httpCtrl->appRcvrCB = (appRcvr_func)rcvrCallback;
     httpCtrl->dataRxHndlr = S__httpRxProvider;
 
     httpCtrl->requestState = httpState_idle;
@@ -316,6 +316,8 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
     strcpy(httpCtrl->requestType, "GET");
     resultCode_t rslt;
 
+    ASSERT(httpCtrl != NULL && httpCtrl->streamType == streamType_HTTP);
+
     if (ATCMD_awaitLock(httpCtrl->timeoutSec))
     {
         atcmd_invokeReuseLock("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs));
@@ -362,7 +364,7 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
 
-        uint8_t reqstHdrs = (customRequest != NULL && customRequest->headersLen == 0);
+        uint8_t reqstHdrs = (customRequest != NULL && customRequest->headersLen > 0);
         atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",%d", reqstHdrs);
         rslt = atcmd_awaitResult();
         if (rslt != resultCode__success)
@@ -371,17 +373,23 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
             return rslt;
         }
 
-        if (customRequest != NULL && customRequest->headersLen == 0)
+        if (reqstHdrs)                                                                      // custom HTTP GET request (custom headers)
         {
-            atcmd_configDataMode(httpCtrl, "CONNECT", atcmd_stdTxDataHndlr, customRequest->buffer, customRequest->headersLen, NULL, true);
+            strcat(customRequest->buffer, "Content-Length: 0\r\n\r\n");
+            customRequest->headersLen = strlen(customRequest->buffer);
+
+            atcmd_configDataMode(httpCtrl, "CONNECT\r\n", ATCMD_txHndlrDefault, customRequest->buffer, customRequest->headersLen, NULL, true);
             atcmd_invokeReuseLock("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, customRequest->headersLen);
         }
-        else
+        else                                                                                // default HTTP GET request
         {
             atcmd_invokeReuseLock("AT+QHTTPGET=%d", PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
         }
 
         rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpGetStatusParser);                                                                     // wait for "+QHTTPGET trailer (request completed)
+
+        DPRINT(PRNT_MAGENTA, "(S__httpGet) GETcmd:rslt=%d, val=%d, resp=%s\r\n", rslt, atcmd_getValue(), atcmd_getResponse());
+
         if (rslt == resultCode__success && atcmd_getValue() == 0)
         {
             httpCtrl->httpStatus = S__parseResponseForHttpStatus(httpCtrl, atcmd_getResponse());
@@ -430,6 +438,8 @@ resultCode_t http_postCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUr
  */
 resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequest_t* customRequest, const char *postData, uint16_t postDataSz, bool returnResponseHdrs)
 {
+    ASSERT(httpCtrl != NULL && httpCtrl->streamType == streamType_HTTP);
+
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
     strcpy(httpCtrl->requestType, "POST");
@@ -489,13 +499,13 @@ resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequ
             memcpy(contentLengthPtr, contentLengthVal, 5);
 
             uint16_t dataLen = customRequest->headersLen + customRequest->contentLen;
-            atcmd_configDataMode(httpCtrl, "CONNECT", atcmd_stdTxDataHndlr, customRequest->buffer, dataLen, NULL, true);
+            atcmd_configDataMode(httpCtrl, "CONNECT\r\n", ATCMD_txHndlrDefault, customRequest->buffer, dataLen, NULL, true);
             atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", dataLen, httpCtrl->timeoutSec);
         }
         else
         {
             uint16_t dataLength = strlen(postData);
-            atcmd_configDataMode(httpCtrl, "CONNECT", atcmd_stdTxDataHndlr, postData, dataLength, NULL, true);
+            atcmd_configDataMode(httpCtrl, "CONNECT\r\n", ATCMD_txHndlrDefault, postData, dataLength, NULL, true);
             atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", strlen(postData), httpCtrl->timeoutSec);
         }
         
@@ -581,7 +591,7 @@ uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char
             return rslt;
         }
 
-        /* POST file IS a "custom" request need set flag for custom request/headers
+        /* POST file IS a "custom" request, need set flag for custom request/headers
          */
         atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",1");
         rslt = atcmd_awaitResult();
@@ -637,6 +647,8 @@ uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char
  */
 uint16_t http_readPage(httpCtrl_t *httpCtrl)
 {
+    ASSERT(httpCtrl != NULL && httpCtrl->dataRxHndlr != NULL);
+
     resultCode_t rslt;
 
     if (httpCtrl->requestState != httpState_requestComplete)
@@ -645,7 +657,7 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
     bBuffer_t* rxBffr = g_lqLTEM.iop->rxBffr;                                   // for better readability
     char* workPtr;
 
-    atcmd_configDataMode(httpCtrl, "CONNECT", S__httpRxProvider, NULL, 0, httpCtrl->appRecvDataCB, false);
+    atcmd_configDataMode(httpCtrl, "CONNECT", S__httpRxProvider, NULL, 0, httpCtrl->appRcvrCB, false);
     if (atcmd_tryInvoke("AT+QHTTPREAD=%d", httpCtrl->timeoutSec))
     {
         return atcmd_awaitResult();                                             // dataHandler will be invoked by atcmd module and return a resultCode
@@ -660,6 +672,7 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
  */
 uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
 {
+    ASSERT(httpCtrl != NULL && httpCtrl->streamType == streamType_HTTP);
     ASSERT(strlen(filename) < http__readToFileNameSzMax);
 
     if (httpCtrl->requestState != httpState_requestComplete)
@@ -713,7 +726,7 @@ static resultCode_t S__setUrl(const char *host, const char *relative)
     DPRINT(PRNT_dMAGENTA, "URL(%d)=%s", strlen(url), url);
     DPRINT(PRNT_dMAGENTA, "\r\n");                                                                  // separate line-end if URL truncates in trace
     
-    atcmd_configDataMode(0, "CONNECT\r\n", atcmd_stdTxDataHndlr, url, strlen(url), NULL, false);    // setup for URL dataMode transfer 
+    atcmd_configDataMode(0, "CONNECT\r\n", ATCMD_txHndlrDefault, url, strlen(url), NULL, false);    // setup for URL dataMode transfer 
     atcmd_invokeReuseLock("AT+QHTTPURL=%d,5", strlen(url));
     rslt = atcmd_awaitResult();
     return rslt;
@@ -787,7 +800,7 @@ static resultCode_t S__httpRxProvider()
     char wrkBffr[32];
     uint16_t pageRslt = 0;
 
-    httpCtrl_t *httpCtrl = (httpCtrl_t*)g_lqLTEM.atcmd->dataMode.ctrlStruct;
+    httpCtrl_t *httpCtrl = (httpCtrl_t*)g_lqLTEM.atcmd->dataMode.streamCtrl;
     ASSERT(httpCtrl != NULL);                                                                           // ASSERT data mode and stream context are consistent
 
     uint8_t popCnt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);
@@ -815,7 +828,7 @@ static resultCode_t S__httpRxProvider()
             DPRINT(PRNT_CYAN, "httpPageRcvr() ptr=%p blkSz=%d isFinal=%d\r\n", streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
 
             // forward to application
-            ((httpRecv_func)(*httpCtrl->appRecvDataCB))(httpCtrl->dataCntxt, streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
+            ((httpAppRcvr_func)(*httpCtrl->appRcvrCB))(httpCtrl->dataCntxt, streamPtr, blockSz, BBFFR_ISFOUND(trailerIndx));
             bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                             // commit POP
         }
 
