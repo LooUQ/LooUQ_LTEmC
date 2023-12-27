@@ -51,6 +51,37 @@ extern "C" {
  */
 void atcmd_reset(bool releaseLock);
 
+/**
+ *	@brief Resets AT-CMD next execution invoke properties.
+ */
+void atcmd_resetInvoke();
+
+
+/**
+ *	@brief Resets AT-CMD last execution result properties.
+ */
+void atcmd_resetResults();
+
+
+
+
+/**
+ * @brief Sets command timeout for next invocation of a BGx AT command. 
+ * @details If newTimeout is zero (0) no change to timeout is made, the current timeout is returned. Following the next command, the timeout value returns to default value.
+ * @param [in] newTimeout Value in milliseconds to wait for a command to complete.
+ * @return The value of the existing timeout.
+ */
+uint16_t ATCMD_ovrrdTimeout(uint16_t newTimeout);
+
+
+/**
+ * @brief Sets response parser for next invocation of a BGx AT command. 
+ * @details If newParser is NULL the existing parser is CLEARED, but its location is returned. Following the next command, the parser will revert to the default parser function.
+ * @param [in] newParser Address of the parser function to use for the next command. 
+ * @return The value of the existing timeout.
+ */
+cmdResponseParser_func ATCMD_ovrrdParser(cmdResponseParser_func newParser);
+
 
 /**
  * @brief Configure atcmd automatic datamode processing
@@ -73,6 +104,15 @@ void atcmd_configDataMode(void* ctrlStruct, const char* trigger, dataHndlr_func 
 //  * @param eotChar 
 //  */
 // void atcmd_setDataModeEot(uint8_t eotChar);
+
+
+/**
+ *	@brief Invokes a BGx AT command using default option values (automatic locking).
+ *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
+ *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
+ *  @return resultCode_t Status code representing outcome of AT-CMD execution.
+ */
+resultCode_t atcmd_dispatch(const char *cmdTemplate, ...);
 
 
 /**
@@ -104,12 +144,12 @@ void atcmd_close();
 resultCode_t atcmd_awaitResult();
 
 
-/**
- *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
- *  @param timeoutMS Time to wait for command response (0==no change). 
- *  @param cmdResponseParser If provided sets parser as the response parser (NULL==no change). 
- */
-resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser);
+// /**
+//  *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
+//  *  @param timeoutMS Time to wait for command response (0==no change). 
+//  *  @param cmdResponseParser If provided sets parser as the response parser (NULL==no change). 
+//  */
+// resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser);
 
 
 /**

@@ -265,7 +265,8 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
             uint8_t ntwkIndx = 0;
 
             atcmd_invokeReuseLock("AT+CGPADDR");
-            if (atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(20), NULL) == resultCode__success)
+            ATCMD_ovrrdTimeout(SEC_TO_MS(20));
+            if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpContextId = strtol(atcmd_getToken(0), NULL, 10);
                 g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpProtocol = pdpProtocol_IPV4;
@@ -287,7 +288,8 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
 {
     if (atcmd_tryInvoke("AT+QIACT=%d", cntxtId))
     {
-        resultCode_t rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
+        ATCMD_ovrrdParser(S__contextStatusCompleteParser);
+        resultCode_t rslt = atcmd_awaitResult();
     }
 }
 
@@ -435,7 +437,8 @@ void ntwkDiagnostics_getOperators(char *operatorsList, uint16_t listSz)
         if (g_lqLTEM.modemInfo->imei[0] == 0)
         {
             atcmd_invokeReuseLock("AT+COPS=?");
-            if (atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(180), NULL) == resultCode__success)
+            ATCMD_ovrrdTimeout(SEC_TO_MS(180));
+            if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 strncpy(operatorsList, atcmd_getResponse() + 9, listSz - 1);
             }

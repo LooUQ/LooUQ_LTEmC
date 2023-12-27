@@ -616,7 +616,8 @@ modemInfo_t* ltem_getModemInfo()
         if (g_lqLTEM.modemInfo->iccid[0] == 0)
         {
             atcmd_invokeReuseLock("AT+ICCID");
-            if (atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__iccidCompleteParser) == resultCode__success)
+            ATCMD_ovrrdParser(S__iccidCompleteParser);
+            if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 char* delimAt;
                 char* responseAt = atcmd_getResponse();

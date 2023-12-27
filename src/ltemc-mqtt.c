@@ -240,7 +240,9 @@ resultCode_t mqtt_open(mqttCtrl_t *mqttCtrl)
 
     if (atcmd_tryInvoke("AT+QMTOPEN=%d,\"%s\",%d", mqttCtrl->dataCntxt, mqttCtrl->hostUrl, mqttCtrl->hostPort))
     {
-        resultCode_t rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(30), S__mqttOpenCompleteParser);
+        ATCMD_ovrrdTimeout(SEC_TO_MS(30));
+        ATCMD_ovrrdParser(S__mqttOpenCompleteParser);
+        resultCode_t rslt = atcmd_awaitResult();
         DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
 
         if (rslt == resultCode__success && atcmd_getValue() == 0)
@@ -285,7 +287,10 @@ resultCode_t mqtt_connect(mqttCtrl_t *mqttCtrl, bool cleanSession)
         return resultCode__internalError;
 
     atcmd_tryInvoke("AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", mqttCtrl->dataCntxt, mqttCtrl->clientId, mqttCtrl->username, mqttCtrl->password);
-    rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), S__mqttConnectCompleteParser); // in autolock mode, so this will release lock
+
+   	ATCMD_ovrrdTimeout(SEC_TO_MS(60));
+    ATCMD_ovrrdParser(S__mqttConnectCompleteParser);
+    rslt = atcmd_awaitResult();
     DPRINT_V(PRNT_dGREEN, "MQTT Open Resp: %s", atcmd_getRawResponse());
 
     if (rslt == resultCode__success)                                                    // COMMAND executed, outcome of CONNECTION may not be a success
@@ -410,7 +415,9 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
 
     if (atcmd_tryInvoke("AT+QMTPUB=%d,%d,%d,0,\"%s\",%d", mqttCtrl->dataCntxt, msgId, qos, topic, messageSz))
     {
-        rslt = atcmd_awaitResultWithOptions(timeoutMS, S__mqttPublishCompleteParser);
+        ATCMD_ovrrdTimeout(timeoutMS);
+        ATCMD_ovrrdParser(S__mqttPublishCompleteParser);
+        rslt = atcmd_awaitResult();
         if (rslt == resultCode__success)
         {
             atcmd_close();
@@ -430,12 +437,18 @@ void mqtt_close(mqttCtrl_t *mqttCtrl)
     if (mqttCtrl->state == mqttState_connected)
     {
         if (atcmd_tryInvoke("AT+QMTDISC=%d", mqttCtrl->dataCntxt))
-            atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), NULL);
+        {
+            ATCMD_ovrrdTimeout(SEC_TO_MS(60));
+            atcmd_awaitResult();
+        }
     }
     else if (mqttCtrl->state == mqttState_open) // LTEmC uses CLOSE
     {
         if (atcmd_tryInvoke("AT+QMTCLOSE=%d", mqttCtrl->dataCntxt))
-            atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(60), NULL);
+        {
+            ATCMD_ovrrdTimeout(SEC_TO_MS(60));
+            atcmd_awaitResult();
+        }
     }
     mqttCtrl->state == mqtt_getStatus(mqttCtrl);                                            // internally set MQTT state
 }
@@ -492,7 +505,10 @@ mqttState_t mqtt_readStatus(mqttCtrl_t *mqttCtrl)
     resultCode_t rslt;
     if (atcmd_tryInvoke("AT+QMTCONN?"))
     {
-        rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(5), S__mqttConnectStatusParser);
+        ATCMD_ovrrdTimeout(SEC_TO_MS(5));
+        ATCMD_ovrrdParser(S__mqttConnectStatusParser);
+        rslt = atcmd_awaitResult();
+
         if (rslt == resultCode__success)
         {
             if (atcmd_getPreambleFound())
@@ -587,7 +603,9 @@ static resultCode_t S__notifyServerTopicChange(mqttCtrl_t *mqttCtrl, mqttTopicCt
     {
         if (atcmd_tryInvoke("AT+QMTSUB=%d,%d,\"%s\",%d", mqttCtrl->dataCntxt, ++mqttCtrl->sentMsgId, topicName, topicCtrl->Qos))
         {
-            return atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(30), S__mqttSubscribeCompleteParser);
+        	ATCMD_ovrrdTimeout(SEC_TO_MS(30));
+            ATCMD_ovrrdParser(S__mqttSubscribeCompleteParser);
+            return atcmd_awaitResult();
         }
     }
     else

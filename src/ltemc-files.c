@@ -214,7 +214,8 @@ resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
         char* eolPtr;
         memset(fileInfo, 0, fileInfoSz);                            // init for c-str behavior
 
-        rslt = atcmd_awaitResultWithOptions(2000, NULL);
+        ATCMD_ovrrdTimeout(SEC_TO_MS(2));
+        rslt = atcmd_awaitResult();
         if (IS_SUCCESS(rslt))
         {
             workPtr = atcmd_getResponse();                          // ptr to response
@@ -326,7 +327,8 @@ resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t wri
     {
         atcmd_configDataMode(0, "CONNECT\r\n", ATCMD_txHndlrDefault, writeData, writeSz, NULL, false);
         atcmd_invokeReuseLock("AT+QFWRITE=%d,%d,1", fileHandle, writeSz);
-        rslt = atcmd_awaitResultWithOptions(SEC_TO_MS(2), NULL);
+        ATCMD_ovrrdTimeout(SEC_TO_MS(2));
+        rslt = atcmd_awaitResult();
 
         char* resultTrailer = strchr(atcmd_getRawResponse(), '+');
         if (memcmp(resultTrailer, "+QFWRITE: ", 10) == 0)

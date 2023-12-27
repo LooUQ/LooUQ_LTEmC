@@ -225,7 +225,8 @@ bool QBG_setOptions()
 
         if (atcmd_tryInvoke(cmdBffr))
         {
-            if (atcmd_awaitResultWithOptions(2000, NULL) == resultCode__success)    // somewhat unknown cmd list for modem initialization, relax timeout
+          	ATCMD_ovrrdTimeout(SEC_TO_MS(2));
+            if (IS_SUCCESS(atcmd_awaitResult()))                                    // somewhat unknown cmd list for modem initialization, relax timeout
             {
                 continue;
             }

@@ -321,7 +321,7 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
     if (ATCMD_awaitLock(httpCtrl->timeoutSec))
     {
         atcmd_invokeReuseLock("AT+QHTTPCFG=\"responseheader\",%d",  (int)(httpCtrl->returnResponseHdrs));
-        rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, NULL);
+        rslt = atcmd_awaitResult();
         if (rslt != resultCode__success)
         {
             atcmd_close();
@@ -373,7 +373,7 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
             return rslt;
         }
 
-        if (reqstHdrs)                                                                      // custom HTTP GET request (custom headers)
+        if (reqstHdrs)                                                                                                  // custom HTTP GET request (custom headers)
         {
             strcat(customRequest->buffer, "Content-Length: 0\r\n\r\n");
             customRequest->headersLen = strlen(customRequest->buffer);
@@ -381,12 +381,14 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
             atcmd_configDataMode(httpCtrl, "CONNECT\r\n", ATCMD_txHndlrDefault, customRequest->buffer, customRequest->headersLen, NULL, true);
             atcmd_invokeReuseLock("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, customRequest->headersLen);
         }
-        else                                                                                // default HTTP GET request
+        else                                                                                                            // default HTTP GET request
         {
             atcmd_invokeReuseLock("AT+QHTTPGET=%d", PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
         }
 
-        rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpGetStatusParser);                                                                     // wait for "+QHTTPGET trailer (request completed)
+        ATCMD_ovrrdTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
+        ATCMD_ovrrdParser(S__httpGetStatusParser);
+        rslt = atcmd_awaitResult();                                                                                     // wait for "+QHTTPGET trailer (request completed)
 
         DPRINT(PRNT_MAGENTA, "(S__httpGet) GETcmd:rslt=%d, val=%d, resp=%s\r\n", rslt, atcmd_getValue(), atcmd_getResponse());
 
@@ -395,7 +397,7 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
             httpCtrl->httpStatus = S__parseResponseForHttpStatus(httpCtrl, atcmd_getResponse());
             if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
             {
-                httpCtrl->requestState = httpState_requestComplete;                                         // update httpState, got GET/POST response
+                httpCtrl->requestState = httpState_requestComplete;                                                     // update httpState, got GET/POST response
                 DPRINT(PRNT_MAGENTA, "GetRqst dCntxt:%d, status=%d\r\n", httpCtrl->dataCntxt, httpCtrl->httpStatus);
             }
         }
@@ -509,12 +511,11 @@ resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequ
             atcmd_invokeReuseLock("AT+QHTTPPOST=%d,5,%d", strlen(postData), httpCtrl->timeoutSec);
         }
         
-        rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpPostStatusParser);
+        ATCMD_ovrrdTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
+        ATCMD_ovrrdParser(S__httpPostStatusParser);
+        rslt = atcmd_awaitResult();
         if (rslt == resultCode__success)
         {
-            // atcmd_reset(false);                                                                         // clear CONNECT event from atcmd results
-            // atcmd_sendCmdData(postData, postDataSz);
-            // rslt = atcmd_awaitResultWithOptions(httpCtrl->timeoutSec, S__httpPostStatusParser);
             if (rslt == resultCode__success && atcmd_getValue() == 0)                                   // wait for "+QHTTPPOST trailer: rslt=200, postErr=0
             {
                 httpCtrl->httpStatus = S__parseResponseForHttpStatus(httpCtrl, atcmd_getResponse());
@@ -612,7 +613,10 @@ uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char
         atcmd_reset(false);                                                                             // reset atCmd control struct WITHOUT clearing lock
         atcmd_invokeReuseLock("AT+QHTTPPOSTFILE=\"%s\",15", filename);
 
-        rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec), S__httpPostFileStatusParser);
+        ATCMD_ovrrdTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
+        ATCMD_ovrrdParser(S__httpPostFileStatusParser);
+        rslt = atcmd_awaitResult();
+
         if (rslt == resultCode__success)
         {
             if (rslt == resultCode__success && atcmd_getValue() == 0)                                   // wait for "+QHTTPPOST trailer: rslt=200, postErr=0
@@ -680,7 +684,10 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
     
     if (atcmd_tryInvoke("AT+QHTTPREADFILE=\"%s\",%d", filename, http__readToFileInterPcktTimeoutSec))
     {
-        resultCode_t rslt = atcmd_awaitResultWithOptions(PERIOD_FROM_SECONDS(http__readToFileTimeoutSec), S__httpReadFileStatusParser);
+        ATCMD_ovrrdTimeout(SEC_TO_MS(http__readToFileTimeoutSec));
+        ATCMD_ovrrdParser(S__httpReadFileStatusParser);
+
+        resultCode_t rslt = atcmd_awaitResult();
         if (IS_SUCCESS(rslt))
         {
             if (strlen(atcmd_getRawResponse()) > sizeof("AT+QHTTPREADFILE: 0") && *atcmd_getResponse() == '0')

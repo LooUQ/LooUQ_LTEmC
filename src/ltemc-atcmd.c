@@ -90,6 +90,62 @@ void atcmd_reset(bool releaseLock)
     g_lqLTEM.atcmd->retValue = 0;
 }
 
+
+/**
+ *	@brief Resets AT-CMD next execution invoke properties.
+ */
+void atcmd_resetInvoke()
+{
+    g_lqLTEM.iop->txSrc = &g_lqLTEM.atcmd->cmdStr;                          // IOP pointer to current "talker"
+    g_lqLTEM.iop->txPending = 0;
+
+    g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
+    g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
+}
+
+
+/**
+ *	@brief Resets AT-CMD last execution result properties.
+ */
+void atcmd_resetResults()
+{
+    memset(g_lqLTEM.atcmd->cmdStr, 0, atcmd__cmdBufferSz);
+    memset(g_lqLTEM.atcmd->rawResponse, 0, atcmd__respBufferSz);
+    memset(g_lqLTEM.atcmd->errorDetail, 0, ltem__errorDetailSz);
+    g_lqLTEM.atcmd->resultCode = 0;
+    g_lqLTEM.atcmd->resultValue = 0;
+    g_lqLTEM.atcmd->invokedAt = 0;
+    g_lqLTEM.atcmd->execDuration = 0;
+    g_lqLTEM.atcmd->response = g_lqLTEM.atcmd->rawResponse;                 // reset data component of response to full-response
+}
+
+
+
+/**
+ * @brief Sets command timeout for next invocation of a BGx AT command. 
+ */
+uint16_t ATCMD_ovrrdTimeout(uint16_t newTimeout)
+{
+    uint16_t oldTimeout = g_lqLTEM.atcmd->timeout;
+    if (newTimeout > 0)
+        g_lqLTEM.atcmd->timeout = newTimeout;
+    else
+        g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
+    return oldTimeout;
+}
+
+
+/**
+ * @brief Sets response parser for next invocation of a BGx AT command. 
+ */
+cmdResponseParser_func ATCMD_ovrrdParser(cmdResponseParser_func newParser)
+{
+    cmdResponseParser_func oldParser = g_lqLTEM.atcmd->responseParserFunc;
+    g_lqLTEM.atcmd->responseParserFunc = newParser;
+    return oldParser;
+}
+
+
 /**
  *	@brief Setup automatic data mode switch/servicing.
  */
@@ -116,6 +172,70 @@ void atcmd_configDataMode(void * ctrlStruct, const char * trigger, dataHndlr_fun
 void atcmd_setDataModeEot(uint8_t eotChar)
 {
     g_lqLTEM.iop->txEot = (char)eotChar;
+}
+
+
+/**
+ *	@brief Invokes a BGx AT command using default option values (automatic locking).
+ */
+resultCode_t atcmd_dispatch(const char *cmdTemplate, ...)
+{
+    /* invoke phase
+     ----------------------------------------- */
+    if (g_lqLTEM.atcmd->isOpenLocked)
+        return resultCode__locked;
+
+    atcmd_resetResults();                                                           // clear results props from ATCMD control structure
+    g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto;                              // set automatic lock control mode
+
+    // char *cmdStr = g_lqLTEM.atcmd->cmdStr;
+    va_list ap;
+
+    va_start(ap, cmdTemplate);
+    vsnprintf(g_lqLTEM.atcmd->cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
+    strcat(g_lqLTEM.atcmd->cmdStr, "\r");
+
+    if (!ATCMD_awaitLock(g_lqLTEM.atcmd->timeout)) // attempt to acquire new atCmd lock for this instance
+        return false;
+
+    // TEMPORARY SPI alters send buffer duplicates 
+    memcpy(g_lqLTEM.atcmd->CMDMIRROR, g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+
+    DPRINT_V(0, "<atcmd_tryInvoke> cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
+    IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+
+    /* await result phase
+     ----------------------------------------- */
+    resultCode_t rslt = resultCode__unknown; // resultCode_t result;
+    g_lqLTEM.atcmd->invokedAt = pMillis();
+    do
+    {
+        rslt = S__readResult();
+        if (g_lqLTEM.cancellationRequest) // test for cancellation (RTOS or IRQ)
+        {
+            g_lqLTEM.atcmd->resultCode = resultCode__cancelled;
+            break;
+        }
+        pYield(); // give back control momentarily before next loop pass
+    } while (rslt == resultCode__unknown);
+
+    #if _DEBUG == 0 // debug for debris in rxBffr
+    ASSERT_W(bbffr_getOccupied(g_lqLTEM.iop->rxBffr) == 0, "RxBffr Dirty");
+    #else
+    if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) > 0)
+    {
+        char dbg[81] = {0};
+        bbffr_pop(g_lqLTEM.iop->rxBffr, dbg, 80);
+        DPRINT(PRNT_YELLOW, "*!* %s", dbg);
+    }
+    #endif
+
+    // reset options back to default values
+    atcmd_resetInvoke();
+    // g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
+    // g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
+
+    return g_lqLTEM.atcmd->resultCode;
 }
 
 
@@ -217,25 +337,25 @@ resultCode_t atcmd_awaitResult()
 }
 
 
-/**
- *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
- */
-resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser)
-{
-    DPRINT_V(0, "(atcmd_awaitResultWithOptions) entered\r\n");
+// /**
+//  *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
+//  */
+// resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser)
+// {
+//     DPRINT_V(0, "(atcmd_awaitResultWithOptions) entered\r\n");
 
-    // set options
-    if (timeoutMS != atcmd__noTimeoutChange)
-    {
-        g_lqLTEM.atcmd->timeout = timeoutMS;
-    }
-    if (cmdResponseParser) // caller can use atcmd__useDefaultOKCompletionParser
-        g_lqLTEM.atcmd->responseParserFunc = cmdResponseParser;
-    else
-        g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
+//     // set options
+//     if (timeoutMS != atcmd__noTimeoutChange)
+//     {
+//         g_lqLTEM.atcmd->timeout = timeoutMS;
+//     }
+//     if (cmdResponseParser) // caller can use atcmd__useDefaultOKCompletionParser
+//         g_lqLTEM.atcmd->responseParserFunc = cmdResponseParser;
+//     else
+//         g_lqLTEM.atcmd->responseParserFunc = ATCMD_okResponseParser;
 
-    return atcmd_awaitResult();
-}
+//     return atcmd_awaitResult();
+// }
 
 
 /**
