@@ -393,8 +393,6 @@ typedef struct iop_tag
 {
     volatile char* txSrc;                   // source pointer to TX pending data
     volatile uint16_t txPending;            // outstanding char count for TX
-    volatile bool dmActive;                 // interaction with BGx is now in data mode
-    volatile uint16_t dmTxEvents;           // number of TX blocks sent during data mode
     volatile bool isrEnabled;               // flag to signal ISR to run normally (true), or return immediately
 
     uint8_t irqAttached;

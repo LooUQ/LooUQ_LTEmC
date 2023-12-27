@@ -440,8 +440,6 @@ static resultCode_t S__readResult()
             if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true)))
             {
                 g_lqLTEM.atcmd->dataMode.dmState = dmState_triggered;
-                g_lqLTEM.iop->dmActive = true;
-                g_lqLTEM.iop->dmTxEvents = 0;
 
                 DPRINT_V(PRNT_MAGENTA, "(S__readResult) trigger=%s fired, invoking handler\r\n", g_lqLTEM.atcmd->dataMode.trigger);
                 // memset(peekBffr, 0, sizeof(peekBffr));
@@ -474,7 +472,6 @@ static resultCode_t S__readResult()
                     g_lqLTEM.atcmd->parserResult = cmdParseRslt_error;
                     g_lqLTEM.atcmd->resultCode = dataRslt;
                 }
-                g_lqLTEM.iop->dmActive = false;
             }
         }
 
