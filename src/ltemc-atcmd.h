@@ -28,8 +28,8 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-#ifndef __LTEMC_ATCMD_H__
-#define __LTEMC_ATCMD_H__
+#ifndef __LTEMC_atcmd_H__
+#define __LTEMC_atcmd_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,7 +71,7 @@ void atcmd_resetResults();
  * @param [in] newTimeout Value in milliseconds to wait for a command to complete.
  * @return The value of the existing timeout.
  */
-uint16_t ATCMD_ovrrdTimeout(uint16_t newTimeout);
+uint16_t atcmd_ovrrdTimeout(uint16_t newTimeout);
 
 
 /**
@@ -80,13 +80,26 @@ uint16_t ATCMD_ovrrdTimeout(uint16_t newTimeout);
  * @param [in] newParser Address of the parser function to use for the next command. 
  * @return The value of the existing timeout.
  */
-cmdResponseParser_func ATCMD_ovrrdParser(cmdResponseParser_func newParser);
+cmdResponseParser_func atcmd_ovrrdParser(cmdResponseParser_func newParser);
 
+
+/**
+ * @brief Configure default ATCMD response parser for a specific command response.
+ * 
+ *  @param [in] preamble - C-string containing the expected phrase that starts response. 
+ *  @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
+ *  @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
+ *  @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
+ *  @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
+ *  @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
+ *  @return Parse status result
+ */
+void atcmd_configParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, const char *finale, uint16_t lengthReqd);
 
 /**
  * @brief Configure atcmd automatic datamode processing
  * 
- * @param [in] contextKey Data context this data mode process configuration applies to
+ * @param [in] streamCtrl Stream control for flow to be serviced. Optional for most writes, generally required for reads
  * @param [in] trigger Character string that prefixes wait for data
  * @param [in] dataHndlr Handler function that services the data transfer 
  * @param [in] dataLoc Pointer to the data to be sent
@@ -94,7 +107,7 @@ cmdResponseParser_func ATCMD_ovrrdParser(cmdResponseParser_func newParser);
  * @param [in] applRecvDataCB Handler function to receive/parse incoming data 
  * @param [in] runParser If true, registered command response parser is invoked after successful data mode processing
  */
-void atcmd_configDataMode(void* ctrlStruct, const char* trigger, dataHndlr_func dataHndlr, const char* txDataPtr, uint16_t txDataSz, appRcvr_func applRecvDataCB, bool skipParser);
+void atcmd_configDataMode(streamCtrl_t * streamCtrl, const char* trigger, dataHndlr_func dataHndlr, const char* txDataPtr, uint16_t txDataSz, appRcvr_func applRecvDataCB, bool skipParser);
 
 
 // /**
@@ -130,6 +143,14 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...);
  *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
  */
 void atcmd_invokeReuseLock(const char *cmdTemplate, ...);
+
+
+/**
+ * @brief 
+ * 
+ * @param timeoutMS 
+ */
+bool atcmd_awaitLock(uint16_t timeoutMS);
 
 
 /**
@@ -194,11 +215,11 @@ bool atcmd_getPreambleFound();
 char* atcmd_getToken(uint8_t tokenIndx);
 
 
-/**
- *	@brief Returns the atCmd result value
- *  @return If the parser was instructed to capture a value (see atcmd_stdResponseParser()) the signed integer value found
- */
-int32_t atcmd_getValue();
+// /**
+//  *	@brief Returns the atCmd result value
+//  *  @return If the parser was instructed to capture a value (see atcmd_stdResponseParser()) the signed integer value found
+//  */
+// int32_t atcmd_getValue();
 
 
 /**
@@ -257,6 +278,8 @@ void atcmd_exitTransparentMode();
 /* Response Parsers
  * --------------------------------------------------------------------------------------------- */
 
+cmdParseRslt_t atcmd_defaultResponseParser();
+
 /**
  *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure. 
  *  @details LTEmC internal function, not static as it is used by several LTEmC modules
@@ -281,13 +304,13 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *preamble, bool preambleReqd, 
 //  *	@brief LTEmC internal testing parser to capture incoming response until timeout. This is generally not used by end-user applications.
 //  *  @return Parse status result (always pending for this test parser)
 //  */
-// cmdParseRslt_t ATCMD_testResponseTrace();
+// cmdParseRslt_t atcmd_testResponseTrace();
 
 
 /**
  *	@brief Stardard TX (out) data handler used by dataMode. Sends data and checks for OK response.
  */
-resultCode_t ATCMD_txHndlrDefault();
+resultCode_t atcmd_txHndlrDefault();
 
 
 // /**
@@ -305,10 +328,10 @@ resultCode_t ATCMD_txHndlrDefault();
 /**
  * @brief Stream RX data handler accepting data length at RX buffer tail.
  */
-resultCode_t ATCMD_rxHndlrWithLength();
+resultCode_t atcmd_rxHndlrWithLength();
 
 
 #ifdef __cplusplus
 }
 #endif
-#endif  // !__LTEMC_ATCMD_H__
+#endif  // !__LTEMC_atcmd_H__

@@ -34,7 +34,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define LQ_SRCFILE "NWK"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 
 #include <stdint.h>
@@ -228,7 +228,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
     else 
         waitMs = SEC_TO_MS(waitSec);
 
-    if (ATCMD_awaitLock(waitMs))                                            // open a reusable lock to complete multiple steps
+    if (atcmd_awaitLock(waitMs))                                            // open a reusable lock to complete multiple steps
     {
         S__clearOperatorInfo();
         do 
@@ -238,10 +238,10 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
             {
                 uint8_t toCopy = strlen(atcmd_getToken(2)) - 2;
                 strncpy(g_lqLTEM.ntwkOperator->name, atcmd_getToken(2) + 1, toCopy);
-                uint8_t ntwkMode = (uint8_t)strtol(atcmd_getToken(3), NULL, 10);
-                if (ntwkMode == 8)
+                char ntwkMode = atcmd_getToken(3)[0];
+                if (ntwkMode == '8')
                     strcpy(g_lqLTEM.ntwkOperator->iotMode, "M1");
-                else if (ntwkMode == 9)
+                else if (ntwkMode == '9')
                     strcpy(g_lqLTEM.ntwkOperator->iotMode, "NB1");
                 else
                     strcpy(g_lqLTEM.ntwkOperator->iotMode, "GSM");
@@ -252,7 +252,6 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
             pDelay(1000);                                                                   // this yields, allowing alternate execution
             endMillis = pMillis();
         } while (endMillis - startMillis < waitMs || g_lqLTEM.cancellationRequest);         // timed out waiting OR global cancellation
-
 
         // got PROVIDER, get networks 
 
@@ -265,7 +264,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
             uint8_t ntwkIndx = 0;
 
             atcmd_invokeReuseLock("AT+CGPADDR");
-            ATCMD_ovrrdTimeout(SEC_TO_MS(20));
+            atcmd_ovrrdTimeout(SEC_TO_MS(20));
             if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpContextId = strtol(atcmd_getToken(0), NULL, 10);
@@ -288,7 +287,7 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
 {
     if (atcmd_tryInvoke("AT+QIACT=%d", cntxtId))
     {
-        ATCMD_ovrrdParser(S__contextStatusCompleteParser);
+        atcmd_ovrrdParser(S__contextStatusCompleteParser);
         resultCode_t rslt = atcmd_awaitResult();
     }
 }
@@ -360,7 +359,7 @@ const char* ntwk_getNetworkInfo()
 {
     if (atcmd_tryInvoke("AT+QNWINFO"))
     {
-        if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+        if (IS_SUCCESS(atcmd_awaitResult()))
         {
             char * copyFrom = strstr(g_lqLTEM.atcmd->rawResponse, "+QNWINFO: ");
             if (copyFrom)                          // clean up extra content/EOL
@@ -405,8 +404,78 @@ bool ntwk_isReady(bool refresh)
     if (refresh)
         ntwk_awaitOperator(0);
 
-    return strlen(g_lqLTEM.ntwkOperator->name) > 0;
+    return ntwk_signalRaw() != 99 &&
+           strlen(g_lqLTEM.ntwkOperator->name) > 0 &&
+           g_lqLTEM.ntwkOperator->packetNetworks[0].ipAddress[0] != '0';
 }
+
+
+/**
+ *  @brief Get the signal strenght as raw value returned from BGx.
+ */
+uint8_t ntwk_signalRaw()
+{
+    uint8_t signal = 99;
+
+    if (ltem_getDeviceState())
+    {
+        if (atcmd_tryInvoke("AT+CSQ"))
+        {
+            if (atcmd_awaitResult() == resultCode__success)
+            {
+                char *term;
+                char *lastResponse = atcmd_getResponse();
+                term = strstr(atcmd_getResponse(), "+CSQ");
+                signal = strtol(term + 6, NULL, 10);
+            }
+            atcmd_close();
+        }
+    }
+    return signal;
+}
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device at a percent
+ */
+uint8_t ntwk_signalPercent()
+{
+    double csq;
+    uint8_t signal = 0;
+    const double csqFactor = 3.23;
+
+    csq = (double)ntwk_signalRaw();
+    signal = (csq == 99) ? 0 : (uint8_t)(csq * csqFactor);
+    return signal;
+}
+
+
+/**
+ *  @brief Get the signal strenght as RSSI (db).
+ */
+int16_t ntwk_signalRSSI()
+{
+    const int8_t rssiBase = -113;
+    const int8_t rssiRange = 113 - 51;
+
+    uint8_t signalPercent = ntwk_signalPercent();
+    return (signalPercent == 0) ? rssiBase : (signalPercent * 0.01 * rssiRange) + rssiBase;
+}
+
+
+/**
+ *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone)
+ * */
+uint8_t ntwk_signalBars(uint8_t displayBarCount)
+{
+    const int8_t barOffset = 20; // adjust point for full-bar percent (20 = full bar count at 80%)
+
+    uint8_t barSpan = 100 / displayBarCount;
+    uint8_t signalPercent = MIN(mdmInfo_signalPercent() + barOffset, 100);
+    return (uint8_t)(signalPercent / barSpan);
+}
+
+
 
 
 
@@ -432,12 +501,12 @@ void ntwkDiagnostics_getOperators(char *operatorsList, uint16_t listSz)
     /* AT+COPS=? */
     ASSERT_W(false, "ntwkDiagnostics_getOperators() blocks and is SLOW!");
 
-    if (ATCMD_awaitLock(atcmd__defaultTimeout))
+    if (atcmd_awaitLock(atcmd__defaultTimeout))
     {
         if (g_lqLTEM.modemInfo->imei[0] == 0)
         {
             atcmd_invokeReuseLock("AT+COPS=?");
-            ATCMD_ovrrdTimeout(SEC_TO_MS(180));
+            atcmd_ovrrdTimeout(SEC_TO_MS(180));
             if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 strncpy(operatorsList, atcmd_getResponse() + 9, listSz - 1);

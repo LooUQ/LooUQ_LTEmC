@@ -119,29 +119,29 @@ typedef struct httpRequest_tag
 
 typedef struct httpCtrl_tag
 {
-    char streamType;                            /// stream type
-    dataCntxt_t dataCntxt;                      /// integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataHndlr_func dataRxHndlr;                 /// function to handle data streaming, initiated by eventMgr() or atcmd module
-    urcEvntHndlr_func urcEvntHndlr;             /// function to determine if "potential" URC event is for an open stream and perform reqd actions
+    char streamType;                            // stream type
+    dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcEvntHndlr;             // function to determine if "potential" URC event is for an open stream and perform reqd actions
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
-    appRcvr_func appRcvrCB;                     /// callback into host application with data (cast from generic func* to stream specific function)
-    bool useTls;                                /// flag indicating SSL/TLS applied to stream
-    char hostUrl[host__urlSz];                  /// URL or IP address of host
-    uint16_t hostPort;                          /// IP port number host is listening on (allows for 65535/0)
-    bool returnResponseHdrs;                    /// if set true, response headers are included in the returned response
-    // char *cstmHdrsBffr;                         /// custom header content, optional buffer provided by application
-    // uint16_t cstmHdrsBffrSz;                    /// size of custom header buffer
-    char requestType[http__rqstTypeSz];         /// type of current/last request: 'G'=GET, 'P'=POST
-    httpState_t requestState;                   /// current state machine variable for HTTP request
-    uint16_t bgxError;                          /// BGx sprecific error code returned from GET/POST
-    uint16_t httpStatus;                        /// set to 0 during a request, initialized to 0xFFFF before any request
-    uint32_t pageSize;                          /// if provided in page response, the page size 
-    uint32_t pageRemaining;                     /// set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
-    uint8_t timeoutSec;                         /// default timeout for GET/POST/read requests (BGx is 60 secs)
-    uint16_t defaultBlockSz;                    /// default size of block (in of bytes) to transfer to app from page read (page read spans blocks)
-    bool pageCancellation;                      /// set to abandon further page loading
+    appRcvr_func appRcvrCB;                     // callback into host application with data (cast from generic func* to stream specific function)
+    bool useTls;                                // flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];                  // URL or IP address of host
+    uint16_t hostPort;                          // IP port number host is listening on (allows for 65535/0)
+    // bool returnResponseHdrs;                    // if set true, response headers are included in the returned response
+    char * responseHdrs;                        // pointer to application provided buffer for response headers
+    uint16_t responseBffrSz;                    // size of app provided response header buffer
+    char requestType[http__rqstTypeSz];         // type of current/last request: 'G'=GET, 'P'=POST
+    httpState_t requestState;                   // current state machine variable for HTTP request
+    uint16_t bgxError;                          // BGx sprecific error code returned from GET/POST
+    uint16_t httpStatus;                        // set to 0 during a request, initialized to 0xFFFF before any request
+    uint32_t pageSize;                          // if provided in page response, the page size 
+    uint32_t pageRemaining;                     // set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
+    uint8_t timeoutSec;                         // default timeout for GET/POST/read requests (BGx is 60 secs)
+    uint16_t defaultBlockSz;                    // default size of block (in of bytes) to transfer to app from page read (page read spans blocks)
+    bool pageCancellation;                      // set to abandon further page loading
 } httpCtrl_t;
 
 
@@ -154,19 +154,28 @@ extern "C"
 /**
  *	@brief Create a HTTP(s) control structure to manage web communications. 
  *  @param [in] httpCtrl HTTP control structure pointer, struct defines parameters of communications with web server.
- *	@param [in] dataCntxt [in] The data context (0-5) to use for this communications.
- *  @param [in] recvCallback [in] Callback function to receive incoming page data.
+ *	@param [in] dataCntxt The data context (0-5) to use for this communications.
+ *  @param [in] recvCallback Callback function to receive incoming page data.
  */
 void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_func appRcvrCB);
 
 
 /**
  *	@brief Set host connection characteristics. 
- *  @param [in] httpCtrl [in] HTTP control structure pointer, struct defines parameters of communications with web server.
- *  @param [in] hostURL [in] The HOST address of the web server URL.
- *  @param [in] hostPort [in] The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
+ *  @param [in] httpCtrl HTTP control structure pointer, struct defines parameters of communications with web server.
+ *  @param [in] hostURL The HOST address of the web server URL.
+ *  @param [in] hostPort The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
  */
 void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t hostPort);
+
+
+/**
+ *	@brief Set host connection characteristics. 
+ *  @param [in] httpCtrl HTTP control structure pointer, struct defines parameters of communications with web server.
+ *  @param [in] respHdrBffr Char buffer to return response headers.
+ *  @param [in] respHdrBffrSz Size of the response header buffer, if response exceeds buffer size the excess header content is dropped.
+ */
+void http_setResponseHeadersBuffer(httpCtrl_t *httpCtrl, char *respHdrBffr, uint16_t respHdrBffrSz);
 
 
 /**
@@ -256,7 +265,7 @@ uint16_t http_addPostData(httpRequest_t* request, const char *postData, uint16_t
  *  Request and Response Section 
  * --------------------------------------------------------------------------------------------- */
 
-resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool returnResponseHdrs);
+resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl);
 
 /**
  *	@brief Perform HTTP GET operation. Results are internally buffered on the LTEm, see http_read().
@@ -269,7 +278,7 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl, bool return
  *  @param [in] returnResponseHdrs Set to true for page result to include response headers at the start of the page
  *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
-resultCode_t http_getCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest, bool returnResponseHdrs);
+resultCode_t http_getCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest);
 
 
 /**
@@ -281,7 +290,7 @@ resultCode_t http_getCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl
  *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data.
  *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
-resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, const char* postData, uint16_t postDataSz, bool returnResponseHdrs);
+resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, const char* postData, uint16_t postDataSz);
 
 
 /**
@@ -293,7 +302,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, const char
  *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data.
  *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
-resultCode_t http_postCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest, bool returnResponseHdrs);
+resultCode_t http_postCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest);
 
 
 /**
@@ -305,7 +314,7 @@ resultCode_t http_postCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUr
  *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data
  *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
-resultCode_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char* filename, bool returnResponseHdrs);
+resultCode_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char* filename);
 
 
 /**

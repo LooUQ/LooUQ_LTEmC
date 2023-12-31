@@ -194,25 +194,28 @@ void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data)
 /**
  *	@brief Reads through the SC16IS741A bridge (its RX FIFO)
  */
-void SC16IS7xx_read(void *dest, uint8_t dest_len)
+void SC16IS7xx_read(uint8_t * rxData, uint32_t size)
 {
     union __SC16IS7xx_reg_addr_byte__ reg_addr = {0};
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, dest, dest_len);
+    //void spi_transferBuffer(platformSpi_t* platformSpi, uint8_t addressByte, const uint8_t * txData,  uint8_t * rxData, uint32_t size);
+
+    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, NULL, rxData, size);
 }
+
 
 /**
  *	@brief Write through the SC16IS741A bridge
  */
-void SC16IS7xx_write(const void *src, uint8_t src_len)
+void SC16IS7xx_write(const uint8_t * txData, uint32_t size)
 {
     union __SC16IS7xx_reg_addr_byte__ reg_addr = {0};
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 
-    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, src, src_len);
+    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, txData, NULL, size);
 }
 
 /**

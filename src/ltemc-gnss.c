@@ -71,7 +71,7 @@ resultCode_t gnss_on()
 {
     if (atcmd_tryInvoke("AT+QGPS=1"))
     {
-        ATCMD_ovrrdTimeout(SEC_TO_MS(2));
+        atcmd_ovrrdTimeout(SEC_TO_MS(2));
         return atcmd_awaitResult();
     }
     return resultCode__conflict;
@@ -105,8 +105,8 @@ gnssLocation_t gnss_getLocation()
 
     if (atcmd_tryInvoke("AT+QGPSLOC=2"))
     {
-        ATCMD_ovrrdTimeout(SEC_TO_MS(2));
-        ATCMD_ovrrdParser(gnssLocCompleteParser);
+        atcmd_ovrrdTimeout(SEC_TO_MS(2));
+        atcmd_ovrrdParser(gnssLocCompleteParser);
         resultCode_t rslt = atcmd_awaitResult();
 
         gnssResult.statusCode = (rslt == 516) ? resultCode__gone : rslt;                    // translate "No fix" to gone

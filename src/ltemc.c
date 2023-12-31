@@ -33,9 +33,8 @@ Also add information on how to contact you by electronic and paper mail.
 #define LQ_SRCFILE "LTE"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-// #include <lqdiag.h>
 
 #include "ltemc.h"
 #include "ltemc-internal.h"
@@ -239,19 +238,7 @@ bool ltem_start(resetAction_t resetAction)
         }
         initTries++;
     }
-    DPRINT_V(PRNT_CYAN, "BGx start verified\r\n");
-
-
-
-    // if (QBG_verifyStart())
-    // else
-    // {
-    //     ltem_notifyApp(appEvent_fault_hardFault, "BGx start verification failed");  // send notification, maybe app can recover
-    //     DPRINT(PRNT_DEFAULT, "BGx start verification failed\r");
-    // }
-
-    // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
-    // DPRINT_V(PRNT_CYAN, "ltem_start(): rat options set");
+    DPRINT(PRNT_CYAN, "BGx start verified\r\n");
 
     ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
     DPRINT_V(PRNT_CYAN, "ltem_start(): pdp ntwk configured\r\n");
@@ -395,7 +382,7 @@ ltemRfPriorityMode_t ltem_getRfPriorityMode()
     {
         if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
         {
-            if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+            if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 uint32_t mode = strtol(atcmd_getToken(1), NULL, 10);
                 DPRINT_V(0, "<ltem_getRfPriorityMode> mode=%d\r\n", mode);
@@ -539,7 +526,7 @@ int8_t ltem_getLocalTimezoneOffset(bool precise)
 
     if (atcmd_tryInvoke("AT+CCLK?"))
     {
-        if (IS_SUCCESS_RSLT(atcmd_awaitResult()))
+        if (IS_SUCCESS(atcmd_awaitResult()))
         {
             if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)        // tolerate preceeding EOL
             {
@@ -567,7 +554,7 @@ int8_t ltem_getLocalTimezoneOffset(bool precise)
  */
 modemInfo_t* ltem_getModemInfo()
 {
-    if (ATCMD_awaitLock(atcmd__defaultTimeout))
+    if (atcmd_awaitLock(atcmd__defaultTimeout))
     {
         if (g_lqLTEM.modemInfo->imei[0] == 0)
         {
@@ -616,7 +603,7 @@ modemInfo_t* ltem_getModemInfo()
         if (g_lqLTEM.modemInfo->iccid[0] == 0)
         {
             atcmd_invokeReuseLock("AT+ICCID");
-            ATCMD_ovrrdParser(S__iccidCompleteParser);
+            atcmd_ovrrdParser(S__iccidCompleteParser);
             if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 char* delimAt;
@@ -649,70 +636,6 @@ bool ltem_isSimReady()
     }
     return strlen(g_lqLTEM.modemInfo->iccid) > 0 && cpinState;
 }
-
-
-/**
- *  @brief Get the signal strenght as raw value returned from BGx.
- */
-uint8_t ltem_signalRaw()
-{
-    uint8_t signal = 99;
-
-    if (ltem_getDeviceState())
-    {
-        if (atcmd_tryInvoke("AT+CSQ"))
-        {
-            if (atcmd_awaitResult() == resultCode__success)
-            {
-                char *term;
-                char *lastResponse = atcmd_getResponse();
-                term = strstr(atcmd_getResponse(), "+CSQ");
-                signal = strtol(term + 6, NULL, 10);
-            }
-            atcmd_close();
-        }
-    }
-    return signal;
-}
-
-/**
- *  @brief Get the signal strength reported by the LTEm device at a percent
- */
-uint8_t mdmInfo_signalPercent()
-{
-    double csq;
-    uint8_t signal = 0;
-    const double csqFactor = 3.23;
-
-    csq = (double)ltem_signalRaw();
-    signal = (csq == 99) ? 0 : (uint8_t)(csq * csqFactor);
-    return signal;
-}
-
-/**
- *  @brief Get the signal strenght as RSSI (db).
- */
-int16_t ltem_signalRSSI()
-{
-    const int8_t rssiBase = -113;
-    const int8_t rssiRange = 113 - 51;
-
-    uint8_t signalPercent = mdmInfo_signalPercent();
-    return (signalPercent == 0) ? rssiBase : (signalPercent * 0.01 * rssiRange) + rssiBase;
-}
-
-/**
- *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone)
- * */
-uint8_t ltem_signalBars(uint8_t displayBarCount)
-{
-    const int8_t barOffset = 20; // adjust point for full-bar percent (20 = full bar count at 80%)
-
-    uint8_t barSpan = 100 / displayBarCount;
-    uint8_t signalPercent = MIN(mdmInfo_signalPercent() + barOffset, 100);
-    return (uint8_t)(signalPercent / barSpan);
-}
-
 
 
 /**

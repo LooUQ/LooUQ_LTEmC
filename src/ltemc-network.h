@@ -211,6 +211,34 @@ resultCode_t ntwk_getRegistrationStatus();
  */
 bool ntwk_isReady(bool refresh);
 
+/**
+ *  @brief Get the signal strength reported by the LTEm device at a percent
+ *  @return The radio signal strength in the range of 0 to 100 (0 is no signal)
+*/
+uint8_t ntwk_signalPercent();
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device as RSSI reported
+ *  @return The radio signal strength in the range of -51dBm to -113dBm (-999 is no signal)
+*/
+int16_t ntwk_signalRSSI();
+
+
+/**
+ *  @brief Get the signal strength reported by the LTEm device as RSSI reported
+ *  @return The raw radio signal level reported by BGx
+*/
+uint8_t ntwk_signalRaw();
+
+
+/** 
+ *  @brief Get the signal strength, as a bar count for visualizations, (like on a smartphone) 
+ *  @return The radio signal strength factored into a count of bars for UI display
+ * */
+uint8_t ntwk_signalBars(uint8_t displayBarCount);
+
+
 
 /** 
  * @brief Development/diagnostic function to retrieve visible providers from radio.

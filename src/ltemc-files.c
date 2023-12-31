@@ -33,7 +33,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define LQ_SRCFILE "FIL"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+// #define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 // #include <lqdiag.h>
 
@@ -59,7 +59,7 @@ void file_setAppReceiver(appRcvr_func fileReceiver)
     ASSERT(fileReceiver != NULL);                                           // assert user provided receiver function
 
     g_lqLTEM.fileCtrl->streamType = streamType_file;                        // init singleton fileCtrl
-    g_lqLTEM.fileCtrl->dataHndlr = ATCMD_rxHndlrWithLength;
+    g_lqLTEM.fileCtrl->dataHndlr = atcmd_rxHndlrWithLength;
     g_lqLTEM.fileCtrl->appRecvDataCB = fileReceiver;
 }
 
@@ -72,7 +72,7 @@ resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
     resultCode_t rslt;
     char *workPtr;
 
-    if (!ATCMD_awaitLock(atcmd__defaultTimeout))
+    if (!atcmd_awaitLock(atcmd__defaultTimeout))
         return resultCode__conflict;                                    // failed to get lock
 
     do
@@ -113,7 +113,7 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
     resultCode_t rslt;
     do
     {
-        if (!ATCMD_awaitLock(atcmd__defaultTimeout))
+        if (!atcmd_awaitLock(atcmd__defaultTimeout))
         {
             rslt = resultCode__conflict;                                    // failed to get lock
             break;
@@ -214,7 +214,7 @@ resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
         char* eolPtr;
         memset(fileInfo, 0, fileInfoSz);                            // init for c-str behavior
 
-        ATCMD_ovrrdTimeout(SEC_TO_MS(2));
+        atcmd_ovrrdTimeout(SEC_TO_MS(2));
         rslt = atcmd_awaitResult();
         if (IS_SUCCESS(rslt))
         {
@@ -284,7 +284,7 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
     ASSERT(bbffr_getCapacity(g_lqLTEM.iop->rxBffr) > (requestSz + 128));        // ensure ample space in buffer for I/O
 
     // waiting for "CONNECT #### \r\n" response; dataMode will trim prefix, in handler buffer tail points at read length
-    atcmd_configDataMode(g_lqLTEM.fileCtrl, "CONNECT ", ATCMD_rxHndlrWithLength, NULL, 0, g_lqLTEM.fileCtrl->appRecvDataCB, false);
+    atcmd_configDataMode(g_lqLTEM.fileCtrl, "CONNECT ", atcmd_rxHndlrWithLength, NULL, 0, g_lqLTEM.fileCtrl->appRecvDataCB, false);
     g_lqLTEM.fileCtrl->fileHandle = fileHandle;
     DPRINT_V(0, "(file_read) dataMode configured fHandle=%d\r\n", g_lqLTEM.fileCtrl->fileHandle);
 
@@ -297,7 +297,6 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
     if (!invoked)
         return resultCode__locked;
 
-    pDelay(1000);
     resultCode_t rslt = atcmd_awaitResult();
     DPRINT_V(0, "(file_read) await rslt=%d\r\n", rslt);
 
@@ -320,14 +319,14 @@ resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t wri
     resultCode_t rslt;
     // char *workPtr;
 
-    if (!ATCMD_awaitLock(atcmd__defaultTimeout))
+    if (!atcmd_awaitLock(atcmd__defaultTimeout))
         return resultCode__conflict;                                                            // failed to get lock
 
     do
     {
-        atcmd_configDataMode(0, "CONNECT\r\n", ATCMD_txHndlrDefault, writeData, writeSz, NULL, false);
+        atcmd_configDataMode(0, "CONNECT\r\n", atcmd_txHndlrDefault, writeData, writeSz, NULL, false);
         atcmd_invokeReuseLock("AT+QFWRITE=%d,%d,1", fileHandle, writeSz);
-        ATCMD_ovrrdTimeout(SEC_TO_MS(2));
+        atcmd_ovrrdTimeout(SEC_TO_MS(2));
         rslt = atcmd_awaitResult();
 
         char* resultTrailer = strchr(atcmd_getRawResponse(), '+');
@@ -440,7 +439,7 @@ static cmdParseRslt_t S__writeStatusParser()
 //  * 
 //  * @return resultCode from operation
 //  */
-// resultCode_t ATCMD_rxHndlrWithLength()
+// resultCode_t atcmd_rxHndlrWithLength()
 // {
 //     char wrkBffr[32] = {0};
 //     uint16_t lengthEOLAt;
@@ -461,7 +460,7 @@ static cmdParseRslt_t S__writeStatusParser()
 //     bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, lengthEOLAt + 2);                                              // pop data length and EOL from RX buffer
 //     uint16_t readLen = strtol(wrkBffr, NULL, 10);
 //     g_lqLTEM.atcmd->retValue = readLen;                                                                     // stash reported read length
-//     DPRINT_V(PRNT_CYAN, "(ATCMD_rxHndlrWithLength) fHandle=%d available=%d\r", fileCtrl->fileHandle, readLen);
+//     DPRINT_V(PRNT_CYAN, "(atcmd_rxHndlrWithLength) fHandle=%d available=%d\r", fileCtrl->fileHandle, readLen);
 
 //     uint32_t readTimeout = pMillis();
 //     uint16_t bffrOccupiedCnt;
@@ -471,7 +470,7 @@ static cmdParseRslt_t S__writeStatusParser()
 //         if (pMillis() - readTimeout > g_lqLTEM.atcmd->timeout)
 //         {
 //             g_lqLTEM.atcmd->retValue = 0;
-//             DPRINT(PRNT_WARN, "(ATCMD_rxHndlrWithLength) bffr timeout: %d rcvd\r\n", bffrOccupiedCnt);
+//             DPRINT(PRNT_WARN, "(atcmd_rxHndlrWithLength) bffr timeout: %d rcvd\r\n", bffrOccupiedCnt);
 //             return resultCode__timeout;                                                                     // return timeout waiting for bffr fill
 //         }
 //     } while (bffrOccupiedCnt < readLen + file__readTrailerSz);
@@ -480,7 +479,7 @@ static cmdParseRslt_t S__writeStatusParser()
 //     {
 //         char* streamPtr;
 //         uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readLen);                       // get contiguous block size from rxBffr
-//         DPRINT_V(PRNT_CYAN, "(ATCMD_rxHndlrWithLength) ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
+//         DPRINT_V(PRNT_CYAN, "(atcmd_rxHndlrWithLength) ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
 //         uint8_t fileHandle = ((streamCtrl_t*)g_lqLTEM.atcmd->dataMode.ctrlStruct)->dataCntxt;
 //         (*g_lqLTEM.fileCtrl->appRecvDataCB)(fileHandle, streamPtr, blockSz);                                // forward to application
 //         bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                 // commit POP

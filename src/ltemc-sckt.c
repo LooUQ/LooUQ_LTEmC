@@ -210,7 +210,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
     resultCode_t rslt;
 
-    atcmd_configDataMode(scktCtrl, "> ", ATCMD_txHndlrDefault, data, dataSz, NULL, false);
+    atcmd_configDataMode(scktCtrl, "> ", atcmd_txHndlrDefault, data, dataSz, NULL, false);
     atcmd_configDataModeEot(0x1A);
 
     if (atcmd_tryInvoke("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz))
@@ -401,7 +401,10 @@ static resultCode_t S__scktRxHndlr()
     bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, popCnt + 2);                                                       // pop preamble phrase to parse data length
     wrkPtr = memchr(wrkBffr, ':', popCnt) + 2;
     uint16_t irdSz = strtol(wrkPtr, NULL, 10);
-    g_lqLTEM.atcmd->retValue = irdSz;
+
+
+    // TODO move to scktCtrl_t
+    // g_lqLTEM.atcmd->retValue = irdSz;
 
     DPRINT(PRNT_CYAN, "scktRxHndlr() cntxt=%d irdSz=%d\r", scktCtrl->dataCntxt, irdSz);
 
