@@ -34,7 +34,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define LQ_SRCFILE "HTT"                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 //#define ENABLE_ASSERT
 // #include <lqdiag.h>
 
@@ -603,7 +603,7 @@ uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char
             return rslt;
         }
 
-        /* POST file IS a "custom" request, need set flag for custom request/headers
+        /* POST file IS a "custom" request, set flag for request + body in file
          */
         atcmd_invokeReuseLock("AT+QHTTPCFG=\"requestheader\",1");
         rslt = atcmd_awaitResult();
@@ -621,39 +621,46 @@ uint16_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char
         * This allows other application tasks to be performed while waiting for page. No LTEm commands can be invoked
         * but non-LTEm tasks like reading sensors can continue.
         *---------------------------------------------------------------------------------------------------------------*/
-        atcmd_reset(false);                                                                             // reset atCmd control struct WITHOUT clearing lock
-        atcmd_invokeReuseLock("AT+QHTTPPOSTFILE=\"%s\",15", filename);
+        // atcmd_reset(false);                                                                             // reset atCmd control struct WITHOUT clearing lock
 
         atcmd_ovrrdTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
         // atcmd_ovrrdParser(S__httpPostFileStatusParser);
         atcmd_configParser("+QHTTPPOSTFILE: ", true, ",", 0, "\r\n", 0);
+
+        atcmd_invokeReuseLock("AT+QHTTPPOSTFILE=\"%s\"", filename);
         rslt = atcmd_awaitResult();
 
-        if (rslt == resultCode__success)
+        DPRINT_V(PRNT_dMAGENTA, "(http_postFile) timeout=%d\r\n", httpCtrl->timeoutSec);
+        DPRINT_V(PRNT_dMAGENTA, "(http_postFile) rslt=%d\r\n", rslt);
+        DPRINT_V(PRNT_dMAGENTA, "(http_postFile) response=%s\r\n", atcmd_getRawResponse());
+        lqDelay(100);
+        
+        if (IS_SUCCESS(rslt))
         {
-            ASSERT(atcmd_getToken(0) != NULL);
-            ASSERT(atcmd_getToken(1) != NULL);
-            // DPRINT(PRNT_MAGENTA, "(http_postFile) rslt=%d, httpVal=%s, statusCode=%s, response=%s\r\n", rslt, atcmd_getToken(0), atcmd_getToken(1), atcmd_getResponse());
-
-            DPRINT_V(PRNT_dMAGENTA, "token_0: %s, token_1: %s\r\n", atcmd_getToken(0), atcmd_getToken(1));
-            if (rslt == resultCode__success && (strlen(atcmd_getToken(0)) > 0 && atcmd_getToken(0)[0] == '0'))
+            char* httpResponse = atcmd_getToken(0);                             // either CMD error or http result
+            if (httpResponse[0] == '0')                                         // no http error code
             {
-                httpCtrl->httpStatus = strtol(atcmd_getToken(1), NULL, 10);
+                httpCtrl->httpStatus = (int16_t)strtol(atcmd_getToken(1), NULL, 10);
                 if (httpCtrl->httpStatus >= resultCode__success && httpCtrl->httpStatus <= resultCode__successMax)
                 {
-                    httpCtrl->requestState = httpState_requestComplete;                                 // update httpState, got GET/POST response
+                    httpCtrl->requestState = httpState_requestComplete;         // request complete, can _read() to get response
+
                     DPRINT(PRNT_MAGENTA, "Post(file) Request dCntxt:%d, status=%d\r\n", httpCtrl->dataCntxt, httpCtrl->httpStatus);
                 }
             }
             else
             {
                 httpCtrl->requestState = httpState_idle;
-                httpCtrl->httpStatus = rslt;
-                DPRINT(PRNT_WARN, "Closed failed POST(file) request, status=%d (%s)\r\n", httpCtrl->httpStatus, atcmd_getErrorDetail());
+                httpCtrl->httpStatus = resultCode__extendedCodesBase + (int16_t)strtol(httpResponse, NULL, 10);
+                DPRINT(PRNT_WARN, "Closed failed POST(file) request, status=%d\r\n", httpCtrl->httpStatus);
             }
         }
         else
+        {
+            httpCtrl->requestState = httpState_idle;
             httpCtrl->httpStatus = resultCode__internalError;
+        }
+
         atcmd_close();
         return httpCtrl->httpStatus;
     }   // awaitLock()

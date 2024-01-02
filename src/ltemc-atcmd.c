@@ -46,7 +46,7 @@ extern ltemDevice_t g_lqLTEM;
 
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------- */
-static void lqStr_getToken(const char * source, char delimiter, uint8_t tokenIndx, char * destBffr, uint8_t destBffrSz);
+static bool lqStr_getToken(const char * source, char delimiter, uint8_t tokenIndx, char * destBffr, uint8_t destBffrSz);
 static resultCode_t S__readResult();
 static bool S__cleanRxBffr();
 //static void S__rxParseForUrc();
@@ -54,19 +54,46 @@ static bool S__cleanRxBffr();
 #pragma region Public Functions
 /*-----------------------------------------------------------------------------------------------*/
 
+// /**
+//  *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
+//  */
+// void atcmd_reset(bool releaseLock)
+// {
+//     /* clearing req/resp buffers now for debug clarity, future likely just insert '\0' */
+
+//     // dataMode is not reset/cleared here, static S__resetDataMode is invoked after result
+
+//     // request side of action
+//     if (releaseLock)
+//         g_lqLTEM.atcmd->isOpenLocked = false; // reset current lock
+
+//     memset(g_lqLTEM.atcmd->cmdStr, 0, atcmd__cmdBufferSz);
+//     memset(g_lqLTEM.atcmd->rawResponse, 0, atcmd__respBufferSz);
+//     memset(g_lqLTEM.atcmd->errorDetail, 0, ltem__errorDetailSz);
+//     g_lqLTEM.atcmd->resultCode = 0;
+//     g_lqLTEM.atcmd->resultValue = 0;
+//     g_lqLTEM.atcmd->invokedAt = 0;
+//     g_lqLTEM.atcmd->execDuration = 0;
+
+
+//     // command side
+//     g_lqLTEM.iop->txSrc = &g_lqLTEM.atcmd->cmdStr;                          // IOP pointer to current "talker"
+//     g_lqLTEM.iop->txPending = 0;
+
+//     // response side
+//     g_lqLTEM.atcmd->response = g_lqLTEM.atcmd->rawResponse;                 // reset data component of response to full-response
+
+//     // restore defaults
+//     g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
+//     g_lqLTEM.atcmd->responseParserFunc = atcmd_defaultResponseParser;
+// }
+
+
 /**
- *	@brief Resets atCmd struct and optionally releases lock, a BGx AT command structure.
+ *	@brief Resets AT-CMD last execution result properties.
  */
-void atcmd_reset(bool releaseLock)
+void atcmd_resetPreInvoke()
 {
-    /* clearing req/resp buffers now for debug clarity, future likely just insert '\0' */
-
-    // dataMode is not reset/cleared here, static S__resetDataMode is invoked after result
-
-    // request side of action
-    if (releaseLock)
-        g_lqLTEM.atcmd->isOpenLocked = false; // reset current lock
-
     memset(g_lqLTEM.atcmd->cmdStr, 0, atcmd__cmdBufferSz);
     memset(g_lqLTEM.atcmd->rawResponse, 0, atcmd__respBufferSz);
     memset(g_lqLTEM.atcmd->errorDetail, 0, ltem__errorDetailSz);
@@ -74,50 +101,22 @@ void atcmd_reset(bool releaseLock)
     g_lqLTEM.atcmd->resultValue = 0;
     g_lqLTEM.atcmd->invokedAt = 0;
     g_lqLTEM.atcmd->execDuration = 0;
-    g_lqLTEM.atcmd->parserConfig.configSet = false;
-
-
-    // command side
-    g_lqLTEM.iop->txSrc = &g_lqLTEM.atcmd->cmdStr;                          // IOP pointer to current "talker"
-    g_lqLTEM.iop->txPending = 0;
-
-    // response side
     g_lqLTEM.atcmd->response = g_lqLTEM.atcmd->rawResponse;                 // reset data component of response to full-response
-
-    // restore defaults
-    g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
-    g_lqLTEM.atcmd->responseParserFunc = atcmd_defaultResponseParser;
 }
 
 
 /**
  *	@brief Resets AT-CMD next execution invoke properties.
  */
-void atcmd_resetInvoke()
+void atcmd_resetPostInvoke()
 {
     g_lqLTEM.iop->txSrc = &g_lqLTEM.atcmd->cmdStr;                          // IOP pointer to current "talker"
     g_lqLTEM.iop->txPending = 0;
 
     g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
     g_lqLTEM.atcmd->responseParserFunc = atcmd_defaultResponseParser;
+    g_lqLTEM.atcmd->parserConfig.configSet = false;
 }
-
-
-/**
- *	@brief Resets AT-CMD last execution result properties.
- */
-void atcmd_resetResults()
-{
-    memset(g_lqLTEM.atcmd->cmdStr, 0, atcmd__cmdBufferSz);
-    memset(g_lqLTEM.atcmd->rawResponse, 0, atcmd__respBufferSz);
-    memset(g_lqLTEM.atcmd->errorDetail, 0, ltem__errorDetailSz);
-    g_lqLTEM.atcmd->resultCode = 0;
-    g_lqLTEM.atcmd->resultValue = 0;
-    g_lqLTEM.atcmd->invokedAt = 0;
-    g_lqLTEM.atcmd->execDuration = 0;
-    g_lqLTEM.atcmd->response = g_lqLTEM.atcmd->rawResponse;                 // reset data component of response to full-response
-}
-
 
 
 /**
@@ -201,7 +200,7 @@ resultCode_t atcmd_dispatch(const char *cmdTemplate, ...)
     if (g_lqLTEM.atcmd->isOpenLocked)
         return resultCode__locked;
 
-    atcmd_resetResults();                                                           // clear results props from ATCMD control structure
+    atcmd_resetPreInvoke();                                                         // clear results props from ATCMD control structure
     g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto;                              // set automatic lock control mode
 
     // char *cmdStr = g_lqLTEM.atcmd->cmdStr;
@@ -261,7 +260,8 @@ bool atcmd_tryInvoke(const char *cmdTemplate, ...)
     // if (g_lqLTEM.atcmd->isOpenLocked)
     //     return false;
 
-    atcmd_reset(true);                                 // clear atCmd control
+    atcmd_resetPreInvoke();
+    // atcmd_reset(true);                                 // clear atCmd control
     g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto; // set automatic lock control mode
 
     // char *cmdStr = g_lqLTEM.atcmd->cmdStr;
@@ -293,7 +293,8 @@ void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
 {
     // ASSERT(g_lqLTEM.atcmd->isOpenLocked); // function assumes re-use of existing lock
 
-    atcmd_reset(false); // clear out properties WITHOUT lock release
+    // atcmd_reset(false); // clear out properties WITHOUT lock release
+    atcmd_resetPreInvoke();
     g_lqLTEM.atcmd->autoLock = atcmd__setLockModeManual;
 
     char *cmdStr = g_lqLTEM.atcmd->cmdStr;
@@ -346,6 +347,7 @@ resultCode_t atcmd_awaitResult()
     // reset options back to default values
     g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
     g_lqLTEM.atcmd->responseParserFunc = atcmd_defaultResponseParser;
+    g_lqLTEM.atcmd->parserConfig.configSet = false;
     return g_lqLTEM.atcmd->resultCode;
 }
 
@@ -438,18 +440,25 @@ uint16_t atcmd_getRxLength()
 
 
 /**
- *	@brief Returns a token from the result of the last module command
+ *	@brief Returns a token from the result of the last module command or NULL if not found
  */
 char* atcmd_getToken(uint8_t tokenIndx)
 {
-    char * startPtr = memchr(g_lqLTEM.atcmd->response, ':', atcmd__respBufferSz);   // list of response values are prefixed by ": "
+    char * startPtr = memchr(g_lqLTEM.atcmd->rawResponse, ':', atcmd__respBufferSz);    // list of response values are prefixed by ": "
     if (startPtr == NULL)
-        startPtr = g_lqLTEM.atcmd->response;                                        // assume the string to tokenize is clean
+        startPtr = g_lqLTEM.atcmd->rawResponse;                                         // assume the string to tokenize has no preamble
     else
-        startPtr += 2;
+        startPtr += 2;                                                                  // point past ": " to content
 
-    lqStr_getToken(startPtr, ',', tokenIndx, g_lqLTEM.atcmd->respToken, atcmd__respTokenSz);
-    return g_lqLTEM.atcmd->respToken;
+    DPRINT_V(PRNT_dMAGENTA, "(atcmd_getToken) toParse:%s\r\n", startPtr);
+
+    if (lqStr_getToken(startPtr, ',', tokenIndx, g_lqLTEM.atcmd->respToken, atcmd__respTokenSz))
+    {
+        DPRINT_V(PRNT_dMAGENTA, "(atcmd_getToken) indx=%d returns:%s\r\n", tokenIndx, g_lqLTEM.atcmd->respToken);
+        return g_lqLTEM.atcmd->respToken;
+    }
+    DPRINT_V(PRNT_dMAGENTA, "(atcmd_getToken) Empty source/insufficient tokens\r\n");
+    return NULL;
 }
 
 
@@ -585,15 +594,15 @@ static resultCode_t S__readResult()
                 // bbffr_peek(g_lqLTEM.iop->rxBffr, peekBffr, 14);
                 // DPRINT_V(PRNT_MAGENTA, "(S__readResult) [peek] post trigger=%s\r\n", peekBffr);
 
-
-                /* *** invoke dataMode handler ***
-                ------------------------------------------- */
-
                 DPRINT_V(PRNT_MAGENTA, "(S__readResult) invoke dataHndlr\r\n");
+                /* *** invoke DM data handler ***
+                ------------------------------------------- */
                 resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)(g_lqLTEM.atcmd->dataMode.streamCtrl);
+                /* --------------------------------------------
+                *** invoke DM data handler *** */
                 DPRINT_V(PRNT_MAGENTA, "(S__readResult) dataHndlr:rslt=%d\r\n", dataRslt);
-                g_lqLTEM.atcmd->dataMode.dmState = dmState_idle;                                    // dataMode completed, go back to _idle
 
+                g_lqLTEM.atcmd->dataMode.dmState = dmState_idle;                                    // dataMode completed, go back to _idle
                 if (dataRslt == resultCode__success)
                 {
                     g_lqLTEM.atcmd->parserResult = cmdParseRslt_success;
@@ -628,6 +637,9 @@ static resultCode_t S__readResult()
             DPRINT_V(PRNT_GRAY, "(S__readResult) invoke parser\r\n", g_lqLTEM.atcmd->parserResult);
             g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();
             DPRINT_V(PRNT_GRAY, "(S__readResult) parser:pRslt=%d \r\n", g_lqLTEM.atcmd->parserResult);
+            /* --------------------------------------------
+            *** parse for command response *** */
+
         }
     }
 
@@ -643,6 +655,7 @@ static resultCode_t S__readResult()
         }
         else
         {
+            DPRINT(PRNT_dMAGENTA, "(S__readResult) pErr=%d, resp:%s\r\n", g_lqLTEM.atcmd->parserResult, g_lqLTEM.atcmd->rawResponse);
             g_lqLTEM.atcmd->resultCode = resultCode__internalError;                                 // covering the unknown
         }
         atcmd_close();                                                                              // close action to release action lock on any error
@@ -734,14 +747,11 @@ cmdParseRslt_t atcmd_defaultResponseParser()
 // cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, uint8_t valueIndx, const char *pFinale, uint16_t lengthReqd)
 cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, uint8_t valueIndx, const char *pFinale, uint16_t lengthReqd)
 {
-    // char *pPreamble;
-    // bool preambleReqd;
-    // char *pDelimeters; 
-    // uint8_t tokensReqd; 
-    // uint8_t valueIndx;
-    // char *pFinale;
-    // uint16_t lengthReqd;
+    /* to be implemented when all parser wrappers are converted
+    */
 
+    // char *pDelimeters; 
+    // char *pFinale;
     // if (g_lqLTEM.atcmd->parserConfig.configSet)
     // {
     //     strcpy(pPreamble, g_lqLTEM.atcmd->parserConfig.preamble);
@@ -755,15 +765,13 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
     // else
     // {
     //     return atcmd_stdResponseParser("", false, "", 0, 0, "OK\r\n", 0);
-
-    //     pPreamble[0] = '\0';
-    //     preambleReqd = g_lqLTEM.atcmd->parserConfig.preambleReqd;
+    //     char* pPreamble[0] = '\0';
+    //     bool preambleReqd = g_lqLTEM.atcmd->parserConfig.preambleReqd;
     //     strcpy(pDelimeters, g_lqLTEM.atcmd->parserConfig.delimiters);
-    //     tokensReqd = g_lqLTEM.atcmd->parserConfig.tokensReqd;
-    //     valueIndx = 0;
+    //     uint8_t = g_lqLTEM.atcmd->parserConfig.tokensReqd;
     //     strcpy(pFinale, g_lqLTEM.atcmd->parserConfig.finale);
-    //     lengthReqd = g_lqLTEM.atcmd->parserConfig.lengthReqd;
-
+    //     uint16_t lengthReqd = g_lqLTEM.atcmd->parserConfig.lengthReqd;
+    //     uint8_t valueIndx = 0;
     // }
 
     cmdParseRslt_t parseRslt = cmdParseRslt_pending;
@@ -1003,34 +1011,41 @@ resultCode_t atcmd_rxHndlrWithLength()
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
- *	@brief Returns a token from the result of the last module command
- *  @param [in] preamble Character phrase prefixing the section of the response to search
- *  @param [in] tokenIndx The 0-based token index to return
- *  @param [out] token Char pointer to found token (will be returned null-terminated)
- *  @param [in] tkBffrLen Size of the application provided buffer to hold the returned token
+ * @brief Returns a token from the result of the last module command
+ * @param [in] preamble Character phrase prefixing the section of the response to search
+ * @param [in] tokenIndx The 0-based token index to return
+ * @param [out] tokenBffr Char pointer to found token (will be returned null-terminated)
+ * @param [in] tokenBffrSz Size of the application provided buffer to hold the returned token
+ * @return true Token available and was returned in token to
+ * @return false Input was empty or had fewer number of tokens than requested.
  */
-static void lqStr_getToken(const char * source, char delimiter, uint8_t tokenIndx, char * destBffr, uint8_t destBffrSz)
+
+static bool lqStr_getToken(const char * source, char delimiter, uint8_t tokenIndx, char * tokenBffr, uint8_t tokenBffrSz)
 {
-    const char* delimPtr = source;                                                                // prepare for search
-    memset(destBffr, 0, destBffrSz);
+    const char* delimPtr = source;                                                          // prepare for search
+    memset(tokenBffr, 0, tokenBffrSz);
     uint8_t tokenCnt = 0;
 
-    char* endPtr = strchr(source, '\r');
+    char* endPtr = strchr(source, '\r');                                                    // end of array or EOL, only scan one line
     if (endPtr == NULL)
         endPtr = strchr(source, '\0');
+
+    if (endPtr == source)                                                                   // empty source
+        return false;
 
     do
     {
         delimPtr = strchr(source, delimiter);                                               // next delimiter
-        delimPtr = (delimPtr == NULL) ? endPtr : delimPtr;
+        delimPtr = (delimPtr == NULL) ? endPtr : delimPtr;                                  // no specified delim for last token, just end of source
         if (tokenCnt == tokenIndx)
         {
-            strncpy(destBffr, source, MIN(delimPtr - source, destBffrSz));                  // copy out vs. change response buffer, ensure no dest overflow
-            return;
+            strncpy(tokenBffr, source, MIN(delimPtr - source, tokenBffrSz));                // copy out vs. change response buffer, ensure no dest overflow
+            return true;
         }
         source = delimPtr + 1;
         tokenCnt++;
-    } while (source < endPtr);
+    } while (source < endPtr);                                                              // while still input to scan
+    return false;
 }
 
 

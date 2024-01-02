@@ -45,24 +45,23 @@ extern "C" {
 //#include "ltemc-types.h"
 
 
-/**
- *	@brief Resets atCmd struct (BGx AT command structure) and optionally releases lock.
- *  @param [in] releaseLock If false, clears ATCMD internal state, but leaves the command lock state unchanged
- */
-void atcmd_reset(bool releaseLock);
-
-/**
- *	@brief Resets AT-CMD next execution invoke properties.
- */
-void atcmd_resetInvoke();
+// /**
+//  *	@brief Resets atCmd struct (BGx AT command structure) and optionally releases lock.
+//  *  @param [in] releaseLock If false, clears ATCMD internal state, but leaves the command lock state unchanged
+//  */
+// void atcmd_reset(bool releaseLock);
 
 
 /**
  *	@brief Resets AT-CMD last execution result properties.
  */
-void atcmd_resetResults();
+void atcmd_resetPreInvoke();
 
 
+/**
+ *	@brief Resets AT-CMD next execution invoke properties.
+ */
+void atcmd_resetPostInvoke();
 
 
 /**

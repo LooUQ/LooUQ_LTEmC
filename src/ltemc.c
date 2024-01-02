@@ -33,7 +33,7 @@ Also add information on how to contact you by electronic and paper mail.
 #define LQ_SRCFILE "LTE"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
+//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
 
 #include "ltemc.h"
@@ -105,7 +105,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     
     g_lqLTEM.atcmd = calloc(1, sizeof(atcmd_t));
     ASSERT(g_lqLTEM.atcmd != NULL);
-    atcmd_reset(true);
+    atcmd_resetPostInvoke();                                        // reset to after cmd state, ready for next cmd
 
     g_lqLTEM.fileCtrl = calloc(1, sizeof(fileCtrl_t));
     ASSERT(g_lqLTEM.fileCtrl != NULL);

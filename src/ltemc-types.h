@@ -425,7 +425,7 @@ enum atcmd__constants
 
     atcmd__streamPrefixSz = 12,                     // obsolete with universal data mode switch
     atcmd__dataModeTriggerSz = 13,
-    atcmd__parserConfigPreambleSz = 16,
+    atcmd__parserConfigPreambleSz = 24,
     atcmd__parserConfigDelimetersSz = 4,
     atcmd__parserConfigFinaleSz = 16
 };
