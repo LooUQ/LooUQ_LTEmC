@@ -134,7 +134,7 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
         rslt = atcmd_awaitResult();
         if (rslt != resultCode__success)
         {
-            if (memcmp(atcmd_getErrorDetail(), "+CME ERROR: 417", 15) == 0)
+            if (strstr(atcmd_getRawResponse(), "+CME ERROR: 417"))
                 rslt = resultCode__notFound;
             break;
         }
@@ -182,11 +182,11 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
         {
             if (rslt >= resultCode__extendedCodesBase)
             {
-                uint16_t errDetail = atcmd_getErrorDetailCode();
-                if (errDetail == fileErr__detail_fileAlreadyOpen)
-                    rslt = fileErr__result_fileAlreadyOpen;
-                else if (errDetail == fileErr__detail_fileAlreadyOpen)
-                    rslt = fileErr__result_fileAlreadyOpen;
+                // uint16_t errDetail = atcmd_getErrorDetailCode();
+                // if (errDetail == fileErr__detail_fileAlreadyOpen)
+                //     rslt = fileErr__result_fileAlreadyOpen;
+                // else if (errDetail == fileErr__detail_fileAlreadyOpen)
+                //     rslt = fileErr__result_fileAlreadyOpen;
             }
             break;
         }

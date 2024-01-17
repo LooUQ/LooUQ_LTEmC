@@ -48,6 +48,8 @@ enum http__constants
     http__defaultTimeoutBGxSec = 60,
     http__rqstTypeSz = 5,                               // GET or POST
     http__commonHeadersSz = 105,                        // For custom requests, the combined length of all the "common" headers 
+    http__minUrlSz = 16,                                // URL validation (ASSERT)
+    http__maxUrlSz = 224,                               // maximum URL length host+relative
     http__maxHeaderKeySz = 48,                          // maximum length for a custom header key size to use with http_addHeader()
     http__readToFileNameSzMax = 80,
     http__readToFileTimeoutSec = 180,                   // Total number of seconds for read to file allowed (atcmd processing)
@@ -222,8 +224,7 @@ void http_addBasicAuthHdr(httpRequest_t* request, const char *user, const char *
  * 
  * @param [in] requestBuffer Char buffer (array) to use for composition and headers store.
  * @param [in] requestBufferSz Size of buffer.
- * @param [in] key Header's key value
- * @param [in] val Header's value
+ * @param [in] keyValue Fully formed header with key and value
  */
 void http_addHeader(httpRequest_t* request, const char *keyValue);
 
@@ -236,7 +237,7 @@ void http_addHeader(httpRequest_t* request, const char *keyValue);
  * @param [in] key Header's key value
  * @param [in] val Header's value
  */
-void http_addHeaderKeyValue(httpRequest_t* request, const char *key, const char *value);
+void http_addHeaderKeyAndValue(httpRequest_t* request, const char *key, const char *value);
 
 
 /**
@@ -273,12 +274,10 @@ resultCode_t http_get(httpCtrl_t *httpCtrl, const char* relativeUrl);
  *  and the only headers sent with the request is the headers provided in the customHeaders parameter.
  *
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
- *	@param [in] relativeUrl The URL to GET (starts with \ and doesn't include the host part)
- *  @param [in] customHeaders If provided (not NULL or empty) GET will include contents as a custom header array.
- *  @param [in] returnResponseHdrs Set to true for page result to include response headers at the start of the page
+ *  @param [in] customRequest Provides custom request/headers for GET.
  *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
-resultCode_t http_getCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest);
+resultCode_t http_getCustomRequest(httpCtrl_t *httpCtrl, httpRequest_t* customRequest);
 
 
 /**
@@ -311,10 +310,10 @@ resultCode_t http_postCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUr
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
  *	@param [in] relativeUrl URL, relative to the host. If none, can be provided as "" or "/".
  *  @param [in] filename C-string containing the name of the file containing the request/headers/body content.
- *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data
+ *  @param [in] customHeaders TRUE: the file includes custom headers AND body; FALSE: the file only include body content.
  *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
-resultCode_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char* filename);
+resultCode_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const char* filename, bool customHeaders);
 
 
 /**
@@ -352,6 +351,13 @@ void http_cancelPage(httpCtrl_t *httpCtrl);
  * @return resultCode_t Translated standard HTTP response code.
  */
 resultCode_t http_translateExtended(uint16_t extendedResultCode);
+
+/**
+ * @brief Parse and output a custom HTTP request object to the current logger
+ * 
+ * @param httpReqst 
+ */
+void http_writeRequestToLog(httpRequest_t* httpReqst);
 
 #ifdef __cplusplus
 }

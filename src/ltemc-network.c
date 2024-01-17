@@ -29,13 +29,11 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define LOG_LEVEL LOGLEVEL_OFF
+#define lqLOG_LEVEL lqLOGLEVEL_OFF
 //#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
 #define LQ_SRCFILE "NWK"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
-#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
-#define ENABLE_ASSERT
+//#define ENABLE_ASSERT
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -56,7 +54,7 @@ extern ltemDevice_t g_lqLTEM;
 
 // local static functions
 static void S__clearOperatorInfo();
-static cmdParseRslt_t S__contextStatusCompleteParser(void * atcmd, const char *response);
+// static cmdParseRslt_t S__contextStatusCompleteParser(void * atcmd, const char *response);
 // static char *S__grabToken(char *source, int delimiter, char *tokenBuf, uint8_t tokenBufSz);
 
 
@@ -194,12 +192,11 @@ resultCode_t ntwk_configPdpNetworkWithAuth(uint8_t pdpContextId, const char *apn
  */
 void ntwk_applyPpdNetworkConfig()
 {
-    resultCode_t rslt;
-    if(strlen(g_lqLTEM.modemSettings->pdpNtwkConfig) > 0 && atcmd_tryInvoke(g_lqLTEM.modemSettings->pdpNtwkConfig))
+    RSLT;
+    if(strlen(g_lqLTEM.modemSettings->pdpNtwkConfig) > 0)
     {
-        rslt = atcmd_awaitResult();
-        if (rslt != resultCode__success)
-            DPRINT(PRNT_CYAN, "DefaultNtwk Config Failed=%d\r", rslt);
+        if (!IS_SUCCESS_RSLT(atcmd_dispatch(g_lqLTEM.modemSettings->pdpNtwkConfig)))
+            lqLOG_ERROR("DefaultNtwk Config Failed=%d\r", rslt);
     }
     atcmd_close();
 }
@@ -228,30 +225,35 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
     else 
         waitMs = SEC_TO_MS(waitSec);
 
-    if (atcmd_awaitLock(waitMs))                                            // open a reusable lock to complete multiple steps
-    {
+    // if (atcmd_awaitLock(waitMs))                                            // open a reusable lock to complete multiple steps
+    // {
         S__clearOperatorInfo();
         do 
         {
-            atcmd_invokeReuseLock("AT+COPS?");                              // get PROVIDER cellular carrier
-            if (atcmd_awaitResult() == resultCode__success)
+            // atcmd_tryInvoke("AT+COPS?");                                          // get cellular operator (carrier)
+            // if (IS_SUCCESS(atcmd_awaitResult()))
+
+            if (IS_SUCCESS(atcmd_dispatch("AT+COPS?")))
             {
-                uint8_t toCopy = strlen(atcmd_getToken(2)) - 2;
-                strncpy(g_lqLTEM.ntwkOperator->name, atcmd_getToken(2) + 1, toCopy);
-                char ntwkMode = atcmd_getToken(3)[0];
-                if (ntwkMode == '8')
-                    strcpy(g_lqLTEM.ntwkOperator->iotMode, "M1");
-                else if (ntwkMode == '9')
-                    strcpy(g_lqLTEM.ntwkOperator->iotMode, "NB1");
-                else
-                    strcpy(g_lqLTEM.ntwkOperator->iotMode, "GSM");
+                if (strlen(atcmd_getToken(1)))                                          // operator name/ID presented
+                {
+                    uint8_t toCopy = strlen(atcmd_getToken(2)) - 2;
+                    strncpy(g_lqLTEM.ntwkOperator->name, atcmd_getToken(2) + 1, toCopy);
+                    char ntwkMode = atcmd_getToken(3)[0];
+                    if (ntwkMode == '8')
+                        strcpy(g_lqLTEM.ntwkOperator->iotMode, "M1");
+                    else if (ntwkMode == '9')
+                        strcpy(g_lqLTEM.ntwkOperator->iotMode, "NB1");
+                    else
+                        strcpy(g_lqLTEM.ntwkOperator->iotMode, "GSM");
+                }
             }
             if (!STREMPTY(g_lqLTEM.ntwkOperator->name))
                 break;
 
-            pDelay(1000);                                                                   // this yields, allowing alternate execution
+            pDelay(1000);                                                               // this yields, allowing alternate execution
             endMillis = pMillis();
-        } while (endMillis - startMillis < waitMs || g_lqLTEM.cancellationRequest);         // timed out waiting OR global cancellation
+        } while (endMillis - startMillis < waitMs || g_lqLTEM.cancellationRequest);     // timed out waiting OR global cancellation
 
         // got PROVIDER, get networks 
 
@@ -263,9 +265,10 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
             char *pContinue;
             uint8_t ntwkIndx = 0;
 
-            atcmd_invokeReuseLock("AT+CGPADDR");
-            atcmd_ovrrdTimeout(SEC_TO_MS(20));
-            if (IS_SUCCESS(atcmd_awaitResult()))
+            // atcmd_ovrrdTimeout(SEC_TO_MS(20));
+            // atcmd_tryInvoke("AT+CGPADDR");
+            // if (IS_SUCCESS(atcmd_awaitResult()))
+            if (IS_SUCCESS(atcmd_dispatch("AT+CGPADDR")))
             {
                 g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpContextId = strtol(atcmd_getToken(0), NULL, 10);
                 g_lqLTEM.ntwkOperator->packetNetworks[ntwkIndx].pdpProtocol = pdpProtocol_IPV4;
@@ -274,8 +277,8 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
             }
             g_lqLTEM.ntwkOperator->pdpCntxtCnt = 1;                                 // future determination
         }
-    }
-    atcmd_close();
+    // }
+    // atcmd_close();
     return g_lqLTEM.ntwkOperator;
 }
 
@@ -285,9 +288,9 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
  */
 void ntwk_activatePdpContext(uint8_t cntxtId)
 {
+    atcmd_configParser("+QIACT: ", false, "", 2, NULL, 0);
     if (atcmd_tryInvoke("AT+QIACT=%d", cntxtId))
     {
-        atcmd_ovrrdParser(S__contextStatusCompleteParser);
         resultCode_t rslt = atcmd_awaitResult();
     }
 }
@@ -298,9 +301,9 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
  */
 void ntwk_deactivatePdpContext(uint8_t cntxtId)
 {
+    atcmd_configParser("+QIACT: ", false, "", 2, NULL, 0);
     if (atcmd_tryInvoke("AT+QIDEACT=%d", cntxtId))
     {
-        // resultCode_t rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__contextStatusCompleteParser);
         resultCode_t rslt = atcmd_awaitResult();
     }
 }
@@ -357,20 +360,17 @@ packetNetwork_t *ntwk_getPacketNetwork(uint8_t pdpContextId)
  */
 const char* ntwk_getNetworkInfo()
 {
-    if (atcmd_tryInvoke("AT+QNWINFO"))
+    if (IS_SUCCESS(atcmd_dispatch("AT+QNWINFO")))
     {
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        char * copyFrom = strstr(g_lqLTEM.atcmd->rawResponse, "+QNWINFO: ");
+        if (copyFrom)                          // clean up extra content/EOL
         {
-            char * copyFrom = strstr(g_lqLTEM.atcmd->rawResponse, "+QNWINFO: ");
-            if (copyFrom)                          // clean up extra content/EOL
+            copyFrom += sizeof("+QNWINFO: ") - 1;
+            char* eol = memchr(copyFrom, '\r', atcmd__respBufferSz - 10);
+            if (eol)
             {
-                copyFrom += sizeof("+QNWINFO: ") - 1;
-                char* eol = memchr(copyFrom, '\r', atcmd__respBufferSz - 10);
-                if (eol)
-                {
-                    memcpy(g_lqLTEM.statics.reportBffr, copyFrom, eol - copyFrom);
-                    return g_lqLTEM.statics.reportBffr;
-                }
+                memcpy(g_lqLTEM.statics.reportBffr, copyFrom, eol - copyFrom);
+                return g_lqLTEM.statics.reportBffr;
             }
         }
     }
@@ -399,14 +399,24 @@ resultCode_t ntwk_getRegistrationStatus()
 /**
  * @brief Check network ready condition.
  */
-bool ntwk_isReady(bool refresh)
+bool ntwk_isReady()
 {
-    if (refresh)
-        ntwk_awaitOperator(0);
-
-    return ntwk_signalRaw() != 99 &&
-           strlen(g_lqLTEM.ntwkOperator->name) > 0 &&
+    return strlen(g_lqLTEM.ntwkOperator->name) > 0 &&
            g_lqLTEM.ntwkOperator->packetNetworks[0].ipAddress[0] != '0';
+           // ntwk_signalRaw() != 99;
+}
+
+
+/**
+ * @brief 
+ * 
+ * @return true 
+ * @return false 
+ */
+bool ntwk_validate()
+{
+    ntwk_awaitOperator(0);
+    return ntwk_isReady() && ntwk_signalRaw() != 99;
 }
 
 
@@ -419,16 +429,19 @@ uint8_t ntwk_signalRaw()
 
     if (ltem_getDeviceState())
     {
-        if (atcmd_tryInvoke("AT+CSQ"))
+        atcmd_ovrrdTimeout(SEC_TO_MS(10));
+        atcmd_configParser("+CSQ", true, ",", 0, "OK\r\n", 0);
+        if (IS_SUCCESS(atcmd_dispatch("AT+CSQ")))
         {
-            if (atcmd_awaitResult() == resultCode__success)
+            char* signalPtr = atcmd_getToken(0);
+            if (strlen(signalPtr))
             {
-                char *term;
-                char *lastResponse = atcmd_getResponse();
-                term = strstr(atcmd_getResponse(), "+CSQ");
-                signal = strtol(term + 6, NULL, 10);
+                signal = strtol(signalPtr, NULL, 10);
             }
-            atcmd_close();
+            // char *term;
+            // char *lastResponse = atcmd_getResponse();
+            // term = strstr(atcmd_getResponse(), "+CSQ");
+            // signal = strtol(term + 6, NULL, 10);
         }
     }
     return signal;
@@ -532,15 +545,15 @@ static void S__clearOperatorInfo()
 }
 
 
-/**
- *   @brief Tests for the completion of a network APN context activate action.
- *   @return standard action result integer (http result).
-*/
-static cmdParseRslt_t S__contextStatusCompleteParser(void *atcmd, const char *response)
-{
-    DPRINT_V(0, "<S__contextStatusCompleteParser()> response=%s\r\n", response);
-    return atcmd_stdResponseParser("+QIACT: ", false, "", 2, 2, NULL, 0);
-}
+// /**
+//  *   @brief Tests for the completion of a network APN context activate action.
+//  *   @return standard action result integer (http result).
+// */
+// static cmdParseRslt_t S__contextStatusCompleteParser(void *atcmd, const char *response)
+// {
+//     DPRINT_V(0, "<S__contextStatusCompleteParser()> response=%s\r\n", response);
+//     return atcmd_stdResponseParser("+QIACT: ", false, "", 2, 2, NULL, 0);
+// }
 
 
 // /**

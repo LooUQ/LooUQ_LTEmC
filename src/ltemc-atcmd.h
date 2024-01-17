@@ -208,10 +208,22 @@ bool atcmd_getPreambleFound();
 
 /**
  * @brief Returns a token from the result of the last module command
+
  * @param tokenIndx 
  * @return Pointer to token from LTEm internal buffer
  */
 char* atcmd_getToken(uint8_t tokenIndx);
+
+
+/**
+ * @brief Grab characters from RX (receive) buffer.
+ * @warning GRAB is generally a diagnostic function note intended for general use. It changes the state of the RX
+ * stream in potentially detrimental ways.
+ * 
+ * @param grabBffr Buffer to hold the grabbed characters.
+ * @param grabBffrSz Specifies both the size of the buffer and the number of characters being requested.
+ */
+void ATCMD_GRABRX(char * grabBffr, uint8_t grabBffrSz);
 
 
 // /**
@@ -233,20 +245,6 @@ uint16_t atcmd_getRxLength();
  *  @return The PARSER result from the last interation of the parser execution. This is generally not applicable to end-user applications.
  */
 cmdParseRslt_t atcmd_getParserResult();
-
-
-/**
- *	@brief Returns the BGx reported CME/CMS error code. Use this function to get details on a resultCode_t = 500
- *  @return Pointer to a error value reported by the BGx module. Note that not all BGx errors have a detailed descriptor.
- */
-char *atcmd_getErrorDetail();
-
-
-/**
- *	@brief Returns the BGx reported CME/CMS error code as a numeric value.
- *  @return Numeric CM* error code, 999 otherwise.
- */
-uint16_t atcmd_getErrorDetailCode();
 
 
 /**

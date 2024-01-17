@@ -62,7 +62,6 @@ enum ltem__constants
     ltem__bufferSz_tx = 1000,
 
     ltem__swVerSz = 12,
-    ltem__errorDetailSz = 18,
     ltem__moduleTypeSz = 8,
 
     // 6 SSL/TLS capable data contexts, (only MQTT and SCKT (sockets) have async behaviors)
@@ -414,7 +413,8 @@ typedef struct iop_tag
 enum atcmd__constants
 {
     atcmd__noTimeoutChange = 0,
-    atcmd__defaultTimeout = 800,
+    // atcmd__defaultTimeout = 800,
+    atcmd__defaultTimeout = 3000,                   
 
     atcmd__setLockModeManual = 0,
     atcmd__setLockModeAuto = 1,
@@ -516,9 +516,6 @@ typedef struct atcmd_tag
     cmdParseRslt_t parserResult;                        // last parser invoke result returned
     bool preambleFound;                                 // true if parser found preamble
     uint32_t execDuration;                              // duration of command's execution in milliseconds
-    char errorDetail[PSZ(ltem__errorDetailSz)];         // BGx error code returned, could be CME ERROR (< 100) or subsystem error (generally > 500)
-
-    // int32_t retValue;                                   // (deprecated) optional signed int value extracted from response
 } atcmd_t;
 
 

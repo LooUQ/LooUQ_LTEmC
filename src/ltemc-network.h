@@ -205,11 +205,22 @@ resultCode_t ntwk_getRegistrationStatus();
 
 
 /**
- * @brief Check network ready condition.
- * @param [in] refresh if TRUE, refresh the cached network information
- * @return True, if network is fully established and ready for data transmission.
+ * @brief Check network ready condition (reads network operator info and checks signal strenght).
+ * 
+ * @return true network is fully established and ready for data transmission.
+ * @return false network operator information is incomplete or no RF signal available.
  */
-bool ntwk_isReady(bool refresh);
+bool ntwk_isReady();
+
+
+/**
+ * @brief Check immediately with module for network condition (completes a module inquiry).
+ * 
+ * @return true, if network is fully established and ready for data transmission.
+ * @return false network is not fully ready for data transmission; carrier info/signal/IP address.
+ */
+bool ntwk_validate();
+
 
 /**
  *  @brief Get the signal strength reported by the LTEm device at a percent

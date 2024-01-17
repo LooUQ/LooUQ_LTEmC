@@ -29,12 +29,8 @@ Also add information on how to contact you by electronic and paper mail.
 
 #include <lq-embed.h>
 #define LOG_LEVEL LOGLEVEL_OFF
-//#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "LTE"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-
-#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
-#define ENABLE_ASSERT
+//#define DISABLE_ASSERTS                       // ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "LTE"                        // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include "ltemc.h"
 #include "ltemc-internal.h"
@@ -159,14 +155,14 @@ bool ltem_start(resetAction_t resetAction)
         platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
         platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
         platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
-        DPRINT_V(PRNT_DEFAULT, "GPIO Configured\r\n");
+        lqLOG_VRBS(PRNT_DEFAULT, "GPIO Configured\r\n");
 
         spi_start(g_lqLTEM.platformSpi);                                        // start host SPI
-        DPRINT_V(PRNT_DEFAULT, "SPI Configured\r\n");
+        lqLOG_VRBS(PRNT_DEFAULT, "SPI Configured\r\n");
         g_lqLTEM.hostConfigured = true;
     }
 
-    DPRINT(PRNT_CYAN, "LTEm reqst resetType=%d\r\n", resetAction);
+    lqLOG_INFO(PRNT_CYAN, "LTEm reqst resetType=%d\r\n", resetAction);
     bool ltemWasReset = true;
     if (QBG_isPowerOn())
     {
@@ -186,19 +182,19 @@ bool ltem_start(resetAction_t resetAction)
     {
        QBG_powerOn();                                                       // turn on BGx
     }
-    DPRINT_V(PRNT_DEFAULT, "LTEm was reset=%d\r\n", ltemWasReset);
+    lqLOG_VRBS(PRNT_DEFAULT, "LTEm was reset=%d\r\n", ltemWasReset);
 
     SC16IS7xx_start();                                                      // initialize NXP SPI-UART bridge base functions: FIFO, levels, baud, framing
-    DPRINT_V(PRNT_CYAN, "UART started\r\n");
+    lqLOG_VRBS(PRNT_CYAN, "UART started\r\n");
     SC16IS7xx_enableIrqMode();                                              // enable IRQ generation on SPI-UART bridge (IRQ mode)
-    DPRINT_V(PRNT_CYAN, "UART set to IRQ mode\r\n");
+    lqLOG_VRBS(PRNT_CYAN, "UART set to IRQ mode\r\n");
     IOP_attachIrq();                                                        // attach I/O processor ISR to IRQ
-    DPRINT_V(PRNT_CYAN, "UART IRQ attached\r\n");
+    lqLOG_VRBS(PRNT_CYAN, "UART IRQ attached\r\n");
 
     IOP_interruptCallbackISR();                                             // force ISR to run once to sync IRQ 
     g_lqLTEM.appEventNotifyEnabled = true;                                  // through the low-level actions, re-enable notifications
 
-    DPRINT_V(0, "LTEm prior state=%d\r\n", g_lqLTEM.deviceState);
+    lqLOG_VRBS(0, "LTEm prior state=%d\r\n", g_lqLTEM.deviceState);
 
     uint32_t startRdyChk = pMillis();                                       // wait for BGx to signal internal ready
     uint32_t appRdyAt = 0;
@@ -213,13 +209,13 @@ bool ltem_start(resetAction_t resetAction)
 
         if (IS_ELAPSED(startRdyChk, APPRDY_TIMEOUT))
         {
-            DPRINT_V(PRNT_WARN, "AppRdy not received! Timeout at %dms\r\n", APPRDY_TIMEOUT);
+            lqLOG_VRBS(PRNT_WARN, "AppRdy not received! Timeout at %dms\r\n", APPRDY_TIMEOUT);
             return false;
         }
     } while (!appRdyAt || !simRdyAt);
     
     g_lqLTEM.deviceState = deviceState_ready;
-    DPRINT(PRNT_dCYAN, "ModuleReady at %dms (%d/%d)\r\n", pMillis() - startRdyChk, appRdyAt - startRdyChk, simRdyAt - startRdyChk);
+    lqLOG_INFO(PRNT_dCYAN, "ModuleReady at %dms (%d/%d)\r\n", pMillis() - startRdyChk, appRdyAt - startRdyChk, simRdyAt - startRdyChk);
     pDelay(500);
     bbffr_reset(g_lqLTEM.iop->rxBffr);                                      // clean out start messages from RX buffer
 
@@ -228,23 +224,23 @@ bool ltem_start(resetAction_t resetAction)
     while (initTries <= 1)
     {
         if (QBG_setOptions())
-            DPRINT_V(PRNT_CYAN, "BGx options set\r\n");
+            lqLOG_VRBS(PRNT_CYAN, "BGx options set\r\n");
             if (ltem_ping())
                 break;
         else
         {
             ltem_notifyApp(appEvent_fault_hardFault, "BGx set options failed");         // send notification, maybe app can recover
-            DPRINT(PRNT_DEFAULT, "BGx set options failed\r");
+            lqLOG_INFO(PRNT_DEFAULT, "BGx set options failed\r");
         }
         initTries++;
     }
-    DPRINT(PRNT_CYAN, "BGx start verified\r\n");
+    lqLOG_INFO("BGx start verified\r\n");
 
     ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
-    DPRINT_V(PRNT_CYAN, "ltem_start(): pdp ntwk configured\r\n");
+    lqLOG_VRBS("ltem_start(): pdp ntwk configured\r\n");
 
     ntwk_awaitOperator(2);                                              // attempt to warm-up provider/PDP briefly. 
-    DPRINT_V(PRNT_CYAN, "ltem_start(): provider warmed up\r\n");        // If longer duration required, leave that to application
+    lqLOG_VRBS("ltem_start(): provider warmed up\r\n");        // If longer duration required, leave that to application
 
     ltem_getModemInfo();                                                // populate modem info struct
     return true;
@@ -267,19 +263,19 @@ bool ltem_start(resetAction_t resetAction)
 //     if (!QBG_setOptions())
 //     {
 //         ltem_notifyApp(appEvent_fault_hardFault, "BGx init cmd fault"); // send notification, maybe app can recover
-//         DPRINT(PRNT_DEFAULT, "\r");
+//         lqLOG_INFO("\r");
 //     }
 //     else
-//         DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): bgx options set");
+//         lqLOG_VRBS(PRNT_CYAN, "S__initLTEmDevice(): bgx options set");
 
 //     // ntwk_setRatOptions();                                            // initialize BGx Radio Access Technology (RAT) options
-//     // DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
+//     // lqLOG_VRBS(PRNT_CYAN, "S__initLTEmDevice(): rat options set");
 
 //     ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
-//     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured");
+//     lqLOG_VRBS(PRNT_CYAN, "S__initLTEmDevice(): pdp ntwk configured");
 
 //     ntwk_awaitProvider(2);                                              // attempt to warm-up provider/PDP briefly. 
-//     DPRINT_V(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up");     // If longer duration required, leave that to application
+//     lqLOG_VRBS(PRNT_CYAN, "S__initLTEmDevice(): provider warmed up");     // If longer duration required, leave that to application
 
 //     return true;
 // }
@@ -328,8 +324,8 @@ resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t rfMode)
 {
     ASSERT(rfMode == 0 || rfMode == 1);
 
-    DPRINT_V(0, "<ltem_setRfPriorityMode()> rfMode=%d\r\n", rfMode);
-    DPRINT_V(0, "<ltem_setRfPriorityMode()> module:%s\r\n", g_lqLTEM.modemInfo->model);
+    lqLOG_VRBS(0, "<ltem_setRfPriorityMode()> rfMode=%d\r\n", rfMode);
+    lqLOG_VRBS(0, "<ltem_setRfPriorityMode()> module:%s\r\n", g_lqLTEM.modemInfo->model);
 
     //  only applicable to single-RF modules
     if (memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) != 0 && memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) != 0)
@@ -385,7 +381,7 @@ ltemRfPriorityMode_t ltem_getRfPriorityMode()
             if (IS_SUCCESS(atcmd_awaitResult()))
             {
                 uint32_t mode = strtol(atcmd_getToken(1), NULL, 10);
-                DPRINT_V(0, "<ltem_getRfPriorityMode> mode=%d\r\n", mode);
+                lqLOG_VRBS(0, "<ltem_getRfPriorityMode> mode=%d\r\n", mode);
                 return mode;
             }
         }
@@ -406,12 +402,12 @@ ltemRfPriorityState_t ltem_getRfPriorityState()
             if (atcmd_awaitResult() == resultCode__success)
             {
                 uint32_t state = strtol(atcmd_getToken(2), NULL, 10);
-                DPRINT_V(0, "<ltem_getRfPriorityState> state=%d\r\n", state);
+                lqLOG_VRBS(0, "<ltem_getRfPriorityState> state=%d\r\n", state);
                 return state;
             }
         }
     }
-    DPRINT_V(0, "<ltem_getRfPriorityState> state=0\r\n");
+    lqLOG_VRBS(0, "<ltem_getRfPriorityState> state=0\r\n");
     return ltemRfPriorityState_unloaded;
 }
 
@@ -438,25 +434,25 @@ const char* ltem_getUtcDateTime(char format)
                 dtSrc++;
                 if (*dtSrc != '8')                                              // test for not initialized date/time, starts with 80 (aka 1980)
                 {
-                    DPRINT_V(0, "ltem_getUtcDateTime(): format=%c\r\n", format);
+                    lqLOG_VRBS(0, "ltem_getUtcDateTime(): format=%c\r\n", format);
 
                     if (format == 'v' || format == 'V')                         // "VERBOSE" format
                     {
                         char* tzDelimPoz = memchr(dtSrc, '+', 20);              // strip UTC offset, safe stop in trailer somewhere
                         char* tzDelimNeg = memchr(dtSrc, '-', 20);              // strip UTC offset, safe stop in trailer somewhere
-                        DPRINT_V(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, tzDelimNeg=%p\r\n", tzDelimPoz, tzDelimNeg);
+                        lqLOG_VRBS(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, tzDelimNeg=%p\r\n", tzDelimPoz, tzDelimNeg);
 
                         vTaskDelay(100);
 
                         if (tzDelimPoz)
                         {
-                            DPRINT_V(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, offset=%d\r\n", tzDelimPoz, tzDelimPoz - dtSrc);
+                            lqLOG_VRBS(0, "ltem_getUtcDateTime(): tzDelimPoz=%p, offset=%d\r\n", tzDelimPoz, tzDelimPoz - dtSrc);
                             *tzDelimPoz = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
                             strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
                         }
                         else if (tzDelimNeg)
                         {
-                            DPRINT_V(0, "ltem_getUtcDateTime(): tzDelimNeg=%p, offset=%d\r\n", tzDelimNeg, tzDelimNeg - dtSrc);
+                            lqLOG_VRBS(0, "ltem_getUtcDateTime(): tzDelimNeg=%p, offset=%d\r\n", tzDelimNeg, tzDelimNeg - dtSrc);
                             *tzDelimNeg = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
                             strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
                         }
@@ -471,38 +467,38 @@ const char* ltem_getUtcDateTime(char format)
                         destPtr += 2;
                     }
                     memcpy(destPtr, dtSrc, 2);                                  // 2-digit year
-                    DPRINT_V(0, "ltem_getUtcDateTime(): post-year: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    lqLOG_VRBS(0, "ltem_getUtcDateTime(): post-year: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     destPtr += 2;
                     memcpy(destPtr, dtSrc + 3, 2);                              // month
 
-                    DPRINT_V(0, "ltem_getUtcDateTime(): post-month: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    lqLOG_VRBS(0, "ltem_getUtcDateTime(): post-month: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     destPtr += 2;
                     memcpy(destPtr, dtSrc + 6, 2);                              // day
 
-                    DPRINT_V(0, "ltem_getUtcDateTime(): post-day: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    lqLOG_VRBS(0, "ltem_getUtcDateTime(): post-day: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     destPtr += 2;
                     *destPtr = 'T';                                             // delimiter
                     destPtr += 1;
 
-                    DPRINT_V(0, "ltem_getUtcDateTime(): post-T: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    lqLOG_VRBS(0, "ltem_getUtcDateTime(): post-T: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     memcpy(destPtr, dtSrc + 9, 2);                              // hours
                     destPtr += 2;
 
-                    DPRINT_V(0, "ltem_getUtcDateTime(): post-hours: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    lqLOG_VRBS(0, "ltem_getUtcDateTime(): post-hours: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     memcpy(destPtr, dtSrc + 12, 2);                       // minutes
                     destPtr += 2;
 
-                    DPRINT_V(0, "ltem_getUtcDateTime(): post-minutes: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    lqLOG_VRBS(0, "ltem_getUtcDateTime(): post-minutes: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     memcpy(destPtr, dtSrc + 15, 2);                       // seconds
                     destPtr += 2;
 
-                    DPRINT_V(0, "ltem_getUtcDateTime(): post-seconds: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    lqLOG_VRBS(0, "ltem_getUtcDateTime(): post-seconds: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
                     if (format != 'c' && format != 'C')                 // not 'c'ompact format: include time zone offset
                     {
@@ -661,14 +657,14 @@ const char* ltem_getModuleType()
  */
 deviceState_t ltem_getDeviceState()
 {
-    DPRINT_V(0, "<ltem_getDeviceState()> prior state=%d\r\n", g_lqLTEM.deviceState);
+    lqLOG_VRBS(0, "<ltem_getDeviceState()> prior state=%d\r\n", g_lqLTEM.deviceState);
 
     if (QBG_isPowerOn())             // ensure powered off device doesn't report otherwise
         g_lqLTEM.deviceState = MAX(g_lqLTEM.deviceState, deviceState_powerOn); 
     else
         g_lqLTEM.deviceState = deviceState_powerOff;
 
-    DPRINT_V(0, "<ltem_getDeviceState()> new state=%d\r\n", g_lqLTEM.deviceState);
+    lqLOG_VRBS(0, "<ltem_getDeviceState()> new state=%d\r\n", g_lqLTEM.deviceState);
     return g_lqLTEM.deviceState;
 }
 
@@ -678,12 +674,9 @@ deviceState_t ltem_getDeviceState()
  */
 bool ltem_ping()
 {
-    if (atcmd_tryInvoke("ATE0"))                        // get OK response (and ensure cmd echo is OFF)
+    if (IS_SUCCESS(atcmd_dispatch("ATE0")))                        // get OK response (and ensure cmd echo is OFF)
     {
-        if (IS_SUCCESS(atcmd_awaitResult()))
-        {
-            return strstr(atcmd_getRawResponse(), "OK\r\n") != NULL;
-        }
+        return strstr(atcmd_getRawResponse(), "\r\nOK\r\n") != NULL;
     }
     return false;
 }
@@ -694,39 +687,52 @@ bool ltem_ping()
  */
 void ltem_eventMgr()
 {
-    /* look for a new incoming URC 
-     */
-    int16_t potentialUrc = bbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);      // look for URC prefix char in RX buffer
-    if (BBFFR_ISNOTFOUND(potentialUrc))
+    lqLOG_VRBS("(ltem_eventMgr) Entered...\r\n");
+
+    if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr))
     {
-        return;                                                                     // nope, done here
-    }
-
-    /* Invoke each stream's URC handler (if stream has one), it will service or return with a cancelled if not handled
-     */
-    for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
-    {
-        // only MQTT and SCKT (sockets) are asynchronous and have URC handlers currently
-
-        resultCode_t serviceRslt;
-        if (g_lqLTEM.streams[i] != NULL &&  g_lqLTEM.streams[i]->urcHndlr != NULL)  // URC event handler in this stream, offer the data to the handler
+        /* look for a new incoming URC 
+        */
+        int16_t urcOffset = bbffr_find(g_lqLTEM.iop->rxBffr, "+", 0, 0, false);             // look for URC prefix char in RX buffer
+        if (BBFFR_ISFOUND(urcOffset))
         {
-            serviceRslt = g_lqLTEM.streams[i]->urcHndlr();
-        }
-        if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
-        {
-            continue;
-        }
-        break;                                                                      // service attempted (might have errored), so this event is over
-    }
+            /* Invoke each stream's URC handler (if stream has one), it will service or return with a cancelled if not handled
+            */
+            for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
+            {
+                // NOTE: only MQTT and SCKT (sockets) are asynchronous and have URC handlers currently
 
-    S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
+                resultCode_t serviceRslt;
+                if (g_lqLTEM.streams[i] != NULL &&  g_lqLTEM.streams[i]->urcHndlr != NULL)  // URC event handler in this stream, offer the data to the handler
+                {
+                    serviceRslt = g_lqLTEM.streams[i]->urcHndlr();
+                }
+                if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
+                {
+                    continue;
+                }
+                break;                                                                      // service attempted (might have errored), so this event is over
+            }
+            S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
+        }
+
+        /* look for orphaned response text
+        */
+        // int16_t debrisOffset = bbffr_find(g_lqLTEM.iop->rxBffr, "\r\n", 0, 0, false);       // look for EOL in RX buffer
+        // if (BBFFR_ISFOUND(debrisOffset))
+        // {
+        //     char debris[64] = {0};
+        //     bbffr_pop(g_lqLTEM.iop->rxBffr, debris, sizeof(debris) - 1);
+        //     lqLOG_INFO("(ltem_eventMgr) RX debris \"%s\" discarded\r\n", debris);
+        // }
+    }
+    lqLOG_VRBS("(ltem_eventMgr) Exiting\r\n");
 }
 
 
 void ltem_addStream(streamCtrl_t *streamCtrl)
 {
-    DPRINT_V(PRNT_INFO, "Registering Stream\r\n");
+    lqLOG_VRBS(PRNT_INFO, "Registering Stream\r\n");
 
     ASSERT(streamCtrl->dataCntxt < ltem__streamCnt);
 
@@ -756,7 +762,7 @@ void ltem_addStream(streamCtrl_t *streamCtrl)
 
 void ltem_deleteStream(streamCtrl_t *streamCtrl)
 {
-    DPRINT_V(PRNT_INFO, "Deregistering Stream\r\n");
+    lqLOG_VRBS(PRNT_INFO, "Deregistering Stream\r\n");
 
     ASSERT(streamCtrl->dataCntxt < ltem__streamCnt);
     ASSERT(streamCtrl->streamType == g_lqLTEM.streams[streamCtrl->dataCntxt]->streamType);
@@ -904,24 +910,31 @@ static void S__ltemUrcHandler()
      * POWER 
     */
 
-    bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                       // for convenience
-    char parseBffr[30];
+    bBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                                   // for convenience
 
-    // bool isQuectel = cbffr_find(rxBffr, "+Q", 0, 0, false) != CBFFR_NOFIND;      // look for Quectel or CCITT URC prefixes
-    // bool isCCITT = cbffr_find(rxBffr, "+C", 0, 0, false) != CBFFR_NOFIND;
+    if (BBFFR_ISFOUND(bbffr_find(rxBffr, "+Q", 0, 0, false)))                   // Quectel URC prefix
+    {
+        /* PDP (packet network) deactivation/close
+        ------------------------------------------------------------------------------------------- */
+        if (bbffr_find(rxBffr, "+QIURC: \"pdpdeact\"", 0, 0, true) >= 0)
+        {
+            if (!ntwk_validate())                                                   // update network operator
+            {
+                // for (size_t i = 0; i < dataCntxt__cnt; i++)                      // future close streams
+                // {
+                //     if (g_lqLTEM.streams[i].dataCloseCB)
+                //     {
+                //         g_lqLTEM.streams[i].dataCloseCB(i);
+                //     }
+                // }
+            }
+        }
+    }
 
-    /* PDP (packet network) deactivation/close
-     ------------------------------------------------------------------------------------------- */
-    // if (cbffr_find(rxBffr, "+QIURC: \"pdpdeact\"", 0, 0, true) >= 0)
-    // {
-    //     for (size_t i = 0; i < dataCntxt__cnt; i++)
-    //     {
-    //         if (g_lqLTEM.streams[i].dataCloseCB)
-    //         {
-    //             g_lqLTEM.streams[i].dataCloseCB(i);
-    //         }
-    //     }
-    // }
+    else if (BBFFR_ISFOUND(bbffr_find(rxBffr, "+C", 0, 0, false)))              // CCITT URC prefixes
+    {
+    }
+
  
 }
 
