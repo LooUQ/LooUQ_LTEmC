@@ -86,9 +86,9 @@ void setup() {
     lqLOG_NOTICE("\r\nLTEmC-09 HTTP Examples\r\n");
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);                       // no yield req'd for testing
+    ntwk_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
     ntwk_setOperatorScanMode(ntwkScanMode_lteonly);
     ntwk_setIotMode(ntwkIotMode_M1);
-    ntwk_setDefaultNetwork(PDP_DATA_CONTEXT, pdpProtocol_IPV4, PDP_APN_NAME);
     ltem_start(resetAction_swReset);
 
     ntwkOperator_t *ntwkOperator;
@@ -134,18 +134,18 @@ void setup() {
     http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
     lqLOG_DBG(lqDARKGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
 
-    char noaaReqstBffr[256] = {0};
+    char noaaReqstBffr[384];
     noaaReqst = http_createRequest(httpRequestType_GET, "https://api.weather.gov", "/points/44.7582,-85.6022", noaaReqstBffr, sizeof(noaaReqstBffr));
 
     lqLOG_INFO("\r\n  Ntwk Info = %s \r\n", ntwk_getNetworkInfo());
 
-    // lqLOG_INFO("\r\nMemfault OTA Check-In\r\n");
-    // memfaultSetup();
-    // memfaultCheckIn();
+    lqLOG_INFO("\r\nMemfault OTA Check-In\r\n");
+    memfaultSetup();
+    memfaultCheckIn();
 
-    lqLOG_INFO("\r\nopMetrics Reporting\r\n");
-    opMetricsSetup();
-    opMetricsPublish();
+    // lqLOG_INFO("\r\nopMetrics Reporting\r\n");
+    // opMetricsSetup();
+    // opMetricsPublish();
 
     lastCycle = 0;
 }
@@ -223,22 +223,23 @@ void loop()
 /* Memfault check-in -- HTTP GET (with custom headers)
  * ============================================================================================= */
 
-//Memfault check-in
-#define OTA_CUSTOMREQUEST_SZ 384
-#define OTA_CHECKIN_URL_SZ 256
-#define OTA_FIRMWARE_URL_SZ 256
-#define OTA_PAGE_SIZE 1024
+//Memfault OTA
 #define OTA_QUERY_URL "https://device.memfault.com"
 #define OTA_PROJECT_KEY "Memfault-Project-Key: 5Zul5eB3Qn1gkEtDFCEs9dn0IXexhr3x"
-#define OTA_CUSTOMHDR_SZ (500)
-#define OTA_RELEASE_QUERY_SZ (200)
-#define OTA_RELEASE_QUERY_HW ("bms-gen2")
-#define OTA_RELEASE_QUERY_SW ("application")
-#define OTA_CONTENT_URL_SZ (200)
-#define OTA_INTERVAL (MIN_TO_MS(5))
-#define OTA_PAGE_SIZE (1024)
 
-char otaCheckinReqstBffr[OTA_CUSTOMREQUEST_SZ];
+#define OTA_RELEASE_QUERY_HW "bms-gen2"
+#define OTA_RELEASE_QUERY_SW "application"
+
+#define OTA_CHECKIN_URL_SZ 192
+#define OTA_CHECKIN_REQUEST_SZ 384
+#define OTA_FIRMWARE_URL_SZ 192
+#define OTA_PAGE_SIZE 1024
+
+#define OTA_PAGE_SIZE (1024)
+#define OTA_PARTITION_0 (0x010000)
+#define OTA_PARTITION_1 (0x150000)
+
+char otaCheckinReqstBffr[OTA_CHECKIN_REQUEST_SZ];
 char otaCheckinUrl[OTA_CHECKIN_URL_SZ];
 char otaFirmwareUrl[OTA_FIRMWARE_URL_SZ];
 char otaPage[OTA_PAGE_SIZE];
@@ -262,7 +263,7 @@ void memfaultSetup()
     http_setConnection(&otaCheckinHttpCtrl, OTA_QUERY_URL, 443);                         // set host target to query for releases
 
     otaCheckinHttpReqst = http_createRequest(httpRequestType_GET, OTA_QUERY_URL, otaCheckinUrl, otaCheckinReqstBffr, sizeof(otaCheckinReqstBffr));
-    http_addCommonHdrs(&otaCheckinHttpReqst, httpHeaderMap_all);
+    http_addStandardHeaders(&otaCheckinHttpReqst, httpHeaderMap_all);
     http_addHeader(&otaCheckinHttpReqst, OTA_PROJECT_KEY);
 
     lqLOG_INFO("[OTA Setup] Check-In URL=%s%s\r\n", otaCheckinHttpCtrl.hostUrl, otaCheckinUrl);
@@ -315,7 +316,7 @@ void opMetricsSetup()
     // }
 
     httpRqst_opMetrics = http_createRequest(httpRequestType_POST, OPM_HOST_URL, relativeUrl, opmRequestBffr, sizeof(opmRequestBffr));
-    http_addCommonHdrs(&httpRqst_opMetrics, httpHeaderMap_all);
+    http_addStandardHeaders(&httpRqst_opMetrics, httpHeaderMap_all);
     http_addHeader(&httpRqst_opMetrics, "LQCloud-OrgKey: 5Zul5eB3Qn1gkEtDFCEs9dn0IXexhr3x");
 
     // create opMetrics file

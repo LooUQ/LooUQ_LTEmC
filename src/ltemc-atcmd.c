@@ -28,7 +28,7 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 #include <lq-embed.h>
-#define LOG_LEVEL LOGLEVEL_VERBS
+#define lqLOG_LEVEL lqLOGLEVEL_DBG
 //#define DISABLE_ASSERTS                                 // ASSERT/ASSERT_W enabled by default, can be disabled 
 #define LQ_SRCFILE "ATC"                                // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
@@ -159,7 +159,12 @@ resultCode_t atcmd_dispatch(const char *cmdTemplate, ...)
     // if (g_lqLTEM.atcmd->isOpenLocked)
     //     return resultCode__locked;
 
-    ltem_eventMgr();
+    if (!g_lqLTEM.atcmd->eventMgrInvoked)
+    {
+        g_lqLTEM.atcmd->eventMgrInvoked = true;
+        ltem_eventMgr();
+        g_lqLTEM.atcmd->eventMgrInvoked = false;
+    }
 
     atcmd_resetPreInvoke();                                                         // clear results props from ATCMD control structure
     // g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto;                              // set automatic lock control mode
@@ -177,20 +182,20 @@ resultCode_t atcmd_dispatch(const char *cmdTemplate, ...)
     {
         lqLOG_WARN("(atcmd_dispatch) debris cleaned from RX buffer\r\n");
     }
-    lqLOG_VRBS("(atcmd_dispatch) cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
+    lqLOG_DBG(lqCYAN, "(atcmd_dispatch) cmd:%s\r\n", g_lqLTEM.atcmd->cmdStr);
     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
 
     /* await result phase
      ----------------------------------------- */
     resultCode_t rslt = resultCode__unknown; // resultCode_t result;
 
-    lqLOG_DBG(0, "(atcmd_dispatch) read result...\r\n");
+    lqLOG_VRBS("(atcmd_dispatch) read result...\r\n");
     g_lqLTEM.atcmd->invokedAt = lqMillis();
     do
     {
-        lqLOG_DBG(0, "^", g_lqLTEM.atcmd->cmdStr);
+        lqLOG_VRBS("^");
         rslt = S__readResult();
-        lqLOG_DBG(0, "-", g_lqLTEM.atcmd->cmdStr);
+        lqLOG_VRBS("-");
         if (g_lqLTEM.cancellationRequest)                                           // test for cancellation (RTOS or IRQ)
         {
             g_lqLTEM.atcmd->resultCode = resultCode__cancelled;
@@ -199,6 +204,7 @@ resultCode_t atcmd_dispatch(const char *cmdTemplate, ...)
         lqDelay(10);                                                                // give back control momentarily before next loop pass (lqDelay is non-blocking)
     } while (rslt == resultCode__unknown);
 
+    lqLOG_DBG(lqCYAN, "(atcmd_dispatch) resp:%s\r\n", atcmd_getRawResponse());
     atcmd_resetPostInvoke();                                                        // cmd exec completed, reset next invoke options back to default values
     return g_lqLTEM.atcmd->resultCode;
 }
@@ -296,27 +302,6 @@ resultCode_t atcmd_awaitResult()
 }
 
 
-// /**
-//  *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
-//  */
-// resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser)
-// {
-//     lqLOG_VRBS(0, "(atcmd_awaitResultWithOptions) entered\r\n");
-
-//     // set options
-//     if (timeoutMS != atcmd__noTimeoutChange)
-//     {
-//         g_lqLTEM.atcmd->timeout = timeoutMS;
-//     }
-//     if (cmdResponseParser) // caller can use atcmd__useDefaultOKCompletionParser
-//         g_lqLTEM.atcmd->responseParserFunc = cmdResponseParser;
-//     else
-//         g_lqLTEM.atcmd->responseParserFunc = atcmd_defaultResponseParser();
-
-//     return atcmd_awaitResult();
-// }
-
-
 /**
  *	@brief Returns the last ATCMD dispatched.
  */
@@ -332,15 +317,6 @@ const char* atcmd_getCommand()
 resultCode_t atcmd_getResult()
 {
     return g_lqLTEM.atcmd->resultCode;
-}
-
-
-/**
- *	@brief Returns the atCmd value response
- */
-bool atcmd_getPreambleFound()
-{
-    return g_lqLTEM.atcmd->preambleFound;
 }
 
 
@@ -401,28 +377,9 @@ char * atcmd_getToken(uint8_t tokenIndx)
         lqLOG_VRBS("(atcmd_getToken) indx=%d returns:%s\r\n", tokenIndx, g_lqLTEM.atcmd->respToken);
         return g_lqLTEM.atcmd->respToken;
     }
-    lqLOG_INFO("(atcmd_getToken) Empty source/insufficient tokens\r\n");
+    lqLOG_WARN("(atcmd_getToken) Empty source/insufficient tokens\r\n");
     return "";
 }
-
-
-
-/**
- * @brief Grab characters from RX (receive) buffer.
- * @warning GRAB is generally a diagnostic function note intended for general use. It changes the state of the RX
- * stream in potentially detrimental ways.
- * 
- * @param grabBffr Buffer to hold the grabbed characters.
- * @param grabBffrSz Specifies both the size of the buffer and the number of characters being requested.
- */
-void ATCMD_GRABRX(char * grabBffr, uint8_t grabBffrSz)
-{
-    if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr))
-    {
-        bbffr_pop(g_lqLTEM.iop->rxBffr, grabBffr, grabBffrSz);
-    }
-}
-
 
 
 /**
@@ -518,25 +475,24 @@ static resultCode_t S__readResult()
 
     if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) > 0)
     {
-        lqLOG_VRBS("0");
         // chk if current command services a stream and a data mode handler is registered
         if (g_lqLTEM.atcmd->dataMode.dataHndlr != NULL)
         {
-            lqLOG_VRBS("1");
             // looking for streamPrefix phrase
             if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->dataMode.trigger, 0, 0, true)))
             {
                 g_lqLTEM.atcmd->dataMode.dmState = dmState_triggered;
 
-                lqLOG_DBG(PRNT_dMAGENTA, "(S__readResult) trigger=%s fired, invoking handler\r\n", g_lqLTEM.atcmd->dataMode.trigger);
+                lqLOG_VRBS("(S__readResult) trigger=%s fired, invoking handler\r\n", g_lqLTEM.atcmd->dataMode.trigger);
+                lqLOG_VRBS("(S__readResult) txSz=%d, rxSz=%d\r\n", g_lqLTEM.atcmd->dataMode.txDataSz, g_lqLTEM.atcmd->dataMode.rxDataSz);
+
                 /* *** invoke DM data handler ***
                 ------------------------------------------- */
                 resultCode_t dataRslt = (*g_lqLTEM.atcmd->dataMode.dataHndlr)(g_lqLTEM.atcmd->dataMode.streamCtrl);
+                lqLOG_INFO("(S__readResult) dataHndlr:rslt=%d\r\n", dataRslt);
                 /* --------------------------------------------
                 *** invoke DM data handler *** */
-                lqLOG_INFO("(S__readResult) dataHndlr:rslt=%d\r\n", dataRslt);
 
-                lqLOG_VRBS("2");
                 g_lqLTEM.atcmd->dataMode.dmState = dmState_idle;                                    // dataMode completed, go back to _idle
                 if (dataRslt == resultCode__success)
                 {
@@ -558,7 +514,6 @@ static resultCode_t S__readResult()
             }
         }
 
-        lqLOG_VRBS("3");
         if (g_lqLTEM.atcmd->parserResult == cmdParseRslt_pending)
         {
             uint8_t respLen = strlen(g_lqLTEM.atcmd->rawResponse);                                      // response so far
@@ -566,13 +521,13 @@ static resultCode_t S__readResult()
             ASSERT((respLen + popSz) < atcmd__respBufferSz);                                            // ensure don't overflow
 
             bbffr_pop(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->rawResponse + respLen, popSz);              // pop new into response buffer for parsing
-            lqLOG_DBG(lqMAGENTA, "(S__readResult) rawResponse:\"%s\"\r\n", g_lqLTEM.atcmd->rawResponse);
+            lqLOG_VRBS("(S__readResult) rawResponse:\"%s\"\r\n", g_lqLTEM.atcmd->rawResponse);
 
             /* *** parse for command response ***
              ------------------------------------------- */
-            lqLOG_DBG(lqMAGENTA, "(S__readResult) invoke parser\r\n", g_lqLTEM.atcmd->parserResult);
+            lqLOG_VRBS("(S__readResult) invoke parser\r\n");
             g_lqLTEM.atcmd->parserResult = (*g_lqLTEM.atcmd->responseParserFunc)();
-            lqLOG_DBG(lqMAGENTA, "(S__readResult) parser:pRslt=%d \r\n", g_lqLTEM.atcmd->parserResult);
+            lqLOG_VRBS("(S__readResult) parser:pRslt=%d \r\n", g_lqLTEM.atcmd->parserResult);
             /* --------------------------------------------
             *** parse for command response *** */
         }
@@ -893,7 +848,6 @@ resultCode_t atcmd_rxHndlrWithLength()
    
     bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, lengthEOLAt + 2);                                              // pop data length and EOL from RX buffer
 
-
     lqLOG_VRBS("(_rxHndlrWithLength) wrkBffr (w/header)=%s\r\n", wrkBffr);
 
     uint8_t triggerSz = strnlen(g_lqLTEM.atcmd->dataMode.trigger, sizeof(g_lqLTEM.atcmd->dataMode.trigger));
@@ -934,6 +888,22 @@ resultCode_t atcmd_rxHndlrWithLength()
     return resultCode__success;
 }
 
+
+/**
+ * @brief Grab characters from RX (receive) buffer.
+ * @warning GRAB is generally a diagnostic function note intended for general use. It changes the state of the RX
+ * stream in potentially detrimental ways.
+ * 
+ * @param grabBffr Buffer to hold the grabbed characters.
+ * @param grabBffrSz Specifies both the size of the buffer and the number of characters being requested.
+ */
+void ATCMD_GRABRX(char * grabBffr, uint8_t grabBffrSz)
+{
+    if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr))
+    {
+        bbffr_pop(g_lqLTEM.iop->rxBffr, grabBffr, grabBffrSz);
+    }
+}
 
 #pragma endregion // completion parsers/data handlers
 

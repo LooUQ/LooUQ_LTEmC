@@ -29,11 +29,9 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_OFF
-//#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "NWK"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-
-//#define ENABLE_ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_DBG
+//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "NWK"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -125,9 +123,8 @@ void ntwk_setOperatorScanMode(ntwkScanMode_t scanMode)
  */
 void ntwk_setIotMode(ntwkIotMode_t iotMode)
 {
-    /* AT+QCFG="iotopmode",<mode>
-    */
     g_lqLTEM.modemSettings->iotMode = iotMode; 
+
     if (ltem_getDeviceState() == deviceState_ready)
     {
         atcmd_tryInvoke("AT+QCFG=\"iotopmode\",%d", iotMode);
@@ -235,24 +232,31 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
 
             if (IS_SUCCESS(atcmd_dispatch("AT+COPS?")))
             {
-                if (strlen(atcmd_getToken(1)))                                          // operator name/ID presented
+                if (strlen(atcmd_getToken(1)))                                          // format 
                 {
-                    uint8_t toCopy = strlen(atcmd_getToken(2)) - 2;
-                    strncpy(g_lqLTEM.ntwkOperator->name, atcmd_getToken(2) + 1, toCopy);
-                    char ntwkMode = atcmd_getToken(3)[0];
-                    if (ntwkMode == '8')
-                        strcpy(g_lqLTEM.ntwkOperator->iotMode, "M1");
-                    else if (ntwkMode == '9')
-                        strcpy(g_lqLTEM.ntwkOperator->iotMode, "NB1");
-                    else
-                        strcpy(g_lqLTEM.ntwkOperator->iotMode, "GSM");
+                    char* operator = atcmd_getToken(2);                                 // operator name/ID presented
+                    if (strlen(operator))
+                    {
+                        uint8_t toCopy = strlen(operator) - 2;
+                        strncpy(g_lqLTEM.ntwkOperator->name, operator + 1, toCopy);
+                        char * ntwkMode = atcmd_getToken(3);
+                        if (strlen(ntwkMode))
+                        {
+                            if (ntwkMode[0] == '8')
+                                strcpy(g_lqLTEM.ntwkOperator->iotMode, "M1");
+                            else if (ntwkMode[0] == '9')
+                                strcpy(g_lqLTEM.ntwkOperator->iotMode, "NB1");
+                            else
+                                strcpy(g_lqLTEM.ntwkOperator->iotMode, "GSM");
+                        }
+                    }
                 }
             }
             if (!STREMPTY(g_lqLTEM.ntwkOperator->name))
                 break;
 
-            pDelay(1000);                                                               // this yields, allowing alternate execution
-            endMillis = pMillis();
+            lqDelay(1000);                                                               // this yields, allowing alternate execution
+            endMillis = lqMillis();
         } while (endMillis - startMillis < waitMs || g_lqLTEM.cancellationRequest);     // timed out waiting OR global cancellation
 
         // got PROVIDER, get networks 
@@ -302,10 +306,7 @@ void ntwk_activatePdpContext(uint8_t cntxtId)
 void ntwk_deactivatePdpContext(uint8_t cntxtId)
 {
     atcmd_configParser("+QIACT: ", false, "", 2, NULL, 0);
-    if (atcmd_tryInvoke("AT+QIDEACT=%d", cntxtId))
-    {
-        resultCode_t rslt = atcmd_awaitResult();
-    }
+    atcmd_dispatch("AT+QIDEACT=%d", cntxtId);
 }
 
 
@@ -360,6 +361,8 @@ packetNetwork_t *ntwk_getPacketNetwork(uint8_t pdpContextId)
  */
 const char* ntwk_getNetworkInfo()
 {
+    g_lqLTEM.statics.reportBffr[0] = '\0';                                          // scratch report buffer
+
     if (IS_SUCCESS(atcmd_dispatch("AT+QNWINFO")))
     {
         char * copyFrom = strstr(g_lqLTEM.atcmd->rawResponse, "+QNWINFO: ");
@@ -370,16 +373,15 @@ const char* ntwk_getNetworkInfo()
             if (eol)
             {
                 memcpy(g_lqLTEM.statics.reportBffr, copyFrom, eol - copyFrom);
-                return g_lqLTEM.statics.reportBffr;
             }
         }
     }
-    return NULL;
+    return g_lqLTEM.statics.reportBffr;
 }
 
 
 /**
- *	@brief Get current network registration status.
+ * @brief Get current network registration status.
  * @return The current network operator registration status.
  */
 resultCode_t ntwk_getRegistrationStatus()
@@ -395,6 +397,7 @@ resultCode_t ntwk_getRegistrationStatus()
         return resultCode__conflict;
     }
 }
+
 
 /**
  * @brief Check network ready condition.

@@ -364,10 +364,12 @@ typedef enum streamType_tag
 
 
 // function prototypes
-typedef resultCode_t (*urcEvntHndlr_func)();            // data comes from rxBuffer, this function parses and forwards to application via appRcvProto_func
-typedef resultCode_t (*dataHndlr_func)(void * ctrl);    // function to marshall data between module and LTEmC
-// typedef void (*appRcvrPrototype_func)();                // prototype/placeholder func() for stream recvData callback
-typedef void (*appRcvr_func)(uint16_t streamId, const char *fileData, uint16_t dataSz);        // generic app receive callback with simple context/data/dataSize
+typedef resultCode_t (*dataHndlr_func)(void * ctrl);                                        // Function to marshall data between module and LTEmC
+typedef void (*appRcvr_func)(uint16_t streamId, const char *fileData, uint16_t dataSz);     // Generic app receive callback with simple context/data/dataSize
+
+typedef resultCode_t (*urcEvntHndlr_func)();                                                // URC detection and processing, invoked by event manager
+typedef void (*closeStream_func)(uint16_t streamId);                                        // Stream close processing (if applicable)
+
 
 typedef struct streamCtrl_tag
 {
@@ -375,6 +377,7 @@ typedef struct streamCtrl_tag
     dataCntxt_t dataCntxt;                              // integer representing the source of the stream; fixed for protocols, file handle for FS
     dataHndlr_func dataHndlr;                           // function to handle data streaming, initiated by eventMgr() or atcmd module
     urcEvntHndlr_func urcHndlr;                         // function to handle data streaming, initiated by eventMgr() or atcmd module
+    closeStream_func closeStreamCB;                     // function to close stream and update stream control structure (usually invoked after URC detected)
 } streamCtrl_t;
 
 
@@ -502,6 +505,7 @@ typedef struct atcmd_tag
     bool isOpenLocked;                                  // True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
     bool autoLock;                                      // last invoke was auto and should be closed automatically on complete
     uint32_t invokedAt;                                 // Tick value at the command invocation, used for timeout detection.
+    bool eventMgrInvoked;                               // True: eventMgr has been invoked by the current command prep and should not be recursively invoked
     
     cmdResponseParser_func responseParserFunc;          // parser function to analyze AT cmd response and optionally extract value
     parserConfig_t parserConfig;

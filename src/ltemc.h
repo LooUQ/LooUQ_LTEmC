@@ -253,8 +253,9 @@ void ltem_eventMgr();
  * @details ASSERTS that no stream is occupying the stream control's data context
  * 
  * @param streamCtrl The stream to add to the LTEm stream table
+ * @return dataCntxt_t Data context number for stream
  */
-void ltem_addStream(streamCtrl_t *streamCtrl);
+dataCntxt_t ltem_addStream(streamCtrl_t *streamCtrl);
 
 
 /**

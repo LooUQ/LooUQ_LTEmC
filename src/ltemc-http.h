@@ -46,11 +46,15 @@ enum http__constants
     http__returnResponseHeaders = 1, 
     http__useDefaultTimeout = 0,
     http__defaultTimeoutBGxSec = 60,
-    http__rqstTypeSz = 5,                               // GET or POST
-    http__commonHeadersSz = 105,                        // For custom requests, the combined length of all the "common" headers 
+    http__requestTypeSz = 5,                            // GET or POST
+    http__requestBaseSz = 50,                           // Size of a custom request base (1st 2 lines) less URLs and content-length
+    http__standardHeadersSz = 130,                      // For custom requests, the combined length of all the "standard/common" headers 
+    http__authHeaderSz = 20,                            // Size of authorization header without encoded credentials
+    http__contentLengthMinHeaderSz = 21,                // Size of "Content-Length: 0" header with 2 EOL body separator
+    http__contentLengthHeaderSz = 25,                   // Size of Content-Length header with 2 EOL body separator
     http__minUrlSz = 16,                                // URL validation (ASSERT)
-    http__maxUrlSz = 224,                               // maximum URL length host+relative
-    http__maxHeaderKeySz = 48,                          // maximum length for a custom header key size to use with http_addHeader()
+    http__maxUrlSz = 224,                               // Maximum URL length host+relative
+    http__maxHeaderKeySz = 48,                          // Maximum length for a custom header key size to use with http_addHeader()
     http__readToFileNameSzMax = 80,
     http__readToFileTimeoutSec = 180,                   // Total number of seconds for read to file allowed (atcmd processing)
     http__readToFileInterPcktTimeoutSec = 20,           // BGx inter-packet timeout (max interval between two packets)
@@ -125,6 +129,7 @@ typedef struct httpCtrl_tag
     dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
     dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
     urcEvntHndlr_func urcEvntHndlr;             // function to determine if "potential" URC event is for an open stream and perform reqd actions
+    closeStream_func closeStreamCB;             // function to close stream and update stream control structure (usually invoked after URC detected)
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
@@ -135,7 +140,7 @@ typedef struct httpCtrl_tag
     // bool returnResponseHdrs;                    // if set true, response headers are included in the returned response
     char * responseHdrs;                        // pointer to application provided buffer for response headers
     uint16_t responseBffrSz;                    // size of app provided response header buffer
-    char requestType[http__rqstTypeSz];         // type of current/last request: 'G'=GET, 'P'=POST
+    char requestType[http__requestTypeSz];      // type of current/last request: 'G'=GET, 'P'=POST
     httpState_t requestState;                   // current state machine variable for HTTP request
     uint16_t bgxError;                          // BGx sprecific error code returned from GET/POST
     uint16_t httpStatus;                        // set to 0 during a request, initialized to 0xFFFF before any request
@@ -199,13 +204,12 @@ httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* hostUr
 
 
 /**
- * @brief Adds common http headers to a custom headers buffer.
+ * @brief Adds standard http headers to a custom headers buffer.
  * 
- * @param [in] requestBuffer Char buffer (array) to use for composition and headers store.
- * @param [in] requestBufferSz Size of buffer.
+ * @param [in] request Request object to update.
  * @param [in] headerMap Bitmap for which standard headers to use.
  */
-void http_addCommonHdrs(httpRequest_t* request, httpHeaderMap_t headerMap);
+void http_addStandardHeaders(httpRequest_t* request, httpHeaderMap_t headerMap);
 
 
 /**
@@ -245,9 +249,18 @@ void http_addHeaderKeyAndValue(httpRequest_t* request, const char *key, const ch
  * @details Primarily used with POST file operations; adding post data automatically closes request.
  * 
  * @param [in] httpReqst HTTP request to get updated.
- * @param [in] contentLength Size of POST body included in HTTP request.
  */
-void http_closeHeaders(httpRequest_t* httpReqst, uint32_t contentLength);
+void http_closeHeaders(httpRequest_t* httpReqst);
+
+
+/**
+ * @brief Update in-memory HTTP request with final Content-Length value
+ * 
+ * @param httpReqst The request to operate on.
+ * @param contentLength The length value to set in header.
+ */
+void http_updateContentLength(httpRequest_t* httpReqst, uint16_t contentLength);
+
 
 /**
  * @brief Add full or partial post data content.

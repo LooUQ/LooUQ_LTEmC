@@ -33,9 +33,9 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define LOG_LEVEL LOGLEVEL_OFF
-//#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "NXP"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LOG_LEVEL lqLOGLEVEL_DBG
+//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "NXP"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 // #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
 // #define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output

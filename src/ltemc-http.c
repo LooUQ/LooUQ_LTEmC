@@ -29,11 +29,9 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "HTT"                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-
-//#define ENABLE_ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_VRBS
+//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "HTT"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-http.h"
@@ -50,11 +48,6 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
 static resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequest_t* request, const char *postData, uint16_t postDataSz);
 
 static inline uint16_t S__setUrl(const char *host, const char *relative);
-// static cmdParseRslt_t S__httpGetStatusParser();
-// static cmdParseRslt_t S__httpPostStatusParser();
-// static cmdParseRslt_t S__httpReadFileStatusParser();
-// static cmdParseRslt_t S__httpPostFileStatusParser();
-// static uint16_t S__parseResponseForHttpStatus(httpCtrl_t *httpCtrl, const char *responseTail);
 static resultCode_t S__httpRxHandler();
 
 
@@ -109,11 +102,22 @@ void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t host
 
 /**
  * @brief Creates a base HTTP request that can be appended with custom headers.
+ * @note This function is ASSERT heavy; attempting to prevent buffer overflow issues 
  */
 httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* hostUrl, const char* relativeUrl, char* reqstBffr, uint16_t reqstBffrSz)
 {
-    ASSERT(strlen(hostUrl) > http__minUrlSz);
+    ASSERT(reqstType == httpRequestType_GET || reqstType == httpRequestType_POST);
+    ASSERT(hostUrl != NULL);
     ASSERT(relativeUrl != NULL);
+
+    uint16_t hostUrlLen = strlen(hostUrl);
+    uint16_t relativeUrlLen = strlen(relativeUrl);
+    ASSERT(hostUrlLen > http__minUrlSz);
+
+    /* Check for a viable request composition buffer. Need room for the overhead of the top and host lines, the combined URL lengths
+     * the combined lengths of the "common" headers inserted by the add common headers function and at least 1 custom header.
+     */
+    //ASSERT(hostUrlLen + relativeUrlLen + http__requestBaseSz + http__standardHeadersSz + http__maxHeaderKeySz < reqstBffrSz);
 
     httpRequest_t httpReqst = { .buffer = reqstBffr, .buffersz = reqstBffrSz, .contentLen = 0, .headersLen = 0 };
     memset(reqstBffr, 0, reqstBffrSz);
@@ -151,12 +155,12 @@ httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* hostUr
 /**
  * @brief Adds common HTTP headers to a custom headers buffer.
  */
-void http_addCommonHdrs(httpRequest_t* httpReqst, httpHeaderMap_t headerMap)
+void http_addStandardHeaders(httpRequest_t* httpReqst, httpHeaderMap_t headerMap)
 {
     ASSERT(headerMap > 0);
     ASSERT(httpReqst->contentLen == 0);                                                     // headers section is still open to additions
     ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                       // existing request ends in \r\n
-    ASSERT(httpReqst->headersLen + http__commonHeadersSz < httpReqst->buffersz);            // "all" headers could fit
+    ASSERT(httpReqst->headersLen + http__standardHeadersSz + 4 < httpReqst->buffersz);      // "all" headers could fit + 2 EOLs (POST) possible
 
     if (headerMap & httpHeaderMap_accept > 0 || headerMap == httpHeaderMap_all)
     {
@@ -188,39 +192,39 @@ void http_addBasicAuthHdr(httpRequest_t* httpReqst, const char *user, const char
 
     ASSERT(user != NULL);
     ASSERT(pw != NULL);
-    ASSERT(httpReqst->contentLen == 0);                                                     // headers section still open to additions
-    ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                       // existing request ends in \r\n
+    ASSERT(httpReqst->contentLen == 0);                                                         // headers section still open to additions
+    ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                           // existing request ends in \r\n
 
     strcat(toEncode, user);
     strcat(toEncode, ":");
     strcat(toEncode, pw);
-    binToB64(b64str, toEncode, strlen(toEncode));                                           // endcode credentials to Base64 string
-    ASSERT(httpReqst->headersLen + strlen(b64str) + 20 < httpReqst->buffersz);              // "Authentication: " + "\r\n" = length 20
+    binToB64(b64str, toEncode, strlen(toEncode));                                               // endcode credentials to Base64 string
+    ASSERT(httpReqst->headersLen + strlen(b64str) + http__authHeaderSz < httpReqst->buffersz);  // "Authentication: " + "\r\n" = length 20
 
     strcat(httpReqst->buffer, "Authentication: ");
     strcat(httpReqst->buffer, b64str);
-    strcat(httpReqst->buffer, "\r\n");                                                      // new header ends in correct EOL
-    httpReqst->headersLen = strlen(httpReqst->buffer);                                      // update object
+    strcat(httpReqst->buffer, "\r\n");                                                          // new header ends in correct EOL
+    httpReqst->headersLen = strlen(httpReqst->buffer);                                          // update object
 }
 
 
-void http_addHeader(httpRequest_t* httpReqst, const char * keyValue)
+void http_addHeader(httpRequest_t* httpReqst, const char * keyAndValue)
 {
-    ASSERT(keyValue != NULL);
-    ASSERT(strnstr(keyValue, ": ", http__maxHeaderKeySz) != NULL);                          // check for HTTP header key/value delimiter, assume key length <= 40
     ASSERT(httpReqst->contentLen == 0);                                                     // headers section still open to additions
     ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                       // existing request ends in \r\n
+    ASSERT(keyAndValue != NULL);
+    ASSERT(strnstr(keyAndValue, ": ", http__maxHeaderKeySz) != NULL);                       // keyAndValue is valid header (contains delimeter)
 
-    uint8_t newHdrSz = strlen(keyValue);
+    uint8_t newHdrSz = strlen(keyAndValue);
     bool missingEOL = false;
-    if (memchr(keyValue, '\r', newHdrSz) == NULL)
+    if (memchr(keyAndValue, '\r', newHdrSz) == NULL)
     {
         newHdrSz += 2;                                                                      // need add EOL (\r\n)
         missingEOL = true;
     }
     ASSERT(httpReqst->headersLen + newHdrSz < httpReqst->buffersz);                         // new header fits
     
-    strcat(httpReqst->buffer, keyValue);
+    strcat(httpReqst->buffer, keyAndValue);
     if (missingEOL)
         strcat(httpReqst->buffer, "\r\n");                                                  // add missing EOL
     httpReqst->headersLen = strlen(httpReqst->buffer);                                      // update object
@@ -248,15 +252,36 @@ void http_addHeaderKeyAndValue(httpRequest_t* httpReqst, const char *key, const 
 }
 
 
-void http_closeHeaders(httpRequest_t* httpReqst, uint32_t contentLength)
+/**
+ * @brief Finalize/close headers to additional header additions.
+ * @note BGx requires that the Content-Length header is the last one in the header section of a custom request.
+ * 
+ * @param httpReqst The custom request object to close headers on.
+ */
+void http_closeHeaders(httpRequest_t* httpReqst)
 {
-    if (httpReqst->contentLen == 0)                                                         // finalize/close headers to additional changes
+    if (httpReqst->contentLen == 0)                                                         // if no content yet: either a GET or POST without data so far
     {
-        char wrkBffr[40];
-        snprintf(wrkBffr, sizeof(wrkBffr), "Content-Length: %d\r\n\r\n", contentLength);
-        strcat(httpReqst->buffer, wrkBffr);
-        httpReqst->headersLen = strlen(httpReqst->buffer);
+        uint16_t searchStart = httpReqst->headersLen - 30;                                  // check for header
+        char * lenHeaderPtr = strnstr(httpReqst->buffer + searchStart, "Content-Length:", 30);
+        if (lenHeaderPtr == NULL)                                                           // no Content-Length header, so add (always last header for BGx)
+        {
+            strcat(httpReqst->buffer, "Content-Length:     0\r\n\r\n");                     // add placeholder, POST will update actual length at invoke
+            httpReqst->headersLen = strlen(httpReqst->buffer);
+        }
     }
+}
+
+
+void http_updateContentLength(httpRequest_t* httpReqst, uint16_t contentLength)
+{
+    char contentLengthFld[6];
+    char * contentLengthPtr = strnstr(httpReqst->buffer, "Content-Length: ", httpReqst->headersLen);
+
+    httpReqst->contentLen = contentLength;
+
+    snprintf(contentLengthFld, sizeof(contentLengthFld), "%5d", contentLength);             // fixup content-length header value 
+    memcpy(contentLengthPtr + 16, contentLengthFld, 5);
 }
 
 
@@ -268,11 +293,7 @@ uint16_t http_addPostData(httpRequest_t* httpReqst, const char *postData, uint16
     ASSERT(postData != NULL);
     ASSERT(*(httpReqst->buffer + httpReqst->headersLen - 2) == '\r');                       // existing request ends in \r\n
 
-    if (httpReqst->contentLen == 0)                                                         // finalize/close headers to additional changes
-    {
-        strcat(httpReqst->buffer, "Content-Length:     0\r\n\r\n");
-        httpReqst->headersLen = strlen(httpReqst->buffer);
-    }
+    http_closeHeaders(httpReqst);
 
     uint16_t availableSz = httpReqst->buffersz - (httpReqst->headersLen + httpReqst->contentLen);
     uint16_t copySz = MIN(availableSz, postDataSz);
@@ -338,6 +359,12 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
         }
     }
 
+    uint8_t reqstHdrs = (uint8_t)customRequest != NULL;
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QHTTPCFG=\"requestheader\",%d", reqstHdrs)))
+    {
+        return rslt;
+    }
+
     /* SET URL FOR REQUEST
     * set BGx HTTP URL: AT+QHTTPURL=<urlLength>,timeoutSec  (BGx default timeout is 60, if not specified)
     * wait for CONNECT prompt, then output <URL>, /r/n/r/nOK
@@ -370,19 +397,12 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
     * but non-LTEm tasks like reading sensors can continue.
     *---------------------------------------------------------------------------------------------------------------*/
 
-    uint8_t reqstHdrs = (uint8_t)customRequest != NULL;
-    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QHTTPCFG=\"requestheader\",%d", reqstHdrs)))
-    {
-        return rslt;
-    }
-
     atcmd_ovrrdTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
     atcmd_configParser("+QHTTPGET: ", true, ",", 0, "\r\n", 0);
 
     if (reqstHdrs)                                                              // custom HTTP GET request
     {
-        strcat(customRequest->buffer, "Content-Length: 0\r\n\r\n");
-        customRequest->headersLen = strlen(customRequest->buffer);
+        http_closeHeaders(customRequest);
         atcmd_configDataMode(httpCtrl, "CONNECT\r\n", atcmd_txHndlrDefault, customRequest->buffer, customRequest->headersLen, NULL, true);
         rslt = atcmd_dispatch("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, customRequest->headersLen);
     }
@@ -478,7 +498,7 @@ resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequ
     if (customRequest)
     {
         urlEndPtr = strchr(customRequest->buffer + 5, ' ');
-        *urlEndPtr = '\0';                                                      // make relativeUrl (within reqst) NULL term'd
+        *urlEndPtr = '\0';                                                                      // make relativeUrl (within reqst) NULL term'd
         relativeUrl = customRequest->buffer + 5;
     }
     if (IS_NOTSUCCESS_RSLT(S__setUrl(httpCtrl->hostUrl, relativeUrl)))
@@ -486,7 +506,7 @@ resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequ
         lqLOG_WARN("Failed set URL rslt=%d\r\n", rslt);
         return rslt;
     }
-    if (urlEndPtr)                                                              // restore request to original
+    if (urlEndPtr)                                                                              // restore request to original
         *urlEndPtr = ' ';
 
     atcmd_ovrrdTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
@@ -494,11 +514,11 @@ resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequ
 
     if (customRequest)
     {
-        // fixup content-length header value
-        char contentLengthVal[6];
-        snprintf(contentLengthVal, sizeof(contentLengthVal), "%5d", customRequest->contentLen);
-        char* contentLengthPtr = customRequest->buffer + customRequest->headersLen - 9;      // backup over the /r/n/r/n and content-length value
-        memcpy(contentLengthPtr, contentLengthVal, 5);
+        http_closeHeaders(customRequest);                                                       // should already be here but just in case (will not be double added)
+        char contentLengthFld[6];
+        snprintf(contentLengthFld, sizeof(contentLengthFld), "%5d", customRequest->contentLen); // fixup content-length header value 
+        char* contentLengthPtr = customRequest->buffer + customRequest->headersLen - 9;         // backup over the /r/n/r/n and content-length value
+        memcpy(contentLengthPtr, contentLengthFld, 5);
 
         uint16_t dataLen = customRequest->headersLen + customRequest->contentLen;
         atcmd_configDataMode(httpCtrl, "CONNECT\r\n", atcmd_txHndlrDefault, customRequest->buffer, dataLen, NULL, true);

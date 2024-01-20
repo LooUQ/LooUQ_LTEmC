@@ -200,13 +200,6 @@ char* atcmd_getResponse();
 
 
 /**
- *	@brief Returns true if the last atCmd response contained a requested preamble. If no preamble specified will return false.
- *  @return True if preamble string was detected in the AT command response
- */
-bool atcmd_getPreambleFound();
-
-
-/**
  * @brief Returns a token from the result of the last module command
 
  * @param tokenIndx 

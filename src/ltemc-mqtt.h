@@ -181,6 +181,7 @@ typedef struct mqttCtrl_tag
     dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
     dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
     urcEvntHndlr_func urcEvntHndlr;             // function to determine if "potential" URC event is for an open stream and perform reqd actions
+    closeStream_func closeStreamCB;             // function to close stream and update stream control structure (usually invoked after URC detected)
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
@@ -196,7 +197,7 @@ typedef struct mqttCtrl_tag
     mqttVersion_t mqttVersion;
     uint16_t sentMsgId;                             // MQTT TX message ID for QOS, automatically incremented, rolls at max value.
     uint16_t recvMsgId;                             // last received message identifier
-    uint8_t errCode;
+    //uint8_t errCode;
 } mqttCtrl_t;
 
 
@@ -397,14 +398,6 @@ uint16_t mqtt_getSentMsgId(mqttCtrl_t *mqttCtrl);
  *  @returns Integer value of the message identifier.
 */
 uint16_t mqtt_getRecvMsgId(mqttCtrl_t *mqttCtrl);
-
-
-/**
- *  @brief Get the MQTT status error code.
- *  @param [in] mqttCtrl Pointer to MQTT type stream control to operate on.
- *  @returns Integer value of the MQTT status error code.
-*/
-uint16_t mqtt_getErrCode(mqttCtrl_t *mqttCtrl);
 
 
 /**
