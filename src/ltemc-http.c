@@ -266,22 +266,22 @@ void http_closeHeaders(httpRequest_t* httpReqst)
         char * lenHeaderPtr = strnstr(httpReqst->buffer + searchStart, "Content-Length:", 30);
         if (lenHeaderPtr == NULL)                                                           // no Content-Length header, so add (always last header for BGx)
         {
-            strcat(httpReqst->buffer, "Content-Length:     0\r\n\r\n");                     // add placeholder, POST will update actual length at invoke
+            strcat(httpReqst->buffer, "Content-Length:       0\r\n\r\n");                   // add placeholder, POST will update actual length at invoke
             httpReqst->headersLen = strlen(httpReqst->buffer);
         }
     }
 }
 
 
-void http_updateContentLength(httpRequest_t* httpReqst, uint16_t contentLength)
+void http_updateContentLength(httpRequest_t* httpReqst, uint32_t contentLength)
 {
-    char contentLengthFld[6];
+    char contentLengthFld[8];
     char * contentLengthPtr = strnstr(httpReqst->buffer, "Content-Length: ", httpReqst->headersLen);
 
     httpReqst->contentLen = contentLength;
 
-    snprintf(contentLengthFld, sizeof(contentLengthFld), "%5d", contentLength);             // fixup content-length header value 
-    memcpy(contentLengthPtr + 16, contentLengthFld, 5);
+    snprintf(contentLengthFld, sizeof(contentLengthFld), "%7d", contentLength);             // fixup content-length header value 
+    memcpy(contentLengthPtr + 16, contentLengthFld, 7);
 }
 
 
@@ -350,7 +350,6 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
     {
         return rslt;
     }
-
     if (httpCtrl->useTls)
     {
         if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt)))
@@ -358,7 +357,6 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
             return rslt;
         }
     }
-
     uint8_t reqstHdrs = (uint8_t)customRequest != NULL;
     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QHTTPCFG=\"requestheader\",%d", reqstHdrs)))
     {
@@ -397,38 +395,54 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
     * but non-LTEm tasks like reading sensors can continue.
     *---------------------------------------------------------------------------------------------------------------*/
 
-    atcmd_ovrrdTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
+    atcmd_ovrrdDCmpltTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
     atcmd_configParser("+QHTTPGET: ", true, ",", 0, "\r\n", 0);
 
-    if (reqstHdrs)                                                              // custom HTTP GET request
+    uint8_t retry = 0;
+    do
     {
-        http_closeHeaders(customRequest);
-        atcmd_configDataMode(httpCtrl, "CONNECT\r\n", atcmd_txHndlrDefault, customRequest->buffer, customRequest->headersLen, NULL, true);
-        rslt = atcmd_dispatch("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, customRequest->headersLen);
-    }
-    else                                                                                                            // default HTTP GET request
-    {
-        rslt = atcmd_dispatch("AT+QHTTPGET=%d", PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
-    }
-
-    httpCtrl->requestState = httpState_idle;
-    char * httpError = atcmd_getToken(0);
-    if (IS_SUCCESS(rslt) && (strlen(httpError) > 0 && *httpError == '0'))
-    {
-        char * httpRslt = atcmd_getToken(1);
-        lqLOG_VRBS("ReqstRslt:%d, HTTP-Rslt:%s\r\n", rslt, httpRslt);
-        httpCtrl->httpStatus = strtol(httpRslt, NULL, 10);
-        if (IS_SUCCESSRANGE(httpCtrl->httpStatus))
+        if (reqstHdrs)                                                                                          // custom HTTP GET request
         {
-            httpCtrl->requestState = httpState_requestComplete;                                                     // update httpState, got GET/POST response
-            lqLOG_INFO("GetRqst dCntxt:%d, status=%d\r\n", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+            http_closeHeaders(customRequest);
+            atcmd_configDataMode(httpCtrl, "CONNECT\r\n", atcmd_txHndlrDefault, customRequest->buffer, customRequest->headersLen, NULL, true);
+            rslt = atcmd_dispatch("AT+QHTTPGET=%d,%d", httpCtrl->timeoutSec, customRequest->headersLen);
         }
-    }
-    else
-    {
-        httpCtrl->httpStatus = resultCode__extendedCodesBase + rslt;
-        lqLOG_WARN("Closed failed GET request, status=%d\r\n", httpCtrl->httpStatus);
-    }
+        else                                                                                                    // default HTTP GET request
+        {
+            rslt = atcmd_dispatch("AT+QHTTPGET=%d", PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
+        }
+
+        httpCtrl->requestState = httpState_idle;
+        char * httpError = atcmd_getToken(0);
+        if (IS_SUCCESS(rslt) && (strlen(httpError) > 0 && *httpError == '0'))
+        {
+            char * httpRslt = atcmd_getToken(1);
+            lqLOG_VRBS("ReqstRslt:%d, HTTP-Rslt:%s\r\n", rslt, httpRslt);
+            httpCtrl->httpStatus = strtol(httpRslt, NULL, 10);
+            if (IS_SUCCESSRANGE(httpCtrl->httpStatus))
+            {
+                httpCtrl->requestState = httpState_requestComplete;                                             // update httpState, got GET/POST response
+                lqLOG_INFO("GetRqst dCntxt:%d, status=%d\r\n", httpCtrl->dataCntxt, httpCtrl->httpStatus);
+            }
+        }
+        else
+        {
+            httpCtrl->httpStatus = resultCode__extendedCodesBase + rslt;
+            if (retry)
+            {
+                lqLOG_WARN("Closed failed GET request, status=%d\r\n", httpCtrl->httpStatus);
+                break;
+            }
+            else
+            {
+                retry++;
+                lqLOG_INFO("GET request failed (status=%d)\r\n", httpCtrl->httpStatus);
+                ntwk_deactivatePdpContext(g_lqLTEM.ntwkOperator->defaultContext);
+                ntwk_activatePdpContext(g_lqLTEM.ntwkOperator->defaultContext);
+            }
+        }
+    } while (retry);
+
     return httpCtrl->httpStatus;
 }   // http_get()
 
@@ -509,17 +523,13 @@ resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequ
     if (urlEndPtr)                                                                              // restore request to original
         *urlEndPtr = ' ';
 
-    atcmd_ovrrdTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
+    atcmd_ovrrdDCmpltTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
     atcmd_configParser("+QHTTPPOST: ", true, ",", 0, "\r\n", 0);
 
     if (customRequest)
     {
         http_closeHeaders(customRequest);                                                       // should already be here but just in case (will not be double added)
-        char contentLengthFld[6];
-        snprintf(contentLengthFld, sizeof(contentLengthFld), "%5d", customRequest->contentLen); // fixup content-length header value 
-        char* contentLengthPtr = customRequest->buffer + customRequest->headersLen - 9;         // backup over the /r/n/r/n and content-length value
-        memcpy(contentLengthPtr, contentLengthFld, 5);
-
+        http_updateContentLength(customRequest, customRequest->contentLen);
         uint16_t dataLen = customRequest->headersLen + customRequest->contentLen;
         atcmd_configDataMode(httpCtrl, "CONNECT\r\n", atcmd_txHndlrDefault, customRequest->buffer, dataLen, NULL, true);
         rslt = atcmd_dispatch("AT+QHTTPPOST=%d,5,%d", dataLen, httpCtrl->timeoutSec);
@@ -610,7 +620,7 @@ resultCode_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const 
     * but non-LTEm tasks like reading sensors can continue.
     *---------------------------------------------------------------------------------------------------------------*/
 
-    atcmd_ovrrdTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
+    atcmd_ovrrdDCmpltTimeout(PERIOD_FROM_SECONDS(httpCtrl->timeoutSec));
     atcmd_configParser("+QHTTPPOSTFILE: ", true, ",", 0, "\r\n", 0);
 
     if (IS_SUCCESS_RSLT(atcmd_dispatch("AT+QHTTPPOSTFILE=\"%s\"", filename)))
@@ -672,7 +682,7 @@ uint16_t http_readPageToFile(httpCtrl_t *httpCtrl, const char* filename)
 
     RSLT;
 
-    atcmd_ovrrdTimeout(SEC_TO_MS(http__readToFileTimeoutSec));
+    atcmd_ovrrdDCmpltTimeout(SEC_TO_MS(http__readToFileTimeoutSec));
     atcmd_configParser("+QHTTPREADFILE: ", true, ",", 0, "\r\n", 0);
 
     if (IS_SUCCESS_RSLT(atcmd_dispatch("AT+QHTTPREADFILE=\"%s\",%d", filename, http__readToFileInterPcktTimeoutSec)))

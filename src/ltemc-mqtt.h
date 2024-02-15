@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-mqtt.h
   @brief Modem MQTT(S) communication functions/services.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -43,7 +43,8 @@ enum mqtt__constants
     mqtt__notUsingTls = 0,
     mqtt__publishTimeout = 15000,
 
-    mqtt__messageSz = 1548,                                             // Maximum message size for BGx family (BG96, BG95, BG77)
+    mqtt__messageMaxSz = 1548,                                          // Maximum message size for BGx family (BG96, BG95, BG77)
+    mqtt_messageRxOvrhd = 24,                                           // extra char in RX buffer padding a receive
     mqtt__topicsCnt = 4,
     mqtt__topic_offset = 24,
     mqtt__topic_nameSz = 90,                                            // Azure IoTHub typically 50-70 chars
@@ -59,7 +60,9 @@ enum mqtt__constants
 
     mqtt__clientIdSz = 35,
     mqtt__userNameSz = 98,
-    mqtt__userPasswordSz = 192
+    mqtt__userPasswordSz = 192,
+    mqtt__closeTriesDeactivateCnt = 5,
+    mqtt__closeTriesLimitCnt = 20
 };
 
 
@@ -127,12 +130,13 @@ typedef enum mqttState_tag
     mqttState_closed = 0,           // MQTT is idle (not active)
     mqttState_open = 1,             // MQTT is open (open but not connected)
     mqttState_connected = 2,        // MQTT is connected (in data session with server)
+    mqttState_ready = 3,            // MQTT has subscribed (if applicable) to receive topics
 
     // BGx MQTT stack can hang in any of the next 3 states, only known recovery is soft-restart module
-    mqttState_PENDING = 100,        ///
-    mqttState_initializing = 101,   // After connect cmd, MQTT is attempting connect
-    mqttState_connecting = 102,     // After connect cmd, MQTT is attempting connect
-    mqttState_disconnecting = 104   // After disconnect/close cmd
+    mqttState_PENDING = -9,         //
+    mqttState_initializing = -1,    // After connect cmd, MQTT is attempting connect
+    mqttState_connecting = -2,      // After connect cmd, MQTT is attempting connect
+    mqttState_disconnecting = -4    // After disconnect/close cmd
 } mqttState_t;
 
 
@@ -162,13 +166,15 @@ typedef enum mqttMsgSegment_tag
 
 /** 
  *  @brief Struct describing a MQTT topic subscription.
+ *  @note LTEmC does not support single-level wildcards ('+') currently.
 */
 typedef struct mqttTopicCtrl_tag
 {
     char topicName[PSZ(mqtt__topic_nameSz)];    // Topic name. Note if the topic registered with '#' wildcard, this is removed from the topic name.
-    char wildcard;                              // Set to '#' if multilevel wildcard specified when subscribing to topic.
-    uint8_t Qos;
+    char wildcard;                              // Set to '#' if topic name includes multilevel wildcard.
+    uint8_t Qos;                                // MQTT QOS for messages received for this topic
     appRcvr_func appRcvrCB;                     // callback into host application with data (cast from generic func* to stream specific function)
+    uint16_t blockSz;                           // size of block to transfer during receive, usually application buffer size
 } mqttTopicCtrl_t;
 
 
@@ -245,8 +251,9 @@ void mqtt_initControl(mqttCtrl_t *mqttCtrl, dataCntxt_t dataCntxt);
  * @param [in] topic Topic name to subscribe to on the MQTT server
  * @param [in] qos The MQTT defined quality-of-service for messages serviced in this topic (0=At most once, 1=At least once, 2=Exactly once)
  * @param [in] appTopicRecvCB Pointer to the application function to receive incoming messages for this topic
+ * @param [in] blockSz Number of chars to transfer to application in a callback to application, set to 0 for maximum number of characters available
  */
-void mqtt_initTopicControl(mqttTopicCtrl_t* topicCtrl, const char* topic, uint8_t qos, mqttAppRcvr_func appTopicRcvrCB);
+void mqtt_initTopicControl(mqttTopicCtrl_t* topicCtrl, const char* topic, uint8_t qos, mqttAppRcvr_func appTopicRcvrCB, uint16_t blockSz);
 
 /**
  * @brief Set the remote server/broker connection values.
@@ -286,6 +293,16 @@ void mqtt_setConnection(mqttCtrl_t *mqttCtrl, const char *hostUrl, uint16_t host
  *  @return A resultCode_t value indicating the success or type of failure.
 */
 resultCode_t mqtt_start(mqttCtrl_t *mqttCtrl, bool cleanSession);
+
+
+/**
+ * @brief Stop MQTT services, disconnects and closes server connection 
+ * 
+ * @param mqttCtrl The MQTT session control to act on.
+ * @return true The connection was successfully stopped.
+ * @return false The connection failed to close completely and is hung in an "closing" state.
+ */
+bool mqtt_stop(mqttCtrl_t *mqttCtrl);
 
 
 /**
@@ -356,9 +373,11 @@ resultCode_t mqtt_publish(mqttCtrl_t *mqttCtrl, const char *topic, mqttQos_t qos
 
 /**
  *  @brief Disconnect and close a connection to a MQTT server
+ * 
  *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
+ *  @return mqttState_t MQTT state for context immediately following close action (may be closed or closing)
 */
-void mqtt_close(mqttCtrl_t *mqttCtrl);
+mqttState_t mqtt_close(mqttCtrl_t *mqttCtrl);
 
 
 /**

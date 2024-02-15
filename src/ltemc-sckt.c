@@ -52,12 +52,12 @@ static resultCode_t S__scktTxDataHndlr();
 static void S__scktUrcHndlr();
 static resultCode_t S__scktRxHndlr();
 
-static cmdParseRslt_t S__irdResponseHeaderParser();
-static cmdParseRslt_t S__sslrecvResponseHeaderParser();
-static cmdParseRslt_t S__udptcpOpenCompleteParser(const char *response, char **endptr);
-static cmdParseRslt_t S__sslOpenCompleteParser(const char *response, char **endptr);
-static cmdParseRslt_t S__socketSendCompleteParser(const char *response, char **endptr);
-static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr);
+// static cmdParseRslt_t S__irdResponseHeaderParser();
+// static cmdParseRslt_t S__sslrecvResponseHeaderParser();
+// static cmdParseRslt_t S__udptcpOpenCompleteParser(const char *response, char **endptr);
+// static cmdParseRslt_t S__sslOpenCompleteParser(const char *response, char **endptr);
+// static cmdParseRslt_t S__socketSendCompleteParser(const char *response, char **endptr);
+// static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr);
 
 
 
@@ -109,20 +109,20 @@ resultCode_t sckt_open(scktCtrl_t *scktCtrl, bool cleanSession)
 
     if (scktCtrl->streamType == 'U')                    // protocol == UDP
     {
-        atcmd_tryInvoke("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
-        rslt = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__udptcpOpenCompleteParser);
+        atcmd_configParser("+QIOPEN: ", true, ",", 1, "", 0);
+        rslt = atcmd_dispatch("AT+QIOPEN=%d,%d,\"UDP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
     }
 
     else if (scktCtrl->streamType == 'T')               // protocol == TCP
     {
-        atcmd_tryInvoke("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
-        rslt = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__udptcpOpenCompleteParser);
+        atcmd_configParser("+QIOPEN: ", true, ",", 1, "", 0);
+        rslt = atcmd_dispatch("AT+QIOPEN=%d,%d,\"TCP\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
     }
 
     else if (scktCtrl->streamType == 'S')               // protocol == SSL/TLS
     {
-        atcmd_tryInvoke("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
-        rslt = atcmd_awaitResultWithOptions(sckt__defaultOpenTimeoutMS, S__sslOpenCompleteParser);
+        atcmd_configParser("+QSSLOPEN: ", true, ",", 1, "", 0);
+        rslt = atcmd_dispatch("AT+QSSLOPEN=%d,%d,\"SSL\",\"%s\",%d,%d", pdpCntxt, scktCtrl->dataCntxt, scktCtrl->hostUrl, scktCtrl->hostPort, scktCtrl->lclPort);
     }
 
     if (rslt == resultCode__success)
@@ -142,12 +142,13 @@ void sckt_close(scktCtrl_t *scktCtrl)
     if (scktCtrl->state == scktState_closed)                                    // not open
         return;
 
+    RSLT;
     if (scktCtrl->useTls)
-        atcmd_tryInvokeDefaults("AT+QSSLCLOSE=%d", scktCtrl->dataCntxt);        // BGx syntax different for SSL
+        rslt = atcmd_dispatch("AT+QSSLCLOSE=%d", scktCtrl->dataCntxt);          // BGx syntax different for SSL
     else
-        atcmd_tryInvokeDefaults("AT+QICLOSE=%d", scktCtrl->dataCntxt);          // BGx syntax different for TCP/UDP
+        rslt = atcmd_dispatch("AT+QICLOSE=%d", scktCtrl->dataCntxt);            // BGx syntax different for TCP/UDP
     
-    if (atcmd_awaitResult() == resultCode__success)
+    if (IS_SUCCESS(rslt))
     {
         scktCtrl->state = scktState_closed;
         ltem_deleteStream(scktCtrl);
@@ -203,20 +204,15 @@ bool sckt_getState(scktCtrl_t *scktCtrl)
  */
 resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 {
-    resultCode_t rslt;
-
     atcmd_configDataMode(scktCtrl, "> ", atcmd_txHndlrDefault, data, dataSz, NULL, false);
     atcmd_configDataModeEot(0x1A);
 
-    if (atcmd_tryInvoke("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz))
+    RSLT;
+    atcmd_configParser("", false, "", 0, "SEND OK\r\n", 0);
+    if (IS_SUCCESS_RSLT(atcmd_dispatch("AT+QISEND=%d,%d", scktCtrl->dataCntxt, dataSz)))
     {
-        rslt = atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__socketSendCompleteParser);
-        if (rslt == resultCode__success)
-        {
-            scktCtrl->statsTxCnt++;
-        }
+        scktCtrl->statsTxCnt++;
     }
-    atcmd_close();
     return rslt;                                                            // return sucess -OR- failure from sendRequest\sendRaw action
 }
 
@@ -340,14 +336,13 @@ static void S__scktUrcHndlr()
             if (isUdpTcp)
             {
                 atcmd_configDataMode(scktCtrl, "+QIRD: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRcvrCB, false);
-                atcmd_tryInvoke("AT+QIRD=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
+                atcmd_dispatch("AT+QIRD=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
             else
             {
                 atcmd_configDataMode(scktCtrl, "+QSSLRECV: ", S__scktRxHndlr, NULL, 0, scktCtrl->appRcvrCB, false);
-                atcmd_tryInvoke("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
+                atcmd_dispatch("AT+QSSLRECV=%d,%d", (uint8_t)dataCntxt, irdRqstSz);
             }
-            atcmd_awaitResult();
             irdRemain = atcmd_getValue();
 
         } while (irdRemain > 0);
@@ -443,64 +438,38 @@ static resultCode_t S__scktRxHndlr()
 #pragma region private service functions and UDP/TCP/SSL response parsers
 /*-----------------------------------------------------------------------------------------------*/
 
-/**
- *	\brief [private] UDP/TCP (IRD Request) response parser.
- *  \return LTEmC parse result
- */
-static cmdParseRslt_t S__irdResponseHeaderParser() 
-{
-    return atcmd_stdResponseParser("+QIRD: ", true, ",", 1, 1, "\r\n", 0);
-}
+// /**
+//  *	\brief [private] UDP/TCP (IRD Request) response parser.
+//  *  \return LTEmC parse result
+//  */
+// static cmdParseRslt_t S__irdResponseHeaderParser() 
+// {
+//     return atcmd_stdResponseParser("+QIRD: ", true, ",", 1, 1, "\r\n", 0);
+// }
 
 
-/**
- *	\brief [private] UDP/TCP (IRD Request) response parser.
- *  \return LTEmC parse result
- */
-static cmdParseRslt_t S__sslrecvResponseHeaderParser() 
-{
-    return atcmd_stdResponseParser("+QSSLRECV: ", true, ",", 1, 1, "\r\n", 0);
-}
+// /**
+//  *	\brief [private] UDP/TCP (IRD Request) response parser.
+//  *  \return LTEmC parse result
+//  */
+// static cmdParseRslt_t S__sslrecvResponseHeaderParser() 
+// {
+//     return atcmd_stdResponseParser("+QSSLRECV: ", true, ",", 1, 1, "\r\n", 0);
+// }
 
 
-/**
- *	@brief [private] TCP/UDP wrapper for open connection parser.
- */
-static cmdParseRslt_t S__udptcpOpenCompleteParser(const char *response, char **endptr) 
-{
-    return atcmd_stdResponseParser("+QIOPEN: ", true, ",", 1, 1, "", 0);
-}
 
-
-/**
- *	@brief [private] SSL wrapper for open connection parser.
- */
-static cmdParseRslt_t S__sslOpenCompleteParser(const char *response, char **endptr) 
-{
-    return atcmd_stdResponseParser("+QSSLOPEN: ", true, ",", 1, 1, "", 0);
-}
-
-
-/**
- *	@brief [private] SSL wrapper for open connection parser.
- */
-static cmdParseRslt_t S__socketSendCompleteParser(const char *response, char **endptr)
-{
-    return atcmd_stdResponseParser("", false, "", 0, 0, "SEND OK\r\n", 0);
-}
-
-
-/**
- *	@brief [static] Socket status parser
- *  @details Wraps generic atcm
- *  @param response [in] Character data recv'd from BGx to parse for task complete
- *  @param endptr [out] Char pointer to the char following parsed text
- *  @return HTTP style result code, 0 = not complete
- */
-static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr) 
-{
-    // BGx +QMTCONN Read returns Status = 3 for connected, service parser returns 203
-    return atcmd_serviceResponseParser(response, "+QISTATE: ", 5, endptr) == 202 ? resultCode__success : resultCode__unavailable;
-}
+// /**
+//  *	@brief [static] Socket status parser
+//  *  @details Wraps generic atcm
+//  *  @param response [in] Character data recv'd from BGx to parse for task complete
+//  *  @param endptr [out] Char pointer to the char following parsed text
+//  *  @return HTTP style result code, 0 = not complete
+//  */
+// static cmdParseRslt_t S__socketStatusParser(const char *response, char **endptr) 
+// {
+//     // BGx +QMTCONN Read returns Status = 3 for connected, service parser returns 203
+//     return atcmd_serviceResponseParser(response, "+QISTATE: ", 5, endptr) == 202 ? resultCode__success : resultCode__unavailable;
+// }
 
 #pragma endregion

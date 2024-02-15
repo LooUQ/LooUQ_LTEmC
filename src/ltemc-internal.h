@@ -114,6 +114,7 @@ typedef struct ltemDevice_tag
     bool cancellationRequest;                   // For RTOS implementations, token to request cancellation of long running task/action
     bool hostConfigured;                        // Host resources configured for LTEm use
     deviceState_t deviceState;                  // Device state of the BGx module
+    bool simReady;                              // SIM is communicating and ready for use
     bool appEventNotifyEnabled;                 // Flag to control forwarding of LTEm notifications back to application
     appEvntNotify_func appEvntNotifyCB;         // Event notification callback to parent application
     appDiagCallback_func appDiagnosticCB;       // Callback to application (platform specific) diagnostics function (stack, memory or other system state)

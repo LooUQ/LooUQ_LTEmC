@@ -70,7 +70,16 @@ void atcmd_resetPostInvoke();
  * @param [in] newTimeout Value in milliseconds to wait for a command to complete.
  * @return The value of the existing timeout.
  */
-uint16_t atcmd_ovrrdTimeout(uint16_t newTimeout);
+uint32_t atcmd_ovrrdDRdyTimeout(uint32_t newTimeout);
+
+
+/**
+ * @brief Sets command timeout for next invocation of a BGx AT command. 
+ * @details If newTimeout is zero (0) no change to timeout is made, the current timeout is returned. Following the next command, the timeout value returns to default value.
+ * @param [in] newTimeout Value in milliseconds to wait for a command to complete.
+ * @return The value of the existing timeout.
+ */
+uint32_t atcmd_ovrrdDCmpltTimeout(uint32_t newTimeout);
 
 
 /**
@@ -127,29 +136,29 @@ void atcmd_configDataMode(streamCtrl_t * streamCtrl, const char* trigger, dataHn
 resultCode_t atcmd_dispatch(const char *cmdTemplate, ...);
 
 
-/**
- *	@brief Invokes a BGx AT command using default option values (automatic locking).
- *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
- *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
- *  @return True if action was invoked, false if not
- */
-bool atcmd_tryInvoke(const char *cmdTemplate, ...);
+// /**
+//  *	@brief Invokes a BGx AT command using default option values (automatic locking).
+//  *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
+//  *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
+//  *  @return True if action was invoked, false if not
+//  */
+// bool atcmd_tryInvoke(const char *cmdTemplate, ...);
 
 
-/**
- *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
- *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
- *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
- */
-void atcmd_invokeReuseLock(const char *cmdTemplate, ...);
+// /**
+//  *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
+//  *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
+//  *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
+//  */
+// void atcmd_invokeReuseLock(const char *cmdTemplate, ...);
 
 
-/**
- * @brief 
- * 
- * @param timeoutMS 
- */
-bool atcmd_awaitLock(uint16_t timeoutMS);
+// /**
+//  * @brief 
+//  * 
+//  * @param timeoutMS 
+//  */
+// bool atcmd_awaitLock(uint16_t timeoutMS);
 
 
 /**
@@ -158,10 +167,10 @@ bool atcmd_awaitLock(uint16_t timeoutMS);
 void atcmd_close();
 
 
-/**
- *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
- */
-resultCode_t atcmd_awaitResult();
+// /**
+//  *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
+//  */
+// resultCode_t atcmd_awaitResult();
 
 
 // /**

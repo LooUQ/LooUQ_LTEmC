@@ -90,13 +90,13 @@ void QBG_powerOn()
 {
     if (QBG_isPowerOn())
     {
-        DPRINT(PRNT_DEFAULT, "LTEm found powered on\r");
+        lqLOG_INFO("LTEm found powered on\r\n");
         g_lqLTEM.deviceState = deviceState_ready;                       // Module start messages come only once, shortly after start, would have missed it 
         return;
     }
     g_lqLTEM.deviceState = deviceState_powerOff;
 
-    DPRINT(PRNT_DEFAULT, "Powering LTEm On...");
+    lqLOG_INFO("Powering LTEm On...");
     platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_high);  // toggle powerKey pin to power on/off
     pDelay(BGX__powerOnDelay);
     platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
@@ -106,13 +106,13 @@ void QBG_powerOn()
     {
         if (waitAttempts++ == 60)
         {
-            DPRINT(PRNT_DEFAULT, "FAILED\r");
+            lqLOG_ERROR("FAILED\r\n");
             return;
         }
         pDelay(100);                                                    // allow background tasks to operate
     }
     g_lqLTEM.deviceState = deviceState_powerOn;
-    DPRINT(PRNT_DEFAULT, "DONE\r");
+    lqLOG_INFO("DONE\r\n");
 }
 
 
@@ -123,12 +123,12 @@ void QBG_powerOff()
 {
     if (!QBG_isPowerOn())
     {
-        DPRINT(PRNT_DEFAULT, "LTEm found powered off\r");
+        lqLOG_INFO("LTEm found powered off\r\n");
         g_lqLTEM.deviceState = deviceState_powerOff;
         return;
     }
 
-    DPRINT(PRNT_DEFAULT, "Powering LTEm Off...");
+    lqLOG_INFO("Powering LTEm Off...");
 	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_high);  // toggle powerKey pin to power on/off
 	pDelay(BGX__powerOffDelay);
 	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
@@ -138,13 +138,13 @@ void QBG_powerOff()
     {
         if (waitAttempts++ == 60)
         {
-            DPRINT(PRNT_DEFAULT, "FAILED\r");
+            lqLOG_ERROR("FAILED\r\n");
             return;
         }
         pDelay(100);                                                    // allow background tasks to operate
     }
     g_lqLTEM.deviceState = deviceState_powerOff;
-    DPRINT(PRNT_DEFAULT, "DONE\r");
+    lqLOG_INFO("DONE\r\n");
 }
 
 
@@ -158,7 +158,7 @@ void QBG_reset(resetAction_t resetAction)
 
     if (resetAction == resetAction_swReset && QBG_isPowerOn())
     {
-        char cmdData[] = "AT+CFUN=1,1\r";                                   // DMA SPI DMA may not tolerate Flash source
+        char cmdData[] = "AT+CFUN=1,1\r\n";                                   // DMA SPI DMA may not tolerate Flash source
         IOP_startTx(cmdData, sizeof(cmdData));                              // soft-reset command: performs a module internal HW reset and cold-start
 
         uint32_t waitStart = pMillis();                                     // start timer to wait for status pin == OFF
@@ -167,7 +167,7 @@ void QBG_reset(resetAction_t resetAction)
             yield();                                                        // give application some time back for processing
             if (pMillis() - waitStart > PERIOD_FROM_SECONDS(3))
             {
-                DPRINT(PRNT_WARN, "LTEm swReset:OFF timeout\r");
+                lqLOG_WARN("LTEm swReset:OFF timeout\r\n");
                 // SC16IS7xx_sendBreak();
                 // atcmd_exitTextMode();                                    // clear possible text mode (hung MQTT publish, etc.)
                 QBG_reset(resetAction_powerReset);                          // recursive call with power-cycle reset specified
@@ -181,25 +181,25 @@ void QBG_reset(resetAction_t resetAction)
             yield();                                                        // give application some time back for processing
             if (pMillis() - waitStart > PERIOD_FROM_SECONDS(3))
             {
-                DPRINT(PRNT_WARN, "LTEm swReset:ON timeout\r");
+                lqLOG_WARN("LTEm swReset:ON timeout\r\n");
                 return;
             }
         }
-        DPRINT(PRNT_WHITE, "LTEm swReset\r");
+        lqLOG_INFO("LTEm swReset\r\n");
     }
     else if (resetAction == resetAction_hwReset)
     {
         platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_high);     // hardware reset: reset pin (LTEm inverts)
         pDelay(4000);                                                       // BG96: active for 150-460ms , BG95: 2-3.8s
         platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
-        DPRINT(PRNT_WHITE, "LTEm hwReset\r");
+        lqLOG_INFO("LTEm hwReset\r\n");
     }
     else // if (resetAction == powerReset)
     {
         QBG_powerOff();                                                     
         pDelay(BGX__resetDelay);
         QBG_powerOn();
-        DPRINT(PRNT_WHITE, "LTEm pwrReset\r");
+        lqLOG_INFO("LTEm pwrReset\r\n");
     }
 }
 
@@ -209,45 +209,27 @@ void QBG_reset(resetAction_t resetAction)
  */
 bool QBG_setOptions()
 {
-    DPRINT(PRNT_DEFAULT, "BGx Init:\r");
+    lqLOG_INFO("Module Init:\r\n");
     bool setOptionsSuccess = true;
     char cmdBffr[120];
 
     for (size_t i = 0; i < qbg_initCmdsCnt; i++)                                    // sequence through list of start cmds
     {
-        DPRINT(PRNT_DEFAULT, " > %s", qbg_initCmds[i]);
+        lqLOG_INFO(" > %s", qbg_initCmds[i]);
         strcpy(cmdBffr, qbg_initCmds[i]);
 
-        if (atcmd_tryInvoke(cmdBffr))
+      	atcmd_ovrrdDCmpltTimeout(SEC_TO_MS(2));
+        if (IS_SUCCESS(atcmd_dispatch(cmdBffr)))
         {
-          	atcmd_ovrrdTimeout(SEC_TO_MS(2));
-            if (IS_SUCCESS(atcmd_awaitResult()))                                    // somewhat unknown cmd list for modem initialization, relax timeout
-            {
-                continue;
-            }
+            continue;
         }
-        DPRINT(PRNT_ERROR, "BGx Init CmdError: %s\r", qbg_initCmds[i]);
+        lqLOG_ERROR("BGx Init CmdError: %s\r\n", qbg_initCmds[i]);
         setOptionsSuccess = false;
         break;
     }
-    DPRINT(PRNT_DEFAULT, " -End BGx Init-\r");
+    lqLOG_INFO(" -End BGx Init-\r\n");
     return setOptionsSuccess;
 }
-
-
-// /**
-//  *	@brief Attempts recovery of command control of the BGx module left in data mode
-//  */
-// bool QBG_clearDataState()
-// {
-//     IOP_forceTx("\x1B", 1);                                                          // send ASCII ESC
-
-//     atcmd_close();
-//     atcmd_tryInvoke("AT");
-//     resultCode_t result = atcmd_awaitResult();
-//     return  result == resultCode__success;
-// }
-
 
 #pragma endregion
 

@@ -243,6 +243,13 @@ deviceState_t ltem_getDeviceState();
 
 
 /**
+ * @brief Restore module non-volatile memory back to factory settings.
+ * @note Do NOT use frequently, restoring NV is not a normal operation! 
+ */
+void ltem_restoreFactoryNV();
+
+
+/**
  *	@brief Background work task runner. To be called in application Loop() periodically.
  */
 void ltem_eventMgr();

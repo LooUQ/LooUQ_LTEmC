@@ -37,7 +37,51 @@ Also add information on how to contact you by electronic and paper mail.
 /* ------------------------------------------------------------------------------------------------
  * Network constants, enums, and structures are declared in the LooUQ global lq-network.h header
  * --------------------------------------------------------------------------------------------- */
-//#include <lq-network.h>
+
+
+/**
+ * @brief GMS bands for configuration of band searching.
+ */
+typedef enum gsmBands_tag
+{
+    GMS_NoChg = 0x0,                        // No change
+    GSM_900  = 0x1,                         // GSM_900 MHz
+    GSM_1800 = 0x2,                         // GSM_1800 MHz
+    GSM_850  = 0x4,                         // GSM_850 MHz
+    GSM_1900 = 0x8,                         // GSM_1900 MHz
+    GSM_ANY = 0xF                           // Any frequency band
+} gsmBands_t;
+
+
+/**
+ * @brief LTE bands includes both eMTC and NB-IOT for configuration of band searching.
+ */
+typedef enum lteBands_tag
+{
+    LTE_B1 =                       0x1,     // (CM_BAND_PREF_LTE_EUTRAN_BAND1)  LTE_B1
+    LTE_B2 =                       0x2,     // (CM_BAND_PREF_LTE_EUTRAN_BAND2)  LTE_B2
+    LTE_B3 =                       0x4,     // (CM_BAND_PREF_LTE_EUTRAN_BAND3)  LTE_B3
+    LTE_B4 =                       0x8,     // (CM_BAND_PREF_LTE_EUTRAN_BAND4)  LTE_B4
+    LTE_B5 =                      0x10,     // (CM_BAND_PREF_LTE_EUTRAN_BAND5)  LTE_B5
+    LTE_B8 =                      0x80,     // (CM_BAND_PREF_LTE_EUTRAN_BAND8)  LTE_B8
+    LTE_B12 =                    0x800,     // (CM_BAND_PREF_LTE_EUTRAN_BAND12) LTE_B12
+    LTE_B13 =                   0x1000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND13) LTE_B13
+    LTE_B14 =                   0x2000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND14) LTE_B14
+    LTE_B18 =                  0x20000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND18) LTE_B18
+    LTE_B19 =                  0x40000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND19) LTE_B19
+    LTE_B20 =                  0x80000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND20) LTE_B20
+    LTE_B25 =                0x1000000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND25) LTE_B25
+    LTE_B26 =                0x2000000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND26) LTE_B26
+    LTE_B27 =                0x4000000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND27) LTE_B27
+    LTE_B28 =                0x8000000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND28) LTE_B28
+    LTE_B31 =               0x40000000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND31) LTE_B31
+    LTE_B66 =      0x20000000000000000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND66) LTE_B66
+    LTE_B72 =     0x800000000000000000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND72) LTE_B72
+    LTE_B73 =    0x1000000000000000000,     // (CM_BAND_PREF_LTE_EUTRAN_BAND73) LTE_B73
+    LTE_B85 = 0x1000000000000000000000     // (CM_BAND_PREF_LTE_EUTRAN_BAND85) LTE_B85
+    //                7FFFFFFFFFFFFFFF
+    // LTE_ANY = 0x4001C2000000000F0E389F      // (CM_BAND_PREF_ANY) Any frequency band
+} lteBands_t;
 
 
 #ifdef __cplusplus
@@ -91,7 +135,7 @@ resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoTyp
  * @param [in] apn The APN name if required by network carrier.
  *  
  */
-resultCode_t ntwk_configPdpNetwork(dataCntxt_t pdpContextId, pdpProtocol_t protoType, const char *apn);
+resultCode_t ntwk_configPdpNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn);
 
 
 /**
@@ -157,10 +201,10 @@ bool ntwk_getPdpContextState(uint8_t cntxtId);
 
 
 /**
- * @brief Get current provider information. If not connected to a provider will be an empty providerInfo struct
- * @return Struct containing the network operator name (operName) and network mode (ntwkMode).
+ * @brief Get current operator information.
+ * @return Pointer to modem structure containing the network operator name (operName), network mode (ntwkMode) and other information.
 */
-ntwkOperator_t *ntwk_getOperatorInfo();
+ntwkOperator_t *ntwk_getOperator();
 
 
 /**
@@ -249,7 +293,12 @@ uint8_t ntwk_signalRaw();
  * */
 uint8_t ntwk_signalBars(uint8_t displayBarCount);
 
-
+/**
+ * @brief 
+ * 
+ * @param bands 
+ */
+void ntwk_configSearchedBands(uint32_t bands);
 
 /** 
  * @brief Development/diagnostic function to retrieve visible providers from radio.

@@ -138,6 +138,8 @@ void ltem_destroy()
  */
 bool ltem_start(resetAction_t resetAction)
 {
+    bool startComplete = false;
+
     LTEM_diagCallback(">> ltem_start()");  
     g_lqLTEM.appEventNotifyEnabled = false;                                     // start may be a restart, suspend operations
     g_lqLTEM.iop->isrEnabled = false;
@@ -181,7 +183,7 @@ bool ltem_start(resetAction_t resetAction)
     }
     else 
     {
-       QBG_powerOn();                                                       // turn on BGx
+       QBG_powerOn();                                                       // turn on module
     }
     lqLOG_VRBS("LTEm was reset=%d\r\n", ltemWasReset);
 
@@ -197,54 +199,55 @@ bool ltem_start(resetAction_t resetAction)
 
     lqLOG_VRBS("LTEm prior state=%d\r\n", g_lqLTEM.deviceState);
 
-    uint32_t startRdyChk = lqMillis();                                      // wait for BGx to signal internal ready
+    uint32_t startRdyChk = lqMillis();                                      // wait for module to signal internal ready
     uint32_t appRdyAt = 0;
-    uint32_t simRdyAt = 0; 
     do
     {
         if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "APP RDY", 0, 0, false)))
             appRdyAt = lqMillis();
 
-        if (BBFFR_ISFOUND(bbffr_find(g_lqLTEM.iop->rxBffr, "+CPIN: READY", 0, 0, false)))
-            simRdyAt = lqMillis();
-
         if (IS_ELAPSED(startRdyChk, APPRDY_TIMEOUT))
         {
-            lqLOG_VRBS("AppRdy not received! Timeout at %dms\r\n", APPRDY_TIMEOUT);
-            return false;
+            lqLOG_WARN("AppRdy not received! Timeout at %dms\r\n", APPRDY_TIMEOUT);
+            break;
         }
-    } while (!appRdyAt || !simRdyAt);
+    } while (!appRdyAt);
     
     g_lqLTEM.deviceState = deviceState_ready;
-    lqLOG_INFO("ModuleReady at %dms (%d/%d)\r\n", lqMillis() - startRdyChk, appRdyAt - startRdyChk, simRdyAt - startRdyChk);
+    lqLOG_INFO("ModuleReady at %dms\r\n", lqMillis() - startRdyChk);
     pDelay(500);
     bbffr_reset(g_lqLTEM.iop->rxBffr);                                      // clean out start messages from RX buffer
 
+    // check for SIM
+    atcmd_dispatch("AT+CPIN?");
+    g_lqLTEM.simReady = (bool)strnstr(atcmd_getRawResponse(), "+CPIN: READY", atcmd__respBufferSz);
+    bbffr_reset(g_lqLTEM.iop->rxBffr);
 
     uint8_t initTries = 0;
     while (initTries <= 1)
     {
         if (QBG_setOptions())
-            lqLOG_VRBS("BGx options set\r\n");
+            lqLOG_INFO("Module options set\r\n");
             if (ltem_ping())
                 break;
         else
         {
-            ltem_notifyApp(appEvent_fault_hardFault, "BGx set options failed");         // send notification, maybe app can recover
-            lqLOG_ERROR("BGx set options failed\r");
+            lqLOG_ERROR("Module set options failed\r");
+            ltem_notifyApp(appEvent_fault_hardFault, "Module set options failed");         // send notification, maybe app can recover
         }
         initTries++;
     }
-    lqLOG_INFO("BGx start verified\r\n");
+    lqLOG_INFO("Module start verified\r\n");
 
     ntwk_applyPpdNetworkConfig();                                       // configures default PDP context for likely autostart with provider attach
     lqLOG_VRBS("ltem_start(): pdp ntwk configured\r\n");
 
     ntwk_awaitOperator(2);                                              // attempt to warm-up provider/PDP briefly. 
-    lqLOG_VRBS("ltem_start(): provider warmed up\r\n");        // If longer duration required, leave that to application
+    lqLOG_VRBS("ltem_start(): provider warmed up\r\n");                 // If longer duration required, leave that to application
 
     ltem_getModemInfo();                                                // populate modem info struct
-    return true;
+    startComplete = true;
+    return startComplete;
 }
 
 
@@ -348,14 +351,11 @@ ltemRfPriorityMode_t ltem_getRfPriorityMode()
 {
     if ((memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) == 0) || (memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) == 0))
     {
-        if (atcmd_tryInvoke("AT+QGPSCFG=\"priority\""))
+        if (IS_SUCCESS(atcmd_dispatch("AT+QGPSCFG=\"priority\"")))
         {
-            if (IS_SUCCESS(atcmd_awaitResult()))
-            {
-                uint32_t mode = strtol(atcmd_getToken(1), NULL, 10);
-                lqLOG_VRBS("<ltem_getRfPriorityMode> mode=%d\r\n", mode);
-                return mode;
-            }
+            uint32_t mode = strtol(atcmd_getToken(1), NULL, 10);
+            lqLOG_VRBS("<ltem_getRfPriorityMode> mode=%d\r\n", mode);
+            return mode;
         }
     }
     return ltemRfPriorityMode_none;
@@ -399,87 +399,85 @@ const char* ltem_getUtcDateTime(char format)
 
     char* destPtr = &g_lqLTEM.statics.dateTimeBffr;
     char* dtDbg  = &g_lqLTEM.statics.dateTimeBffr;
+    ASSERT(destPtr != NULL);
 
-    if (destPtr != NULL && atcmd_tryInvoke("AT+CCLK?"))
+    if (IS_SUCCESS(atcmd_dispatch("AT+CCLK?")))
     {
-        if (atcmd_awaitResult() == resultCode__success)
+        if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)         // allowance for preceeding EOL
         {
-            if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)         // allowance for preceeding EOL
+            dtSrc++;
+            if (*dtSrc != '8')                                              // test for not initialized date/time, starts with 80 (aka 1980)
             {
-                dtSrc++;
-                if (*dtSrc != '8')                                              // test for not initialized date/time, starts with 80 (aka 1980)
+                lqLOG_VRBS("ltem_getUtcDateTime(): format=%c\r\n", format);
+
+                if (format == 'v' || format == 'V')                         // "VERBOSE" format
                 {
-                    lqLOG_VRBS("ltem_getUtcDateTime(): format=%c\r\n", format);
+                    char* tzDelimPoz = memchr(dtSrc, '+', 20);              // strip UTC offset, safe stop in trailer somewhere
+                    char* tzDelimNeg = memchr(dtSrc, '-', 20);              // strip UTC offset, safe stop in trailer somewhere
+                    lqLOG_VRBS("ltem_getUtcDateTime(): tzDelimPoz=%p, tzDelimNeg=%p\r\n", tzDelimPoz, tzDelimNeg);
 
-                    if (format == 'v' || format == 'V')                         // "VERBOSE" format
+                    vTaskDelay(100);
+
+                    if (tzDelimPoz)
                     {
-                        char* tzDelimPoz = memchr(dtSrc, '+', 20);              // strip UTC offset, safe stop in trailer somewhere
-                        char* tzDelimNeg = memchr(dtSrc, '-', 20);              // strip UTC offset, safe stop in trailer somewhere
-                        lqLOG_VRBS("ltem_getUtcDateTime(): tzDelimPoz=%p, tzDelimNeg=%p\r\n", tzDelimPoz, tzDelimNeg);
-
-                        vTaskDelay(100);
-
-                        if (tzDelimPoz)
-                        {
-                            lqLOG_VRBS("ltem_getUtcDateTime(): tzDelimPoz=%p, offset=%d\r\n", tzDelimPoz, tzDelimPoz - dtSrc);
-                            *tzDelimPoz = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
-                            strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
-                        }
-                        else if (tzDelimNeg)
-                        {
-                            lqLOG_VRBS("ltem_getUtcDateTime(): tzDelimNeg=%p, offset=%d\r\n", tzDelimNeg, tzDelimNeg - dtSrc);
-                            *tzDelimNeg = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
-                            strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
-                        }
-                        return &g_lqLTEM.statics.dateTimeBffr;
+                        lqLOG_VRBS("ltem_getUtcDateTime(): tzDelimPoz=%p, offset=%d\r\n", tzDelimPoz, tzDelimPoz - dtSrc);
+                        *tzDelimPoz = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
+                        strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
                     }
-
-                    /*  process 'i'= ISO8601 or 'c'= compact ISO (2-digit year and no timezone)
-                    */
-                    if (format != 'c' && format != 'C')                         // not 'c'ompact format: 4 digit year
+                    else if (tzDelimNeg)
                     {
-                        memcpy(destPtr, "20", 2);                               // convert to 4 digit year (ISO8601)
-                        destPtr += 2;
+                        lqLOG_VRBS("ltem_getUtcDateTime(): tzDelimNeg=%p, offset=%d\r\n", tzDelimNeg, tzDelimNeg - dtSrc);
+                        *tzDelimNeg = '\0';                                 // verbose displays local time, use ltem_getLocalTimezoneOffset() to get TZ
+                        strcpy(destPtr, dtSrc);                             // safe c-string strcpy to dateTime
                     }
-                    memcpy(destPtr, dtSrc, 2);                                  // 2-digit year
-                    lqLOG_VRBS("ltem_getUtcDateTime(): post-year: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                    return &g_lqLTEM.statics.dateTimeBffr;
+                }
 
+                /*  process 'i'= ISO8601 or 'c'= compact ISO (2-digit year and no timezone)
+                */
+                if (format != 'c' && format != 'C')                         // not 'c'ompact format: 4 digit year
+                {
+                    memcpy(destPtr, "20", 2);                               // convert to 4 digit year (ISO8601)
                     destPtr += 2;
-                    memcpy(destPtr, dtSrc + 3, 2);                              // month
+                }
+                memcpy(destPtr, dtSrc, 2);                                  // 2-digit year
+                lqLOG_VRBS("ltem_getUtcDateTime(): post-year: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
-                    lqLOG_VRBS("ltem_getUtcDateTime(): post-month: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                destPtr += 2;
+                memcpy(destPtr, dtSrc + 3, 2);                              // month
 
-                    destPtr += 2;
-                    memcpy(destPtr, dtSrc + 6, 2);                              // day
+                lqLOG_VRBS("ltem_getUtcDateTime(): post-month: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
-                    lqLOG_VRBS("ltem_getUtcDateTime(): post-day: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                destPtr += 2;
+                memcpy(destPtr, dtSrc + 6, 2);                              // day
 
-                    destPtr += 2;
-                    *destPtr = 'T';                                             // delimiter
-                    destPtr += 1;
+                lqLOG_VRBS("ltem_getUtcDateTime(): post-day: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
-                    lqLOG_VRBS("ltem_getUtcDateTime(): post-T: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                destPtr += 2;
+                *destPtr = 'T';                                             // delimiter
+                destPtr += 1;
 
-                    memcpy(destPtr, dtSrc + 9, 2);                              // hours
-                    destPtr += 2;
+                lqLOG_VRBS("ltem_getUtcDateTime(): post-T: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
-                    lqLOG_VRBS("ltem_getUtcDateTime(): post-hours: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                memcpy(destPtr, dtSrc + 9, 2);                              // hours
+                destPtr += 2;
 
-                    memcpy(destPtr, dtSrc + 12, 2);                       // minutes
-                    destPtr += 2;
+                lqLOG_VRBS("ltem_getUtcDateTime(): post-hours: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
-                    lqLOG_VRBS("ltem_getUtcDateTime(): post-minutes: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                memcpy(destPtr, dtSrc + 12, 2);                       // minutes
+                destPtr += 2;
 
-                    memcpy(destPtr, dtSrc + 15, 2);                       // seconds
-                    destPtr += 2;
+                lqLOG_VRBS("ltem_getUtcDateTime(): post-minutes: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
 
-                    lqLOG_VRBS("ltem_getUtcDateTime(): post-seconds: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+                memcpy(destPtr, dtSrc + 15, 2);                       // seconds
+                destPtr += 2;
 
-                    if (format != 'c' && format != 'C')                 // not 'c'ompact format: include time zone offset
-                    {
-                        strcat(destPtr, "Z");
-                    }
-               }
+                lqLOG_VRBS("ltem_getUtcDateTime(): post-seconds: %s, len=%d\r\n", dtDbg, strlen(dtDbg));
+
+                if (format != 'c' && format != 'C')                 // not 'c'ompact format: include time zone offset
+                {
+                    strcat(destPtr, "Z");
+                }
             }
         }
     }
@@ -495,23 +493,20 @@ int8_t ltem_getLocalTimezoneOffset(bool precise)
     char dateTime[30] = {0};
     char *dtSrc;
 
-    if (atcmd_tryInvoke("AT+CCLK?"))
+    if (IS_SUCCESS(atcmd_dispatch("AT+CCLK?")))
     {
-        if (IS_SUCCESS(atcmd_awaitResult()))
+        if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)     // tolerate preceeding EOL
         {
-            if ((dtSrc = memchr(atcmd_getResponse(), '"', 12)) != NULL)        // tolerate preceeding EOL
+            dtSrc++;
+            if (*dtSrc != '8')                                          // test for not initialized date/time, stardtSrc with 80 (aka 1980)
             {
-                dtSrc++;
-                if (*dtSrc != '8')                                             // test for not initialized date/time, stardtSrc with 80 (aka 1980)
+                char* tzDelim = memchr(dtSrc, '-', 20);                 // strip UTC offset, safe stop in trailer somewhere
+                if (tzDelim != NULL)                                    // found expected - delimeter before TZ offset
                 {
-                    char* tzDelim = memchr(dtSrc, '-', 20);                    // strip UTC offset, safe stop in trailer somewhere
-                    if (tzDelim != NULL)                                    // found expected - delimeter before TZ offset
-                    {
-                        if (precise)
-                            return strtol(tzDelim, NULL, 10);               // BGx reports 15min TZ offsets (supports 30, 45 minutes TZ offset regions)
-                        else
-                            return strtol(tzDelim, NULL, 10) / 4;           // BGx reports 15min TZ offsets (supports 30, 45 minutes TZ offset regions)
-                    }
+                    if (precise)
+                        return strtol(tzDelim, NULL, 10);               // Module reports 15min TZ offsets (supports 30, 45 minutes TZ offset regions)
+                    else
+                        return strtol(tzDelim, NULL, 10) / 4;
                 }
             }
         }
@@ -525,67 +520,57 @@ int8_t ltem_getLocalTimezoneOffset(bool precise)
  */
 modemInfo_t* ltem_getModemInfo()
 {
-    if (atcmd_awaitLock(atcmd__defaultTimeout))
+    if (g_lqLTEM.modemInfo->imei[0] == 0)
     {
-        if (g_lqLTEM.modemInfo->imei[0] == 0)
+        if (IS_SUCCESS(atcmd_dispatch("AT+GSN")))
+            strncpy(g_lqLTEM.modemInfo->imei, atcmd_getResponse(), ntwk__imeiSz);
+    }
+
+    if (g_lqLTEM.modemInfo->fwver[0] == 0)
+    {
+        if (IS_SUCCESS(atcmd_dispatch("AT+QGMR")))
         {
-            atcmd_invokeReuseLock("AT+GSN");
-            if (atcmd_awaitResult() == resultCode__success)
+            char *eol;
+            if ((eol = strstr(atcmd_getResponse(), "\r\n")) != NULL)
             {
-                strncpy(g_lqLTEM.modemInfo->imei, atcmd_getResponse(), ntwk__imeiSz);
+                uint8_t sz = eol - atcmd_getResponse();
+                memcpy(g_lqLTEM.modemInfo->fwver, atcmd_getResponse(), MIN(sz, ntwk__dvcFwVerSz));
             }
         }
+    }
 
-        if (g_lqLTEM.modemInfo->fwver[0] == 0)
+    if (g_lqLTEM.modemInfo->mfg[0] == 0)
+    {
+        if (IS_SUCCESS(atcmd_dispatch("ATI")))
         {
-            atcmd_invokeReuseLock("AT+QGMR");
-            if (atcmd_awaitResult() == resultCode__success)
+            char* response = atcmd_getResponse();
+            char* eol = strchr(response, '\r');
+            memcpy(g_lqLTEM.modemInfo->mfg, response, eol - response);
+
+            response = eol + 2;
+            eol = strchr(response, '\r');
+            memcpy(g_lqLTEM.modemInfo->model, response, eol - response);
+
+            response = eol + 2;
+            eol = strchr(response, ':');
+            response = eol + 2;
+            eol = strchr(response, '\r');
+            memcpy(g_lqLTEM.modemInfo->fwver, response, eol - response);
+        }
+    }
+
+    if (g_lqLTEM.modemInfo->iccid[0] == 0)
+    {
+        atcmd_ovrrdParser(S__iccidCompleteParser);
+        if (IS_SUCCESS(atcmd_dispatch("AT+ICCID")))
+        {
+            char* delimAt;
+            char* responseAt = atcmd_getResponse();
+            if (strlen(responseAt) && (delimAt = memchr(responseAt, '\r', strlen(responseAt))))
             {
-                char *eol;
-                if ((eol = strstr(atcmd_getResponse(), "\r\n")) != NULL)
-                {
-                    uint8_t sz = eol - atcmd_getResponse();
-                    memcpy(g_lqLTEM.modemInfo->fwver, atcmd_getResponse(), MIN(sz, ntwk__dvcFwVerSz));
-                }
+                memcpy(g_lqLTEM.modemInfo->iccid, responseAt, MIN(delimAt - responseAt, ntwk__iccidSz));
             }
         }
-
-        if (g_lqLTEM.modemInfo->mfg[0] == 0)
-        {
-            atcmd_invokeReuseLock("ATI");
-            if (atcmd_awaitResult() == resultCode__success)
-            {
-                char* response = atcmd_getResponse();
-                char* eol = strchr(response, '\r');
-                memcpy(g_lqLTEM.modemInfo->mfg, response, eol - response);
-
-                response = eol + 2;
-                eol = strchr(response, '\r');
-                memcpy(g_lqLTEM.modemInfo->model, response, eol - response);
-
-                response = eol + 2;
-                eol = strchr(response, ':');
-                response = eol + 2;
-                eol = strchr(response, '\r');
-                memcpy(g_lqLTEM.modemInfo->fwver, response, eol - response);
-            }
-        }
-
-        if (g_lqLTEM.modemInfo->iccid[0] == 0)
-        {
-            atcmd_invokeReuseLock("AT+ICCID");
-            atcmd_ovrrdParser(S__iccidCompleteParser);
-            if (IS_SUCCESS(atcmd_awaitResult()))
-            {
-                char* delimAt;
-                char* responseAt = atcmd_getResponse();
-                if (strlen(responseAt) && (delimAt = memchr(responseAt, '\r', strlen(responseAt))))
-                {
-                    memcpy(g_lqLTEM.modemInfo->iccid, responseAt, MIN(delimAt - responseAt, ntwk__iccidSz));
-                }
-            }
-        }
-        atcmd_close();
     }
     return g_lqLTEM.modemInfo;
 }
@@ -597,13 +582,9 @@ modemInfo_t* ltem_getModemInfo()
 bool ltem_isSimReady()
 {
     bool cpinState = false;
-    if (atcmd_tryInvoke("AT+CPIN?"))
+    if (IS_SUCCESS(atcmd_dispatch("AT+CPIN?")))
     {
-        if (atcmd_awaitResult() == resultCode__success)
-        {
-            cpinState = strstr(atcmd_getResponse(), "+CPIN: READY") != NULL;
-        }
-        atcmd_close();
+        cpinState = strstr(atcmd_getResponse(), "+CPIN: READY") != NULL;
     }
     return strlen(g_lqLTEM.modemInfo->iccid) > 0 && cpinState;
 }
@@ -645,7 +626,20 @@ deviceState_t ltem_getDeviceState()
 
 
 /**
- *	@brief Test for responsive and initialized BGx.
+ * @brief Restore module non-volatile memory back to factory settings.
+ * @note Do NOT use frequently, restoring NV is not a normal operation! 
+ */
+void ltem_restoreFactoryNV()
+{
+    /* Stephen.Li-Q 
+     * "Generally , AT+QCFG=“nvrestore”,0 is recommended , instead of AT+QPRTPARA=3"
+     */
+    atcmd_dispatch("AT+QCFG=\"nvrestore\",0");
+}
+
+
+/**
+ *	@brief Test for responsive and initialized module.
  */
 bool ltem_ping()
 {
@@ -673,22 +667,20 @@ void ltem_eventMgr()
         {
             /* Invoke each stream's URC handler (if stream has one), it will service or return with a cancelled if not handled
             */
+            resultCode_t serviceRslt;
             for (size_t i = 0; i < ltem__streamCnt; i++)                                    // potential URC in rxBffr, see if a data handler will service
             {
                 // NOTE: only MQTT and SCKT (sockets) are asynchronous and have URC handlers currently
 
-                resultCode_t serviceRslt;
                 if (g_lqLTEM.streams[i] != NULL &&  g_lqLTEM.streams[i]->urcHndlr != NULL)  // URC event handler in this stream, offer the data to the handler
                 {
                     serviceRslt = g_lqLTEM.streams[i]->urcHndlr();
+                    if (serviceRslt == resultCode__success)                                 // serviced, exit search for handler
+                        break;
                 }
-                if (serviceRslt == resultCode__cancelled)                                   // not serviced, continue looking
-                {
-                    continue;
-                }
-                break;                                                                      // service attempted (might have errored), so this event is over
             }
-            S__ltemUrcHandler();                                                            // always invoke system level URC validation/service
+            if (serviceRslt == resultCode__success)                                         // serviced, not a global event
+                S__ltemUrcHandler();                                                        // always invoke system level URC validation/service if not stream URC
         }
     }
     lqLOG_VRBS("(ltem_eventMgr) Exiting\r\n");
@@ -842,22 +834,21 @@ static void S__ltemUrcHandler()
 
     if (BBFFR_ISFOUND(bbffr_find(rxBffr, "+Q", 0, 0, false)))                   // Quectel URC prefix
     {
-        lqLOG_INFO("Quectel URC received\r\n");
+        lqLOG_INFO("(S__ltemUrcHandler) Quectel URC received\r\n");
 
         /* PDP (packet network) deactivation/close
         ------------------------------------------------------------------------------------------- */
-        if (bbffr_find(rxBffr, "+QIURC: \"pdpdeact\"", 0, 0, true) >= 0)
+        if (BBFFR_ISFOUND(bbffr_find(rxBffr, "+QIURC: \"pdpdeact\"", 0, 0, true)))
         {
-            lqLOG_INFO("PDP deactivation reported\r\n");
+            lqLOG_INFO("(S__ltemUrcHandler) PDP deactivation reported\r\n");
+            lqLOG_VRBS("(S__ltemUrcHandler) streams ptrArray @ %p\r\n", g_lqLTEM.streams);
 
-            if (!ntwk_awaitOperator(0))                                             // update network operator
+            for (size_t i = 0; i < dataCntxt__cnt; i++)
             {
-                for (size_t i = 0; i < dataCntxt__cnt; i++)                      // future close streams
+                if (g_lqLTEM.streams[i] && g_lqLTEM.streams[i]->closeStreamCB)
                 {
-                    if (g_lqLTEM.streams[i]->closeStreamCB)
-                    {
-                        g_lqLTEM.streams[i]->closeStreamCB(i);
-                    }
+                    lqLOG_VRBS("(S__ltemUrcHandler) streams (%d) @ %p CB: %p\r\n", i, g_lqLTEM.streams[i], g_lqLTEM.streams[i]->closeStreamCB);
+                    (*g_lqLTEM.streams[i]->closeStreamCB)(i);
                 }
             }
         }
@@ -865,7 +856,7 @@ static void S__ltemUrcHandler()
 
     else if (BBFFR_ISFOUND(bbffr_find(rxBffr, "+C", 0, 0, false)))              // CCITT URC prefixes
     {
-        lqLOG_INFO("CCITT URC received\r\n");
+        lqLOG_INFO("(S__ltemUrcHandler) CCITT URC received\r\n");
     }
 }
 

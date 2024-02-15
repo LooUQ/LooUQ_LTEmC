@@ -67,12 +67,8 @@ Also add information on how to contact you by electronic and paper mail.
  */
 resultCode_t gnss_on()
 {
-    if (atcmd_tryInvoke("AT+QGPS=1"))
-    {
-        atcmd_ovrrdTimeout(SEC_TO_MS(2));
-        return atcmd_awaitResult();
-    }
-    return resultCode__conflict;
+    atcmd_ovrrdDCmpltTimeout(SEC_TO_MS(2));
+    return atcmd_dispatch("AT+QGPS=1");
 }
 
 
@@ -81,11 +77,7 @@ resultCode_t gnss_on()
  */
 resultCode_t gnss_off()
 {
-    if (atcmd_tryInvoke("AT+QGPSEND"))
-    {
-        return atcmd_awaitResult();
-    }
-    return resultCode__conflict;
+    return atcmd_dispatch("AT+QGPSEND");
 }
 
 
@@ -99,13 +91,12 @@ gnssLocation_t gnss_getLocation()
     gnssResult.statusCode = resultCode__internalError;
 
     // atcmd_ovrrdParser(gnssLocCompleteParser);
-    atcmd_ovrrdTimeout(SEC_TO_MS(2));
+    atcmd_ovrrdDCmpltTimeout(SEC_TO_MS(2));
     atcmd_configParser("+QGPSLOC: ", true, ",", GNSS_LOC_EXPECTED_TOKENCOUNT, "OK\r\n", 0);
 
-    if (atcmd_tryInvoke("AT+QGPSLOC=2"))
+    RSLT;
+    if (IS_SUCCESS_RSLT(atcmd_dispatch("AT+QGPSLOC=2")))
     {
-        resultCode_t rslt = atcmd_awaitResult();
-
         gnssResult.statusCode = (rslt == 516) ? resultCode__gone : rslt;                    // translate "No fix" to gone
         if (rslt != resultCode__success)
             return gnssResult;                                                              // return on failure, continue to parse on success

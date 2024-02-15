@@ -1,8 +1,40 @@
+/** ***************************************************************************
+  @file ltemc-04-atcmd.ino
+  @brief ATCMD processor example for LooUQ LTEm series modems with LTEmC.
 
-#define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
-#define ENABLE_ASSERT
-//#include <lqdiag.h>
+  @author Greg Terrell, LooUQ Incorporated
+
+  \loouq
+-------------------------------------------------------------------------------
+
+LooUQ-LTEmC // Example/test application for using LooUQ LTEm series cellular modems.
+Copyright (C) 2017-2023 LooUQ Incorporated
+
+Copyright <YEAR> <COPYRIGHT HOLDER>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of  
+this software and associated documentation files (the “Software”), to deal in the 
+Software without restriction, including without limitation the rights to use, copy, 
+modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+and to permit persons to whom the Software is furnished to do so, subject to the 
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies 
+or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT 
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF 
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE 
+OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+**************************************************************************** */
+
+#include <lq-embed.h>
+#define lqLOG_LEVEL lqLOGLEVEL_DBG
+//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
+//#define LQ_SRCFILE "INO"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+
 
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
@@ -14,17 +46,9 @@
     // #define HOST_FEATHER_LTEM3F
 #endif
 
-// #define PERIOD_FROM_SECONDS(period)  (period * 1000)
-// #define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
-// #define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
-
-
-#include <ltemc-internal.h>
-
-
 // LTEmC Includes
 #include <ltemc.h>
-
+#include <ltemc-internal.h>
 
 // test controls
 bBuffer_t* rxBffrPtr;
@@ -38,12 +62,15 @@ resultCode_t rslt;
 
 void setup() 
 {
-    #ifdef DIAGPRINT_SERIAL
+    #if defined(lqLOG_SERIAL)
         Serial.begin(115200);
-        delay(5000);                // just give it some time
+        delay(5000);                                            // just give it some time
     #endif
-    DPRINT(PRNT_RED,"\n\n*** ltemc-04-atcmd started ***\n\n");
+
+    lqDelay(10);
+    lqLOG_NOTICE("\n\n*** ltemc-04-atcmd started ***\n\n");
     randomSeed(analogRead(0));
+
     // lqDiag_setNotifyCallback(appEvntNotify);                 // configure LTEMC ASSERTS to callback into application
 
     ltem_create(ltem_pinConfig, NULL, appEvntNotify);           // create LTEmC modem
@@ -75,36 +102,26 @@ void loop()
         char cmdStr[] = "ATI";
         // char cmdStr[] = "AT+CPIN?";
         // char cmdStr[] = "AT+QCCID";
-        DPRINT(PRNT_DEFAULT, "Invoking cmd: %s \r\n", cmdStr);
+        lqLOG_DBG(lqcDEFAULT, "Invoking cmd: %s \r\n", cmdStr);
 
-        if (atcmd_tryInvoke(cmdStr))
+        resultCode_t rslt = atcmd_dispatch(cmdStr);
+        if (IS_SUCCESS(rslt))
         {
-            resultCode_t atResult = atcmd_awaitResult();
-            
-                char *response = atcmd_getRawResponse();
-                DPRINT(PRNT_INFO, "Got %d chars\r", strlen(response));
-                DPRINT(PRNT_WHITE, "Resp:");
-                DPRINT(PRNT_CYAN, "%s\r", response);
-                                                                                                // test response v. expected 
-                char *validResponse = "\r\nQuectel\r\nBG";                                      // near beginning (depends on BGx echo)
-                if (!strstr(response, validResponse))
-                    indicateFailure("Expected cmd response missing... failed."); 
-
-            if (atResult != resultCode__success)                                                // statusCode == 200 (similar to HTTP codes)
-            {
-                DPRINT(PRNT_ERROR, "atResult=%d \r", atResult);
-                // indicateFailure("Unexpected command response... failed."); 
-                indicateFailure("Invalid BGx response");
-            }
-
-            /* atcmd_close();       Not needed here since tryInvokeDefaults(). 
-                                    With options and manual lock, required when done with response to close action and release action lock */
+            char *response = atcmd_getRawResponse();
+            lqLOG_DBG(lqcINFO, "Got %d chars\r", strlen(response));
+            lqLOG_DBG(lqcWHITE, "Resp:");
+            lqLOG_DBG(lqcCYAN, "%s\r", response);
+                                                                                            // test response v. expected 
+            char *validResponse = "\r\nQuectel\r\nBG";                                      // near beginning (depends on BGx echo)
+            if (!strstr(response, validResponse))
+                indicateFailure("Expected cmd response missing... failed."); 
         }
         else
-            DPRINT(PRNT_WARN, "Unable to get action lock.\r");
-
-
-        DPRINT(0,"Loop=%d \n\n", loopCnt);
+        {
+            lqLOG_DBG(lqcERROR, "atResult=%d \r", rslt);
+            indicateFailure("Invalid BGx response");
+        }
+        lqLOG_INFO("Loop=%d \n\n", loopCnt);
      }
 }
 
@@ -115,20 +132,20 @@ void loop()
 void appEvntNotify(appEvent_t eventType, const char *notifyMsg)
 {
     if (eventType == appEvent_fault_assertFailed)
-        DPRINT(PRNT_ERROR, "LTEmC-HardFault: %s\r", notifyMsg);
+        lqLOG_DBG(lqcERROR, "LTEmC-HardFault: %s\r", notifyMsg);
     else 
-        DPRINT(PRNT_WHITE, "LTEmC Info: %s\r", notifyMsg);
+        lqLOG_DBG(lqcWHITE, "LTEmC Info: %s\r", notifyMsg);
     return;
 }
 
 
 void indicateFailure(char failureMsg[])
 {
-	DPRINT(PRNT_ERROR, "\r\n** %s \r", failureMsg);
-    DPRINT(PRNT_ERROR, "** Test Assertion Failed. \r");
+	lqLOG_DBG(lqcERROR, "\r\n** %s \r", failureMsg);
+    lqLOG_DBG(lqcERROR, "** Test Assertion Failed. \r");
 
     #if 1
-    DPRINT(PRNT_ERROR, "** Halting Execution \r\n");
+    lqLOG_DBG(lqcERROR, "** Halting Execution \r\n");
     bool halt = true;
     while (halt)
     {
@@ -165,11 +182,11 @@ void startLTEm()
     // {
     //     if (IOP_awaitAppReady())
     //     {
-    //         DPRINT(PRNT_INFO, "AppRdy recv'd\r\n");
+    //         lqLOG_DBG(lqINFO, "AppRdy recv'd\r\n");
     //     }
     // }
     // else
-    //     DPRINT(PRNT_dYELLOW, "AppRdy assumed\r\n");
+    //     lqLOG_DBG(lqDARKYELLOW, "AppRdy assumed\r\n");
     // SC16IS7xx_enableIrqMode();
     // IOP_attachIrq();
 }

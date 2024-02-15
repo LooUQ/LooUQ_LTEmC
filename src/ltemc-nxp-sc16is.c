@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-nxp-sc16is.c
   @brief UART control and transfer functions/services.
 
   @author Greg Terrell/Jensen Miller, LooUQ Incorporated
@@ -36,10 +36,6 @@ Also add information on how to contact you by electronic and paper mail.
 #define LOG_LEVEL lqLOGLEVEL_DBG
 //#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
 #define LQ_SRCFILE "NXP"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
-
-// #define ENABLE_DIAGPRINT                    // expand DIAGPRINT into debug output
-// #define ENABLE_DIAGPRINT_VERBOSE            // expand DIAGPRINT and DIAGPRINT_V into debug output
-#define ENABLE_ASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-platform.h"
@@ -154,7 +150,7 @@ bool SC16IS7xx_awaitReady()
             return true;
         }
         pDelay(10);
-        DPRINT(0, "_awaitReady() try: %d\r\n", i + 2);
+        lqLOG_VRBS("_awaitReady() try: %d\r\n", i + 2);
     }
     return false;
 }

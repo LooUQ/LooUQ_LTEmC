@@ -259,7 +259,7 @@ void http_closeHeaders(httpRequest_t* httpReqst);
  * @param httpReqst The request to operate on.
  * @param contentLength The length value to set in header.
  */
-void http_updateContentLength(httpRequest_t* httpReqst, uint16_t contentLength);
+void http_updateContentLength(httpRequest_t* httpReqst, uint32_t contentLength);
 
 
 /**

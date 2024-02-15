@@ -274,6 +274,7 @@ ltemRfPriorityState_gnssLoaded = 4          // GNSS in loaded state
 */
 typedef struct modemSettings_tag
 {
+    uint8_t pdpContextId;
     char scanSequence[PSZ(ntwk__scanSeqSz)];
     ntwkScanMode_t scanMode;
     ntwkIotMode_t iotMode;
@@ -368,7 +369,7 @@ typedef resultCode_t (*dataHndlr_func)(void * ctrl);                            
 typedef void (*appRcvr_func)(uint16_t streamId, const char *fileData, uint16_t dataSz);     // Generic app receive callback with simple context/data/dataSize
 
 typedef resultCode_t (*urcEvntHndlr_func)();                                                // URC detection and processing, invoked by event manager
-typedef void (*closeStream_func)(uint16_t streamId);                                        // Stream close processing (if applicable)
+typedef void (*closeStream_func)(uint8_t streamId);                                         // Stream close processing (if applicable)
 
 
 typedef struct streamCtrl_tag
@@ -416,13 +417,14 @@ typedef struct iop_tag
 enum atcmd__constants
 {
     atcmd__noTimeoutChange = 0,
+    atcmd__dRdyTimeoutDefault = 2500,               // milliseconds to wait for exclusive access to atcmd dispatch ready
     // atcmd__defaultTimeout = 800,
-    atcmd__defaultTimeout = 3000,                   
+    atcmd__dCmpltTimeoutDefault = 1000,             // milliseconds to wait (default) for atcmd dispatch to complete
 
     atcmd__setLockModeManual = 0,
     atcmd__setLockModeAuto = 1,
 
-    atcmd__cmdBufferSz = 448,                       // prev=120, mqtt(Azure) connect=384, new=512 for universal cmd coverage, data mode to us dynamic TX bffr switching
+    atcmd__cmdBufferSz = 384,                       // prev=120, mqtt(Azure) connect=384, new=512 for universal cmd coverage, data mode to us dynamic TX bffr switching
     atcmd__respBufferSz = 128,
     atcmd__respTokenSz = 64,
 
@@ -445,9 +447,13 @@ typedef enum cmdParseRslt_tag
     cmdParseRslt_countShort = 0x02,
     cmdParseRslt_moduleError = 0x04,
     cmdParseRslt_timeoutError = 0x08,
+    //cmdParseRslt_reserved = 0x10,
+    //cmdParseRslt_reserved = 0x20,
+    cmdParseRslt_generalError = 0x40,
 
-    cmdParseRslt_success = 0x40,
-    cmdParseRslt_error = 0x80,
+    cmdParseRslt_errorMask = 0x7F,
+    cmdParseRslt_complete = 0x80
+
 } cmdParseRslt_t;
 
 
@@ -501,7 +507,10 @@ typedef struct atcmd_tag
 {
     char cmdStr[atcmd__cmdBufferSz];                    // AT command string to be passed to the BGx module.
 
-    uint32_t timeout;                                   // Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
+    bool dispatchReady;                                 // True: no command is in-flight and blocking next action
+    uint32_t dRdyTimeout;                               // Number of MS to wait for exclusive access for dispatch ready
+    uint32_t dCmpltTimeout;                             // Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
+    // uint32_t timeout;                                   // Timout in milliseconds for the command, defaults to 300mS. BGx documentation indicates cmds with longer timeout.
     bool isOpenLocked;                                  // True if the command is still open, AT commands are single threaded and this blocks a new cmd initiation.
     bool autoLock;                                      // last invoke was auto and should be closed automatically on complete
     uint32_t invokedAt;                                 // Tick value at the command invocation, used for timeout detection.
@@ -526,12 +535,12 @@ typedef struct atcmd_tag
 /** 
  *  \brief Result structure returned from a action request (await or get).
 */
-typedef struct atcmdResult_tag
-{
-    resultCode_t statusCode;                    // The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
-    char *response;                             // The char c-string containing the full response from the BGx.
-    uint16_t responseCode;                      // Numeric response value from many "status" action parsers (suffixed with _rc)
-} atcmdResult_t;
+// typedef struct atcmdResult_tag
+// {
+//     resultCode_t statusCode;                    // The HTML style status code, indicates the sucess or failure (type) for the command's invocation.
+//     char *response;                             // The char c-string containing the full response from the BGx.
+//     uint16_t responseCode;                      // Numeric response value from many "status" action parsers (suffixed with _rc)
+// } atcmdResult_t;
 
 
 /* SSL/TLS Module Type Definitions

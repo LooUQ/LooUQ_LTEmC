@@ -64,69 +64,49 @@ void file_setAppReceiver(appRcvr_func fileReceiver)
  */
 resultCode_t file_getFSInfo(filesysInfo_t * fsInfo)
 {
-    resultCode_t rslt;
-    char *workPtr;
-
-    if (!atcmd_awaitLock(atcmd__defaultTimeout))
-        return resultCode__conflict;                                    // failed to get lock
-
+    RSLT;
     do
     {
         // first get file system info
-        atcmd_invokeReuseLock("AT+QFLDS=\"UFS\"");
-        rslt = atcmd_awaitResult();
-        if (rslt != resultCode__success)
-        {
+        if (IS_NOTSUCCESS(atcmd_dispatch("AT+QFLDS=\"UFS\"")))
             break;
-        }
+
         // parse response >>  +QFLDS: <freesize>,<total_size>
-        workPtr = atcmd_getResponse() + file__dataOffset_info;    // skip past +QFLDS: 
+        char * workPtr = atcmd_getResponse() + file__dataOffset_info;           // skip past +QFLDS: 
         fsInfo->freeSz = strtol(workPtr, &workPtr, 10);  
-        fsInfo->totalSz = strtol(++workPtr, &workPtr, 10);      // incr past comma, then grab total fileSystem size
+        fsInfo->totalSz = strtol(++workPtr, &workPtr, 10);                      // incr past comma, then grab total fileSystem size
 
         // now get file collection info
-        atcmd_invokeReuseLock("AT+QFLDS");
-        rslt = atcmd_awaitResult();
-        if (rslt != resultCode__success)
-        {
+        if (IS_NOTSUCCESS(atcmd_dispatch("AT+QFLDS")))
             break;
-        }
+
         // parse response
         // +QFLDS: <freesize>,<total_size>
-        workPtr = atcmd_getResponse() + file__dataOffset_info;    // skip past +QFLDS: 
+        workPtr = atcmd_getResponse() + file__dataOffset_info;                  // skip past +QFLDS: 
         fsInfo->filesSz = strtol(workPtr, &workPtr, 10);  
-        fsInfo->filesCnt = strtol(++workPtr, &workPtr, 10);     // incr past comma, then grab total fileSystem size
+        fsInfo->filesCnt = strtol(++workPtr, &workPtr, 10);                     // incr past comma, then grab total fileSystem size
     } while (0);
-    
-    atcmd_close();
     return rslt;
 }
 
 
 resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
 {
-    resultCode_t rslt;
+    RSLT;
     do
     {
-        if (!atcmd_awaitLock(atcmd__defaultTimeout))
-        {
-            rslt = resultCode__conflict;                                    // failed to get lock
-            break;
-        }
-
         if (strlen(filename) == 0)
         {
             fileList->namePattern[0] = '*';
             fileList->namePattern[1] = '\0';
-            atcmd_invokeReuseLock("AT+QFLST ");
+            rslt = atcmd_dispatch("AT+QFLST ");
         }
         else
         {
             memset(fileList->namePattern, 0, sizeof(fileList->namePattern));
             strncpy(fileList->namePattern, filename, MIN(strlen(filename), file__filenameSz));
-            atcmd_invokeReuseLock("AT+QFLST=\"%s\"", fileList->namePattern);
+            rslt = atcmd_dispatch("AT+QFLST=\"%s\"", fileList->namePattern);
         }
-        rslt = atcmd_awaitResult();
         if (rslt != resultCode__success)
         {
             if (strstr(atcmd_getRawResponse(), "+CME ERROR: 417"))
@@ -153,8 +133,6 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
             }
         }
     } while (0);
-
-    atcmd_close();
     return rslt;
 }
 
@@ -162,18 +140,11 @@ resultCode_t file_getFilelist(fileListResult_t *fileList, const char* filename)
 resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* fileHandle)
 {
     ASSERT(strlen(filename) > 0);                                           // assert user provided a filename
-    resultCode_t rslt;
-    char *workPtr;
 
+    RSLT;
     do
     {
-        if (!atcmd_tryInvoke("AT+QFOPEN=\"%s\",%d", filename, openMode))
-        {
-            return resultCode__conflict;
-        }
-        
-        rslt = atcmd_awaitResult();
-        if (rslt != resultCode__success)
+        if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QFOPEN=\"%s\",%d", filename, openMode)))
         {
             if (rslt >= resultCode__extendedCodesBase)
             {
@@ -186,12 +157,10 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
             break;
         }
         // parse response >> +QFOPEN: <filehandle>
-        workPtr = atcmd_getResponse() + file__dataOffset_open;
+        char * workPtr = atcmd_getResponse() + file__dataOffset_open;
         *fileHandle = strtol(workPtr, NULL, 10);
         break;
     } while (0);
-
-    atcmd_close();
     return rslt;
 }
 
@@ -201,34 +170,26 @@ resultCode_t file_open(const char* filename, fileOpenMode_t openMode, uint16_t* 
  */
 resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
 {
-    resultCode_t rslt;
-
-    if (atcmd_tryInvoke("AT+QFOPEN? "))
+    RSLT;
+    atcmd_ovrrdDCmpltTimeout(SEC_TO_MS(2));
+    if (IS_SUCCESS_RSLT(atcmd_dispatch("AT+QFOPEN? ")))
     {
-        char* workPtr;
-        char* eolPtr;
-        memset(fileInfo, 0, fileInfoSz);                            // init for c-str behavior
+        memset(fileInfo, 0, fileInfoSz);
 
-        atcmd_ovrrdTimeout(SEC_TO_MS(2));
-        rslt = atcmd_awaitResult();
-        if (IS_SUCCESS(rslt))
+        char * workPtr = atcmd_getResponse();
+        while (memcmp(workPtr, "+QFOPEN: ", file__dataOffset_open) == 0)
         {
-            workPtr = atcmd_getResponse();                          // ptr to response
-            while (memcmp(workPtr, "+QFOPEN: ", file__dataOffset_open) == 0)
-            {
-                workPtr += file__dataOffset_open;
-                eolPtr = strchr(workPtr, '\r');
-                memcpy(fileInfo, workPtr, eolPtr - workPtr);
-                fileInfo += eolPtr - workPtr;
-                *fileInfo = '\r';
-                fileInfo++;
-                workPtr = eolPtr + 2;
-            }
-            return resultCode__success;
+            workPtr += file__dataOffset_open;
+            char * eolPtr = strchr(workPtr, '\r');
+            memcpy(fileInfo, workPtr, eolPtr - workPtr);
+            fileInfo += eolPtr - workPtr;
+            *fileInfo = '\r';
+            fileInfo++;
+            workPtr = eolPtr + 2;
         }
-        return rslt;
+        return resultCode__success;
     }
-    return resultCode__conflict;
+    return rslt;
 }
 
 
@@ -237,11 +198,7 @@ resultCode_t file_getOpenFiles(char *fileInfo, uint16_t fileInfoSz)
  */
 resultCode_t file_close(uint16_t fileHandle)
 {
-    if (atcmd_tryInvoke("AT+QFCLOSE=%d", fileHandle))
-    {
-        return atcmd_awaitResult();
-    }
-    return resultCode__conflict;
+    return atcmd_dispatch("AT+QFCLOSE=%d", fileHandle);
 }
 
 
@@ -283,56 +240,50 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
     g_lqLTEM.fileCtrl->fileHandle = fileHandle;
     DPRINT_V(0, "(file_read) dataMode configured fHandle=%d\r\n", g_lqLTEM.fileCtrl->fileHandle);
 
-    bool invoked = false;
+    RSLT;
     if (readSz > 0)
-        invoked = atcmd_tryInvoke("AT+QFREAD=%d,%d", fileHandle, requestSz);
+        rslt = atcmd_dispatch("AT+QFREAD=%d,%d", fileHandle, requestSz);
     else
-        invoked = atcmd_tryInvoke("AT+QFREAD=%d", fileHandle);
+        rslt = atcmd_dispatch("AT+QFREAD=%d", fileHandle);
 
-    if (!invoked)
-        return resultCode__locked;
-
-    resultCode_t rslt = atcmd_awaitResult();
-    DPRINT_V(0, "(file_read) await rslt=%d\r\n", rslt);
+    lqLOG_VRBS("(file_read) cmd rslt=%d\r\n", rslt);
 
     if (rslt == resultCode__success)
     {
-        DPRINT_V(0, "(file_read) requestSz=%d, readSz=%d\r\n", requestSz, *readSz);
+        lqLOG_VRBS("(file_read) requestSz=%d, readSz=%d\r\n", requestSz, *readSz);
 
         *readSz = g_lqLTEM.atcmd->dataMode.rxDataSz;
         if (*readSz < requestSz)
             rslt = resultCode__partialContent;                                       // content returned, less than requested
     }
     else 
+    {
         *readSz = 0;
+        return resultCode__locked;
+    }
     return rslt;
 }
 
 
 resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz, fileWriteResult_t *writeResult)
 {
-    resultCode_t rslt;
-    // char *workPtr;
-
-    if (!atcmd_awaitLock(atcmd__defaultTimeout))
-        return resultCode__conflict;                                                            // failed to get lock
-
+    RSLT;
     do
     {
         atcmd_configDataMode(0, "CONNECT\r\n", atcmd_txHndlrDefault, writeData, writeSz, NULL, false);
-        atcmd_invokeReuseLock("AT+QFWRITE=%d,%d,1", fileHandle, writeSz);
-        atcmd_ovrrdTimeout(SEC_TO_MS(2));
-        rslt = atcmd_awaitResult();
-
-        char* resultTrailer = strchr(atcmd_getRawResponse(), '+');
-        if (memcmp(resultTrailer, "+QFWRITE: ", 10) == 0)
+        atcmd_ovrrdDCmpltTimeout(SEC_TO_MS(2));
+        if (IS_SUCCESS(atcmd_dispatch("AT+QFWRITE=%d,%d,1", fileHandle, writeSz)))
         {
-            writeResult->writtenSz = strtol(resultTrailer + 10, &resultTrailer, 10);
-            writeResult->fileSz = strtol(++resultTrailer, NULL, 10);
-            rslt = resultCode__success;
+            char* resultTrailer = strchr(atcmd_getRawResponse(), '+');
+            if (memcmp(resultTrailer, "+QFWRITE: ", 10) == 0)
+            {
+                writeResult->writtenSz = strtol(resultTrailer + 10, &resultTrailer, 10);
+                writeResult->fileSz = strtol(++resultTrailer, NULL, 10);
+                rslt = resultCode__success;
+            }
         }
     } while (0);
-    atcmd_close();
+
     return rslt;
 }
 
@@ -342,27 +293,16 @@ resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t wri
  */
 resultCode_t file_seek(uint16_t fileHandle, uint32_t offset, fileSeekMode_t seekFrom)
 {
-    if (atcmd_tryInvoke("AT+QFSEEK=%d,%d,%d", fileHandle, offset, seekFrom))
-    {
-        return atcmd_awaitResult();
-    }
-    return resultCode__conflict;
+    return atcmd_dispatch("AT+QFSEEK=%d,%d,%d", fileHandle, offset, seekFrom);
 }
 
 
 resultCode_t file_getPosition(uint16_t fileHandle, uint32_t* filePtr)
 {
-    resultCode_t rslt;
-    char *workPtr;
-
-    if (atcmd_tryInvoke("AT+QFPOSITION=%d", fileHandle))
+    RSLT;
+    if (IS_SUCCESS_RSLT(atcmd_dispatch("AT+QFPOSITION=%d", fileHandle)))
     {
-        rslt = atcmd_awaitResult();
-        if (rslt != resultCode__success)
-            return rslt;
-
-        // parse response
-        workPtr = atcmd_getResponse() + file__dataOffset_pos;           // skip past preamble 
+        char * workPtr = atcmd_getResponse() + file__dataOffset_pos;           // skip past preamble 
         *filePtr = strtol(workPtr, NULL, 10);
     }
     return rslt;
@@ -374,11 +314,7 @@ resultCode_t file_getPosition(uint16_t fileHandle, uint32_t* filePtr)
  */
 resultCode_t file_truncate(uint16_t fileHandle)
 {
-    if (atcmd_tryInvokeAdv("AT+QFTUCAT=%d", fileHandle))
-    {
-        return atcmd_awaitResult();
-    }
-    return resultCode__conflict;
+    return atcmd_dispatch("AT+QFTUCAT=%d", fileHandle);
 }
 
 
@@ -387,11 +323,7 @@ resultCode_t file_truncate(uint16_t fileHandle)
  */
 resultCode_t file_delete(const char* filename)
 {
-    if (atcmd_tryInvoke("AT+QFDEL=\"%s\"", filename))
-    {
-        return atcmd_awaitResult();
-    }
-    return resultCode__conflict;
+    return atcmd_dispatch("AT+QFDEL=\"%s\"", filename);
 }
 
 

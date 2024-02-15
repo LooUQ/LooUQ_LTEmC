@@ -37,19 +37,6 @@ Also add information on how to contact you by electronic and paper mail.
 #include "ltemc-gpio.h"
 
 
-// private local declarations
-static resultCode_t S__adcValueParser(const char *response, char **endptr);
-static resultCode_t S__ioValueParser(const char *response, char **endptr);
-
-
-/*  GPIO functions are accessed via a single AT command
- *  >> AT+QCFG="gpio",<mode>,<pin>[,[<dir>,<pull>,<drv>]/[<val>][,<save>]]
- *  ADC functions are accessed via 
- *  >> AT+QADC=<port>
- *  BG95&BG77&BG600L Series QCFG AT Commands Manual
- */
-
-
 /**
  *	@brief Read valule of ADC interface.
  */
@@ -58,19 +45,17 @@ resultCode_t gpio_adcRead(uint8_t portNumber, uint16_t* analogValue)
     ASSERT(portNumber > 0 && portNumber <= adc__BG77__maxPin);
     ASSERT_W(portNumber > 0 && portNumber <= adc__LTEM3F__maxPin, "Bad port");
 
-    if (atcmd_tryInvoke("AT+QADC=%d", portNumber))
+    atcmd_configParser("+QADC: ", true, ",", 1, "\r\n", 0);
+
+    if (IS_SUCCESS(atcmd_dispatch("AT+QADC=%d", portNumber)))
     {
-        if (atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__adcValueParser) == resultCode__success)
+        if (memcmp(atcmd_getResponse(), "+QADC: 1", 8) == 0)
         {
-            if (memcmp(atcmd_getResponse(), "+QADC: 1", 8) == 0)
-            {
-                *analogValue = atcmd_getValue();
-                return resultCode__success;
-            }
-            return resultCode__badRequest;
+            *analogValue = atcmd_getValue();
+            return resultCode__success;
         }
     }
-    return resultCode__conflict;
+    return resultCode__badRequest;
 }
 
 
@@ -82,25 +67,16 @@ resultCode_t gpio_configPort(uint8_t portNumber, gpioDirection_t direction, gpio
     ASSERT(portNumber > 0 && portNumber <= gpio__BG77__maxPin);
     ASSERT_W(portNumber > 0 && portNumber <= gpio__LTEM3F__maxPin, "Bad port");
 
-    bool invoked;
+    RSLT;
     if (direction == gpioDirection_input)
-        invoked = atcmd_tryInvoke("AT+QCFG=\"gpio\",1,%d,0,%d,%d", portNumber, pullType, pullDriveCurrent);
+        rslt = atcmd_dispatch("AT+QCFG=\"gpio\",1,%d,0,%d,%d", portNumber, pullType, pullDriveCurrent);
     else
-        invoked = atcmd_tryInvoke("AT+QCFG=\"gpio\",1,%d,1", portNumber);
+        rslt = atcmd_dispatch("AT+QCFG=\"gpio\",1,%d,1", portNumber);
 
-    if (invoked)
-    {
-        resultCode_t rslt = atcmd_awaitResult();
-        if (rslt == resultCode__success)
-        {
-            return resultCode__success;
-        }
-        else
-        {
-            return resultCode__badRequest;
-        }
-    }
-    return resultCode__conflict;
+    if (IS_SUCCESS(rslt))
+        return resultCode__success;
+
+    return resultCode__badRequest;
 }
 
 
@@ -112,15 +88,13 @@ resultCode_t gpio_read(uint8_t portNumber, bool* pinValue)
     ASSERT(portNumber > 0 && portNumber <= gpio__BG77__maxPin);
     ASSERT_W(portNumber > 0 && portNumber <= gpio__LTEM3F__maxPin, "Bad port");
 
-    if (atcmd_tryInvoke("AT+QCFG=\"gpio\",2,%d", portNumber))
+    atcmd_configParser("+QCFG: \"gpio\",", true, ",", 1, "\r\n", 0);
+    if (IS_SUCCESS(atcmd_dispatch("AT+QCFG=\"gpio\",2,%d", portNumber)))
     {
-        if (atcmd_awaitResultWithOptions(atcmd__defaultTimeout, S__ioValueParser) == resultCode__success)
-        {
-            *pinValue = atcmd_getValue();
-            return resultCode__success;
-        }
+        *pinValue = atcmd_getValue();
+        return resultCode__success;
     }
-    return resultCode__conflict;
+    return resultCode__badRequest;
 }
 
 
@@ -132,30 +106,5 @@ resultCode_t gpio_write(uint8_t portNumber, bool pinValue)
     ASSERT(portNumber > 0 && portNumber <= gpio__BG77__maxPin);
     ASSERT_W(portNumber > 0 && portNumber <= gpio__LTEM3F__maxPin, "Bad port");
 
-    if (atcmd_tryInvoke("AT+QCFG=\"gpio\",3,%d/%d", portNumber, pinValue))
-    {
-        if (atcmd_awaitResult() == resultCode__success)
-        {
-            return resultCode__success;
-        }
-    }
-    return resultCode__conflict;
-}
-
-
-
-/* Static local functions
- * --------------------------------------------------------------------------------------------- */
-
-static resultCode_t S__adcValueParser(const char *response, char **endptr)
-{
-    cmdParseRslt_t parseRslt = atcmd_stdResponseParser("+QADC: ", true, ",", 1, 0, "\r\n", 0);
-    return parseRslt;
-}
-
-
-static resultCode_t S__ioValueParser(const char *response, char **endptr)
-{
-    cmdParseRslt_t parseRslt = atcmd_stdResponseParser("+QCFG: \"gpio\",", true, ",", 1, 0, "\r\n", 0);
-    return parseRslt;
+    return atcmd_dispatch("AT+QCFG=\"gpio\",3,%d/%d", portNumber, pinValue);
 }

@@ -39,29 +39,22 @@ Also add information on how to contact you by electronic and paper mail.
 
 bool tls_configure(uint8_t dataCntxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
 {
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, version))                   // set SSL/TLS version
+    RSLT;
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, version)))                  // set SSL/TLS version
     {
-        if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
-            return false;
+        return false;
     }
-
-
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", dataCntxt, cipherSuite))            // set cipher suite
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", dataCntxt, cipherSuite)))           // set cipher suite
     {
-        if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
-            return false;
+        return false;
     }
-
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", dataCntxt, certExpirationCheck))  // set certificate expiration check
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", dataCntxt, certExpirationCheck))) // set certificate expiration check
     {
-        if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
-            return false;
+        return false;
     }
-
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"seclevel\",%d,%d", dataCntxt, securityLevel))               // set security level, aka what is checked
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"seclevel\",%d,%d", dataCntxt, securityLevel)))              // set security level, aka what is checked
     {
-        if (atcmd_awaitResult() != resultCode__success)                                         // return on failure, continue on success
-            return false;
+        return false;
     }
 
     return true;
@@ -83,35 +76,24 @@ void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t ciphe
 }
 
 
-tlsOptions_t tlsGetOptions(uint8_t dataCntxt)
-{
-    tlsOptions_t result = {0};
-
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d", (uint8_t)dataCntxt))    // get SSL\TLS version
-    {   
-        if (atcmd_awaitResult() == resultCode__success)
-        {
-            DPRINT(PRNT_DEFAULT, "%s", atcmd_getLastResponse());
-            // strncpy(result.version, atResult.response);
-        }
-        atcmd_close();
-    }
-    return result;
-}
+// tlsOptions_t tlsGetOptions(uint8_t dataCntxt)
+// {
+//     tlsOptions_t tlsOptions = {0};
+//     RSLT;
+//     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sslversion\",%d", (uint8_t)dataCntxt)))     // get SSL\TLS version
+//     {
+//         lqLOG_WARN("(tlsGetOptions) options: %s", atcmd_getLastResponse());
+//     }
+//     return tlsOptions;
+// }
 
 
 resultCode_t tls_enableSni(dataCntxt_t dataCntxt, bool enableSNI)
 {
-    resultCode_t rslt = resultCode__internalError;
-
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"sni\",%d,%d", dataCntxt, enableSNI))              // set SNI for TLS
+    RSLT;
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sni\",%d,%d", dataCntxt, enableSNI)))       // set SNI for TLS
     {   
-        if (atcmd_awaitResult() == resultCode__success)
-        {
-            DPRINT(PRNT_DEFAULT, "%s", atcmd_getResponse());
-            // strncpy(result.version, atResult.response);
-        }
-        atcmd_close();
+        lqLOG_WARN("(tls_enableSni) options: %s", atcmd_getLastResponse());
     }
     return rslt;
 }
@@ -122,34 +104,21 @@ resultCode_t tls_enableSni(dataCntxt_t dataCntxt, bool enableSNI)
  */
 bool tls_applySettings(dataCntxt_t dataCntxt, tlsCtrl_t* tlsCtrl)
 {
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, tlsCtrl->version))                    // set SSL/TLS version
-    {
-        if (atcmd_awaitResult() != resultCode__success)                                                     // return on failure, continue on success
-            return false;
-    }
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", dataCntxt, tlsCtrl->cipherSuite))             // set cipher suite
-    {
-        if (atcmd_awaitResult() != resultCode__success)                                                     // return on failure, continue on success
-            return false;
-    }
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", dataCntxt, tlsCtrl->certExpirationCheck))   // set certificate expiration check
-    {
-        if (atcmd_awaitResult() != resultCode__success)                                                     // return on failure, continue on success
-            return false;
-    }
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"seclevel\",%d,%d", dataCntxt, tlsCtrl->securityLevel))                // set security level, aka what is checked
-    {
-        if (atcmd_awaitResult() != resultCode__success)                                                     // return on failure, continue on success
-            return false;
-    }
+    RSLT;
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, tlsCtrl->version)))                     // set SSL/TLS version
+        return false;
 
-    if (atcmd_tryInvoke("AT+QSSLCFG=\"sni\",%d,%d", dataCntxt, tlsCtrl->sniEnabled))                         // set security level, aka what is checked
-    {
-        if (atcmd_awaitResult() != resultCode__success)                                                     // return on failure, continue on success
-            return false;
-    }
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", dataCntxt, tlsCtrl->cipherSuite)))              // set cipher suite
+        return false;
 
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", dataCntxt, tlsCtrl->certExpirationCheck)))    // set certificate expiration check
+        return false;
+
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"seclevel\",%d,%d", dataCntxt, tlsCtrl->securityLevel)))                 // set security level, aka what is checked
+        return false;
+
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sni\",%d,%d", dataCntxt, tlsCtrl->sniEnabled)))                         // set security level, aka what is checked
+        return false;
 
     return true;
-
 }

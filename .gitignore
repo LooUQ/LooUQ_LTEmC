@@ -19,3 +19,5 @@ _deps
 build/
 .vscode/
 
+## LooUQ local files
+credentials.txt 

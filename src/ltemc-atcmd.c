@@ -69,25 +69,41 @@ void atcmd_resetPreInvoke()
  */
 void atcmd_resetPostInvoke()
 {
-    g_lqLTEM.iop->txSrc = &g_lqLTEM.atcmd->cmdStr;                          // IOP pointer to current "talker"
+    g_lqLTEM.iop->txSrc = &g_lqLTEM.atcmd->cmdStr;                          // IOP pointer to current "talker" back to cmd dispatcher
     g_lqLTEM.iop->txPending = 0;
 
-    g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
+    g_lqLTEM.atcmd->dispatchReady = true;
+    g_lqLTEM.atcmd->dRdyTimeout = atcmd__dRdyTimeoutDefault;
+    g_lqLTEM.atcmd->dCmpltTimeout = atcmd__dCmpltTimeoutDefault;
     g_lqLTEM.atcmd->responseParserFunc = atcmd_defaultResponseParser;
     g_lqLTEM.atcmd->parserConfig.configSet = false;
 }
 
 
 /**
- * @brief Sets command timeout for next invocation of a BGx AT command. 
+ * @brief Sets command wait for exclusive timeout for next invocation of a module command. 
  */
-uint16_t atcmd_ovrrdTimeout(uint16_t newTimeout)
+uint32_t atcmd_ovrrdDRdyTimeout(uint32_t newTimeout)
 {
-    uint16_t oldTimeout = g_lqLTEM.atcmd->timeout;
+    uint32_t oldTimeout = g_lqLTEM.atcmd->dRdyTimeout;
     if (newTimeout > 0)
-        g_lqLTEM.atcmd->timeout = newTimeout;
+        g_lqLTEM.atcmd->dRdyTimeout = newTimeout;
     else
-        g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
+        g_lqLTEM.atcmd->dRdyTimeout = atcmd__dRdyTimeoutDefault;
+    return oldTimeout;
+}
+
+
+/**
+ * @brief Sets command execution timeout for next invocation of a module command. 
+ */
+uint32_t atcmd_ovrrdDCmpltTimeout(uint32_t newTimeout)
+{
+    uint32_t oldTimeout = g_lqLTEM.atcmd->dCmpltTimeout;
+    if (newTimeout > 0)
+        g_lqLTEM.atcmd->dCmpltTimeout = newTimeout;
+    else
+        g_lqLTEM.atcmd->dCmpltTimeout = atcmd__dCmpltTimeoutDefault;
     return oldTimeout;
 }
 
@@ -108,8 +124,10 @@ cmdResponseParser_func atcmd_ovrrdParser(cmdResponseParser_func newParser)
  */
 void atcmd_configParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, const char *finale, uint16_t lengthReqd)
 {
-    // parserConfig (parserConfig_t) struct holds settings
+    ASSERT(!preambleReqd || (preamble != NULL && preamble[0] != '\0'));
+    ASSERT(delimiters != NULL && delimiters[0] != '\0');
 
+    // parserConfig (parserConfig_t) struct holds settings
     g_lqLTEM.atcmd->parserConfig.configSet = true;
 
     strncpy(g_lqLTEM.atcmd->parserConfig.preamble, preamble, atcmd__parserConfigPreambleSz);
@@ -159,16 +177,19 @@ resultCode_t atcmd_dispatch(const char *cmdTemplate, ...)
     // if (g_lqLTEM.atcmd->isOpenLocked)
     //     return resultCode__locked;
 
-    if (!g_lqLTEM.atcmd->eventMgrInvoked)
+    uint32_t dRdyWaitStart = lqMillis();
+    do
     {
-        g_lqLTEM.atcmd->eventMgrInvoked = true;
-        ltem_eventMgr();
-        g_lqLTEM.atcmd->eventMgrInvoked = false;
-    }
+        if (IS_ELAPSED(dRdyWaitStart, g_lqLTEM.atcmd->dRdyTimeout))
+        {
+            return resultCode__gtwyTimeout;
+        }
+        lqDelay(100);                                                           // pause task, give access else where
 
-    atcmd_resetPreInvoke();                                                         // clear results props from ATCMD control structure
-    // g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto;                              // set automatic lock control mode
-    // char *cmdStr = g_lqLTEM.atcmd->cmdStr;
+    } while (!g_lqLTEM.atcmd->dispatchReady);                                   // wait for other task to release dispatcher
+
+    g_lqLTEM.atcmd->dispatchReady = false;                                      // then we take it here
+    atcmd_resetPreInvoke();                                                     // clear results props from ATCMD control structure
 
     va_list ap;
     va_start(ap, cmdTemplate);
@@ -182,18 +203,27 @@ resultCode_t atcmd_dispatch(const char *cmdTemplate, ...)
     {
         lqLOG_WARN("(atcmd_dispatch) debris cleaned from RX buffer\r\n");
     }
-    lqLOG_DBG(lqCYAN, "(atcmd_dispatch) cmd:%s\r\n", g_lqLTEM.atcmd->cmdStr);
+    lqLOG_DBG(lqCYAN, "(atcmd_dispatch) cmd(%d):%s", strlen(g_lqLTEM.atcmd->cmdStr), g_lqLTEM.atcmd->cmdStr);
+    lqLOG_DBG(lqCYAN, "\r\n");
     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
 
     /* await result phase
      ----------------------------------------- */
     resultCode_t rslt = resultCode__unknown; // resultCode_t result;
 
-    lqLOG_VRBS("(atcmd_dispatch) read result...\r\n");
+    lqLOG_VRBS("(atcmd_dispatch) reading result...\r\n");
     g_lqLTEM.atcmd->invokedAt = lqMillis();
+
     do
     {
-        lqLOG_VRBS("^");
+        if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) && !g_lqLTEM.atcmd->eventMgrInvoked)    // possible URC incoming
+        {
+            g_lqLTEM.atcmd->eventMgrInvoked = true;
+            ltem_eventMgr();
+            g_lqLTEM.atcmd->eventMgrInvoked = false;
+        }
+
+        lqLOG_VRBS("~");
         rslt = S__readResult();
         lqLOG_VRBS("-");
         if (g_lqLTEM.cancellationRequest)                                           // test for cancellation (RTOS or IRQ)
@@ -205,64 +235,64 @@ resultCode_t atcmd_dispatch(const char *cmdTemplate, ...)
     } while (rslt == resultCode__unknown);
 
     lqLOG_DBG(lqCYAN, "(atcmd_dispatch) resp:%s\r\n", atcmd_getRawResponse());
-    atcmd_resetPostInvoke();                                                        // cmd exec completed, reset next invoke options back to default values
+    atcmd_resetPostInvoke();                                                        // cmd completed, reset next invoke options back to default values
     return g_lqLTEM.atcmd->resultCode;
 }
 
 
-/**
- *	@brief Invokes a BGx AT command using default option values (automatic locking).
- */
-bool atcmd_tryInvoke(const char *cmdTemplate, ...)
-{
-    // if (g_lqLTEM.atcmd->isOpenLocked)
-    //     return false;
+// /**
+//  *	@brief Invokes a BGx AT command using default option values (automatic locking).
+//  */
+// bool atcmd_tryInvoke(const char *cmdTemplate, ...)
+// {
+//     // if (g_lqLTEM.atcmd->isOpenLocked)
+//     //     return false;
 
-    atcmd_resetPreInvoke();
-    // g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto;                              // set automatic lock control mode
+//     atcmd_resetPreInvoke();
+//     // g_lqLTEM.atcmd->autoLock = atcmd__setLockModeAuto;                              // set automatic lock control mode
 
-    // char *cmdStr = g_lqLTEM.atcmd->cmdStr;
-    va_list ap;
+//     // char *cmdStr = g_lqLTEM.atcmd->cmdStr;
+//     va_list ap;
 
-    va_start(ap, cmdTemplate);
-    vsnprintf(g_lqLTEM.atcmd->cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
-    strcat(g_lqLTEM.atcmd->cmdStr, "\r");
+//     va_start(ap, cmdTemplate);
+//     vsnprintf(g_lqLTEM.atcmd->cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
+//     strcat(g_lqLTEM.atcmd->cmdStr, "\r");
 
-    // if (!atcmd_awaitLock(g_lqLTEM.atcmd->timeout))                                    // attempt to acquire new atCmd lock for this instance
-    //     return false;
+//     // if (!atcmd_awaitLock(g_lqLTEM.atcmd->timeout))                                    // attempt to acquire new atCmd lock for this instance
+//     //     return false;
 
-    if (S__cleanRxBffr())
-        lqLOG_WARN("Debris cleaned from RX buffer\r\n");
+//     if (S__cleanRxBffr())
+//         lqLOG_WARN("Debris cleaned from RX buffer\r\n");
 
-    lqLOG_VRBS("(atcmd_tryInvoke) cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
-    IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
-    return true;
-}
+//     lqLOG_VRBS("(atcmd_tryInvoke) cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
+//     IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+//     return true;
+// }
 
 
-/**
- *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
- */
-void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
-{
-    // ASSERT(g_lqLTEM.atcmd->isOpenLocked); // function assumes re-use of existing lock
+// /**
+//  *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
+//  */
+// void atcmd_invokeReuseLock(const char *cmdTemplate, ...)
+// {
+//     // ASSERT(g_lqLTEM.atcmd->isOpenLocked); // function assumes re-use of existing lock
 
-    atcmd_resetPreInvoke();
-    g_lqLTEM.atcmd->autoLock = atcmd__setLockModeManual;
+//     atcmd_resetPreInvoke();
+//     g_lqLTEM.atcmd->autoLock = atcmd__setLockModeManual;
 
-    char *cmdStr = g_lqLTEM.atcmd->cmdStr;
-    va_list ap;
+//     char *cmdStr = g_lqLTEM.atcmd->cmdStr;
+//     va_list ap;
 
-    va_start(ap, cmdTemplate);
-    vsnprintf(cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
-    strcat(g_lqLTEM.atcmd->cmdStr, "\r");
+//     va_start(ap, cmdTemplate);
+//     vsnprintf(cmdStr, sizeof(g_lqLTEM.atcmd->cmdStr), cmdTemplate, ap);
+//     strcat(g_lqLTEM.atcmd->cmdStr, "\r");
 
-    if (S__cleanRxBffr())
-        lqLOG_WARN("(atcmd_invokeReuseLock) debris cleaned from RX buffer\r\n");
+//     if (S__cleanRxBffr())
+//         lqLOG_WARN("(atcmd_invokeReuseLock) debris cleaned from RX buffer\r\n");
 
-   lqLOG_VRBS("(atcmd_invokeReuseLock) cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
-   IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
-}
+//    lqLOG_VRBS("(atcmd_invokeReuseLock) cmd=%s\r\n", g_lqLTEM.atcmd->cmdStr);
+//    IOP_startTx(g_lqLTEM.atcmd->cmdStr, strlen(g_lqLTEM.atcmd->cmdStr));
+// }
 
 
 /**
@@ -275,31 +305,31 @@ void atcmd_close()
 }
 
 
-/**
- *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
- */
-resultCode_t atcmd_awaitResult()
-{
-    resultCode_t rslt = resultCode__unknown;                                    // resultCode_t result;
-    g_lqLTEM.atcmd->invokedAt = lqMillis();
-    do
-    {
-        rslt = S__readResult();
+// /**
+//  *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
+//  */
+// resultCode_t atcmd_awaitResult()
+// {
+//     resultCode_t rslt = resultCode__unknown;                                    // resultCode_t result;
+//     g_lqLTEM.atcmd->invokedAt = lqMillis();
+//     do
+//     {
+//         rslt = S__readResult();
 
-        if (g_lqLTEM.cancellationRequest)                                       // test for cancellation (RTOS or IRQ)
-        {
-            g_lqLTEM.atcmd->resultCode = resultCode__cancelled;
-            break;
-        }
-        lqDelay(50);                                                            // lqDelay() incorporates yield to give application processing opportunity
-    } while (rslt == resultCode__unknown);
+//         if (g_lqLTEM.cancellationRequest)                                       // test for cancellation (RTOS or IRQ)
+//         {
+//             g_lqLTEM.atcmd->resultCode = resultCode__cancelled;
+//             break;
+//         }
+//         lqDelay(50);                                                            // lqDelay() incorporates yield to give application processing opportunity
+//     } while (rslt == resultCode__unknown);
 
-    // reset options back to default values
-    g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
-    g_lqLTEM.atcmd->responseParserFunc = atcmd_defaultResponseParser;
-    g_lqLTEM.atcmd->parserConfig.configSet = false;
-    return g_lqLTEM.atcmd->resultCode;
-}
+//     // reset options back to default values
+//     g_lqLTEM.atcmd->timeout = atcmd__defaultTimeout;
+//     g_lqLTEM.atcmd->responseParserFunc = atcmd_defaultResponseParser;
+//     g_lqLTEM.atcmd->parserConfig.configSet = false;
+//     return g_lqLTEM.atcmd->resultCode;
+// }
 
 
 /**
@@ -321,7 +351,7 @@ resultCode_t atcmd_getResult()
 
 
 /**
- *	@brief Returns the string captured from the last command response; between pPreamble and pFinale (excludes both)
+ *	@brief Returns the string captured from the last command response; between preamble and finale (excludes both)
  */
 char* atcmd_getRawResponse()
 {
@@ -377,7 +407,7 @@ char * atcmd_getToken(uint8_t tokenIndx)
         lqLOG_VRBS("(atcmd_getToken) indx=%d returns:%s\r\n", tokenIndx, g_lqLTEM.atcmd->respToken);
         return g_lqLTEM.atcmd->respToken;
     }
-    lqLOG_WARN("(atcmd_getToken) Empty source/insufficient tokens\r\n");
+    lqLOG_INFO("(atcmd_getToken) Empty source/insufficient tokens\r\n");
     return "";
 }
 
@@ -496,19 +526,19 @@ static resultCode_t S__readResult()
                 g_lqLTEM.atcmd->dataMode.dmState = dmState_idle;                                    // dataMode completed, go back to _idle
                 if (dataRslt == resultCode__success)
                 {
-                    g_lqLTEM.atcmd->parserResult = cmdParseRslt_success;
+                    g_lqLTEM.atcmd->parserResult = cmdParseRslt_complete;
                     g_lqLTEM.atcmd->resultCode = dataRslt;
                     if (g_lqLTEM.atcmd->dataMode.runParserAfterDataMode)
                         g_lqLTEM.atcmd->parserResult = cmdParseRslt_pending;                        // revert to pending if specified
                 }
                 else if (dataRslt == resultCode__timeout)
                 {
-                    g_lqLTEM.atcmd->parserResult = cmdParseRslt_error & cmdParseRslt_timeoutError;
+                    g_lqLTEM.atcmd->parserResult = cmdParseRslt_complete | cmdParseRslt_timeoutError;
                     g_lqLTEM.atcmd->resultCode = resultCode__timeout;
                 }
                 else
                 {
-                    g_lqLTEM.atcmd->parserResult = cmdParseRslt_error;
+                    g_lqLTEM.atcmd->parserResult = cmdParseRslt_complete | cmdParseRslt_generalError;
                     g_lqLTEM.atcmd->resultCode = dataRslt;
                 }
             }
@@ -533,52 +563,53 @@ static resultCode_t S__readResult()
         }
     }
 
-    if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_error)                                          // check error bit
+    if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_errorMask)                                          // check error bits
     {
-        if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_moduleError)                                // BGx ERROR or CME/CMS
+        if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_moduleError)                                    // BGx ERROR or CME/CMS
         {
             char * cmError = atcmd_getToken(0);
             ASSERT(cmError);
             g_lqLTEM.atcmd->resultCode = resultCode__extendedCodesBase + strtol(cmError, NULL, 10);
         }
-        else if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_countShort)                            // did not find expected tokens
+        else if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_countShort)                                // did not find expected tokens
         {
             g_lqLTEM.atcmd->resultCode = resultCode__notFound;
         }
         else
         {
             lqLOG_ERROR("(S__readResult) pErr=%d, resp:%s\r\n", g_lqLTEM.atcmd->parserResult, g_lqLTEM.atcmd->rawResponse);
-            g_lqLTEM.atcmd->resultCode = resultCode__internalError;                                 // covering the unknown
+            g_lqLTEM.atcmd->resultCode = resultCode__internalError;                                     // covering the unknown
         }
-        atcmd_close();                                                                              // close action to release action lock on any error
+        atcmd_close();                                                                                  // close action to release action lock on any error
     }
 
-    if (g_lqLTEM.atcmd->parserResult == cmdParseRslt_pending)                                       // still pending, check for timeout error
+    if (g_lqLTEM.atcmd->parserResult == cmdParseRslt_pending)                                           // still pending, check for timeout error
     {
-        if (IS_ELAPSED(g_lqLTEM.atcmd->invokedAt, g_lqLTEM.atcmd->timeout))
+        if (IS_ELAPSED(g_lqLTEM.atcmd->invokedAt, g_lqLTEM.atcmd->dCmpltTimeout))
         {
             g_lqLTEM.atcmd->resultCode = resultCode__timeout;
-            g_lqLTEM.atcmd->isOpenLocked = false;                                                   // close action to release action lock
+            g_lqLTEM.atcmd->isOpenLocked = false;                                                       // close action to release action lock
             g_lqLTEM.atcmd->execDuration = lqMillis() - g_lqLTEM.atcmd->invokedAt;
 
-            if (ltem_getDeviceState() != deviceState_ready)                                         // if action timed-out, verify not a device wide failure
+            if (ltem_getDeviceState() != deviceState_ready)                                             // if action timed-out, verify not a device wide failure
             {
                 ltem_notifyApp(appEvent_fault_hardLogic, "LTEm Not Ready");
                 ltem_notifyApp(appEvent_fault_hardLogic, g_lqLTEM.atcmd->cmdStr);
             }
             else if (!SC16IS7xx_ping())
             {
-                ltem_notifyApp(appEvent_fault_softLogic, "LTEm SPI Fault");                         // UART bridge SPI not initialized correctly, IRQ not enabled
+                ltem_notifyApp(appEvent_fault_softLogic, "LTEm SPI Fault");                             // UART bridge SPI not initialized correctly, IRQ not enabled
             }
             return resultCode__timeout;
         }
         return resultCode__unknown;
     }
 
-    if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_success)                                        // success bit: parser completed with success (may have excessRecv warning)
+    if (g_lqLTEM.atcmd->parserResult & cmdParseRslt_complete &&
+        (g_lqLTEM.atcmd->parserResult & cmdParseRslt_errorMask) == 0)
     {
-        if (g_lqLTEM.atcmd->autoLock)                                                               // if the individual cmd is controlling lock state
-            g_lqLTEM.atcmd->isOpenLocked = false;                                                   // equivalent to atcmd_close()
+        if (g_lqLTEM.atcmd->autoLock)                                                                   // if the individual cmd is controlling lock state
+            g_lqLTEM.atcmd->isOpenLocked = false;                                                       // equivalent to atcmd_close()
         g_lqLTEM.atcmd->execDuration = lqMillis() - g_lqLTEM.atcmd->invokedAt;
         g_lqLTEM.atcmd->resultCode = resultCode__success;
         g_lqLTEM.metrics.cmdInvokes++;
@@ -668,61 +699,50 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 
     cmdParseRslt_t parseRslt = cmdParseRslt_pending;
 
-    ASSERT(!(preambleReqd && STREMPTY(pPreamble)));                             // if preamble required, cannot be empty
-    ASSERT(pPreamble != NULL && pDelimeters != NULL && pFinale != NULL);        // char params are not NULL, must be valid empty char arrays
-    ASSERT((!(tokensReqd || valueIndx) || strlen(pDelimeters) > 0));            // if tokens count or value return, need delimiter
-
-    uint8_t preambleLen = strlen(pPreamble);
+    uint8_t preambleLen = pPreamble == NULL ? 0 : strlen(pPreamble);
     uint8_t reqdPreambleLen = preambleReqd ? preambleLen : 0;
-    uint8_t finaleLen = strlen(pFinale);
+    uint8_t finaleLen = pFinale == NULL ? 0 : strlen(pFinale);
     uint16_t responseLen = strlen(g_lqLTEM.atcmd->rawResponse);
 
     // always look for error, short-circuit result if CME/CMS
     char *pErrorLoctn;
     if ((pErrorLoctn = strstr(g_lqLTEM.atcmd->rawResponse, "+CM")) || (pErrorLoctn = strstr(g_lqLTEM.atcmd->rawResponse, "ERROR")))
     {
-        return cmdParseRslt_error | cmdParseRslt_moduleError;
+        return cmdParseRslt_complete | cmdParseRslt_moduleError;
     }
 
     bool lengthSatisfied = responseLen >= lengthReqd &&
                            responseLen >= (reqdPreambleLen + finaleLen);
-    if (!lengthSatisfied)                                                       // still pending, haven't recv'd required cnt of chars
+    if (!lengthSatisfied)                                                               // still pending, haven't recv'd required cnt of chars
         return cmdParseRslt_pending;
 
     /* Response length has been satisfied (and no error detected).
      * Search response for preamble, finale, token count (tokensReqd/valueIndx)
      */
 
-    while (g_lqLTEM.atcmd->response[0] == '\r' || g_lqLTEM.atcmd->response[0] == '\n')
-    {
-        g_lqLTEM.atcmd->response++;                                             // skip past prefixing line terminators
-    }
+    while (g_lqLTEM.atcmd->response[0] < '!')                                           // skip past non-relevant characters
+        g_lqLTEM.atcmd->response++;          
 
     bool preambleSatisfied = false;
-    if (preambleLen) // if pPreamble provided
+    if (preambleLen)                                                                    // if pPreamble provided
     {
-        char *pPreambleLoctn = strstr(g_lqLTEM.atcmd->rawResponse, pPreamble);  // find it in response
+        char *pPreambleLoctn = strstr(g_lqLTEM.atcmd->rawResponse, pPreamble);          // find it in response
         if (pPreambleLoctn)
         {
             preambleSatisfied = true;
             g_lqLTEM.atcmd->preambleFound = true;
-            g_lqLTEM.atcmd->response = pPreambleLoctn + preambleLen;            // remove pPreamble from retResponse
+            g_lqLTEM.atcmd->response = pPreambleLoctn + preambleLen;                    // remove pPreamble from retResponse
         }
+        // else if (preambleReqd)
+        // {
+        //     if (responseLen >= preambleLen)
+        //         return cmdParseRslt_complete | cmdParseRslt_preambleMissing;         // require preamble missing, response is sufficient for match
+
+        //     return cmdParseRslt_pending;                                             // keep waiting on response
+        // }
         else if (preambleReqd)
         {
-            if (responseLen >= preambleLen)
-                return cmdParseRslt_error | cmdParseRslt_preambleMissing; // require preamble missing, response is sufficient for match
-
-            return cmdParseRslt_pending; // keep waiting on response
-        }
-        else  // !preambleReqd
-        {
-            if (strstr(g_lqLTEM.atcmd->rawResponse, pFinale))
-            {
-                preambleSatisfied = true;
-                g_lqLTEM.atcmd->preambleFound = false;
-                return cmdParseRslt_success;
-            }
+            return cmdParseRslt_pending;                                                // keep waiting on response
         }
     }
     else
@@ -768,8 +788,8 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
             // if (tokenCnt == valueIndx) // grab value, this is what is requested
             //     g_lqLTEM.atcmd->retValue = strtol(pTokenAt, NULL, 0);
 
-            pDelimeterAt = strpbrk(pTokenAt, pDelimeters);       // look for delimeter/next token
-            if (tokenCnt >= tokensReqd && tokenCnt >= valueIndx) // at/past required token = done
+            pDelimeterAt = strpbrk(pTokenAt, pDelimeters);                              // look for delimeter/next token
+            if (tokenCnt >= tokensReqd && tokenCnt >= valueIndx)                        // at/past required token = done
             {
                 tokenCntSatified = true;
                 break;
@@ -782,15 +802,15 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
         } while (pDelimeterAt);
 
         if (!tokenCntSatified)
-            parseRslt |= cmdParseRslt_error | cmdParseRslt_countShort; // set error and count short bits
+            parseRslt |= cmdParseRslt_complete | cmdParseRslt_countShort;               // set error and count short bits
     }
 
-    if (!(parseRslt & cmdParseRslt_error) && // check error bit
+    if (!(parseRslt & cmdParseRslt_errorMask) &&                                        // check error bits
         preambleSatisfied &&
         finaleSatisfied &&
-        tokenCntSatified) // and all component test conditions
+        tokenCntSatified)                                                               // and all component test conditions
     {
-        parseRslt |= cmdParseRslt_success; // no error, preserve possible warnings (excess recv, etc.)
+        parseRslt |= cmdParseRslt_complete;                                             // no error, preserve possible warnings (excess recv, etc.)
     }
     return parseRslt; // done
 }
@@ -803,25 +823,25 @@ resultCode_t atcmd_txHndlrDefault()
 {
     lqLOG_VRBS("(atcmd_txHndlrDefault) entered\r\n");
     uint8_t triggerSz = strlen(g_lqLTEM.atcmd->dataMode.trigger);
-    bbffr_skipTail(g_lqLTEM.iop->rxBffr, triggerSz);                                        // clear out recv'd trigger from RX bffr
+    bbffr_skipTail(g_lqLTEM.iop->rxBffr, triggerSz);                                    // clear out recv'd trigger from RX bffr
 
-    IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz);     // send of datamode content
+    IOP_startTx(g_lqLTEM.atcmd->dataMode.txDataLoc, g_lqLTEM.atcmd->dataMode.txDataSz); // send of datamode content
 
     uint32_t startTime = lqMillis();
-    while (lqMillis() - startTime < g_lqLTEM.atcmd->timeout)
+    while (lqMillis() - startTime < g_lqLTEM.atcmd->dCmpltTimeout)
     {
         uint16_t trlrIndx = bbffr_find(g_lqLTEM.iop->rxBffr, "OK", 0, 0, false);
         if (BBFFR_ISFOUND(trlrIndx))
         {
             bbffr_pop(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->rawResponse, trlrIndx);
-            bbffr_skipTail(g_lqLTEM.iop->rxBffr, OK_COMPLETED_LENGTH);                      // OK + line-end
+            bbffr_skipTail(g_lqLTEM.iop->rxBffr, OK_COMPLETED_LENGTH);                  // OK + line-end
             return resultCode__success;
         }
         trlrIndx = bbffr_find(g_lqLTEM.iop->rxBffr, "+CM", 0, 0, false);
         if (BBFFR_ISFOUND(trlrIndx))
         {
             bbffr_pop(g_lqLTEM.iop->rxBffr, g_lqLTEM.atcmd->rawResponse, trlrIndx);
-            bbffr_skipTail(g_lqLTEM.iop->rxBffr, CMx_COMPLETED_LENGTH);                     // +CM? ERROR: ### + line-end
+            bbffr_skipTail(g_lqLTEM.iop->rxBffr, CMx_COMPLETED_LENGTH);                 // +CM? ERROR: ### + line-end
             return resultCode__partialContent;
         }
         lqDelay(1);
@@ -846,14 +866,14 @@ resultCode_t atcmd_rxHndlrWithLength()
 
     } while (!BBFFR_ISFOUND(lengthEOLAt));
    
-    bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, lengthEOLAt + 2);                                              // pop data length and EOL from RX buffer
+    bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, lengthEOLAt + 2);                                      // pop data length and EOL from RX buffer
 
     lqLOG_VRBS("(_rxHndlrWithLength) wrkBffr (w/header)=%s\r\n", wrkBffr);
 
     uint8_t triggerSz = strnlen(g_lqLTEM.atcmd->dataMode.trigger, sizeof(g_lqLTEM.atcmd->dataMode.trigger));
     ASSERT(wrkBffr + triggerSz);
     uint16_t readLen = lq_strToInt(wrkBffr + triggerSz, NULL, 10);
-    g_lqLTEM.atcmd->dataMode.rxDataSz = readLen;                                                            // stash reported read length
+    g_lqLTEM.atcmd->dataMode.rxDataSz = readLen;                                                    // stash reported read length
     uint16_t streamId = g_lqLTEM.atcmd->dataMode.streamCtrl->dataCntxt;
     lqLOG_INFO("(atcmd_rxHndlrWithLength) streamId=%d readLen=%d\r\n",  streamId, readLen);
 
@@ -862,26 +882,26 @@ resultCode_t atcmd_rxHndlrWithLength()
     do
     {
         bffrOccupiedCnt = bbffr_getOccupied(g_lqLTEM.iop->rxBffr);
-        if (IS_ELAPSED(readStart, g_lqLTEM.atcmd->timeout))
+        if (IS_ELAPSED(readStart, g_lqLTEM.atcmd->dCmpltTimeout))
         {
-            g_lqLTEM.atcmd->dataMode.rxDataSz = 0;                                                          // report as failed read, length unknown
+            g_lqLTEM.atcmd->dataMode.rxDataSz = 0;                                                  // report as failed read, length unknown
             lqLOG_WARN("(atcmd_rxHndlrWithLength) bffr timeout: %d rcvd\r\n", bffrOccupiedCnt);
-            return resultCode__timeout;                                                                     // return timeout waiting for bffr fill
+            return resultCode__timeout;                                                             // return timeout waiting for bffr fill
         }
     } while (bffrOccupiedCnt < readLen + streams__contentLengthTrailerSz);
     
-    do                                                                                                      // *NOTE* depending on buffer wrap may take 2 ops
+    do                                                                                              // *NOTE* depending on buffer wrap may take 2 ops
     {
         char* streamPtr;
-        uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readLen);                       // get contiguous block size from rxBffr
+        uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readLen);               // get contiguous block size from rxBffr
         lqLOG_VRBS("(atcmd_rxHndlrWithLength) ptr=%p, bSz=%d, rSz=%d\r\n", streamPtr, blockSz, readLen);
         uint8_t streamId = g_lqLTEM.atcmd->dataMode.streamCtrl->dataCntxt;
-        (*g_lqLTEM.fileCtrl->appRecvDataCB)(streamId, streamPtr, blockSz);                                  // forward to application
-        bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                 // commit POP
+        (*g_lqLTEM.fileCtrl->appRecvDataCB)(streamId, streamPtr, blockSz);                          // forward to application
+        bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                         // commit POP
         readLen -= blockSz;
     } while (readLen > 0);
 
-    if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= streams__contentLengthTrailerSz)                         // cleanup, remove trailer
+    if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= streams__contentLengthTrailerSz)                 // cleanup, remove trailer
     {
         bbffr_skipTail(g_lqLTEM.iop->rxBffr, streams__contentLengthTrailerSz);
     }

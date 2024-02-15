@@ -25,13 +25,13 @@
  ******************************************************************************
  * Test HTTP(S) protocol client. 
  * 
- * The sketch is designed for debug output to observe results.
+ * The sketch is intended for debug output to go to a monitor window to see results.
  *****************************************************************************/
 
 #include <lq-embed.h>
 #define lqLOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERT                                   // ASSERT/_W enabled by default, can be disabled 
-#define ASSERT_ACTION_STOP 
+//#define DISABLE_ASSERT                                    // ASSERT/_W enabled by default, can be disabled 
+//#define ASSERT_ACTION_STOP                                // ASSERTS can be configured to stop at while(){}
 
 
 /* specify the pin configuration 
@@ -67,7 +67,7 @@ uint32_t lastCycle;
  * variable with: "httpCtrl_t *httpCtrl1 = &httpCtrl;"   */
 httpCtrl_t httpCtrlG;
 httpCtrl_t httpCtrlP;
-httpCtrl_t *httpCtrl;                           // used for common READ 
+httpCtrl_t *httpCtrl;                                                       // used for common READ 
 httpRequest_t noaaReqst;
 
 static char webPageBuf[1024];
@@ -78,9 +78,9 @@ uint16_t pageChars = 0;
 
 
 void setup() {
-    #if defined(DIAGPRINT_SERIAL) || defined(lqLOG_SERIAL)
+    #if defined(lqLOG_SERIAL)
         Serial.begin(115200);
-        delay(5000);            // just give it some time
+        delay(5000);                                                        // just give it some time
     #endif
 
     lqLOG_NOTICE("\r\nLTEmC-09 HTTP Examples\r\n");
@@ -125,14 +125,14 @@ void setup() {
     // // create a control for talking to the website
     http_initControl(&httpCtrlG, dataCntxt_0, httpRecvCB);                              // initialize local (internal) structures
     http_setConnection(&httpCtrlG, "https://api.weather.gov", 443);                     // set remote web host
-    lqLOG_DBG(lqDARKGREEN, "URL Host1=%s\r", httpCtrlG.hostUrl);
+    lqLOG_DBG(lqcDARKGREEN, "URL Host1=%s\r", httpCtrlG.hostUrl);
 
     // you can optionally setup a httpCtrl, EXAMPLE: httpCtrl *httpCtrl = &httpCtrl2
     // Below the &httpCtrl2 style is required since there is no "ptr" variable created (around line 65) to use here
 
     http_initControl(&httpCtrlP, dataCntxt_1, httpRecvCB);
     http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
-    lqLOG_DBG(lqDARKGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
+    lqLOG_DBG(lqcDARKGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
 
     char noaaReqstBffr[384];
     noaaReqst = http_createRequest(httpRequestType_GET, "https://api.weather.gov", "/points/44.7582,-85.6022", noaaReqstBffr, sizeof(noaaReqstBffr));
