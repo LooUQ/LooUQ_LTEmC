@@ -12,6 +12,9 @@ _deps
 
 ##	Visual Studio temporary files
 .vs/
+obj/
+bin/
+
 ##  LooUQ project files
 .project/
 
