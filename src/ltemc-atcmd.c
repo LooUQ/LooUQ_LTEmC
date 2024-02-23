@@ -28,16 +28,18 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERTS                                 // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "ATC"                                // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_DBG                                  ///< Logging detail level for this source file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "ATC"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include <stdarg.h>
 #include "ltemc-internal.h"
 
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-extern ltemDevice_t g_lqLTEM;
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))                         ///< Return the smaller of two numbers    
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))                         ///< Return the larger of two numbers
+
+extern ltemDevice_t g_lqLTEM;                                       ///< global LTEm instance
+
 
 /* Static Function Declarations
 ------------------------------------------------------------------------------------------------- */
@@ -122,7 +124,7 @@ cmdResponseParser_func atcmd_ovrrdParser(cmdResponseParser_func newParser)
 /**
  * @brief Configure default ATCMD response parser for a specific command response.
  */
-void atcmd_configParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, const char *finale, uint16_t lengthReqd)
+void atcmd_configParser(const char * preamble, bool preambleReqd, const char * delimiters, uint8_t tokensReqd, const char * finale, uint16_t lengthReqd)
 {
     ASSERT(!preambleReqd || (preamble != NULL && preamble[0] != '\0'));
     ASSERT(delimiters != NULL && delimiters[0] != '\0');
@@ -142,7 +144,7 @@ void atcmd_configParser(const char *preamble, bool preambleReqd, const char *del
 /**
  *	@brief Setup automatic data mode switch/servicing.
  */
-void atcmd_configDataMode(streamCtrl_t * streamCtrl, const char * trigger, dataHndlr_func dataHndlr, const char * dataPtr, uint16_t dataSz, appRcvr_func applRcvrCB, bool runParser)
+void atcmd_configDataMode(streamCtrl_t * streamCtrl, const char * trigger, dataHndlr_func dataHndlr, const char * txDataPtr, uint16_t txDataSz, appRcvr_func applRecvDataCB, bool runParser)
 {
     ASSERT(strlen(trigger) > 0); // verify 3rd party setup (stream)
     ASSERT(dataHndlr != NULL); //
@@ -153,14 +155,19 @@ void atcmd_configDataMode(streamCtrl_t * streamCtrl, const char * trigger, dataH
     g_lqLTEM.atcmd->dataMode.streamCtrl = streamCtrl;
     memcpy(g_lqLTEM.atcmd->dataMode.trigger, trigger, strlen(trigger));
     g_lqLTEM.atcmd->dataMode.dataHndlr = dataHndlr;
-    g_lqLTEM.atcmd->dataMode.txDataLoc = dataPtr;
-    g_lqLTEM.atcmd->dataMode.txDataSz = dataSz;
+    g_lqLTEM.atcmd->dataMode.txDataLoc = txDataPtr;
+    g_lqLTEM.atcmd->dataMode.txDataSz = txDataSz;
     // g_lqLTEM.atcmd->dataMode.rxDataSz = 0;                               // automatic from memset
-    g_lqLTEM.atcmd->dataMode.applRcvrCB = applRcvrCB;
+    g_lqLTEM.atcmd->dataMode.applRcvrCB = applRecvDataCB;
     g_lqLTEM.atcmd->dataMode.runParserAfterDataMode = runParser;
 }
 
 
+/**
+ * @brief Send EOT character
+ * 
+ * @param eotChar Character to send
+ */
 void atcmd_setDataModeEot(uint8_t eotChar)
 {
     g_lqLTEM.iop->txEot = (char)eotChar;
@@ -620,31 +627,29 @@ static resultCode_t S__readResult()
 #pragma endregion // LTEmC Internal Functions
 
 #pragma region Completion Parsers
+
 /* --------------------------------------------------------------------------------------------------------
  * Action command completion parsers
  * ----------------------------------------------------------------------------------------------------- */
 
-#define OK_COMPLETED_STRING "OK\r\n"
-#define OK_COMPLETED_LENGTH 4
-#define CMx_COMPLETED_LENGTH 17
-#define ERROR_COMPLETED_STRING "ERROR\r\n"
-#define ERROR_VALUE_OFFSET 7
-#define FAIL_COMPLETED_STRING "FAIL\r\n"
-#define FAIL_VALUE_OFFSET 6
-#define NOCARRIER_COMPLETED_STRING "NO CARRIER\r\n"
-#define NOCARRIER_VALUE_OFFSET 12
-#define CME_PREABLE "+CME ERROR:"
-#define CME_PREABLE_SZ 11
-
-// /**
-//  *	@brief Validate the response ends in a BGxx OK value.
-//  */
-// cmdParseRslt_t atcmd_okResponseParser()
-// {
-//     return atcmd_stdResponseParser("", false, "", 0, 0, "OK\r\n", 0);
-// }
+#define OK_COMPLETED_STRING "OK\r\n"                                ///< typical command response complete
+#define OK_COMPLETED_LENGTH 4                                       ///< OK completed length
+#define CMx_COMPLETED_LENGTH 17                                     ///< CMx error completed length
+#define ERROR_COMPLETED_STRING "ERROR\r\n"                          ///< Generic error completed length
+#define ERROR_VALUE_OFFSET 7                                        ///< Error value offset
+#define FAIL_COMPLETED_STRING "FAIL\r\n"                            ///< Fail response complete
+#define FAIL_VALUE_OFFSET 6                                         ///< Fail error value offset
+#define NOCARRIER_COMPLETED_STRING "NO CARRIER\r\n"                 ///< No carrier complete response
+#define NOCARRIER_VALUE_OFFSET 12                                   ///< No carrier value offset
+#define CME_PREABLE "+CME ERROR:"                                   ///< CME preamble
+#define CME_PREABLE_SZ 11                                           ///< CME preamble length
 
 
+/**
+ * @brief Wrapper to standard response parser to use parser config values
+ * 
+ * @return cmdParseRslt_t 
+ */
 cmdParseRslt_t atcmd_defaultResponseParser()
 {
     if (g_lqLTEM.atcmd->parserConfig.configSet)
@@ -654,12 +659,11 @@ cmdParseRslt_t atcmd_defaultResponseParser()
             g_lqLTEM.atcmd->parserConfig.preambleReqd, 
             g_lqLTEM.atcmd->parserConfig.delimiters,
             g_lqLTEM.atcmd->parserConfig.tokensReqd, 
-            0,
             g_lqLTEM.atcmd->parserConfig.finale,
             g_lqLTEM.atcmd->parserConfig.lengthReqd);
     }
     else
-        return atcmd_stdResponseParser("", false, "", 0, 0, "OK\r\n", 0);
+        return atcmd_stdResponseParser("", false, "", 0, OK_COMPLETED_STRING, 0);
 
 }
 
@@ -667,8 +671,7 @@ cmdParseRslt_t atcmd_defaultResponseParser()
 /**
  *	@brief Stardard atCmd response parser, flexible response pattern match and parse.
  */
-// cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, uint8_t valueIndx, const char *pFinale, uint16_t lengthReqd)
-cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd, const char *pDelimeters, uint8_t tokensReqd, uint8_t valueIndx, const char *pFinale, uint16_t lengthReqd)
+cmdParseRslt_t atcmd_stdResponseParser(const char * preamble, bool preambleReqd, const char * delimiters, uint8_t tokensReqd, const char * finale, uint16_t lengthReqd)
 {
     /* to be implemented when all parser wrappers are converted
     */
@@ -699,9 +702,9 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
 
     cmdParseRslt_t parseRslt = cmdParseRslt_pending;
 
-    uint8_t preambleLen = pPreamble == NULL ? 0 : strlen(pPreamble);
+    uint8_t preambleLen = preamble == NULL ? 0 : strlen(preamble);
     uint8_t reqdPreambleLen = preambleReqd ? preambleLen : 0;
-    uint8_t finaleLen = pFinale == NULL ? 0 : strlen(pFinale);
+    uint8_t finaleLen = finale == NULL ? 0 : strlen(finale);
     uint16_t responseLen = strlen(g_lqLTEM.atcmd->rawResponse);
 
     // always look for error, short-circuit result if CME/CMS
@@ -726,7 +729,7 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
     bool preambleSatisfied = false;
     if (preambleLen)                                                                    // if pPreamble provided
     {
-        char *pPreambleLoctn = strstr(g_lqLTEM.atcmd->rawResponse, pPreamble);          // find it in response
+        char *pPreambleLoctn = strstr(g_lqLTEM.atcmd->rawResponse, preamble);          // find it in response
         if (pPreambleLoctn)
         {
             preambleSatisfied = true;
@@ -761,11 +764,11 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
     bool finaleSatisfied = false;
     if (preambleSatisfied)
     {
-        if (STREMPTY(pFinale))
+        if (STREMPTY(finale))
             finaleSatisfied = true;
         else
         {
-            pFinaleLoctn = strstr(g_lqLTEM.atcmd->response, pFinale);
+            pFinaleLoctn = strstr(g_lqLTEM.atcmd->response, finale);
             if (pFinaleLoctn)
             {
                 finaleSatisfied = true;
@@ -777,29 +780,29 @@ cmdParseRslt_t atcmd_stdResponseParser(const char *pPreamble, bool preambleReqd,
     /*  Parse content between pPreamble/response start and pFinale for tokens (reqd cnt) and value extraction
      *  Only supporting one delimiter for now; support for optional delimeter list in future won't require API change
      */
-    bool tokenCntSatified = !(tokensReqd || valueIndx);
+    bool tokenCntSatified = !(tokensReqd);
     if (finaleSatisfied && !tokenCntSatified) // count tokens to service value return or validate required token count
     {
         tokenCnt = 1;
-        char *pDelimeterAt;
+        char *pDelimiterAt;
         char *pTokenAt = g_lqLTEM.atcmd->response;
         do
         {
             // if (tokenCnt == valueIndx) // grab value, this is what is requested
             //     g_lqLTEM.atcmd->retValue = strtol(pTokenAt, NULL, 0);
 
-            pDelimeterAt = strpbrk(pTokenAt, pDelimeters);                              // look for delimeter/next token
-            if (tokenCnt >= tokensReqd && tokenCnt >= valueIndx)                        // at/past required token = done
+            pDelimiterAt = strpbrk(pTokenAt, delimiters);                               // look for delimiter/next token
+            if (tokenCnt >= tokensReqd)                                                 // at/past required token = done
             {
                 tokenCntSatified = true;
                 break;
             }
-            if (pDelimeterAt)
+            if (pDelimiterAt)
             {
                 tokenCnt++;
-                pTokenAt = pDelimeterAt + 1;
+                pTokenAt = pDelimiterAt + 1;
             }
-        } while (pDelimeterAt);
+        } while (pDelimiterAt);
 
         if (!tokenCntSatified)
             parseRslt |= cmdParseRslt_complete | cmdParseRslt_countShort;               // set error and count short bits

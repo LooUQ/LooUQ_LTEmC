@@ -39,26 +39,30 @@ extern "C"
 
 #include "ltemc-types.h"
 
+/**
+ * @brief Context settings for TLS security
+ */
 typedef struct tlsCtrl_tag
 {
-    tlsVersion_t version;
-    tlsCipher_t cipherSuite;
-    tlsCertExpiration_t certExpirationCheck;
-    tlsSecurityLevel_t securityLevel;
-    bool sniEnabled;
+    tlsVersion_t version;                                   ///< (SSL)TLS version
+    tlsCipher_t cipher;                                     ///< Cipher suite available to TLS 
+    tlsCertExpiration_t certExpirationCheck;                ///< Should dataCntxt check for server certificate expiration 
+    tlsSecurityLevel_t securityLevel;                       ///< Designate what checks for SSL/TLS should complete to validate the server
+    bool sniEnabled;                                        ///< TLS uses SNI
 } tlsCtrl_t;
 
 
 /** 
  *  @brief Configure the TLS/SSL settings for a context
  *  @details The TLS/SSL context is loosely associated with the protocol context. This package maintains a 1-to-1 map for consistency.
+
  *  @param [in] contxt TLS/SSL context to configure
  *  @param [in] version TLS/SSL version: 0=SSL-3.0, 1=TLS-1.0, 2=TLS-1.1, 3=TLS-1.2, 4=ALL
- *  @param [in] cipherSuite Cipher suite to use for processing of crypto
+ *  @param [in] cipher Cipher suite to use for processing of crypto
  *  @param [in] certExpirationCheck Options for how the certificate's expiration information is processed
  *  @param [in] securityLevel Authentication mode: 0=no auth, 1=server auth, 2=server/client auth
  */
-bool tls_configure(uint8_t sckt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel);
+bool tls_configure(uint8_t contxt, tlsVersion_t version, tlsCipher_t cipher, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel);
 
 
 /** 
@@ -66,21 +70,22 @@ bool tls_configure(uint8_t sckt, tlsVersion_t version, tlsCipher_t cipherSuite, 
  *  @details The TLS/SSL context is loosely associated with the protocol context. LTEmC maintains a 1-to-1 map for consistency.
  *  @param [in] tlsCtrl Pointer to TLS/SSL control block to be configured
  *  @param [in] version TLS/SSL version: 0=SSL-3.0, 1=TLS-1.0, 2=TLS-1.1, 3=TLS-1.2, 4=ALL
- *  @param [in] cipherSuite Cipher suite to use for processing of crypto
+ *  @param [in] cipher Cipher suite to use for processing of crypto
  *  @param [in] certExpirationCheck Options for how the certificate's expiration information is processed
  *  @param [in] securityLevel Authentication mode: 0=no auth, 1=server auth, 2=server/client auth
  *  @param [in] sniEnabled Enable Server Name Indication in TLS handshake
  */
-void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel, bool sniEnabled);
+void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t cipher, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel, bool sniEnabled);
 
 
 /** 
  *  @brief Configure the TLS/SSL settings for a context
  *  @details The TLS/SSL context is loosely associated with the protocol context. LTEmC maintains a 1-to-1 map for consistency.
- *  @param [in] contxt TLS/SSL context to configure
+
+ *  @param [in] sckt TLS/SSL context to configure
  *  @return TLS options structure with the settings currently applied to the specified context
  */
-tlsOptions_t tlsGetOptions(uint8_t sckt);
+tlsCtrl_t tlsGetOptions(uint8_t sckt);
 
 
 /* Maintenance of customer trustd root (TR) certificates requires the file_ module functionality (under developement Q3-2021)
@@ -96,15 +101,17 @@ tlsOptions_t tlsGetOptions(uint8_t sckt);
 
 /** 
  *  @brief Configure the SNI (Server Name Indication) option for TLS/SSL (default is no SNI).
- *  @param [in] contxt TLS/SSL context to configure
- *  @param [in] turnSniOn If true, enable SNI in TLS handshake
+ * 
+ *  @param [in] dataCntxt TLS/SSL context to configure
+ *  @param [in] enableSNI If true, enable SNI in TLS handshake
  *  @return TLS options structure with the settings currently applied to the specified context
  */
-resultCode_t tls_enableSni(dataCntxt_t cntx, bool enableSNI);
+resultCode_t tls_enableSni(dataCntxt_t dataCntxt, bool enableSNI);
 
 
 /** 
  *  @brief Apply settings from a TLS/SSL control to a data context.
+ * 
  *  @param [in] contxt TLS/SSL context to configure
  *  @param [in] tlsCtrl Pointer to a TLS control structure
  *  @return True if application of settings is successful

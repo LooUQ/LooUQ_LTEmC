@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file ltem-tls.c
+  @file ltemc-tls.c
   @brief Modem protocol security (SSL/TLS) communication functions/services.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -29,47 +29,50 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_OFF
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "TLS"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_OFF                                  ///< Logging detail level for this source file.
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "TLS"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics lqASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-tls.h"
 
 
-bool tls_configure(uint8_t dataCntxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
-{
-    RSLT;
-    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, version)))                  // set SSL/TLS version
-    {
-        return false;
-    }
-    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", dataCntxt, cipherSuite)))           // set cipher suite
-    {
-        return false;
-    }
-    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", dataCntxt, certExpirationCheck))) // set certificate expiration check
-    {
-        return false;
-    }
-    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"seclevel\",%d,%d", dataCntxt, securityLevel)))              // set security level, aka what is checked
-    {
-        return false;
-    }
+// /**
+//  * @brief 
+//  */
+// bool tls_configure(uint8_t dataCntxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
+// {
+//     RSLT;
+//     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, version)))                  // set SSL/TLS version
+//     {
+//         return false;
+//     }
+//     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", dataCntxt, cipherSuite)))           // set cipher suite
+//     {
+//         return false;
+//     }
+//     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", dataCntxt, certExpirationCheck))) // set certificate expiration check
+//     {
+//         return false;
+//     }
+//     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"seclevel\",%d,%d", dataCntxt, securityLevel)))              // set security level, aka what is checked
+//     {
+//         return false;
+//     }
 
-    return true;
-}
+//     return true;
+// }
 
 
 /** 
  *  @brief Configure a TLS/SSL control block with current settings
  */
-void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel, bool sniEnabled)
+void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t cipher, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel, bool sniEnabled)
 {
     memset(tlsCtrl, 0, sizeof(tlsCtrl_t));
    
     tlsCtrl->version = version;
-    tlsCtrl->cipherSuite = cipherSuite;
+    tlsCtrl->cipher = cipher;
     tlsCtrl->certExpirationCheck = certExpirationCheck;
     tlsCtrl->securityLevel = securityLevel;
     tlsCtrl->sniEnabled = sniEnabled;
@@ -87,7 +90,9 @@ void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t ciphe
 //     return tlsOptions;
 // }
 
-
+/**
+ * @brief Enable SNI verification for this data context
+ */
 resultCode_t tls_enableSni(dataCntxt_t dataCntxt, bool enableSNI)
 {
     RSLT;
@@ -108,7 +113,7 @@ bool tls_applySettings(dataCntxt_t dataCntxt, tlsCtrl_t* tlsCtrl)
     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, tlsCtrl->version)))                     // set SSL/TLS version
         return false;
 
-    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", dataCntxt, tlsCtrl->cipherSuite)))              // set cipher suite
+    if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", dataCntxt, tlsCtrl->cipher)))                   // set cipher suite
         return false;
 
     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", dataCntxt, tlsCtrl->certExpirationCheck)))    // set certificate expiration check

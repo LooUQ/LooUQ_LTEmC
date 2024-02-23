@@ -100,7 +100,6 @@ cmdResponseParser_func atcmd_ovrrdParser(cmdResponseParser_func newParser);
  *  @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
  *  @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
  *  @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
- *  @return Parse status result
  */
 void atcmd_configParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, const char *finale, uint16_t lengthReqd);
 
@@ -110,75 +109,28 @@ void atcmd_configParser(const char *preamble, bool preambleReqd, const char *del
  * @param [in] streamCtrl Stream control for flow to be serviced. Optional for most writes, generally required for reads
  * @param [in] trigger Character string that prefixes wait for data
  * @param [in] dataHndlr Handler function that services the data transfer 
- * @param [in] dataLoc Pointer to the data to be sent
- * @param [in] dataSz Size of the data block (opperates in transparent data mode, no EOT char/phrase)
+ * @param [in] txDataPtr Pointer to the data to be sent
+ * @param [in] txDataSz Size of the data block (opperates in transparent data mode, no EOT char/phrase)
  * @param [in] applRecvDataCB Handler function to receive/parse incoming data 
  * @param [in] runParser If true, registered command response parser is invoked after successful data mode processing
  */
-void atcmd_configDataMode(streamCtrl_t * streamCtrl, const char* trigger, dataHndlr_func dataHndlr, const char* txDataPtr, uint16_t txDataSz, appRcvr_func applRecvDataCB, bool skipParser);
-
-
-// /**
-//  * @brief Set the TX end-of-transmission (EOT) signally character
-//  * @details The EOT character is automatically sent by the IOP module when the TX side of the UART goes idle. Cleared automatically on send.
-//  * 
-//  * @param eotChar 
-//  */
-// void atcmd_setDataModeEot(uint8_t eotChar);
+void atcmd_configDataMode(streamCtrl_t * streamCtrl, const char* trigger, dataHndlr_func dataHndlr, const char* txDataPtr, uint16_t txDataSz, appRcvr_func applRecvDataCB, bool runParser);
 
 
 /**
  *	@brief Invokes a BGx AT command using default option values (automatic locking).
- *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
- *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
+
+ *	@param [in] cmdTemplate The command string to send to the BG96 module.
+ *  @param [in] ... parameter list to integrate into the cmdTemplate.
  *  @return resultCode_t Status code representing outcome of AT-CMD execution.
  */
 resultCode_t atcmd_dispatch(const char *cmdTemplate, ...);
-
-
-// /**
-//  *	@brief Invokes a BGx AT command using default option values (automatic locking).
-//  *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
-//  *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
-//  *  @return True if action was invoked, false if not
-//  */
-// bool atcmd_tryInvoke(const char *cmdTemplate, ...);
-
-
-// /**
-//  *	@brief Invokes a BGx AT command without acquiring a lock, using previously set setOptions() values.
-//  *	@param [in] cmdStrTemplate The command string to send to the BG96 module.
-//  *  @param [in] variadic ... parameter list to integrate into the cmdStrTemplate.
-//  */
-// void atcmd_invokeReuseLock(const char *cmdTemplate, ...);
-
-
-// /**
-//  * @brief 
-//  * 
-//  * @param timeoutMS 
-//  */
-// bool atcmd_awaitLock(uint16_t timeoutMS);
 
 
 /**
  *	@brief Closes (completes) a BGx AT command structure and frees action resource (release action lock).
  */
 void atcmd_close();
-
-
-// /**
-//  *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
-//  */
-// resultCode_t atcmd_awaitResult();
-
-
-// /**
-//  *	@brief Waits for atcmd result, periodically checking recv buffer for valid response until timeout.
-//  *  @param timeoutMS Time to wait for command response (0==no change). 
-//  *  @param cmdResponseParser If provided sets parser as the response parser (NULL==no change). 
-//  */
-// resultCode_t atcmd_awaitResultWithOptions(uint32_t timeoutMS, cmdResponseParser_func cmdResponseParser);
 
 
 /**
@@ -287,16 +239,16 @@ cmdParseRslt_t atcmd_defaultResponseParser();
  *                 the first block of characters received.
  *           The "value" and "response" variables are cached internally to the atCmd structure and can be retrieved with atcmd_getValue()
  *           and atcmd_getResponse() functions respectively.
+ * 
  *  @param [in] preamble - C-string containing the expected phrase that starts response. 
  *  @param [in] preambleReqd - True to require the presence of the preamble for a SUCCESS response
  *  @param [in] delimiters - (optional: ""=N/A) C-string containing the expected delimiter between response tokens.
  *  @param [in] tokensReqd - (optional: 0=N/A, 1=first) The minimum count of tokens between preamble and finale for a SUCCESS response.
- *  @param [in] valueIndx - (optional: 0=N/A, 1=first) Indicates the 1-n position (chars/tokens) of an integer value to grab from the response.
  *  @param [in] finale - (optional: ""=finale not required) C-string containing the expected phrase that concludes response.
  *  @param [in] lengthReqd - (optional: 0=N/A) The minimum character count between preamble and finale for a SUCCESS response.
- *  @return Parse status result
+ *  @return cmdParseRslt_t Parse status result
  */
-cmdParseRslt_t atcmd_stdResponseParser(const char *preamble, bool preambleReqd, const char *delimiters, uint8_t tokensReqd, uint8_t valueIndx, const char *finale, uint16_t lengthReqd);
+cmdParseRslt_t atcmd_stdResponseParser(const char * preamble, bool preambleReqd, const char * delimiters, uint8_t tokensReqd, const char * finale, uint16_t lengthReqd);
 
 
 // /**

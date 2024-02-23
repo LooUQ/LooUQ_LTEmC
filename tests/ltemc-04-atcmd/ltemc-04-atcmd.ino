@@ -82,7 +82,7 @@ void setup()
 
 void loop() 
 {
-    if (ELAPSED(lastCycle, cycle_interval))
+    if (IS_ELAPSED(lastCycle, cycle_interval))
     {
         lastCycle = millis();
         loopCnt++;
@@ -149,10 +149,10 @@ void indicateFailure(char failureMsg[])
     bool halt = true;
     while (halt)
     {
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        pDelay(1000);
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        pDelay(100);
+        lqGpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        lqDelay(1000);
+        lqGpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        lqDelay(100);
     }
     #endif
 }

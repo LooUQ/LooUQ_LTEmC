@@ -1,5 +1,5 @@
 /******************************************************************************
- *  \file ltemc-9-http.ino
+ *  \file http_basicRequest.ino
  *  \author Greg Terrell
  *  \license MIT License
  *
@@ -154,7 +154,6 @@ void loop()
         if (loopCnt % 2 == 1)
         {
             rslt = http_get(&httpCtrlG, "/points/44.7582,-85.6022");                                // default HTTP timeout is 60 seconds
-            rslt = http_get(&httpCtrlG);
 
             // rslt = http_get(&httpCtrlG, "/points/44.7582,-85.6022");
             if (rslt == resultCode__success)

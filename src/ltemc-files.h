@@ -37,21 +37,27 @@ Also add information on how to contact you by electronic and paper mail.
 /*
 ------------------------------------------------------------------------------------------------ */
 
+/**
+ * @brief file module constants
+ */
 enum file
 {
     file__filenameSz = 81,
-    file__timeoutMS = 800,              /// file system command default timeout (milliseconds)
+    file__timeoutMS = 800,                                          ///< file system command default timeout (milliseconds)
     file__fileListMaxCnt = 32,
     file__openFileItemSz = 28,
     file__openFileMaxCnt = 10,
     
-    file__dataOffset_info = 7,          /// +QFLDS and +QFLST
-    file__dataOffset_open = 9,          /// +QFOPEN: "filename",<handle>,<mode>
+    file__dataOffset_info = 7,                                      ///< +QFLDS and +QFLST
+    file__dataOffset_open = 9,                                      ///< +QFOPEN: "filename",{handle},{mode}
     file__handleSearchMax = 20,
-    file__dataOffset_pos = 13           /// +QFPOSITION: 
+    file__dataOffset_pos = 13                                       ///< +QFPOSITION: 
 };
 
 
+/**
+ * @brief file error map
+ */
 enum fileErrMap
 {
     fileErr__detail_fileAlreadyOpen = 426,
@@ -61,7 +67,9 @@ enum fileErrMap
     fileErr__result_fileNotFound = 404
 };
 
-
+/**
+ * @brief Describes the returned type of file object
+ */
 typedef enum fileInfoType_tag
 {
     fileInfoType_fileSystem = 0,
@@ -69,65 +77,70 @@ typedef enum fileInfoType_tag
 } fileInfoType_t;
 
 
+/**
+ * @brief Summary structure describing the LTEm file system and contents
+ */
 typedef struct filesysInfo_tag
 {
-    uint32_t freeSz;
-    uint32_t totalSz;
-    uint32_t filesSz;
-    uint16_t filesCnt;
+    uint32_t freeSz;                                                ///< Free space available on LTEm device for file system
+    uint32_t totalSz;                                               ///< Total capacity of LTEm device for file system
+    uint32_t filesSz;                                               ///< Summation occupied space for all files
+    uint16_t filesCnt;                                              ///< Total number of files in the file system
 } filesysInfo_t;
 
 
+/**
+ * @brief Structure describing an individual item returned in a file list
+ */
 typedef struct fileListItem_tag
 {
-    char filename[file__filenameSz];
-    uint32_t fileSz;
+    char filename[file__filenameSz];                                ///< Filename of the item
+    uint32_t fileSz;                                                ///< File's size on the filesystem
 } fileListItem_t;
 
 
+/**
+ * @brief Summary result of a file list query
+ */
 typedef struct fileListResult_tag
 {
-    char namePattern[file__filenameSz];
-    uint8_t fileCnt;
-    fileListItem_t files[file__fileListMaxCnt];
+    char namePattern[file__filenameSz];                             ///< Searched pattern
+    uint8_t fileCnt;                                                ///< Number of matches returned
+    fileListItem_t files[file__fileListMaxCnt];                     ///< Collection of file objects for the matched files
 } fileListResult_t;
 
 
-typedef struct fileUploadResult_tag
+/**
+ * @brief Returned result object from a file I/O request (upload, download, write)
+ */
+typedef struct fileResult_tag
 {
-    uint32_t size;
-    uint16_t checksum;
-} fileUploadResult_t;
+    uint32_t ioSize;                                                ///< Number of bytes read/written 
+    uint16_t checksum;                                              ///< Module calculated checksum of the upload
+    uint32_t filesize;                                              ///< resulting file size
+} fileResult_t;
 
 
-typedef struct fileDownloadResult_tag
-{
-    uint32_t size;
-    uint16_t checksum;
-} fileDownloadResult_t;
-
-
+/**
+ * @brief File open mode, controls file I/O behavior until file is closed
+ */
 typedef enum fileOpenMode_tag
 {
-    fileOpenMode_rdWr = 0,
-    fileOpenMode_ovrRdWr = 1,
-    fileOpenMode_rdOnly = 2
+    fileOpenMode_rdWr = 0,                                          ///< Open file for read/write, no change to file at open
+    fileOpenMode_ovrRdWr = 1,                                       ///< Open file for read/write, TRUNCATE file at open
+    fileOpenMode_rdOnly = 2                                         ///< Open file for read-only
 } fileOpenMode_t;
 
-
+/**
+ * @brief When seeking to a new position within a file, the starting point
+ */
 typedef enum fileSeekMode_tag
 {
-    fileSeekMode_fromBegin = 0,
-    fileSeekMode_fromCurrent = 1,
-    fileSeekMode_fromEnd = 2
+    fileSeekMode_fromBegin = 0,                                     ///< Move file pointer (position) relative to the start of the file
+    fileSeekMode_fromCurrent = 1,                                   ///< Move file pointer (position) relative to the current position
+    fileSeekMode_fromEnd = 2                                        ///< Move file pointer (position) relative to the last byte position of the file
 } fileSeekMode_t;
 
-
-typedef struct fileWriteResult_tag
-{
-    uint16_t writtenSz;
-    uint32_t fileSz;
-} fileWriteResult_t;
 
 
 // /** 
@@ -190,6 +203,7 @@ resultCode_t file_close(uint16_t fileHandle);
 
 /**
  *	@brief Closes all open files.
+ *
  *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
  */
 resultCode_t file_closeAll();
@@ -197,17 +211,24 @@ resultCode_t file_closeAll();
 
 /**
  *	@brief Closes the file. 
+ *
  *	@param [in] fileHandle - Numeric handle for the file to close.
- *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ *	@param [in] requestSz - Requested number of bytes to read from the file.
+ *	@param [out] readSz - Number of bytes actually read from file.
+ *  @return resultCode_t 200==successful, otherwise error code (HTTP status type).
  */
 resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz);
 
+
 /**
  *	@brief Closes the file. 
- *	@param [in] fileHandle - Numeric handle for the file to close.
- *  @return ResultCode=200 if successful, otherwise error code (HTTP status type).
+ *	@param [in] fileHandle - Numeric handle for the file to write/update.
+ *	@param [in] writeData Pointer to char array containing data to write to file.
+ *	@param [in] requestSz - Number of bytes in buffer to write to file.
+ *	@param [in] writeSz - Numberic of bytes actually written to file.
+ *  @return resultCode_t 200==successful, otherwise error code (HTTP status type).
  */
-resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz, fileWriteResult_t *writeResult);
+resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t requestSz, fileResult_t *writeSz);
 
 
 /**

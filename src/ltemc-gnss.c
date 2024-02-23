@@ -29,22 +29,21 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERTS                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "GNS"                       // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_DBG                                  ///< Logging detail level for this source file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "GNS"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
-//#define ENABLE_ASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-gnss.h"
 
 
-#define GNSS_CMD_RESULTBUF_SZ 90
-#define GNSS_LOC_DATAOFFSET 12
-#define GNSS_LOC_EXPECTED_TOKENCOUNT 11
-#define GNSS_TIMEOUTml 800
+#define GNSS_CMD_RESULTBUF_SZ 90                                    ///< GNSS reponse buffer size (parse location from here)
+#define GNSS_LOC_DATAOFFSET 12                                      ///< Buffer offset
+#define GNSS_LOC_EXPECTED_TOKENCOUNT 11                             ///< Number of expected tokens in GNSS location response
+#define GNSS_TIMEOUTms 800                                          ///< GNSS timeout in milliseconds
 
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))                         ///< Return the smaller of two numbers
 
 
 // private local declarations

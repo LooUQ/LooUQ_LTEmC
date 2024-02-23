@@ -28,22 +28,17 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "FIL"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_DBG                                  ///< Logging detail level for this source file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "FIL"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-files.h"
 
-extern ltemDevice_t g_lqLTEM;
+extern ltemDevice_t g_lqLTEM;                                       ///< Global LTEm singleton
 
-
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-
-/* Local Static Functions
-------------------------------------------------------------------------------------------------------------------------- */
-static cmdParseRslt_t S__writeStatusParser();
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))                         ///< Return the smaller of two numbers
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))                         ///< Return the larger of two numbers
 
 
 /**
@@ -265,7 +260,7 @@ resultCode_t file_read(uint16_t fileHandle, uint16_t requestSz, uint16_t* readSz
 }
 
 
-resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz, fileWriteResult_t *writeResult)
+resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t writeSz, fileResult_t * writeResult)
 {
     RSLT;
     do
@@ -277,8 +272,8 @@ resultCode_t file_write(uint16_t fileHandle, const char* writeData, uint16_t wri
             char* resultTrailer = strchr(atcmd_getRawResponse(), '+');
             if (memcmp(resultTrailer, "+QFWRITE: ", 10) == 0)
             {
-                writeResult->writtenSz = strtol(resultTrailer + 10, &resultTrailer, 10);
-                writeResult->fileSz = strtol(++resultTrailer, NULL, 10);
+                writeResult->ioSize = strtol(resultTrailer + 10, &resultTrailer, 10);
+                writeResult->filesize = strtol(++resultTrailer, NULL, 10);
                 rslt = resultCode__success;
             }
         }
@@ -347,78 +342,3 @@ void file_getTsFilename(char* tsFilename, uint8_t fnSize, const char* suffix)
 */
 // fileUploadResult_t file_upload(const char* filename) {}
 // fileDownloadResult_t file_download(const char* filename) {}
-
-
-#pragma Static Helpers and Response Parsers
-/*
- * --------------------------------------------------------------------------------------------- */
-
-
-static cmdParseRslt_t S__writeStatusParser() 
-{
-    // +QFWRITE: <written_length>,<total_length>
-    return atcmd_stdResponseParser("+QFWRITE: ", true, ",", 0, 1, "\r\n", 0);
-}
-
-
-// /**
-//  * @brief Stream RX data handler accepting data length at RX buffer tail.
-//  * 
-//  * @return resultCode from operation
-//  */
-// resultCode_t atcmd_rxHndlrWithLength()
-// {
-//     char wrkBffr[32] = {0};
-//     uint16_t lengthEOLAt;
-//     // resultCode_t rsltNoError = resultCode__success;                                                         // stage full-read result, but could be partial/no content
-//     // fileCtrl_t* fileCtrl = (fileCtrl_t*)g_lqLTEM.atcmd->dataMode.ctrlStruct;                                // cast for convenience
-    
-//     uint32_t trailerWaitStart = pMillis();
-//     do
-//     {
-//         lengthEOLAt = bbffr_find(g_lqLTEM.iop->rxBffr, "\r", 0, 0, false);                                  // find EOL from CONNECT response
-
-//         if (IS_ELAPSED(trailerWaitStart, streams__lengthWaitDuration))
-//             return resultCode__timeout;
-
-//     } while (BBFFR_ISFOUND(lengthEOLAt));
-    
-   
-//     bbffr_pop(g_lqLTEM.iop->rxBffr, wrkBffr, lengthEOLAt + 2);                                              // pop data length and EOL from RX buffer
-//     uint16_t readLen = strtol(wrkBffr, NULL, 10);
-//     g_lqLTEM.atcmd->retValue = readLen;                                                                     // stash reported read length
-//     DPRINT_V(PRNT_CYAN, "(atcmd_rxHndlrWithLength) fHandle=%d available=%d\r", fileCtrl->fileHandle, readLen);
-
-//     uint32_t readTimeout = pMillis();
-//     uint16_t bffrOccupiedCnt;
-//     do
-//     {
-//         bffrOccupiedCnt = bbffr_getOccupied(g_lqLTEM.iop->rxBffr);
-//         if (pMillis() - readTimeout > g_lqLTEM.atcmd->timeout)
-//         {
-//             g_lqLTEM.atcmd->retValue = 0;
-//             DPRINT(PRNT_WARN, "(atcmd_rxHndlrWithLength) bffr timeout: %d rcvd\r\n", bffrOccupiedCnt);
-//             return resultCode__timeout;                                                                     // return timeout waiting for bffr fill
-//         }
-//     } while (bffrOccupiedCnt < readLen + file__readTrailerSz);
-    
-//     do                                                                                                      // *NOTE* depending on buffer wrap may take 2 ops
-//     {
-//         char* streamPtr;
-//         uint16_t blockSz = bbffr_popBlock(g_lqLTEM.iop->rxBffr, &streamPtr, readLen);                       // get contiguous block size from rxBffr
-//         DPRINT_V(PRNT_CYAN, "(atcmd_rxHndlrWithLength) ptr=%p, bSz=%d, rSz=%d\r", streamPtr, blockSz, readSz);
-//         uint8_t fileHandle = ((streamCtrl_t*)g_lqLTEM.atcmd->dataMode.ctrlStruct)->dataCntxt;
-//         (*g_lqLTEM.fileCtrl->appRecvDataCB)(fileHandle, streamPtr, blockSz);                                // forward to application
-//         bbffr_popBlockFinalize(g_lqLTEM.iop->rxBffr, true);                                                 // commit POP
-//         readLen -= blockSz;
-//     } while (readLen > 0);
-
-//     if (bbffr_getOccupied(g_lqLTEM.iop->rxBffr) >= file__readTrailerSz)                                     // cleanup, remove trailer
-//     {
-//         bbffr_skipTail(g_lqLTEM.iop->rxBffr, file__readTrailerSz);
-//     }
-//     return resultCode__success;
-// }
-
-
-#pragma endregion

@@ -29,9 +29,9 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_OFF
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "SKT"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_OFF                                  ///< Set logging detail level for this source file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "SKT"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics lqASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-sckt.h"
@@ -39,12 +39,11 @@ Also add information on how to contact you by electronic and paper mail.
 extern ltemDevice_t g_lqLTEM;
 
 
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define MAX(x, y) (((x) < (y)) ? (y) : (x))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))                                                             ///< Return the smaller of two numbers
+#define MAX(x, y) (((x) < (y)) ? (y) : (x))                                                             ///< Return the larger of two numbers
 
-#define DETECT_STALL(tick, threshold)  if (pMillis() - tick > threshold) return resultCode__timeout
-#define ASSERT_NOTSTALLED(tick, threshold)  ASSERT(pMillis() - tick > threshold)
-
+#define DETECT_STALL(tick, threshold)  if (pMillis() - tick > threshold) return resultCode__timeout     ///< MACRO to determine if a protocol stall/timeout event has happened
+#define ASSERT_NOTSTALLED(tick, threshold)  ASSERT(pMillis() - tick > threshold)                        ///< ASSERT no stall
 
 
 // file scope local function declarations
@@ -250,7 +249,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 #pragma region private local static functions
 /*-----------------------------------------------------------------------------------------------*/
 
-#define SCKT_URC_HEADERSZ 30
+#define SCKT_URC_HEADERSZ 30                                        ///< SCKT (sockets) URC header size
 
 /**
  *   @brief Move socket data through pipeline.

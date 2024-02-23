@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-iop.c
   @brief LTEmC low-level I/O processing.
   @warning Internal dependencies, changes should only be completed with the advise of LooUQ staff.
 
@@ -29,70 +29,49 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 
-/*** Known BGx Header Patterns Supported by LTEmC IOP ***
 /**
- * @details
+ * @brief Known BGx Header Patterns Supported by LTEmC IOP 
 
- Area/Msg Prefix
-    // -- BG96 init
-    // \r\nAPP RDY\r\n      -- BG96 completed firmware initialization
-    // 
-    // -- Commands
-    // +QPING:              -- PING response (instance and summary header)
-    // +QIURC: "dnsgip"     -- DNS lookup reply
-    //
-    // -- Protocols
-    // +QIURC: "recv",      -- "unsolicited response" proto tcp/udp
-    // +QIRD: #             -- "read data" response 
-    // +QSSLURC: "recv"     -- "unsolicited response" proto ssl tunnel
-    // +QHTTPGET:           -- GET response, HTTP-READ 
-    // CONNECT<cr><lf>      -- HTTP Read
-    // +QMTSTAT:            -- MQTT state change message recv'd
-    // +QMTRECV:            -- MQTT subscription data message recv'd
-    // 
-    // -- Async Status Change Messaging
-    // +QIURC: "pdpdeact"   -- network pdp context timed out and deactivated
+    Area/Msg Prefix
+     -- BG96 init
+     \r\nAPP RDY\r\n      -- BG96 completed firmware initialization
+     
+     -- Commands
+     +QPING:              -- PING response (instance and summary header)
+     +QIURC: "dnsgip"     -- DNS lookup reply
+    
+     -- Protocols
+     +QIURC: "recv",      -- "unsolicited response" proto tcp/udp
+     +QIRD: #             -- "read data" response 
+     +QSSLURC: "recv"     -- "unsolicited response" proto ssl tunnel
+     +QHTTPGET:           -- GET response, HTTP-READ 
+     CONNECT<cr><lf>      -- HTTP Read
+     +QMTSTAT:            -- MQTT state change message recv'd
+     +QMTRECV:            -- MQTT subscription data message recv'd
+     
+     -- Async Status Change Messaging
+     +QIURC: "pdpdeact"   -- network pdp context timed out and deactivated
 
-    // default content type is command response
- * 
+     default content type is command response
  */
 
-#pragma region Header
-
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "IOP"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_DBG                                  ///< Logging detail level for this source file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "IOP"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-iop.h"
 
-extern ltemDevice_t g_lqLTEM;
+extern ltemDevice_t g_lqLTEM;                                       ///< Global singleton LTEm object
 
-#define QBG_APPREADY_MILLISMAX 15000
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))                         ///< Returns the smaller of two numbers
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))                         ///< Returns the larger of two numbers
 
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define IOP_RXCTRLBLK_ADVINDEX(INDX) INDX = (++INDX == IOP_RXCTRLBLK_COUNT) ? 0 : INDX
-
-
-
-#pragma region Private Static Function Declarations
+// Private Static Function Declarations
 /* ------------------------------------------------------------------------------------------------ */
-
-// static void IOP_interruptCallbackISR();
 static inline uint8_t S_convertCharToContextId(const char cntxtChar);
 
-#pragma endregion // Header
-
-
-#pragma region Public Functions
-/*-----------------------------------------------------------------------------------------------*/
-#pragma endregion // Public Functions
-
-
-#pragma region LTEm Internal Functions
-/*-----------------------------------------------------------------------------------------------*/
 
 /**
  *	@brief Initialize the Input/Output Process subsystem.
@@ -126,8 +105,8 @@ void IOP_attachIrq()
     if (g_lqLTEM.iop->irqAttached == 0)
     {
         g_lqLTEM.iop->irqAttached = g_lqLTEM.pinConfig.irqPin;
-        spi_usingInterrupt(g_lqLTEM.platformSpi, g_lqLTEM.pinConfig.irqPin);
-        platform_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, IOP_interruptCallbackISR);
+        lqSpi_usingInterrupt(g_lqLTEM.platformSpi, g_lqLTEM.pinConfig.irqPin);
+        lqGpio_attachIsr(g_lqLTEM.pinConfig.irqPin, true, gpioIrqTriggerOn_falling, IOP_interruptCallbackISR);
     }
 
     SC16IS7xx_resetFifo(SC16IS7xx_FIFO_resetActionRxTx);            // ensure FIFO state is empty, UART will not refire interrupt if pending
@@ -135,20 +114,6 @@ void IOP_attachIrq()
     g_lqLTEM.iop->txPending = 0;
     g_lqLTEM.iop->isrEnabled = true;
 }
-
-
-// /**
-//  *	@brief Stop IOP services.
-//  */
-// void IOP_detachIrq()
-// {
-//     if (g_lqLTEM.iop->irqAttached)
-//     {
-//         DPRINT(0, "[IOP_detachIrq()] detached=%d\r\n", g_lqLTEM.pinConfig.irqPin);
-//         platform_detachIsr(g_lqLTEM.pinConfig.irqPin);
-//         g_lqLTEM.iop->irqAttached = 0;
-//     }
-// }
 
 
 /**
@@ -192,16 +157,26 @@ void IOP_forceTx(const char *sendData, uint16_t sendSz)
  */
 uint32_t IOP_getRxIdleDuration()
 {
-    return pMillis() - g_lqLTEM.iop->lastRxAt;
+    return lqMillis() - g_lqLTEM.iop->lastRxAt;
 }
 
 
+/**
+ * @brief Get the current RX FIFO fill level from UART
+ * 
+ * @return uint8_t Number of characters in RX FIFO
+ */
 uint8_t IOP_getRxLevel()
 {
     return SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
 }
 
 
+/**
+ * @brief Get the current TX FIFO available level from UART
+ * 
+ * @return uint8_t Number of spaces in TX FIFO
+ */
 uint8_t IOP_getTxLevel()
 {
     return SC16IS7xx_readReg(SC16IS7xx_TXLVL_regAddr);
@@ -217,21 +192,19 @@ void IOP_resetRxBuffer()
 }
 
 
-#pragma endregion
 
-
-#pragma region Static Function Definions
+// Static Function Definions
 /*-----------------------------------------------------------------------------------------------*/
 
 /**
  *	@brief Rapid fixed case conversion of context value returned from BGx to number.
- *  @param cntxChar [in] RX data buffer to sync.
+ *
+ *  @param [in] cntxChar RX data buffer to sync.
  */
 static inline uint8_t S_convertCharToContextId(const char cntxtChar)
 {
     return (uint8_t)cntxtChar - 0x30;
 }
-
 
 
 /**
@@ -290,7 +263,7 @@ void IOP_interruptCallbackISR()
         {
             if (rxLevel > 0)
             {
-                g_lqLTEM.iop->lastRxAt = pMillis();
+                g_lqLTEM.iop->lastRxAt = lqMillis();
                 char *bAddr;
                 rxLevel = SC16IS7xx_readReg(SC16IS7xx_RXLVL_regAddr);
 
@@ -345,7 +318,7 @@ void IOP_interruptCallbackISR()
 
     DPRINT(PRNT_WHITE, "]\r");
 
-    gpioPinValue_t irqPin = platform_readPin(g_lqLTEM.pinConfig.irqPin);
+    gpioPinValue_t irqPin = lqGpio_readPin(g_lqLTEM.pinConfig.irqPin);
     if (irqPin == gpioValue_low)
     {
         iirVal.reg = SC16IS7xx_readReg(SC16IS7xx_IIR_regAddr);
@@ -356,7 +329,3 @@ void IOP_interruptCallbackISR()
         goto retryIsr;
     }
 }
-
-
-#pragma endregion
-

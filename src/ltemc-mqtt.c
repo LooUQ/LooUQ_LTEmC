@@ -29,28 +29,21 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "MQT"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_DBG                                  ///< Logging detail level for this translation unit
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "MQT"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-mqtt.h"
 
-extern ltemDevice_t g_lqLTEM;
+extern ltemDevice_t g_lqLTEM;                                       ///< Global singleton LTEm object
 
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define ASCII_CtrlZ_STR "\x1A"
-#define ASCII_ESC_STR "\x1B"
-#define ASCII_DblQuote_CHAR '"'
+#define QMTURC_PREAMBLE_SZ 10                                       ///< Minimum number of characters to capture in order to determine MQTT URC preamble present
+#define QMTRECV_TIMEOUT 180                                         ///< Number of milliseconds between MQTT preamble detection and EOT received 
 
-enum
-{
-    resultCode__parserPending = 0xFFFF
-};
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))                         ///< Return the smaller of two numbers    
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))                         ///< Return the larger of two numbers
 
-// #define MQTT_ACTION_CMD_SZ 81
-// #define MQTT_CONNECT_CMD_SZ 300
 
 /* Local Function Declarations
  ----------------------------------------------------------------------------------------------- */
@@ -468,8 +461,6 @@ mqttState_t mqtt_close(mqttCtrl_t *mqttCtrl)
 
 /**
  *  @brief Reset and attempt to reestablish a server connection.
- *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  @param resetModem [in] True if modem should be reset prior to reestablishing MQTT connection.
  */
 void mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem)
 {
@@ -484,19 +475,9 @@ void mqtt_reset(mqttCtrl_t *mqttCtrl, bool resetModem)
     mqtt_start(mqttCtrl, true);
 }
 
-void mqtt_flush(mqttCtrl_t *mqttCtrl)
-{
-    for (size_t i = 0; i < 1548; i++)
-    {
-        /* code */
-    }
-}
-
 
 /**
  *  @brief Return current MQTT connection state.
- *  @param mqttCtrl [in] Pointer to MQTT type stream control to operate on.
- *  @return A mqttState_t value indicating the state of the MQTT connection.
  */
 mqttState_t mqtt_getStatus(mqttCtrl_t *mqttCtrl)
 {
@@ -621,9 +602,6 @@ static resultCode_t S__notifyServerTopicChange(mqttCtrl_t *mqttCtrl, mqttTopicCt
     return resultCode__internalError;
 }
 
-
-#define QMTURC_PREAMBLE_SZ 10
-#define QMTRECV_TIMEOUT 180
 
 static resultCode_t S__mqttUrcHandler()
 {
@@ -810,9 +788,6 @@ static bool S__mqttClose(uint8_t context)
 
 /**
  * @brief Translate a module specific MQTT error code into a standard web/HTTP response code.
- * 
- * @param [in] extendedResultCode BGx MQTT error code.
- * @return resultCode_t Translated standard web/HTTP response code.
  */
 resultCode_t mqtt_translateExtended(uint16_t extendedResultCode)
 {

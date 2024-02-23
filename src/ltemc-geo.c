@@ -29,9 +29,9 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "GEO"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_DBG                                  ///< Logging detail level for this source file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "GEO"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include <stdio.h>
 #include "ltemc-internal.h"
@@ -46,15 +46,27 @@ static resultCode_t geoQueryResponseParser(const char *response);
  * --------------------------------------------------------------------------------------------- */
 #pragma region public functions
 
+#define COORD_SZ 12                                                 ///< Length of coordinate component (buffer size)
+#define CMDSZ 32+8*COORD_SZ                                         ///< Resulting length of command buffer to handle geofence description
+
 /**
- *	@brief Create a geo-fence for future position evaluations.
+ * @brief Create a geo-fence for future position evaluations.
+ * 
+ * @param geoId 
+ * @param mode 
+ * @param shape 
+ * @param lat1 
+ * @param lon1 
+ * @param lat2 
+ * @param lon2 
+ * @param lat3 
+ * @param lon3 
+ * @param lat4 
+ * @param lon4 
+ * @return resultCode_t 
  */
 resultCode_t geo_add(uint8_t geoId, geoMode_t mode, geoShape_t shape, double lat1, double lon1, double lat2, double lon2, double lat3, double lon3, double lat4, double lon4)
 {
-    #define COORD_SZ 12
-    #define COORD_P 6
-    #define CMDSZ 32+8*COORD_SZ
-
     char cmdStr[CMDSZ] = {0};
 
     if (mode != geoMode_noUrc)                                 // currently only supporting mode 0 (no event reporting)

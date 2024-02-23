@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc.c
   @brief API for control and use of the LooUQ LTEm cellular modem.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -28,9 +28,9 @@ Also add information on how to contact you by electronic and paper mail.
 **************************************************************************** */
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "LTE"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_DBG                                  ///< Set logging detail level for this src file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "LTE"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics lqASSERT
 
 #include "ltemc.h"
 #include "ltemc-internal.h"
@@ -40,34 +40,35 @@ Also add information on how to contact you by electronic and paper mail.
  * --------------------------------------------------------------------------------------------- */
 ltemDevice_t g_lqLTEM;
 
-#define APPRDY_TIMEOUT 8000
+#define APPRDY_TIMEOUT 8000                                         ///< Number of milliseconds follow LTEm start to wait for module "APP RDY"
 
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))                         ///< Return the smaller of two numbers
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))                         ///< Return the larger of two numbers
 
 
-/* BGx module initialization commands (start script)
- * ---------------------------------------------------------------------------------------------
+/**
+ * @brief Commands to invoke on module start to ensure predictable behaviors
+ *
+ * BGx module initialization commands (start script)
+ * ------------------------------------------------------------------------------------------------
  * used in ltemc-quectel-bg.c for module initialization, declared here for convenience
  * LTEmC requires that no-echo is there, append any ADDITIONAL global module setting command in the list.
  * Ex: Radio setup (RAT search, IoT mode, etc.) 
- * ------------------------------------------------------------------------------------------------ */
+ * ------------------------------------------------------------------------------------------------
+ */
 const char* const qbg_initCmds[] = 
 { 
-    "ATE0\r",                                       // don't echo AT commands on serial
-    "AT+QURCCFG=\"urcport\",\"uart1\"\r"            // URC events are reported to UART1
+    "ATE0\r",                                                       ///< don't echo AT commands on serial
+    "AT+QURCCFG=\"urcport\",\"uart1\"\r"                            ///< URC events are reported to UART1
 };
 
 // makes for compile time automatic sz determination
-int8_t qbg_initCmdsCnt = sizeof(qbg_initCmds)/sizeof(const char* const);            
+int8_t qbg_initCmdsCnt = sizeof(qbg_initCmds)/sizeof(const char* const);    ///< compile time constant for the number of init commands
 
 
 /* Static Local Function Declarations
 ------------------------------------------------------------------------------------------------ */
-// static bool S__initLTEmDevice();
 static void S__ltemUrcHandler();
-static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
-
 
 
 #pragma region Public Functions
@@ -76,16 +77,16 @@ static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem);
 /**
  *	@brief Initialize the LTEm1 modem.
  */
-void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, appEvntNotify_func eventNotifCallback)
+void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCB, appEvntNotify_func eventNotifyCB)
 {
     ASSERT(g_lqLTEM.atcmd == NULL);                 // prevent multiple calls, memory leak calloc()
     memset(&g_lqLTEM, 0, sizeof(ltemDevice_t));
     
 	g_lqLTEM.pinConfig = ltem_config;
     #if (ARDUINO_ARCH_ESP32)
-        g_lqLTEM.platformSpi = spi_createFromPins(g_lqLTEM.pinConfig.spiClkPin, g_lqLTEM.pinConfig.spiMisoPin, g_lqLTEM.pinConfig.spiMosiPin, g_lqLTEM.pinConfig.spiCsPin);
+        g_lqLTEM.platformSpi = lqSpi_createFromPins(g_lqLTEM.pinConfig.spiClkPin, g_lqLTEM.pinConfig.spiMisoPin, g_lqLTEM.pinConfig.spiMosiPin, g_lqLTEM.pinConfig.spiCsPin);
     #else
-        g_lqLTEM.platformSpi = spi_createFromIndex(g_lqLTEM.pinConfig.spiIndx, g_lqLTEM.pinConfig.spiCsPin);
+        g_lqLTEM.platformSpi = lqSpi_createFromIndex(g_lqLTEM.pinConfig.spiIndx, g_lqLTEM.pinConfig.spiCsPin);
     #endif
 
     g_lqLTEM.modemSettings =  calloc(1, sizeof(modemSettings_t));
@@ -109,7 +110,7 @@ void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCallback, ap
     ntwk_create();
 
     g_lqLTEM.cancellationRequest = false;
-    g_lqLTEM.appEvntNotifyCB = eventNotifCallback;
+    g_lqLTEM.appEvntNotifyCB = eventNotifyCB;
 }
 
 
@@ -129,7 +130,7 @@ void ltem_destroy()
     ip_destroy();
     free(g_lqLTEM.atcmd);
     iop_destroy();
-    spi_destroy(g_lqLTEM.platformSpi);
+    lqSpi_destroy(g_lqLTEM.platformSpi);
 }
 
 
@@ -148,19 +149,19 @@ bool ltem_start(resetAction_t resetAction)
     if (!g_lqLTEM.hostConfigured)
     {
         // on Arduino compatible, ensure pin is in default "logical" state prior to opening
-        platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
-        platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
-        platform_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
-        platform_writePin(g_lqLTEM.pinConfig.irqPin, gpioValue_high);
+        lqGpio_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
+        lqGpio_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
+        lqGpio_writePin(g_lqLTEM.pinConfig.spiCsPin, gpioValue_high);
+        lqGpio_writePin(g_lqLTEM.pinConfig.irqPin, gpioValue_high);
 
-        platform_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		// powerKey: normal low
-        platform_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			// resetPin: normal low
-        platform_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			// spiCsPin: invert, normal gpioValue_high
-        platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
-        platform_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
+        lqGpio_openPin(g_lqLTEM.pinConfig.powerkeyPin, gpioMode_output);		    // powerKey: normal low
+        lqGpio_openPin(g_lqLTEM.pinConfig.resetPin, gpioMode_output);			    // resetPin: normal low
+        lqGpio_openPin(g_lqLTEM.pinConfig.spiCsPin, gpioMode_output);			    // spiCsPin: invert, normal gpioValue_high
+        lqGpio_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);
+        lqGpio_openPin(g_lqLTEM.pinConfig.irqPin, gpioMode_inputPullUp);
         lqLOG_VRBS("GPIO Configured\r\n");
 
-        spi_start(g_lqLTEM.platformSpi);                                        // start host SPI
+        lqSpi_start(g_lqLTEM.platformSpi);                                      // start host SPI
         lqLOG_VRBS("SPI Configured\r\n");
         g_lqLTEM.hostConfigured = true;
     }
@@ -215,7 +216,7 @@ bool ltem_start(resetAction_t resetAction)
     
     g_lqLTEM.deviceState = deviceState_ready;
     lqLOG_INFO("ModuleReady at %dms\r\n", lqMillis() - startRdyChk);
-    pDelay(500);
+    lqDelay(500);
     bbffr_reset(g_lqLTEM.iop->rxBffr);                                      // clean out start messages from RX buffer
 
     // check for SIM
@@ -256,7 +257,7 @@ bool ltem_start(resetAction_t resetAction)
  */
 void ltem_stop()
 {
-    spi_stop(g_lqLTEM.platformSpi);
+    lqSpi_stop(g_lqLTEM.platformSpi);
     IOP_stopIrq();
     g_lqLTEM.deviceState = deviceState_powerOff;
     QBG_powerOff();
@@ -282,6 +283,9 @@ void ltem_powerOff()
 }
 
 
+/**
+ * @brief (Future) Enter PCM mode
+ */
 void ltem_enterPcm()
 {
 }
@@ -290,26 +294,26 @@ void ltem_enterPcm()
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
  */
-resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t rfMode)
+resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t rfPriorityMode)
 {
-    ASSERT(rfMode == 0 || rfMode == 1);
+    ASSERT(rfPriorityMode == 0 || rfPriorityMode == 1);
 
-    lqLOG_VRBS("<ltem_setRfPriorityMode()> rfMode=%d\r\n", rfMode);
-    lqLOG_VRBS("<ltem_setRfPriorityMode()> module:%s\r\n", g_lqLTEM.modemInfo->model);
+    lqLOG_VRBS("(ltem_setRfPriorityMode) rfPriorityMode=%d\r\n", rfPriorityMode);
+    lqLOG_VRBS("(ltem_setRfPriorityMode) module:%s\r\n", g_lqLTEM.modemInfo->model);
 
     //  only applicable to single-RF modules
     if (memcmp(g_lqLTEM.modemInfo->model, "BG95", 4) != 0 && memcmp(g_lqLTEM.modemInfo->model, "BG77", 4) != 0)
         return resultCode__badRequest;
 
     RSLT;
-    uint8_t targetLoadedState = (rfMode == ltemRfPriorityMode_wwan) ? ltemRfPriorityState_wwanLoaded : ltemRfPriorityState_gnssLoaded;
+    uint8_t targetLoadedState = (rfPriorityMode == ltemRfPriorityMode_wwan) ? ltemRfPriorityState_wwanLoaded : ltemRfPriorityState_gnssLoaded;
     if (targetLoadedState == ltem_getRfPriorityState())
     {
         lqLOG_WARN("RF priority already at set state.\r\n");
         return resultCode__success;                                                 // already at destination
     }
 
-    if (rfMode == ltemRfPriorityMode_gnss)                                          // test for requesting GNSS priority but GNSS not ON
+    if (rfPriorityMode == ltemRfPriorityMode_gnss)                                          // test for requesting GNSS priority but GNSS not ON
     {
         bool gnssActive = false;
         if (IS_SUCCESS_RSLT(atcmd_dispatch("AT+QGPS?")))
@@ -329,7 +333,7 @@ resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t rfMode)
     uint32_t waitStart = lqMillis();
     for (size_t i = 0; i < 10; i++)
     {
-        if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QGPSCFG=\"priority\",%d", rfMode)))
+        if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QGPSCFG=\"priority\",%d", rfPriorityMode)))
         {
                 return rslt;
         }
@@ -561,7 +565,7 @@ modemInfo_t* ltem_getModemInfo()
 
     if (g_lqLTEM.modemInfo->iccid[0] == 0)
     {
-        atcmd_ovrrdParser(S__iccidCompleteParser);
+        atcmd_configParser("+ICCID: ", true, "", 0, "\r\n\r\nOK\r\n", 20);
         if (IS_SUCCESS(atcmd_dispatch("AT+ICCID")))
         {
             char* delimAt;
@@ -859,16 +863,5 @@ static void S__ltemUrcHandler()
         lqLOG_INFO("(S__ltemUrcHandler) CCITT URC received\r\n");
     }
 }
-
-
-/**
- *	@brief Action response parser for iccid value request.
- */
-static cmdParseRslt_t S__iccidCompleteParser(ltemDevice_t *modem)
-{
-    return atcmd_stdResponseParser("+ICCID: ", true, "", 0, 0, "\r\n\r\nOK\r\n", 20);
-}
-
-
 
 #pragma endregion

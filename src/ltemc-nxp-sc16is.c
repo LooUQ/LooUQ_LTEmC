@@ -33,21 +33,22 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define LOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "NXP"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define LOG_LEVEL lqLOGLEVEL_DBG                                    ///< Logging detail level for this source file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "NXP"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-platform.h"
 #include "ltemc-nxp-sc16is.h"
 
-extern ltemDevice_t g_lqLTEM;
+extern ltemDevice_t g_lqLTEM;                                       ///< Global singleton LTEm object
 
 #define REG_MODIFY(REG_NAME, MODIFY_ACTION)                     \
     REG_NAME REG_NAME##_reg = {0};                              \
     REG_NAME##_reg.reg = SC16IS7xx_readReg(REG_NAME##_regAddr); \
     MODIFY_ACTION                                               \
-    SC16IS7xx_writeReg(REG_NAME##_regAddr, REG_NAME##_reg.reg);
+    SC16IS7xx_writeReg(REG_NAME##_regAddr, REG_NAME##_reg.reg);     ///< Streamlined register update/modity
+
 
 #pragma region Public Functions
 #pragma endregion
@@ -57,7 +58,6 @@ extern ltemDevice_t g_lqLTEM;
 
 /* Static Local Functions Declarations
 ------------------------------------------------------------------------------------------------ */
-void S_displayFifoStatus(const char *dispMsg);
 
 #pragma region Bridge Initialization
 
@@ -131,7 +131,7 @@ void SC16IS7xx_enableIrqMode()
  */
 bool SC16IS7xx_ping()
 {
-    uint8_t wrVal = (uint8_t)(pMillis() & 0xFF);
+    uint8_t wrVal = (uint8_t)(lqMillis() & 0xFF);
     SC16IS7xx_writeReg(SC16IS7xx_SPR_regAddr, wrVal);
     return SC16IS7xx_readReg(SC16IS7xx_SPR_regAddr) == wrVal;
 }
@@ -170,7 +170,7 @@ uint8_t SC16IS7xx_readReg(uint8_t reg_addr)
     reg_payload.reg_addr.A = reg_addr;
     reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-    reg_payload.reg_payload = spi_transferWord(g_lqLTEM.platformSpi, reg_payload.reg_payload);
+    reg_payload.reg_payload = lqSpi_transferWord(g_lqLTEM.platformSpi, reg_payload.reg_payload);
     return reg_payload.reg_data;
 }
 
@@ -184,7 +184,7 @@ void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data)
     reg_payload.reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
     reg_payload.reg_data = reg_data;
 
-    spi_transferWord(g_lqLTEM.platformSpi, reg_payload.reg_payload);
+    lqSpi_transferWord(g_lqLTEM.platformSpi, reg_payload.reg_payload);
 }
 
 /**
@@ -196,9 +196,9 @@ void SC16IS7xx_read(uint8_t * rxData, uint32_t size)
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_readRnW;
 
-    //void spi_transferBuffer(platformSpi_t* platformSpi, uint8_t addressByte, const uint8_t * txData,  uint8_t * rxData, uint32_t size);
+    //void lqSpi_transferBuffer(platformSpi_t* platformSpi, uint8_t addressByte, const uint8_t * txData,  uint8_t * rxData, uint32_t size);
 
-    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, NULL, rxData, size);
+    lqSpi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, NULL, rxData, size);
 }
 
 
@@ -211,7 +211,7 @@ void SC16IS7xx_write(const uint8_t * txData, uint32_t size)
     reg_addr.A = SC16IS7xx_FIFO_regAddr;
     reg_addr.RnW = SC16IS7xx__FIFO_writeRnW;
 
-    spi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, txData, NULL, size);
+    lqSpi_transferBuffer(g_lqLTEM.platformSpi, reg_addr.reg_address, txData, NULL, size);
 }
 
 /**

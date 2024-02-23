@@ -102,26 +102,27 @@ void ntwk_create();
  * @details Example: scanSequence = "020301" represents: search LTE-M1, then LTE-NB1, then GSM
  * @param [in] scanSequence Character string specifying the RAT scanning order; 00=Automatic[LTE-M1|LTE-NB1|GSM],01=GSM,02=LTE-M1,03=LTE-NB1
 */
-void ntwk_setOperatorScanSeq(const char *sequence);
+void ntwk_setOperatorScanSeq(const char *scanSequence);
 
 
 /** 
  * @brief Configure RAT(s) allowed to be searched
  * @param [in] scanMode Enum specifying what cell network to scan; 0=Automatic,1=GSM only,3=LTE only
 */
-void ntwk_setOperatorScanMode(ntwkScanMode_t mode);
+void ntwk_setOperatorScanMode(ntwkScanMode_t scanMode);
 
 
 /** 
  * @brief Configure the network category to be searched under LTE RAT.
  * @param [in] iotMode Enum specifying the LTE LPWAN protocol(s) to scan; 0=LTE M1,1=LTE NB1,2=LTE M1 and NB1
  */
-void ntwk_setIotMode(ntwkIotMode_t mode);
+void ntwk_setIotMode(ntwkIotMode_t iotMode);
 
 
 /**
  * @brief Build default data context configuration for modem to use on startup.
- * @param [in] cntxtId The context ID to operate on. Typically 0 or 1
+ * 
+ * @param [in] pdpContextId The context ID to operate on. Typically 0 or 1
  * @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
  * @param [in] apn The APN name if required by network carrier.
  */
@@ -130,10 +131,10 @@ resultCode_t ntwk_setDefaultNetwork(uint8_t pdpContextId, pdpProtocol_t protoTyp
 
 /**
  * @brief Configure PDP Context.
- * @param [in] cntxtId The context ID to operate on. Typically 0 or 1
+ * 
+ * @param [in] pdpContextId The context ID to operate on. Typically 0 or 1
  * @param [in] protoType The PDP protocol IPV4, IPV6, IPV4V6 (both).
  * @param [in] apn The APN name if required by network carrier.
- *  
  */
 resultCode_t ntwk_configPdpNetwork(uint8_t pdpContextId, pdpProtocol_t protoType, const char *apn);
 
@@ -215,8 +216,9 @@ uint8_t ntwk_getActiveNetworkCount();
 
 
 /**
- * @brief Get PDP network information
- * @param [in] cntxtId The PDP context ID/index to retreive.
+ * @brief Get PDP network information.
+ * 
+ * @param [in] pdpContextId The PDP context ID/index to retreive.
  * @return Pointer to network (PDP) info in active network table, NULL if context ID not active
  */
 packetNetwork_t* ntwk_getPacketNetwork(uint8_t pdpContextId);
@@ -293,10 +295,12 @@ uint8_t ntwk_signalRaw();
  * */
 uint8_t ntwk_signalBars(uint8_t displayBarCount);
 
+
 /**
- * @brief 
+ * @brief Configure cellular radio bands to search
+ * @note This setting is written to flash and requires a flash wipe to remove
  * 
- * @param bands 
+ * @param [in] bands Binary AND of band maps to search
  */
 void ntwk_configSearchedBands(uint32_t bands);
 
@@ -307,7 +311,7 @@ void ntwk_configSearchedBands(uint32_t bands);
  * @param [out] operatorList  Pointer to char buffer to return operator list information retrieved from BGx.
  * @param [in] listSz Length of provided buffer.
  */
-void ntwkDiagnostics_getOperators(char *operatorList, uint16_t listSz);
+void ntwkDiagnostics_getOperators(char * operatorList, uint16_t listSz);
 
 
 #ifdef __cplusplus

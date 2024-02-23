@@ -48,22 +48,26 @@ Also add information on how to contact you by electronic and paper mail.
 //#include "platform/platform-spi.h"
 
 
-#define DEF_SC16IS7xx_REG(REG_NAME, REG_BITS) \
-typedef union    \
-{                \
-    struct {     \
-    REG_BITS     \
-    };           \
-    uint8_t reg; \
-} SC16IS7xx_##REG_NAME;
+#define DEF_SC16IS7xx_REG(REG_NAME, REG_BITS)   \
+typedef union                                   \
+{                                               \
+    struct {                                    \
+    REG_BITS                                    \
+    };                                          \
+    uint8_t reg;                                \
+} SC16IS7xx_##REG_NAME;                                             ///< Shortcut for UART register access
 
-#define AWAIT_READY_TRIES 5
+#define AWAIT_READY_TRIES 5                                         ///< Restart sync attempts
 
 #pragma region structures
 
-typedef const uint8_t ro8;
-typedef uint8_t rw8;
+typedef const uint8_t ro8;                                          ///< Read-only register
+typedef uint8_t rw8;                                                ///< Read-write register
 
+
+/**
+ * @brief NXP UART register constants and command values
+ */
 enum SC16IS7xx__constants
 {
     // BGx default baudrate is 115200, LTEm-OSC raw clock is 7.378MHz (SC16IS740 section 7.8)
@@ -197,7 +201,7 @@ union __SC16IS7xx_reg_addr_byte__
 		rw8 A : 4;
 		rw8 RnW : 1;
 	};
-	uint8_t reg_address;
+    uint8_t reg_address;                                            ///< Combined bits into a byte variable
 };
 
 
@@ -211,7 +215,7 @@ union __SC16IS7xx_reg_payload__
 		union __SC16IS7xx_reg_addr_byte__ reg_addr;
 		uint8_t reg_data;
 	};
-	uint16_t reg_payload;
+	uint16_t reg_payload;                                           ///< Combined register address and data
 };
 
 
@@ -229,14 +233,14 @@ union __SC16IS7xx_reg_payload__
  *  @brief Interrupt enable register.
  */
 DEF_SC16IS7xx_REG(IER,
-    rw8 RHR_DATA_AVAIL_INT_EN : 1;
-    rw8 THR_EMPTY_INT_EN : 1;
-    rw8 RECEIVE_LINE_STAT_INT_EN : 1;
-    rw8 MDM_STAT_INT_EN : 1;
-    rw8 SLP_MODE_EN : 1;
-    rw8 nXOFF_INT_EN : 1;
-    rw8 nRTS_INT_EN : 1;
-    rw8 nCTS_INT_EN : 1;
+    rw8 RHR_DATA_AVAIL_INT_EN : 1;                                  ///< data available interrupt enable
+    rw8 THR_EMPTY_INT_EN : 1;                                       ///< transmit hold register empty interrupt enable
+    rw8 RECEIVE_LINE_STAT_INT_EN : 1;                               ///< receive line status change interrupt enable
+    rw8 MDM_STAT_INT_EN : 1;                                        ///< modem status lines change interrupt enable
+    rw8 SLP_MODE_EN : 1;                                            ///< sleep mode enable
+    rw8 nXOFF_INT_EN : 1;                                           ///< XON/XOFF control enable
+    rw8 nRTS_INT_EN : 1;                                            ///< RTS status pin interrupt enable
+    rw8 nCTS_INT_EN : 1;                                            ///< CTS status pin interrupt enable
 )        
 
 
@@ -244,15 +248,18 @@ DEF_SC16IS7xx_REG(IER,
  *  @brief FIFO control register.
  */
 DEF_SC16IS7xx_REG(FCR,
-    rw8 FIFO_EN : 1;
-    rw8 RX_FIFO_RST : 1;
-    rw8 TX_FIFO_RST : 1;
-    ro8 : 1;
-    rw8 TX_TRIGGER_LVL : 2;
-    rw8 RX_TRIGGER_LVL : 2;
+    rw8 FIFO_EN : 1;                                                ///< Enable FIFO RX/TX buffers
+    rw8 RX_FIFO_RST : 1;                                            ///< Reset RX FIFO 
+    rw8 TX_FIFO_RST : 1;                                            ///< Reset TX FIFO
+    ro8 : 1;                                                        ///< Not used
+    rw8 TX_TRIGGER_LVL : 2;                                         ///< 2-bit TX trigger level
+    rw8 RX_TRIGGER_LVL : 2;                                         ///< 2-bit RX trigger level
 )
 
 
+/**
+ * @brief Transmit (TX) buffer fill trigger levels
+ */
 typedef enum
 {
     TX_LVL_8SPACES = 0b00U,
@@ -262,6 +269,9 @@ typedef enum
 } SC16IS7xx_fcr_tx_trigger_val;
 
 
+/**
+ * @brief Receive (RX) buffer fill trigger levels
+ */
 typedef enum
 {
     RX_LVL_8CHARS = 0b00U,
@@ -290,23 +300,23 @@ typedef enum
  *  @brief Interrupt indicator register.
  */
 DEF_SC16IS7xx_REG(IIR,
-    ro8 IRQ_nPENDING : 1;
-    ro8 IRQ_SOURCE : 5;
-    ro8 FIFO_EN : 2;
+    ro8 IRQ_nPENDING : 1;                                           ///< Interrupt pending (inverted, 0=pending)
+    ro8 IRQ_SOURCE : 5;                                             ///< Interrupt source field
+    ro8 FIFO_EN : 2;                                                ///< FIFO interrupt enable
 )
 
 
 /**
- *  @brief Line control register.
+ *  @brief Line control register, UART controls.
  */
 DEF_SC16IS7xx_REG(LCR, 
-    rw8 WORD_LEN : 2;
-    rw8 STOP : 1;
-    rw8 PARITY_EN : 1;
-    rw8 EVEN_PARITY : 1;
-    rw8 SET_PARITY : 1;
-    rw8 SET_BREAK : 1;
-    rw8 DIVISOR_LATCH_EN : 1;
+    rw8 WORD_LEN : 2;                                               ///< Word length
+    rw8 STOP : 1;                                                   ///< Stop bit destination
+    rw8 PARITY_EN : 1;                                              ///< Parity enable
+    rw8 EVEN_PARITY : 1;                                            ///< Parity odd/even
+    rw8 SET_PARITY : 1;                                             ///< Fixed parity value
+    rw8 SET_BREAK : 1;                                              ///< Set break condition
+    rw8 DIVISOR_LATCH_EN : 1;                                       ///< Enable access to divisor register
 )
 
 
@@ -314,14 +324,14 @@ DEF_SC16IS7xx_REG(LCR,
  *  @brief Modem control register.
  */
 DEF_SC16IS7xx_REG(MCR,
-    ro8 : 1;
-    rw8 nRTS : 1;
-    rw8 TCR_TLR_EN : 1;
-    ro8 : 1;
-    rw8 LOOPBACK_EN : 1;
-    rw8 XON_ANY : 1;
-    rw8 IRDA_MODE_EN : 1;
-    rw8 CLOCK_DIVISOR : 1;
+    ro8 : 1;                                                        ///< Not used
+    rw8 nRTS : 1;                                                   ///< Set RTS active
+    rw8 TCR_TLR_EN : 1;                                             ///< Enable transmission control register
+    ro8 : 1;                                                        ///< Not used
+    rw8 LOOPBACK_EN : 1;                                            ///< Place TX/RX in loopback mode
+    rw8 XON_ANY : 1;                                                ///< XON/XOFF enable
+    rw8 IRDA_MODE_EN : 1;                                           ///< iRDA enable
+    rw8 CLOCK_DIVISOR : 1;                                          ///< clock divisor bit
 )
 
 
@@ -329,14 +339,14 @@ DEF_SC16IS7xx_REG(MCR,
  *  @brief Line status register.
  */
 DEF_SC16IS7xx_REG(LSR,
-    ro8 DATA_IN_RECVR : 1;
-    ro8 OVERRUN_ERROR : 1;
-    ro8 PARITY_ERROR : 1;
-    ro8 FRAMING_ERROR : 1;
-    ro8 BREAK_INT : 1;
-    ro8 THR_EMPTY : 1;
-    ro8 THR_TSR_EMPTY : 1;
-    ro8 FIFO_DATA_ERROR : 1;
+    ro8 DATA_IN_RECVR : 1;                                          ///< Data present in RX FIFO/hold 
+    ro8 OVERRUN_ERROR : 1;                                          ///< Data received prior to position vacated, overrun error
+    ro8 PARITY_ERROR : 1;                                           ///< Data received with parity error
+    ro8 FRAMING_ERROR : 1;                                          ///< Improper data frame received    
+    ro8 BREAK_INT : 1;                                              ///< Serial break received
+    ro8 THR_EMPTY : 1;                                              ///< Transmit hold register empty
+    ro8 THR_TSR_EMPTY : 1;                                          ///< Transmit send register empty
+    ro8 FIFO_DATA_ERROR : 1;                                        ///< FIFO data error (one or more positions with error)
 )
 
 
@@ -344,10 +354,10 @@ DEF_SC16IS7xx_REG(LSR,
  *  @brief Modem status register.
  */
 DEF_SC16IS7xx_REG(MSR,
-    ro8 DELTA_CTS : 1;
-    ro8 : 3;
-    ro8 CTS : 1;
-    ro8 : 3;
+    ro8 DELTA_CTS : 1;                                              ///< Change in CTS     
+    ro8 : 3;                                                        ///< Not used
+    ro8 CTS : 1;                                                    ///< CTS (clear-to-send) received
+    ro8 : 3;                                                        ///< Not used
 )
 
 
@@ -355,7 +365,7 @@ DEF_SC16IS7xx_REG(MSR,
  *  @brief Scratch pad register.
  */
 DEF_SC16IS7xx_REG(SPR,
-    rw8 DATA;
+    rw8 DATA;                                                       ///< 8-bit scratchpad register
 )
 
 
@@ -363,23 +373,23 @@ DEF_SC16IS7xx_REG(SPR,
  *  @brief UART software reset.
  */
 DEF_SC16IS7xx_REG(UARTRST,
-    ro8 : 3;
-    rw8 UART_SWRST : 1;
+    ro8 : 3;                                                        ///< Not used
+    rw8 UART_SWRST : 1;                                             ///< Perform a UART software initiated reset
 )
 
 
 /**
- *  @brief
+ *  @brief EFCR register (extra features)
  */
 DEF_SC16IS7xx_REG(EFCR,
-    rw8 MODE_9BIT_EN : 1;
-    rw8 RECVR_DISABLE : 1;
-    rw8 TRANSMITTER_DISABLE : 1;
-    ro8 : 1;
-    rw8 AUTO_RS_485_RTS_DIR_CTRL : 1;
-    rw8 AUTO_RS_485_RTS_OUTPUT_INV : 1;
-    ro8 : 1;
-    rw8 IRDA_MODE : 1;
+    rw8 MODE_9BIT_EN : 1;                                           ///< Enable 9-bit mode
+    rw8 RECVR_DISABLE : 1;                                          ///< Disable RX 
+    rw8 TRANSMITTER_DISABLE : 1;                                    ///< Disable TX
+    ro8 : 1;                                                        ///< Not used
+    rw8 AUTO_RS_485_RTS_DIR_CTRL : 1;                               ///< RS-485 RTS direction control
+    rw8 AUTO_RS_485_RTS_OUTPUT_INV : 1;                             ///< RS-485 RTS output inverted
+    ro8 : 1;                                                        ///< Not used
+    rw8 IRDA_MODE : 1;                                              ///< IRDA mode
 )
 
 
@@ -387,8 +397,8 @@ DEF_SC16IS7xx_REG(EFCR,
  *  @brief Modem status register.
  */
 DEF_SC16IS7xx_REG(TLR,
-    rw8 TX_TRIGGER_LVL : 4;
-    rw8 RX_TRIGGER_LVL : 4;
+    rw8 TX_TRIGGER_LVL : 4;                                         ///< TX trigger level
+    rw8 RX_TRIGGER_LVL : 4;                                         ///< RX trigger level
 )
 
 
@@ -396,11 +406,11 @@ DEF_SC16IS7xx_REG(TLR,
  *  @brief
  */
 DEF_SC16IS7xx_REG(EFR, 
-    rw8 SWFLOW_CTRL : 4;
-    rw8 ENHANCED_FNS_EN : 1;
-    rw8 SPECIAL_CHAR_DETECT : 1;
-    rw8 AUTO_nRTS : 1;
-    rw8 AUTO_nCTS : 1;
+    rw8 SWFLOW_CTRL : 4;                                            ///< SW flow control enabled
+    rw8 ENHANCED_FNS_EN : 1;                                        ///< Enhanced feature set enabled
+    rw8 SPECIAL_CHAR_DETECT : 1;                                    ///< Special character detection enabled
+    rw8 AUTO_nRTS : 1;                                              ///< Auto RTS enable
+    rw8 AUTO_nCTS : 1;                                              ///< Auto CTS enable
 )
 
 #pragma endregion
@@ -457,16 +467,16 @@ void SC16IS7xx_writeReg(uint8_t reg_addr, uint8_t reg_data);
 
 /**
  *	@brief Reads through the SC16IS741A bridge (its RX FIFO)
- *	@param dest [out] - The destination buffer
- *	@param dest_len [in] - The length of the destination buffer
+ *	@param [out] rxData Destination buffer
+ *	@param [in] size Length of the destination buffer
  */
 void SC16IS7xx_read(uint8_t* rxData, uint32_t size);
 
 
 /**
  *	@brief Write through the SC16IS741A bridge
- *	@param src [in] - The source data to write
- *	@param src_len [in] - The length of the source
+ *	@param [in] txData Source data to write
+ *	@param [in] size Length of the source
  */
 void SC16IS7xx_write(const uint8_t * txData, uint32_t size);
 

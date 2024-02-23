@@ -31,34 +31,18 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_H__
 #define __LTEMC_H__
 
-#define LTEmC_VERSION "3.1.0d"
+#define LTEmC_VERSION "3.1.0d"                                      ///< LTEmC version reported to host
 
 #include <lq-logging.h>
 #include <lq-diagnostics.h>
 
-// #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
-// #include <lq-diagnostics.h>                     /// ASSERT and diagnostic data collection
-// #include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
-// #include "lq-platform.h"                        /// platform abstractions (arduino, etc.)
-// #include "ltemc-atcmd.h"                        /// command processor interface
-// #include "ltemc-mdminfo.h"                      /// modem information
-// #include "ltemc-network.h"                      /// cellular provider and packet network 
-// #ifdef __cplusplus
-// extern "C"
-// {
-// #endif // __cplusplus
 
-// Internal static buffers you may need to change for your application. Contact LooUQ for details.
-// #define IOP_RX_COREBUF_SZ 256
-// #define IOP_TX_BUFFER_SZ 1460
+#include <lq-types.h>                               /// LooUQ embedded device library typedefs, common across products/libraries
+#include "ltemc-types.h"                            /// type definitions for LTEm device driver: LTEmC
 
-#include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
-#include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
-//#include <lqdiag.h>                             /// PRINTDBG and ASSERT diagnostic data collection
-
-#include "ltemc-platform.h"                     /// platform abstractions (arduino, etc.)
-#include "ltemc-atcmd.h"                        /// command processor interface
-#include "ltemc-network.h"                      /// cellular provider and packet network 
+#include "ltemc-platform.h"                         /// platform abstractions (arduino, etc.)
+#include "ltemc-atcmd.h"                            /// command processor interface
+#include "ltemc-network.h"                          /// cellular provider and packet network 
 
 
 /* Add the following LTEmC feature sets as required for your project's main .cpp or .c file 
@@ -86,12 +70,12 @@ extern "C"
 #endif // __cplusplus
 
 
-// typedef void (*eventNotifCallback_func)(uint8_t notifCode, const char *message);
-
 /**
  *	@brief Initialize the LTEm1 modem.
- *	@param ltem_config [in] - The LTE modem gpio pin configuration.
- *  @param applicationCallback [in] - If supplied (not NULL), this function will be invoked for significant LTEm events.
+ *
+ *	@param [in] ltem_config The LTE modem gpio pin configuration.
+ *  @param [in] yieldCB Callback into host application whenever LTEmC is awaiting a long running event
+ *  @param [in] eventNotifyCB If supplied (not NULL), this function will be invoked for significant LTEm events.
  */
 void ltem_create(const ltemPinConfig_t ltem_config, yield_func yieldCB, appEvntNotify_func eventNotifyCB);
 
@@ -103,15 +87,17 @@ void ltem_destroy();
 
 
 /**
- *	@brief Set radio priority. 
- *  @param [in] radioPriority The priority consumer for the radio receive path.
+ *	@brief Set radio priority to cellular or GNSS function
+ *
+ *  @param [in] rfPriorityMode The priority consumer for the radio receive path.
  *  @return Result code representing status of operation, OK = 200.
  */
-resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t priorityMode);
+resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t rfPriorityMode);
 
 
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
+
  *  @return Current RF priority mode
  */
 ltemRfPriorityMode_t ltem_getRfPriorityMode();
@@ -119,6 +105,7 @@ ltemRfPriorityMode_t ltem_getRfPriorityMode();
 
 /**
  *	@brief Set RF priority on BG95/BG77 modules. 
+
  *  @return Current RF priority state
  */
 ltemRfPriorityState_t ltem_getRfPriorityState();
@@ -126,7 +113,8 @@ ltemRfPriorityState_t ltem_getRfPriorityState();
 
 /**
  *	@brief Power on and start the modem
- *  @param resetIfPoweredOn [in] Perform a software reset on the modem, if found in a powered on state
+
+ *  @param [in] resetAction Perform a software reset on the modem, if found in a powered on state
  */
 bool ltem_start(resetAction_t resetAction);
 
@@ -152,6 +140,7 @@ bool ltem_reset(bool hardReset);
 
 /**
  *	@brief Turn modem power on/off.
+
  *	@param [in] powerState New state for modem: true is on, false is off.
  */
 void ltem_setPowerState(bool powerState);
@@ -163,29 +152,6 @@ void ltem_setPowerState(bool powerState);
  */
 bool ltem_ping();
 
-/* RF Priority (BG95\BG77)
- ----------------------------------------------------------------------------------------------- */
-
-/**
- *	@brief Set RF priority on BG95/BG77 modules. 
- *	@param [in] setPriority New radio priority.
- *  @return Result code representing status of operation, OK = 200.
- */
-resultCode_t ltem_setRfPriorityMode(ltemRfPriorityMode_t priorityMode);
-
-
-/**
- *	@brief Get RF priority mode on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
- */
-ltemRfPriorityMode_t ltem_getRfPriorityMode();
-
-
-/**
- *	@brief Get RF priority state on BG95/BG77 modules. 
- *  @return Result code representing status of operation, OK = 200.
- */
-ltemRfPriorityState_t ltem_getRfPriorityState();
 
 
 // /**
@@ -278,7 +244,6 @@ void ltem_deleteStream(streamCtrl_t *streamCtrl);
  * @brief Get a stream control from data context, optionally filtering on stream type.
  * 
  * @param context The data context for the stream 
- * @param streamType Protocol of the stream
  * @return streamCtrl_t* Pointer of a generic stream, can be cast (after type validation) to a specific protocol control
  */
 streamCtrl_t* ltem_findStream(uint8_t context);
@@ -286,7 +251,7 @@ streamCtrl_t* ltem_findStream(uint8_t context);
 
 /**
  *	@brief Registers the address (void*) of your application yield callback handler.
- *  @param yieldCallback [in] Callback function in application code to be invoked when LTEmC is in await section.
+ *  @param [in] yieldCB Callback function in application code to be invoked when LTEmC is in await section.
  */
 void ltem_setYieldCallback(yield_func yieldCB);
 
@@ -310,7 +275,19 @@ void ltem_notifyApp(uint8_t notifyType, const char *notifyMsg);
 /*
  ----------------------------------------------------------------------------------------------- */
 
+/**
+ * @brief Register application diagnostics function for callback in a LTEmC diagnostics event
+ * 
+ * @param [in] diagCB Function to be called
+ */
 void LTEM_registerDiagCallback(appDiagCallback_func diagCB);
+
+
+/**
+ * @brief 
+ * 
+ * @param diagPointDescription 
+ */
 void LTEM_diagCallback(const char* diagPointDescription);
 
 

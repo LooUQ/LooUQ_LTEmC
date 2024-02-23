@@ -32,12 +32,7 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_IOP_H__
 #define __LTEMC_IOP_H__
 
-// #include "ltemc-types.h"
-// #include "ltemc-nxp-sc16is.h"
 #include <stdint.h>
-
-#define USR_PG() (!pRxBffr->iopPg)
-#define IOP_PG() (pRxBffr->iopPg)
 
 
 #ifdef __cplusplus

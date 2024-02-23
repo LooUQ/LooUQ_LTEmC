@@ -33,17 +33,7 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_INTERNAL_H__
 #define __LTEMC_INTERNAL_H__
 
-#define PRODUCT "LM" 
-
-// Common macro functions used across LTEmC environment
-#define PERIOD_FROM_SECONDS(period)  (period * 1000)
-#define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
-#define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
-#define STRCMP(x,y)  (strcmp(x,y) == 0)
-
-// Internal static buffers you may need to change for your application. Contact LooUQ for details.
-// #define IOP_RX_COREBUF_SZ 256
-// #define IOP_TX_BUFFER_SZ 1460
+#define PRODUCT "LM"                                                ///< Product code used by lqASSERT
 
 #include "ltemc.h"
 #include <lq-str.h>                         // most LTEmC modules use LooUQ string functions
@@ -65,12 +55,17 @@ Also add information on how to contact you by electronic and paper mail.
 
 /* Metric Type Definitions
  * ------------------------------------------------------------------------------------------------------------------------------*/
+
+
+/**
+ * @brief Metrics collection for LTEm/LTEmC operations
+ */
 typedef struct ltemMetrics_tag
 {
     // metrics
-    uint32_t cmdInvokes;
-
+    uint32_t cmdInvokes;                                            ///< Number of times an AT cmd has been dispatched to the module
 } ltemMetrics_t;
+
 
 /**
  * @brief enum describing the last receive event serviced by the ISR
@@ -83,13 +78,15 @@ typedef enum recvEvent_tag
 } recvEvent_t;
 
 
+/**
+ * @brief Stream control for the singleton file system control.
+ */
 typedef struct fileCtrl_tag
 {
-    char streamType;                                    // stream type
-    dataCntxt_t fileHandle;                             // the file sourcing data
-    dataHndlr_func dataHndlr;                           // function to handle data streaming, initiated by atcmd dataMode (RX only)
-
-    appRcvr_func appRecvDataCB;
+    char streamType;                                                ///< Stream type (for compatibility with other streams)
+    dataCntxt_t fileHandle;                                         ///< File sourcing data
+    dataHndlr_func dataHndlr;                                       ///< Function to handle data streaming, initiated by atcmd dataMode (RX only)
+    appRcvr_func appRecvDataCB;                                     ///< Application's receiver (callback)
 } fileCtrl_t;
 
 /**
@@ -97,8 +94,8 @@ typedef struct fileCtrl_tag
  */
 typedef struct ltemStatics_tag
 {
-    char dateTimeBffr[PSZ(ltem__dateTimeBffrSz)];       // reused by date/time functions for parsing formats
-    char reportBffr[PSZ(ltem__reportsBffrSz)];          // reused by *Rpt() functions
+    char dateTimeBffr[PSZ(ltem__dateTimeBffrSz)];                   ///< reused by date/time functions for parsing formats
+    char reportBffr[PSZ(ltem__reportsBffrSz)];                      ///< reused by *Rpt() functions
 } ltemStatics_t;
 
 
@@ -110,33 +107,33 @@ typedef struct ltemStatics_tag
  */
 typedef struct ltemDevice_tag
 {
-	ltemPinConfig_t pinConfig;                  // GPIO pin configuration for required GPIO and SPI interfacing
-    bool cancellationRequest;                   // For RTOS implementations, token to request cancellation of long running task/action
-    bool hostConfigured;                        // Host resources configured for LTEm use
-    deviceState_t deviceState;                  // Device state of the BGx module
-    bool simReady;                              // SIM is communicating and ready for use
-    bool appEventNotifyEnabled;                 // Flag to control forwarding of LTEm notifications back to application
-    appEvntNotify_func appEvntNotifyCB;         // Event notification callback to parent application
-    appDiagCallback_func appDiagnosticCB;       // Callback to application (platform specific) diagnostics function (stack, memory or other system state)
+	ltemPinConfig_t pinConfig;                                      ///< GPIO pin configuration for required GPIO and SPI interfacing
+    bool cancellationRequest;                                       ///< For RTOS implementations, token to request cancellation of long running task/action
+    bool hostConfigured;                                            ///< Host resources configured for LTEm use
+    deviceState_t deviceState;                                      ///< Device state of the BGx module
+    bool simReady;                                                  ///< SIM is communicating and ready for use
+    bool appEventNotifyEnabled;                                     ///< Flag to control forwarding of LTEm notifications back to application
+    appEvntNotify_func appEvntNotifyCB;                             ///< Event notification callback to parent application
+    appDiagCallback_func appDiagnosticCB;                           ///< Callback to application (platform specific) diagnostics function (stack, memory or other system state)
 
-    platformSpi_t* platformSpi;
-    iop_t *iop;                                 // IOP subsystem controls
-    atcmd_t *atcmd;                             // Action subsystem controls
-    modemSettings_t *modemSettings;             // Settings to control radio and cellular network initialization
-	modemInfo_t *modemInfo;                     // Data structure holding persistent information about modem device
-    ntwkOperator_t *ntwkOperator;               // Data structure representing the cellular network provider and the networks (PDP contexts it provides)
-    streamCtrl_t* streams[ltem__streamCnt];     // Data streams: protocols
-    fileCtrl_t* fileCtrl;
+    lqSpi_t* platformSpi;                                           ///< LQ platform generic SPI interface
+    iop_t *iop;                                                     ///< IOP subsystem controls
+    atcmd_t *atcmd;                                                 ///< Action subsystem controls
+    modemSettings_t *modemSettings;                                 ///< Settings to control radio and cellular network initialization
+	modemInfo_t *modemInfo;                                         ///< Data structure holding persistent information about modem device
+    ntwkOperator_t *ntwkOperator;                                   ///< Data structure representing the cellular network provider and the networks (PDP contexts it provides)
+    streamCtrl_t* streams[ltem__streamCnt];                         ///< Data streams: protocols
+    fileCtrl_t* fileCtrl;                                           ///< Stream control dedicated to LTEm device file system
 
-    ltemMetrics_t metrics;                      // metrics for operational analysis and reporting
-    ltemStatics_t statics;
+    ltemMetrics_t metrics;                                          ///< metrics for operational analysis and reporting
+    ltemStatics_t statics;                                          ///< collection of static buffers used to return results of several commands
 } ltemDevice_t;
 
 
 /* ================================================================================================================================
  * LTEmC Global Structure */
 
-extern ltemDevice_t g_lqLTEM;                   // The LTEm "object".
+extern ltemDevice_t g_lqLTEM;                                       ///< The LTEm "object".
 
 /* LTEmC device is created as a global singleton variable
  * ==============================================================================================================================*/

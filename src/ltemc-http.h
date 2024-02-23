@@ -46,20 +46,20 @@ enum http__constants
     http__returnResponseHeaders = 1, 
     http__useDefaultTimeout = 0,
     http__defaultTimeoutBGxSec = 60,
-    http__requestTypeSz = 5,                            // GET or POST
-    http__requestBaseSz = 50,                           // Size of a custom request base (1st 2 lines) less URLs and content-length
-    http__standardHeadersSz = 130,                      // For custom requests, the combined length of all the "standard/common" headers 
-    http__authHeaderSz = 20,                            // Size of authorization header without encoded credentials
-    http__contentLengthMinHeaderSz = 21,                // Size of "Content-Length: 0" header with 2 EOL body separator
-    http__contentLengthHeaderSz = 25,                   // Size of Content-Length header with 2 EOL body separator
-    http__minUrlSz = 16,                                // URL validation (ASSERT)
-    http__maxUrlSz = 224,                               // Maximum URL length host+relative
-    http__maxHeaderKeySz = 48,                          // Maximum length for a custom header key size to use with http_addHeader()
+    http__requestTypeSz = 5,                                            ///< GET or POST
+    http__requestBaseSz = 50,                                           ///< Size of a custom request base (1st 2 lines) less URLs and content-length
+    http__standardHeadersSz = 130,                                      ///< For custom requests, the combined length of all the "standard/common" headers 
+    http__authHeaderSz = 20,                                            ///< Size of authorization header without encoded credentials
+    http__contentLengthMinHeaderSz = 21,                                ///< Size of "Content-Length: 0" header with 2 EOL body separator
+    http__contentLengthHeaderSz = 25,                                   ///< Size of Content-Length header with 2 EOL body separator
+    http__minUrlSz = 16,                                                ///< URL validation (ASSERT)
+    http__maxUrlSz = 224,                                               ///< Maximum URL length host+relative
+    http__maxHeaderKeySz = 48,                                          ///< Maximum length for a custom header key size to use with http_addHeader()
     http__readToFileNameSzMax = 80,
-    http__readToFileTimeoutSec = 180,                   // Total number of seconds for read to file allowed (atcmd processing)
-    http__readToFileInterPcktTimeoutSec = 20,           // BGx inter-packet timeout (max interval between two packets)
+    http__readToFileTimeoutSec = 180,                                   ///< Total number of seconds for read to file allowed (atcmd processing)
+    http__readToFileInterPcktTimeoutSec = 20,                           ///< BGx inter-packet timeout (max interval between two packets)
 
-    http__typicalCustomRequestHeaders = 275             // HTTP request with typical URL, common headers and space for one/two custom headers
+    http__typicalCustomRequestHeaders = 275                             ///< HTTP request with typical URL, common headers and space for one/two custom headers
 };
 
 
@@ -77,7 +77,7 @@ typedef void (*httpAppRcvr_func)(dataCntxt_t dataCntxt, char *data, uint16_t dat
 /** 
  *  @brief If using custom headers, bit-map indicating what headers to create for default custom header collection.
 */
-typedef enum httpHeaderMap_tag              // bit-map to indicate headers to create for add custom headers, bitwise OR to http_addDefaultHdrs()
+typedef enum httpHeaderMap_tag
 {
     httpHeaderMap_accept = 0x0001,
     httpHeaderMap_userAgent = 0x0002,
@@ -116,39 +116,42 @@ typedef enum httpRequestType_tag
  */
 typedef struct httpRequest_tag
 {
-    char * buffer;
-    uint16_t buffersz;
-    uint16_t headersLen;
-    uint16_t contentLen;
+    char * buffer;                                                  ///< Character buffer for storage of request (headers)
+    uint16_t buffersz;                                              ///< Size of the buffer 
+    uint16_t headersLen;                                            ///< As request is constructed, updates with the total buffer space consumed by added headers
+    uint16_t contentLen;                                            ///< Once request is sealed, indicates content length to transfer to host
 } httpRequest_t;
 
 
+/**
+ * @brief HTTP protocol control structure
+ */
 typedef struct httpCtrl_tag
 {
-    char streamType;                            // stream type
-    dataCntxt_t dataCntxt;                      // integer representing the source of the stream; fixed for protocols, file handle for FS
-    dataHndlr_func dataRxHndlr;                 // function to handle data streaming, initiated by eventMgr() or atcmd module
-    urcEvntHndlr_func urcEvntHndlr;             // function to determine if "potential" URC event is for an open stream and perform reqd actions
-    closeStream_func closeStreamCB;             // function to close stream and update stream control structure (usually invoked after URC detected)
+    char streamType;                                                ///< stream type
+    dataCntxt_t dataCntxt;                                          ///< integer representing the source of the stream; fixed for protocols, file handle for FS
+    dataHndlr_func dataRxHndlr;                                     ///< function to handle data streaming, initiated by eventMgr() or atcmd module
+    urcEvntHndlr_func urcEvntHndlr;                                 ///< function to determine if "potential" URC event is for an open stream and perform reqd actions
+    closeStream_func closeStreamCB;                                 ///< function to close stream and update stream control structure (usually invoked after URC detected)
 
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
-    appRcvr_func appRcvrCB;                     // callback into host application with data (cast from generic func* to stream specific function)
-    bool useTls;                                // flag indicating SSL/TLS applied to stream
-    char hostUrl[host__urlSz];                  // URL or IP address of host
-    uint16_t hostPort;                          // IP port number host is listening on (allows for 65535/0)
-    // bool returnResponseHdrs;                    // if set true, response headers are included in the returned response
-    char * responseHdrs;                        // pointer to application provided buffer for response headers
-    uint16_t responseBffrSz;                    // size of app provided response header buffer
-    char requestType[http__requestTypeSz];      // type of current/last request: 'G'=GET, 'P'=POST
-    httpState_t requestState;                   // current state machine variable for HTTP request
-    uint16_t bgxError;                          // BGx sprecific error code returned from GET/POST
-    uint16_t httpStatus;                        // set to 0 during a request, initialized to 0xFFFF before any request
-    uint32_t pageSize;                          // if provided in page response, the page size 
-    uint32_t pageRemaining;                     // set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
-    uint8_t timeoutSec;                         // default timeout for GET/POST/read requests (BGx is 60 secs)
-    uint16_t defaultBlockSz;                    // default size of block (in of bytes) to transfer to app from page read (page read spans blocks)
-    bool pageCancellation;                      // set to abandon further page loading
+    appRcvr_func appRcvrCB;                                         ///< callback into host application with data (cast from generic func* to stream specific function)
+    bool useTls;                                                    ///< flag indicating SSL/TLS applied to stream
+    char hostUrl[host__urlSz];                                      ///< URL or IP address of host
+    uint16_t hostPort;                                              ///< IP port number host is listening on (allows for 65535/0)
+    // bool returnResponseHdrs;                                     ///< True: response headers are included in the returned response
+    char * responseHdrs;                                            ///< pointer to application provided buffer for response headers
+    uint16_t responseBffrSz;                                        ///< size of app provided response header buffer
+    char requestType[http__requestTypeSz];                          ///< type of current/last request: 'G'=GET, 'P'=POST
+    httpState_t requestState;                                       ///< current state machine variable for HTTP request
+    uint16_t bgxError;                                              ///< BGx sprecific error code returned from GET/POST
+    uint16_t httpStatus;                                            ///< set to 0 during a request, initialized to 0xFFFF before any request
+    uint32_t pageSize;                                              ///< if provided in page response, the page size 
+    uint32_t pageRemaining;                                         ///< set to page size (if incl in respose) counts down to 0 (used for optimizing page end parsing)
+    uint8_t timeoutSec;                                             ///< default timeout for GET/POST/read requests (BGx is 60 secs)
+    uint16_t defaultBlockSz;                                        ///< default size of block (in of bytes) to transfer to app from page read (page read spans blocks)
+    bool pageCancellation;                                          ///< set to abandon further page loading
 } httpCtrl_t;
 
 
@@ -162,15 +165,16 @@ extern "C"
  *	@brief Create a HTTP(s) control structure to manage web communications. 
  *  @param [in] httpCtrl HTTP control structure pointer, struct defines parameters of communications with web server.
  *	@param [in] dataCntxt The data context (0-5) to use for this communications.
- *  @param [in] recvCallback Callback function to receive incoming page data.
+ *  @param [in] appRcvrCB Callback function to receive incoming page data.
  */
 void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_func appRcvrCB);
 
 
 /**
  *	@brief Set host connection characteristics. 
+ *
  *  @param [in] httpCtrl HTTP control structure pointer, struct defines parameters of communications with web server.
- *  @param [in] hostURL The HOST address of the web server URL.
+ *  @param [in] hostUrl The HOST address of the web server URL.
  *  @param [in] hostPort The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
  */
 void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t hostPort);
@@ -193,7 +197,6 @@ void http_setResponseHeadersBuffer(httpCtrl_t *httpCtrl, char *respHdrBffr, uint
  * @param reqstType Enum directing the type of request to create.
  * @param [in] hostUrl Host name or IP address.
  * @param [in] relativeUrl Text containing the relative URL to the host (excludes query string).
- * @param [in] contentLength Total expected length of the request body.
  * @param [in] reqstBffr Char buffer to hold the request.
  * @param [in] reqstBffrSz Size of the buffer.
  * @return httpRequest_t object containing the components for a custom HTTP(S) request.
@@ -206,28 +209,26 @@ httpRequest_t http_createRequest(httpRequestType_t reqstType, const char* hostUr
 /**
  * @brief Adds standard http headers to a custom headers buffer.
  * 
- * @param [in] request Request object to update.
+ * @param [in] httpReqst Request object to update.
  * @param [in] headerMap Bitmap for which standard headers to use.
  */
-void http_addStandardHeaders(httpRequest_t* request, httpHeaderMap_t headerMap);
+void http_addStandardHeaders(httpRequest_t * httpReqst, httpHeaderMap_t headerMap);
 
 
 /**
  * @brief Adds a basic authorization header to a headers buffer.
  *
- * @param [in] requestBuffer Char buffer (array) to use for composition and headers store.
- * @param [in] requestBufferSz Size of buffer.
+ * @param [in] httpReqst HTTP request control to update with authorization header
  * @param [in] user User name.
  * @param [in] pw Password/secret for header.
  */
-void http_addBasicAuthHdr(httpRequest_t* request, const char *user, const char *pw);
+void http_addBasicAuthHdr(httpRequest_t* httpReqst, const char *user, const char *pw);
 
 
 /**
  * @brief Helper to compose a generic header and add it to the headers collection being composed.
  * 
- * @param [in] requestBuffer Char buffer (array) to use for composition and headers store.
- * @param [in] requestBufferSz Size of buffer.
+ * @param [in] request HTTP request control to update with new header
  * @param [in] keyValue Fully formed header with key and value
  */
 void http_addHeader(httpRequest_t* request, const char *keyValue);
@@ -236,12 +237,11 @@ void http_addHeader(httpRequest_t* request, const char *keyValue);
 /**
  * @brief Helper to compose a generic header and add it to the headers collection being composed.
  * 
- * @param [in] requestBuffer Char buffer (array) to use for composition and headers store.
- * @param [in] requestBufferSz Size of buffer.
+ * @param [in] httpReqst HTTP request control to update with new header
  * @param [in] key Header's key value
- * @param [in] val Header's value
+ * @param [in] value Header's value
  */
-void http_addHeaderKeyAndValue(httpRequest_t* request, const char *key, const char *value);
+void http_addHeaderKeyAndValue(httpRequest_t* httpReqst, const char *key, const char *value);
 
 
 /**
@@ -267,13 +267,12 @@ void http_updateContentLength(httpRequest_t* httpReqst, uint32_t contentLength);
  * @note This function closes request header section, no additional headers can be added to request
  * once this function has been called with the referenced requestBuffer. 
  * 
- * @param [in] requestBuffer The char buffer to contain the HTTP POST request being constructed.
- * @param [in] requestBufferSz The size of the request char buffer.
+ * @param [in] httpReqst HTTP request control The char buffer to contain the HTTP POST request being constructed.
  * @param [in] postData Character data to be appended to the request.
- * @return true The provided postData was added to the request.
+ * @param [in] postDataSz Number of characters to be appended to the request.
  * @return uint16_t The number of DROPPED chars due to insufficient room in request buffer.
  */
-uint16_t http_addPostData(httpRequest_t* request, const char *postData, uint16_t postDataSz);
+uint16_t http_addPostData(httpRequest_t* httpReqst, const char *postData, uint16_t postDataSz);
 
 /* ------------------------------------------------------------------------------------------------
  *  Request and Response Section 
@@ -297,9 +296,8 @@ resultCode_t http_getCustomRequest(httpCtrl_t *httpCtrl, httpRequest_t* customRe
  *	@brief Performs a HTTP POST page web request.
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
  *	@param [in] relativeUrl URL, relative to the host. If none, can be provided as "" or "/".
- *  @param [in] customHeaders If provided (not NULL or empty) GET will include contents as a custom header array.
  *  @param [in] postData Pointer to char buffer with POST content.
- *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data.
+ *  @param [in] postDataSz Size of the POST content.
  *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
 resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, const char* postData, uint16_t postDataSz);
@@ -309,9 +307,7 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char* relativeUrl, const char
  *	@brief Performs a HTTP POST page web request.
  *  @param [in] httpCtrl Pointer to the control block for HTTP communications.
  *	@param [in] relativeUrl URL, relative to the host. If none, can be provided as "" or "/".
- *  @param [in] customHeaders If provided (not NULL or empty) GET will include contents as a custom header array.
- *  @param [in] postData Pointer to char buffer with POST content.
- *  @param [in] returnResponseHdrs if requested (true) the page response stream will prefix the page data.
+ *  @param [in] customRequest Pointer to a HTTP request control with information for the HTTP operation.
  *  @return resultCode_t indicating the success/failure of the request (HTTP standard result codes).
  */
 resultCode_t http_postCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest);

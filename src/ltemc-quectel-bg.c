@@ -32,25 +32,24 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_OFF
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "BGX"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_OFF                                  ///< Logging detail level for this source file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "BGX"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-quectel-bg.h"
 #include <platform\lq-platform_gpio.h>
 
-extern ltemDevice_t g_lqLTEM;
+extern ltemDevice_t g_lqLTEM;                                       ///< Global singleton LTEm object
 
 extern const char* const qbg_initCmds[];
 extern int8_t qbg_initCmdsCnt;
 
-#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))                         ///< Returns the larger of two numbers
 
 
 /* Private static functions
  --------------------------------------------------------------------------------------------- */
-bool S__statusFix();
 
 
 #pragma region public functions
@@ -62,19 +61,19 @@ bool S__statusFix();
  */
 bool QBG_isPowerOn()
 {
-    gpioPinValue_t statusPin = platform_readPin(g_lqLTEM.pinConfig.statusPin);
+    gpioPinValue_t statusPin = lqGpio_readPin(g_lqLTEM.pinConfig.statusPin);
 
     #ifdef STATUS_LOW_PULLDOWN
     if (statusPin)                     // if pin high, assume latched
     {
-        platform_closePin(g_lqLTEM.pinConfig.statusPin);
-        platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_output);    // open status for write, set low
-        platform_writePin(g_lqLTEM.pinConfig.statusPin, gpioValue_low);     // set low
-        pDelay(1);
-        platform_closePin(g_lqLTEM.pinConfig.statusPin);
-        platform_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);     // reopen for normal usage (read)
+        lqGpio_closePin(g_lqLTEM.pinConfig.statusPin);
+        lqGpio_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_output);    // open status for write, set low
+        lq_writePin(g_lqLTEM.pinConfig.statusPin, gpioValue_low);     // set low
+        lqDelay(1);
+        lqGpio_closePin(g_lqLTEM.pinConfig.statusPin);
+        lqGpio_openPin(g_lqLTEM.pinConfig.statusPin, gpioMode_input);     // reopen for normal usage (read)
 
-        statusPin = platform_readPin(g_lqLTEM.pinConfig.statusPin);                     // perform 2nd read, after pull-down sequence
+        statusPin = lqGpio_readPin(g_lqLTEM.pinConfig.statusPin);                     // perform 2nd read, after pull-down sequence
     }
     #endif
 
@@ -97,9 +96,9 @@ void QBG_powerOn()
     g_lqLTEM.deviceState = deviceState_powerOff;
 
     lqLOG_INFO("Powering LTEm On...");
-    platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_high);  // toggle powerKey pin to power on/off
-    pDelay(BGX__powerOnDelay);
-    platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
+    lqGpio_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_high);  // toggle powerKey pin to power on/off
+    lqDelay(BGX__powerOnDelay);
+    lqGpio_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
 
     uint8_t waitAttempts = 0;
     while (!QBG_isPowerOn())
@@ -109,7 +108,7 @@ void QBG_powerOn()
             lqLOG_ERROR("FAILED\r\n");
             return;
         }
-        pDelay(100);                                                    // allow background tasks to operate
+        lqDelay(100);                                                    // allow background tasks to operate
     }
     g_lqLTEM.deviceState = deviceState_powerOn;
     lqLOG_INFO("DONE\r\n");
@@ -129,9 +128,9 @@ void QBG_powerOff()
     }
 
     lqLOG_INFO("Powering LTEm Off...");
-	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_high);  // toggle powerKey pin to power on/off
-	pDelay(BGX__powerOffDelay);
-	platform_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
+	lqGpio_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_high);  // toggle powerKey pin to power on/off
+	lqDelay(BGX__powerOffDelay);
+	lqGpio_writePin(g_lqLTEM.pinConfig.powerkeyPin, gpioValue_low);
 
     uint8_t waitAttempts = 0;
     while (QBG_isPowerOn())
@@ -141,7 +140,7 @@ void QBG_powerOff()
             lqLOG_ERROR("FAILED\r\n");
             return;
         }
-        pDelay(100);                                                    // allow background tasks to operate
+        lqDelay(100);                                                    // allow background tasks to operate
     }
     g_lqLTEM.deviceState = deviceState_powerOff;
     lqLOG_INFO("DONE\r\n");
@@ -161,11 +160,11 @@ void QBG_reset(resetAction_t resetAction)
         char cmdData[] = "AT+CFUN=1,1\r\n";                                   // DMA SPI DMA may not tolerate Flash source
         IOP_startTx(cmdData, sizeof(cmdData));                              // soft-reset command: performs a module internal HW reset and cold-start
 
-        uint32_t waitStart = pMillis();                                     // start timer to wait for status pin == OFF
+        uint32_t waitStart = lqMillis();                                     // start timer to wait for status pin == OFF
         while (QBG_isPowerOn())
         {
             yield();                                                        // give application some time back for processing
-            if (pMillis() - waitStart > PERIOD_FROM_SECONDS(3))
+            if (lqMillis() - waitStart > PERIOD_FROM_SECONDS(3))
             {
                 lqLOG_WARN("LTEm swReset:OFF timeout\r\n");
                 // SC16IS7xx_sendBreak();
@@ -175,11 +174,11 @@ void QBG_reset(resetAction_t resetAction)
             }
         }
 
-        waitStart = pMillis();                                              // start timer to wait for status pin == ON
+        waitStart = lqMillis();                                              // start timer to wait for status pin == ON
         while (!QBG_isPowerOn())
         {
             yield();                                                        // give application some time back for processing
-            if (pMillis() - waitStart > PERIOD_FROM_SECONDS(3))
+            if (lqMillis() - waitStart > PERIOD_FROM_SECONDS(3))
             {
                 lqLOG_WARN("LTEm swReset:ON timeout\r\n");
                 return;
@@ -189,15 +188,15 @@ void QBG_reset(resetAction_t resetAction)
     }
     else if (resetAction == resetAction_hwReset)
     {
-        platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_high);     // hardware reset: reset pin (LTEm inverts)
-        pDelay(4000);                                                       // BG96: active for 150-460ms , BG95: 2-3.8s
-        platform_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
+        lqGpio_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_high);     // hardware reset: reset pin (LTEm inverts)
+        lqDelay(4000);                                                       // BG96: active for 150-460ms , BG95: 2-3.8s
+        lqGpio_writePin(g_lqLTEM.pinConfig.resetPin, gpioValue_low);
         lqLOG_INFO("LTEm hwReset\r\n");
     }
     else // if (resetAction == powerReset)
     {
         QBG_powerOff();                                                     
-        pDelay(BGX__resetDelay);
+        lqDelay(BGX__resetDelay);
         QBG_powerOn();
         lqLOG_INFO("LTEm pwrReset\r\n");
     }

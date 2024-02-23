@@ -29,17 +29,17 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_VRBS
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "HTT"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_DBG                                  ///< Logging detail level for this source translation unit
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "HTT"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-http.h"
 
-extern ltemDevice_t g_lqLTEM;
+extern ltemDevice_t g_lqLTEM;                                       ///< Global singleton LTEm object
 
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))                         ///< Returns the smaller of two numbers
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))                         ///< Returns the larger of two numbers
 
 
 /* Local Static Functions
@@ -57,7 +57,7 @@ static resultCode_t S__httpRxHandler();
 /**
  *	@brief Create a HTTP(s) control structure to manage web communications. 
  */
-void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_func rcvrCallback)
+void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_func appRcvrCB)
 {
     ASSERT(httpCtrl != NULL);
     ASSERT(dataCntxt < dataCntxt__cnt);
@@ -67,7 +67,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_f
     memset(httpCtrl, 0, sizeof(httpCtrl_t));
     httpCtrl->dataCntxt = dataCntxt;
     httpCtrl->streamType = streamType_HTTP;
-    httpCtrl->appRcvrCB = (appRcvr_func)rcvrCallback;
+    httpCtrl->appRcvrCB = (appRcvr_func)appRcvrCB;
     httpCtrl->dataRxHndlr = S__httpRxHandler;
 
     httpCtrl->requestState = httpState_idle;
@@ -76,8 +76,6 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_f
     httpCtrl->useTls = false;
     httpCtrl->timeoutSec = http__defaultTimeoutBGxSec;
     httpCtrl->defaultBlockSz = bbffr_getCapacity(g_lqLTEM.iop->rxBffr) / 4;
-    // httpCtrl->cstmHdrsBffr = NULL;
-    // httpCtrl->cstmHdrsBffrSz = 0;
     httpCtrl->httpStatus = 0xFFFF;
 }
 
@@ -255,8 +253,6 @@ void http_addHeaderKeyAndValue(httpRequest_t* httpReqst, const char *key, const 
 /**
  * @brief Finalize/close headers to additional header additions.
  * @note BGx requires that the Content-Length header is the last one in the header section of a custom request.
- * 
- * @param httpReqst The custom request object to close headers on.
  */
 void http_closeHeaders(httpRequest_t* httpReqst)
 {
@@ -449,7 +445,6 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
 
 /**
  *	@brief Performs a HTTP POST page web request.
- *  -----------------------------------------------------------------------------------------------
  */
 resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, const char *postData, uint16_t postDataSz)
 {
@@ -459,7 +454,6 @@ resultCode_t http_post(httpCtrl_t *httpCtrl, const char *relativeUrl, const char
 
 /**
  *	@brief Performs a HTTP POST page web request.
- *  -----------------------------------------------------------------------------------------------
  */
 resultCode_t http_postCustomRequest(httpCtrl_t *httpCtrl, const char* relativeUrl, httpRequest_t* customRequest)
 {
@@ -735,9 +729,6 @@ static inline resultCode_t S__setUrl(const char *host, const char *relative)
 
 /**
  * @brief Translate a module specific HTTP error code into a standard HTTP response code.
- * 
- * @param [in] extendedResultCode BGx HTTP error code.
- * @return resultCode_t Translated standard HTTP response code.
  */
 resultCode_t http_translateExtended(uint16_t extendedResultCode)
 {

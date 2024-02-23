@@ -1,5 +1,5 @@
 /** ***************************************************************************
-  @file 
+  @file ltemc-gpio.c
   @brief Modem GPIO/ADC expansion features/services.
 
   @author Greg Terrell, LooUQ Incorporated
@@ -29,21 +29,20 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_DBG
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "PIO"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_DBG                                  ///< Logging detail level for this source file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "PIO"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics lqASSERT
 
 #include "ltemc-internal.h"
 #include "ltemc-gpio.h"
 
 
 /**
- *	@brief Read valule of ADC interface.
+ * @brief Read valule of ADC interface.
  */
-resultCode_t gpio_adcRead(uint8_t portNumber, uint16_t* analogValue)
+resultCode_t gpio_adcRead(uint8_t portNumber, uint16_t * analogValue)
 {
     ASSERT(portNumber > 0 && portNumber <= adc__BG77__maxPin);
-    ASSERT_W(portNumber > 0 && portNumber <= adc__LTEM3F__maxPin, "Bad port");
 
     atcmd_configParser("+QADC: ", true, ",", 1, "\r\n", 0);
 
@@ -60,7 +59,7 @@ resultCode_t gpio_adcRead(uint8_t portNumber, uint16_t* analogValue)
 
 
 /**
- *	\brief Configure a GPIO port for intended use.
+ * @brief Configure a GPIO port for intended use.
  */
 resultCode_t gpio_configPort(uint8_t portNumber, gpioDirection_t direction, gpioPull_t pullType, gpioPullDrive_t pullDriveCurrent)
 {
@@ -81,7 +80,7 @@ resultCode_t gpio_configPort(uint8_t portNumber, gpioDirection_t direction, gpio
 
 
 /**
- *	\brief Read digitial value from a GPIO port.
+ *	@brief Read digitial value from a GPIO port.
  */
 resultCode_t gpio_read(uint8_t portNumber, bool* pinValue)
 {
@@ -99,7 +98,7 @@ resultCode_t gpio_read(uint8_t portNumber, bool* pinValue)
 
 
 /**
- *	\brief Write digital value from to GPIO port.
+ *	@brief Write digital value from to GPIO port.
  */
 resultCode_t gpio_write(uint8_t portNumber, bool pinValue)
 {

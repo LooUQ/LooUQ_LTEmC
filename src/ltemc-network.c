@@ -29,9 +29,9 @@ Also add information on how to contact you by electronic and paper mail.
 
 
 #include <lq-embed.h>
-#define lqLOG_LEVEL lqLOGLEVEL_VRBS
-//#define DISABLE_ASSERTS                                   // ASSERT/ASSERT_W enabled by default, can be disabled 
-#define LQ_SRCFILE "NWK"                                    // create SRCFILE (3 char) MACRO for lq-diagnostics ASSERT
+#define lqLOG_LEVEL lqLOGLEVEL_VRBS                                 ///< Logging detail level for this source file
+//#define DISABLE_ASSERTS                                           ///< ASSERT/ASSERT_W enabled by default, can be disabled 
+#define LQ_SRCFILE "NWK"                                            ///< create SRCFILE (3 char) MACRO for lq-diagnostics lqASSERT
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -42,12 +42,10 @@ Also add information on how to contact you by electronic and paper mail.
 #include "ltemc-network.h"
 #include "ltemc-internal.h"
 
-extern ltemDevice_t g_lqLTEM;
+extern ltemDevice_t g_lqLTEM;                                       ///< Global singleton LTEm object
 
-
-#define PROTOCOLS_CMD_BUFFER_SZ 80
-#define MIN(x, y) (((x)<(y)) ? (x):(y))
-#define STREMPTY(charvar)  (charvar == NULL || charvar[0] == 0 )
+#define MIN(x, y) (((x)<(y)) ? (x):(y))                             ///< Returns the smaller of two numbers
+#define STREMPTY(charvar)  (charvar == NULL || charvar[0] == 0 )    ///< Returns true if a character array is NULL or empty
 
 
 // local static functions
@@ -199,7 +197,7 @@ ntwkOperator_t* ntwk_awaitOperator(uint16_t waitSec)
     ASSERT(g_lqLTEM.ntwkOperator != NULL);          // ASSERT g_lqLTEM.ntwkOperator has been initialized
 
     uint32_t startMillis, endMillis;
-    startMillis = endMillis = pMillis();
+    startMillis = endMillis = lqMillis();
     uint32_t waitMs;
     if (waitSec > 300)
         waitMs = SEC_TO_MS(300);                    // max is 5 minutes
@@ -300,8 +298,9 @@ bool ntwk_getPdpContextState(uint8_t cntxtId)
 
 
 /**
- *   @brief Get current operator information. If not connected to a operator will be an empty operatorInfo struct
- *   @return Struct containing the network operator name (operName) and network mode (ntwkMode).
+ *   @brief Get current operator information. If not connected to a operator will be an empty operatorInfo struct.
+ * 
+ *   @return ntwkOperator_t pointer to stuct containing the network operator information.
 */
 ntwkOperator_t * ntwk_getOperator()
 {
@@ -487,7 +486,7 @@ void ntwk_configSearchedBands(uint32_t bands)
 /** 
  *  @brief Development/diagnostic function to retrieve visible operators from cell radio.
  */
-void ntwkDiagnostics_getOperators(char *operatorsList, uint16_t listSz)
+void ntwkDiagnostics_getOperators(char * operatorList, uint16_t listSz)
 {
     /* AT+COPS=? */
     ASSERT_W(false, "ntwkDiagnostics_getOperators() blocks and is SLOW!");
@@ -495,7 +494,7 @@ void ntwkDiagnostics_getOperators(char *operatorsList, uint16_t listSz)
     atcmd_ovrrdDCmpltTimeout(SEC_TO_MS(180));
     if (IS_SUCCESS(atcmd_dispatch("AT+COPS=?")))
     {
-        strncpy(operatorsList, atcmd_getResponse() + 9, listSz - 1);
+        strncpy(operatorList, atcmd_getResponse() + 9, listSz - 1);
     }
 }
 
