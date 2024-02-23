@@ -27,10 +27,10 @@
  * The sketch is designed for debug output to observe results.
  *****************************************************************************/
 
-#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
-#define ENABLE_ASSERT
-#include <lqdiag.h>
+#include <lq-embed.h>
+#define lqLOG_LEVEL lqLOGLEVEL_DBG
+//#define DISABLE_ASSERT                                    // ASSERT/_W enabled by default, can be disabled 
+//#define ASSERT_ACTION_STOP                                // ASSERTS can be configured to stop at while(){}
 
 
 /* specify the pin configuration 
@@ -42,10 +42,6 @@
     // #define HOST_FEATHER_UXPLOR             
     // #define HOST_FEATHER_LTEM3F
 #endif
-
-#define PERIOD_FROM_SECONDS(period)  (period * 1000)
-#define PERIOD_FROM_MINUTES(period)  (period * 1000 * 60)
-#define ELAPSED(start, timeout) ((start == 0) ? 0 : millis() - start > timeout)
 
 #include <ltemc.h>
 #include <ltemc-gnss.h>
@@ -82,16 +78,16 @@ void setup() {
     if (rslt == 504)
         DPRINT(PRNT_WARN, "GNSS was already on\r\n", rslt);
 
-    ltem_setRfPriority(ltemRfPrioritySet_gnss);
+    ltem_setRfPriorityMode(ltemRfPriorityMode_gnss);
 
     lastCycle = cycle_interval;
-    fixWaitStart = pMillis();
+    fixWaitStart = lqMillis();
 }
 
 
 void loop() 
 {
-    if (ELAPSED(lastCycle, cycle_interval))
+    if (IS_ELAPSED(lastCycle, cycle_interval))
     {
         lastCycle = millis();
         loopCnt++;
@@ -106,7 +102,7 @@ void loop()
 
             if (secondsToFix == 0)
             {
-                secondsToFix = (pMillis() - fixWaitStart) / 1000 + 1;       // if less than 1 second, round up
+                secondsToFix = (lqMillis() - fixWaitStart) / 1000 + 1;       // if less than 1 second, round up
             }
             DPRINT(PRNT_DEFAULT, "Location Information\r\n");
             DPRINT(PRNT_CYAN, "UTC=%s   FixSecs=%d\r\n", location.utc, secondsToFix);
@@ -167,10 +163,10 @@ void indicateFailure(char failureMsg[])
     bool halt = true;
     while (halt)
     {
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        pDelay(1000);
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        pDelay(100);
+        lqGpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        lqDelay(1000);
+        lqGpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        lqDelay(100);
     }
 }
 

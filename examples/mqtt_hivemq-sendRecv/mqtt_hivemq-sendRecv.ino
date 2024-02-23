@@ -118,7 +118,7 @@ void setup() {
     mqttSetup();                                                                // local function with setup actions
     mqtt_start(&mqttCtrl, true);                                                // LTEmC mqtt start function (marshalls connection to MQTT host/hub)
 
-    lastCycle = pMillis();
+    lastCycle = lqMillis();
 }
 
 // #define MQTT_STOP_DEACTIVATE_LIMIT (3)
@@ -126,15 +126,15 @@ void setup() {
 
 void loop() 
 {
-    if (pElapsed(lastCycle, cycle_interval))
+    if (IS_ELAPSED(lastCycle, cycle_interval))
     {
-        lastCycle = pMillis();
+        lastCycle = lqMillis();
         loopCnt++;
         double windspeed = random(0, 4999) * 0.01;
         snprintf(mqttMessage, 200, "{ \"loopCnt\": %d,  \"windspeed\": %.2f }", loopCnt, windspeed);
 
         resultCode_t rslt;
-        uint32_t publishTck = pMillis();
+        uint32_t publishTck = lqMillis();
 
         lqLOG_DBG(lqcWHITE, "Publishing message: %d\r", loopCnt);
         rslt = mqtt_publish(&mqttCtrl, D2C_TOPIC, mqttQos_1, mqttMessage, strlen(mqttMessage), 30);

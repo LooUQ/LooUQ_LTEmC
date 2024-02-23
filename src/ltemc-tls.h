@@ -31,13 +31,87 @@ Also add information on how to contact you by electronic and paper mail.
 #ifndef __LTEMC_TLS_H__
 #define __LTEMC_TLS_H__
 
-#ifdef __cplusplus
-extern "C"
+
+
+/* SSL/TLS Module Type Definitions
+ * ------------------------------------------------------------------------------------------------------------------------------*/
+
+/** 
+ *  @brief Enum of available SSL version options for an SSL connection
+*/
+typedef enum tlsVersion_tag
 {
-#endif // __cplusplus
+    tlsVersion_none = 255,
+    tlsVersion_ssl30 = 0,
+    tlsVersion_tls10 = 1,
+    tlsVersion_tls11 = 2,
+    tlsVersion_tls12 = 3,
+    tlsVersion_any = 4,                                             ///< BGx default
+
+    tlsVersion_default = 4
+} tlsVersion_t;
 
 
-#include "ltemc-types.h"
+
+/** 
+ *  @brief Enum of the available cipher suites for TLS processing
+*/
+typedef enum tlsCipher_tag
+{
+    tlsCipher_rsaAes256CbcSha = 0X0035,
+    tlsCipher_rsaAes128CbcSha = 0X002F,
+    tlsCipher_rsaRc4128Sha = 0x0005,
+    tlsCipher_rsaRc4128Md5 = 0x0004,
+    tlsCipher_rsa3desEdeCbcSha = 0x000A,
+    tlsCipher_rsaAes256CbcSha256 = 0x003D,
+
+    tlsCipher_ecdheRsaRc4128Sha = 0xC011,
+    tlsCipher_ecdheRsa3desEdeCbcSha = 0xC012,
+    tlsCipher_ecdheRsaAes128CbcSha = 0xC013,
+    tlsCipher_ecdheRsaAes256CbcSha = 0xC014,
+    tlsCipher_ecdheRsaAes128CbcSha256 = 0xC027,
+    tlsCipher_ecdheRsaAes256CbcSha384 = 0xC028,
+    tlsCipher_ecdheRsaAes128GcmSha256 = 0xC02F,
+
+    tlsCipher_any = 0xFFFF,                                         ///< BGx default
+
+    tlsCipher_default = 0xFFFF
+} tlsCipher_t;
+
+
+/** 
+ *  @brief Enum of the options for certificate expiration date/time checking
+*/
+typedef enum tlsCertExpiration_tag
+{
+    tlsCertExpiration_check = 0,
+    tlsCertExpiration_ignore = 1,                                   ///< BGx default
+
+    tlsCertExpiration_default = 1
+} tlsCertExpiration_t;
+
+
+/** 
+ *  @brief Enum of the certification validation options
+*/
+typedef enum tlsSecurityLevel_tag
+{
+    tlsSecurityLevel_noAuthentication = 0,                          //< BGx default
+    tlsSecurityLevel_serverAuthentication = 1,
+    tlsSecurityLevel_serverClientAuthentication = 2,
+
+    tlsSecurityLevel_default = 0
+} tlsSecurityLevel_t;
+
+
+typedef enum tlsEnableSni_tag
+{
+    tlsEnableSni_enabled = 1,
+    tlsEnableSni_disabled = 0
+} tlsEnableSni_t;
+
+
+//#include "ltemc-types.h"
 
 /**
  * @brief Context settings for TLS security
@@ -50,6 +124,15 @@ typedef struct tlsCtrl_tag
     tlsSecurityLevel_t securityLevel;                       ///< Designate what checks for SSL/TLS should complete to validate the server
     bool sniEnabled;                                        ///< TLS uses SNI
 } tlsCtrl_t;
+
+
+
+
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif // __cplusplus
 
 
 /** 
@@ -75,7 +158,7 @@ bool tls_configure(uint8_t contxt, tlsVersion_t version, tlsCipher_t cipher, tls
  *  @param [in] securityLevel Authentication mode: 0=no auth, 1=server auth, 2=server/client auth
  *  @param [in] sniEnabled Enable Server Name Indication in TLS handshake
  */
-void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t cipher, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel, bool sniEnabled);
+void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t cipher, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel, tlsEnableSni_t sniEnabled);
 
 
 /** 
@@ -106,7 +189,7 @@ tlsCtrl_t tlsGetOptions(uint8_t sckt);
  *  @param [in] enableSNI If true, enable SNI in TLS handshake
  *  @return TLS options structure with the settings currently applied to the specified context
  */
-resultCode_t tls_enableSni(dataCntxt_t dataCntxt, bool enableSNI);
+resultCode_t tls_enableSni(dataCntxt_t dataCntxt, tlsEnableSni_t enableSNI);
 
 
 /** 

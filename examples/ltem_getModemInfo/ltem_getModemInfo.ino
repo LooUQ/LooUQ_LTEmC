@@ -140,9 +140,9 @@ void indicateFailure(char failureMsg[])
     uint8_t halt = 1;
     while (halt)
     {
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        pDelay(1000);
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        pDelay(100);
+        lqGpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        lqDelay(1000);
+        lqGpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        lqDelay(100);
     }
 }

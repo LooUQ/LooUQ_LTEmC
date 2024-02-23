@@ -50,7 +50,7 @@ resultCode_t gpio_adcRead(uint8_t portNumber, uint16_t * analogValue)
     {
         if (memcmp(atcmd_getResponse(), "+QADC: 1", 8) == 0)
         {
-            *analogValue = atcmd_getValue();
+            *analogValue = strtol(atcmd_getResponse(), NULL, 10);
             return resultCode__success;
         }
     }
@@ -90,7 +90,7 @@ resultCode_t gpio_read(uint8_t portNumber, bool* pinValue)
     atcmd_configParser("+QCFG: \"gpio\",", true, ",", 1, "\r\n", 0);
     if (IS_SUCCESS(atcmd_dispatch("AT+QCFG=\"gpio\",2,%d", portNumber)))
     {
-        *pinValue = atcmd_getValue();
+        *pinValue =  strtol(atcmd_getResponse(), NULL, 10);
         return resultCode__success;
     }
     return resultCode__badRequest;

@@ -24,10 +24,10 @@
  ******************************************************************************
  *****************************************************************************/
 
-#define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
-//#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
-#define ENABLE_ASSERT
-#include <lqdiag.h>
+#include <lq-embed.h>
+#define lqLOG_LEVEL lqLOGLEVEL_DBG
+//#define DISABLE_ASSERT                                    // ASSERT/_W enabled by default, can be disabled 
+//#define ASSERT_ACTION_STOP                                // ASSERTS can be configured to stop at while(){}
 
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
@@ -38,8 +38,6 @@
     // #define HOST_FEATHER_UXPLOR             
     // #define HOST_FEATHER_LTEM3F
 #endif
-
-#include <lq-SAMDutil.h>                // allows read of reset cause
 
 #include <ltemc.h>
 #include <ltemc-gpio.h>
@@ -60,16 +58,15 @@ void setup()
         delay(5000);            // just give it some time
     #endif
 
-    DPRINT(PRNT_RED, "\rLTEmC test-11-gpio\r");
-    DPRINT(PRNT_WHITE, "RCause=%d\r\n", lqSAMD_getResetCause());
-    platform_openPin(LED_BUILTIN, gpioMode_output);
+    DPRINT(PRNT_RED, "\rGPIO AccessPorts Example\r");
+    lqGpio_openPin(LED_BUILTIN, gpioMode_output);
     //lqDiag_setNotifyCallback(applEvntNotify);
 
     ltem_create(ltem_pinConfig, NULL, applEvntNotify);
     ltem_start(resetAction_skipIfOn);                                            // start LTEm, if found on reset it
 
-    modemInfo_t *modemInfo  = mdminfo_ltem();
-    if (strcmp(modemInfo->mfgmodel,"BG77") == 0)
+    modemInfo_t *modemInfo  = ltem_getModemInfo();
+    if (strcmp(modemInfo->model,"BG77") == 0)
     {
         DPRINT(PRNT_INFO, "Modem: LTEM3F\r");
     }
@@ -102,7 +99,7 @@ void loop()
     gpio_adcRead(testAdc, &adcValue);
     DPRINT(PRNT_CYAN, "ADC value=%dmV\r");
 
-    pDelay(2000);
+    lqDelay(2000);
     loopCnt ++;
     indicateLoop(loopCnt, random(1000));
 }
@@ -132,15 +129,15 @@ void indicateLoop(int loopCnt, int waitNext)
 
     for (int i = 0; i < 6; i++)
     {
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        pDelay(50);
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        pDelay(50);
+        lqGpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        lqDelay(50);
+        lqGpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        lqDelay(50);
     }
 
     DPRINT(PRNT_DEFAULT, "FreeMem=%u\r\n", getFreeMemory());
     DPRINT(PRNT_DEFAULT, "NextTest (millis)=%i\r\r", waitNext);
-    pDelay(waitNext);
+    lqDelay(waitNext);
 }
 
 
@@ -152,10 +149,10 @@ void indicateFailure(char failureMsg[])
     uint8_t halt = 1;
     while (halt)
     {
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
-        pDelay(1000);
-        platform_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
-        pDelay(100);
+        lqGpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_high);
+        lqDelay(1000);
+        lqGpio_writePin(LED_BUILTIN, gpioPinValue_t::gpioValue_low);
+        lqDelay(100);
     }
 }
 

@@ -67,7 +67,7 @@ Also add information on how to contact you by electronic and paper mail.
 /** 
  *  @brief Configure a TLS/SSL control block with current settings
  */
-void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t cipher, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel, bool sniEnabled)
+void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t cipher, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel, tlsEnableSni_t sniEnabled)
 {
     memset(tlsCtrl, 0, sizeof(tlsCtrl_t));
    
@@ -93,7 +93,7 @@ void tls_initControl(tlsCtrl_t* tlsCtrl, tlsVersion_t version, tlsCipher_t ciphe
 /**
  * @brief Enable SNI verification for this data context
  */
-resultCode_t tls_enableSni(dataCntxt_t dataCntxt, bool enableSNI)
+resultCode_t tls_enableSni(dataCntxt_t dataCntxt, tlsEnableSni_t enableSNI)
 {
     RSLT;
     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sni\",%d,%d", dataCntxt, enableSNI)))       // set SNI for TLS

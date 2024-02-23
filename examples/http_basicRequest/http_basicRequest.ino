@@ -65,6 +65,7 @@ uint32_t lastCycle;
 // LTEmC variables
 /* To avoid having to prefix httpCtrl1 with & in calls below, you can create a pointer
  * variable with: "httpCtrl_t *httpCtrl1 = &httpCtrl;"   */
+tlsCtrl_t tlsCtrl;
 httpCtrl_t httpCtrlG;
 httpCtrl_t httpCtrlP;
 httpCtrl_t *httpCtrl;                                                       // used for common READ 
@@ -109,7 +110,7 @@ void setup() {
 
     // most sites use tls, 
     // NOTE: the TLS context MUST == the HTTP context if using SSL\TLS; dataContext_0 is this example
-    tls_configure(dataCntxt_0, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    //tls_configure(dataCntxt_0, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
 
     // test sites...
     // https://api.weather.gov/points/44.7582,-85.6022          (returns approx total=1.45KB; headers=811 bytes, body=676 bytes)
@@ -124,6 +125,7 @@ void setup() {
 
     // // create a control for talking to the website
     http_initControl(&httpCtrlG, dataCntxt_0, httpRecvCB);                              // initialize local (internal) structures
+    tls_initControl(&tlsCtrl, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default, tlsEnableSni_enabled);
     http_setConnection(&httpCtrlG, "https://api.weather.gov", 443);                     // set remote web host
     lqLOG_DBG(lqcDARKGREEN, "URL Host1=%s\r", httpCtrlG.hostUrl);
 

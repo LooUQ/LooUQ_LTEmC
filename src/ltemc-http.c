@@ -784,11 +784,11 @@ static resultCode_t S__httpRxHandler()
     lqLOG_VRBS("(S__httpRxHandler) stream started\r\n");
 
     bool dataClosed = false;
-    uint32_t readStart = pMillis();
+    uint32_t readStart = lqMillis();
     do
     {
         uint16_t occupiedCnt = bbffr_getOccupied(g_lqLTEM.iop->rxBffr);
-        bool readTimeout = pMillis() - readStart > httpCtrl->timeoutSec;
+        bool readTimeout = lqMillis() - readStart > httpCtrl->timeoutSec;
         uint16_t trailerIndx = bbffr_find(g_lqLTEM.iop->rxBffr, "\r\nOK\r\n\r\n", 0, 0, false);
         uint16_t reqstBlockSz = MIN(trailerIndx, httpCtrl->defaultBlockSz);                                     // trailerIndx 65535, if not found
 
