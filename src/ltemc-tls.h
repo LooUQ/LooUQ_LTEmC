@@ -104,6 +104,9 @@ typedef enum tlsSecurityLevel_tag
 } tlsSecurityLevel_t;
 
 
+/**
+ * @brief Options for TLS SNI behavior
+ */
 typedef enum tlsEnableSni_tag
 {
     tlsEnableSni_enabled = 1,

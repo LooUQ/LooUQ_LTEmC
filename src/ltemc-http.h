@@ -175,8 +175,9 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_f
  *	@brief Set host connection characteristics. 
  *
  *  @param [in] httpCtrl HTTP control structure pointer, struct defines parameters of communications with web server.
- *  @param [in] hostUrl The HOST address of the web server URL.
- *  @param [in] hostPort The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
+ *  @param [in] hostUrl HOST address of the web server URL.
+ *  @param [in] tlsCtrl Pointer to tlsCtrl_t object with security settings for HTTP server connection
+ *  @param [in] hostPort Port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
  */
 void http_setConnection(httpCtrl_t * httpCtrl, const char * hostUrl, tlsCtrl_t * tlsCtrl, uint16_t hostPort);
 

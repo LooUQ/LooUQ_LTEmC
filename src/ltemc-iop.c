@@ -34,7 +34,7 @@ Also add information on how to contact you by electronic and paper mail.
 
     Area/Msg Prefix
      -- BG96 init
-     \r\nAPP RDY\r\n      -- BG96 completed firmware initialization
+     /r/nAPP RDY/r/n      -- BG96 completed firmware initialization
      
      -- Commands
      +QPING:              -- PING response (instance and summary header)
@@ -45,7 +45,7 @@ Also add information on how to contact you by electronic and paper mail.
      +QIRD: #             -- "read data" response 
      +QSSLURC: "recv"     -- "unsolicited response" proto ssl tunnel
      +QHTTPGET:           -- GET response, HTTP-READ 
-     CONNECT<cr><lf>      -- HTTP Read
+     CONNECT[cr][lf]      -- HTTP Read
      +QMTSTAT:            -- MQTT state change message recv'd
      +QMTRECV:            -- MQTT subscription data message recv'd
      
