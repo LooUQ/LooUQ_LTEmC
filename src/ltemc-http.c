@@ -73,7 +73,6 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_f
     httpCtrl->requestState = httpState_idle;
     httpCtrl->httpStatus = resultCode__unknown;
     httpCtrl->pageCancellation = false;
-    httpCtrl->useTls = false;
     httpCtrl->timeoutSec = http__defaultTimeoutBGxSec;
     httpCtrl->defaultBlockSz = bbffr_getCapacity(g_lqLTEM.iop->rxBffr) / 4;
     httpCtrl->httpStatus = 0xFFFF;
@@ -83,16 +82,15 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_f
 /**
  *	@brief Set host connection characteristics. 
  */
-void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t hostPort)
+void http_setConnection(httpCtrl_t * httpCtrl, const char * hostUrl, tlsCtrl_t * tlsCtrl, uint16_t hostPort)
 {
     ASSERT(strncmp(hostUrl, "HTTP", 4) == 0 || strncmp(hostUrl, "http", 4) == 0);
-    ASSERT(hostPort == 0 || hostPort >= 80);
 
     strncpy(httpCtrl->hostUrl, hostUrl, sizeof(httpCtrl->hostUrl));
 
-    httpCtrl->useTls = ((httpCtrl->hostUrl)[4] == 'S' || (httpCtrl->hostUrl)[4] == 's');
+    httpCtrl->tlsCtrl = tlsCtrl;
     if (hostPort == 0)
-        httpCtrl->hostPort = httpCtrl->useTls ? 443 : 80;                  // if hostPort not specified, set from URL prefix
+        httpCtrl->hostPort = httpCtrl->tlsCtrl == NULL ? 80 : 443;                  // if hostPort not specified, set from URL prefix
     else
         httpCtrl->hostPort = hostPort;
 }
@@ -346,13 +344,17 @@ static resultCode_t S__httpGET(httpCtrl_t *httpCtrl, const char* relativeUrl, ht
     {
         return rslt;
     }
-    if (httpCtrl->useTls)
+
+    if (httpCtrl->tlsCtrl)
     {
         if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt)))
         {
             return rslt;
         }
+
+        TLS_applySettings((int)httpCtrl->dataCntxt, httpCtrl->tlsCtrl);
     }
+
     uint8_t reqstHdrs = (uint8_t)customRequest != NULL;
     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QHTTPCFG=\"requestheader\",%d", reqstHdrs)))
     {
@@ -481,12 +483,14 @@ resultCode_t S__httpPOST(httpCtrl_t *httpCtrl, const char *relativeUrl, httpRequ
         return rslt;
     }
 
-    if (httpCtrl->useTls)
+    if (httpCtrl->tlsCtrl)
     {
         if (IS_SUCCESS_RSLT(atcmd_dispatch("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt)))
         {
             return rslt;
         }
+
+        TLS_applySettings((int)httpCtrl->dataCntxt, httpCtrl->tlsCtrl);
     }
 
     uint8_t reqstHdrs = (uint8_t)customRequest != NULL;
@@ -577,12 +581,14 @@ resultCode_t http_postFile(httpCtrl_t *httpCtrl, const char *relativeUrl, const 
         return rslt;
     }
 
-    if (httpCtrl->useTls)
+    if (httpCtrl->tlsCtrl)
     {
         if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QHTTPCFG=\"sslctxid\",%d",  (int)httpCtrl->dataCntxt)))
         {
             return rslt;
         }
+
+        TLS_applySettings((int)httpCtrl->dataCntxt, httpCtrl->tlsCtrl);
     }
 
     /* POST file may or may not include a custom request, set flag for request + body in file

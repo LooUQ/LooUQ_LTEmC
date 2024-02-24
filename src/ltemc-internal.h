@@ -43,6 +43,8 @@ Also add information on how to contact you by electronic and paper mail.
 #include "ltemc-nxp-sc16is.h"
 #include "ltemc-iop.h"
 
+#include "ltemc-tls.h"
+
 
 
 /* ================================================================================================================================
@@ -147,19 +149,10 @@ extern "C"
 #endif // __cplusplus
 
 
-// LTEM Internal
-// void LTEM_initIo();
-// void LTEM_registerDoWorker(doWork_func *doWorker);
-// void LTEM_registerUrcHandler(urcHandler_func *urcHandler);
-
 #pragma region ATCMD LTEmC Internal Functions
+
 /* LTEmC internal, not intended for user application consumption.
  * --------------------------------------------------------------------------------------------- */
-
-// /**
-//  *	\brief Checks recv buffer for command response and sets atcmd structure data with result.
-//  */
-// resultCode_t ATCMD_readResult();
 
 /**
  *  \brief Default AT command result parser.
@@ -202,26 +195,31 @@ cmdParseRslt_t ATCMD_connectPromptParser();
  * End ATCMD LTEmC Internal Functions */
 
 
-#pragma region NTWK LTEmC Internal Functions
 /* LTEmC internal, not intended for user application consumption.
  * --------------------------------------------------------------------------------------------- */
-
 
 /**
  *	\brief Initialize BGx Radio Access Technology (RAT) options.
  */
 void NTWK_initRatOptions();
 
-
 /**
  *	\brief Apply the default PDP context config to BGx.
  */
 void NTWK_applyDefaulNetwork();
 
+/**
+ * @brief Apply settings from a TLS control to a data context.
+ * 
+ * @param dataCntxt Data context (0-5) to be configured.
+ * @param tlsCtrl TLS control with the desired settings.
+ * @return true All settings were successfully applied
+ * @return false Failed to apply one or more settings 
+ */
+bool TLS_applySettings(dataCntxt_t dataCntxt, tlsCtrl_t* tlsCtrl);
 
-#pragma endregion
 /* ------------------------------------------------------------------------------------------------
- * End NTWK LTEmC Internal Functions */
+ * End LTEmC Internal Functions */
 
 
 

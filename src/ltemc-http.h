@@ -33,6 +33,7 @@ Also add information on how to contact you by electronic and paper mail.
 
 #include <lq-types.h>
 #include "ltemc-types.h"
+#include "ltemc-tls.h"
 
 /** 
  *  @brief Typed numeric constants used in HTTP module.
@@ -137,7 +138,7 @@ typedef struct httpCtrl_tag
     /* Above section of <stream>Ctrl structure is the same for all LTEmC implemented streams/protocols TCP/HTTP/MQTT etc. 
     */
     appRcvr_func appRcvrCB;                                         ///< callback into host application with data (cast from generic func* to stream specific function)
-    bool useTls;                                                    ///< flag indicating SSL/TLS applied to stream
+    tlsCtrl_t * tlsCtrl;                                            ///< Pointer to tlsCtrl with security settings for this HTTP connection
     char hostUrl[host__urlSz];                                      ///< URL or IP address of host
     uint16_t hostPort;                                              ///< IP port number host is listening on (allows for 65535/0)
     // bool returnResponseHdrs;                                     ///< True: response headers are included in the returned response
@@ -177,7 +178,7 @@ void http_initControl(httpCtrl_t *httpCtrl, dataCntxt_t dataCntxt, httpAppRcvr_f
  *  @param [in] hostUrl The HOST address of the web server URL.
  *  @param [in] hostPort The port number for the host web server. 0 >> auto-select HTTP(80), HTTPS(443)
  */
-void http_setConnection(httpCtrl_t *httpCtrl, const char *hostUrl, uint16_t hostPort);
+void http_setConnection(httpCtrl_t * httpCtrl, const char * hostUrl, tlsCtrl_t * tlsCtrl, uint16_t hostPort);
 
 
 /**

@@ -135,17 +135,17 @@ extern "C"
 #endif // __cplusplus
 
 
-/** 
- *  @brief Configure the TLS/SSL settings for a context
- *  @details The TLS/SSL context is loosely associated with the protocol context. This package maintains a 1-to-1 map for consistency.
+// /** 
+//  *  @brief Configure the TLS/SSL settings for a context
+//  *  @details The TLS/SSL context is loosely associated with the protocol context. This package maintains a 1-to-1 map for consistency.
 
- *  @param [in] contxt TLS/SSL context to configure
- *  @param [in] version TLS/SSL version: 0=SSL-3.0, 1=TLS-1.0, 2=TLS-1.1, 3=TLS-1.2, 4=ALL
- *  @param [in] cipher Cipher suite to use for processing of crypto
- *  @param [in] certExpirationCheck Options for how the certificate's expiration information is processed
- *  @param [in] securityLevel Authentication mode: 0=no auth, 1=server auth, 2=server/client auth
- */
-bool tls_configure(uint8_t contxt, tlsVersion_t version, tlsCipher_t cipher, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel);
+//  *  @param [in] contxt TLS/SSL context to configure
+//  *  @param [in] version TLS/SSL version: 0=SSL-3.0, 1=TLS-1.0, 2=TLS-1.1, 3=TLS-1.2, 4=ALL
+//  *  @param [in] cipher Cipher suite to use for processing of crypto
+//  *  @param [in] certExpirationCheck Options for how the certificate's expiration information is processed
+//  *  @param [in] securityLevel Authentication mode: 0=no auth, 1=server auth, 2=server/client auth
+//  */
+// bool tls_configure(uint8_t contxt, tlsVersion_t version, tlsCipher_t cipher, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel);
 
 
 /** 

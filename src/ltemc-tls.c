@@ -37,31 +37,6 @@ Also add information on how to contact you by electronic and paper mail.
 #include "ltemc-tls.h"
 
 
-// /**
-//  * @brief 
-//  */
-// bool tls_configure(uint8_t dataCntxt, tlsVersion_t version, tlsCipher_t cipherSuite, tlsCertExpiration_t certExpirationCheck, tlsSecurityLevel_t securityLevel)
-// {
-//     RSLT;
-//     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, version)))                  // set SSL/TLS version
-//     {
-//         return false;
-//     }
-//     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ciphersuite\",%d,0X%X", dataCntxt, cipherSuite)))           // set cipher suite
-//     {
-//         return false;
-//     }
-//     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"ignorelocaltime\",%d,%d", dataCntxt, certExpirationCheck))) // set certificate expiration check
-//     {
-//         return false;
-//     }
-//     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"seclevel\",%d,%d", dataCntxt, securityLevel)))              // set security level, aka what is checked
-//     {
-//         return false;
-//     }
-
-//     return true;
-// }
 
 
 /** 
@@ -107,7 +82,7 @@ resultCode_t tls_enableSni(dataCntxt_t dataCntxt, tlsEnableSni_t enableSNI)
 /** 
  *  @brief Apply settings from a TLS/SSL control to a data context.
  */
-bool tls_applySettings(dataCntxt_t dataCntxt, tlsCtrl_t* tlsCtrl)
+bool TLS_applySettings(dataCntxt_t dataCntxt, tlsCtrl_t* tlsCtrl)
 {
     RSLT;
     if (IS_NOTSUCCESS_RSLT(atcmd_dispatch("AT+QSSLCFG=\"sslversion\",%d,%d", dataCntxt, tlsCtrl->version)))                     // set SSL/TLS version

@@ -109,8 +109,8 @@ void setup() {
     /* Basic connectivity established, moving on to HTTPS setup */
 
     // most sites use tls, 
-    // NOTE: the TLS context MUST == the HTTP context if using SSL\TLS; dataContext_0 is this example
-    //tls_configure(dataCntxt_0, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default);
+    // TLS is applied to a HTTP connect by including a tlsCtrl_t in the set connection (via pointer)
+    tls_initControl(&tlsCtrl, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default, tlsEnableSni_enabled);
 
     // test sites...
     // https://api.weather.gov/points/44.7582,-85.6022          (returns approx total=1.45KB; headers=811 bytes, body=676 bytes)
@@ -125,15 +125,14 @@ void setup() {
 
     // // create a control for talking to the website
     http_initControl(&httpCtrlG, dataCntxt_0, httpRecvCB);                              // initialize local (internal) structures
-    tls_initControl(&tlsCtrl, tlsVersion_any, tlsCipher_default, tlsCertExpiration_default, tlsSecurityLevel_default, tlsEnableSni_enabled);
-    http_setConnection(&httpCtrlG, "https://api.weather.gov", 443);                     // set remote web host
+    http_setConnection(&httpCtrlG, "https://api.weather.gov", &tlsCtrl, 443);                     // set remote web host
     lqLOG_DBG(lqcDARKGREEN, "URL Host1=%s\r", httpCtrlG.hostUrl);
 
     // you can optionally setup a httpCtrl, EXAMPLE: httpCtrl *httpCtrl = &httpCtrl2
     // Below the &httpCtrl2 style is required since there is no "ptr" variable created (around line 65) to use here
 
     http_initControl(&httpCtrlP, dataCntxt_1, httpRecvCB);
-    http_setConnection(&httpCtrlP, "http://httpbin.org", 80);
+    http_setConnection(&httpCtrlP, "http://httpbin.org", &tlsCtrl, 80);
     lqLOG_DBG(lqcDARKGREEN, "URL Host2=%s\r", httpCtrlP.hostUrl);
 
     char noaaReqstBffr[384];
