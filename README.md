@@ -4,6 +4,8 @@ LooUQ's universal modem device driver for LooUQ’s embedded system LTE modems: 
 
 The LooUQ LTEmC driver supports the LooUQ LTEm line of embedded modem devices. The LTEm modem series is designed to allow for cost-effective cellular communications in embedded systems by supporting LTE CAT-M1 and LTE CAT-NB1 (NB-IOT) communications. The LTEm1 and LTEm2 modems are certified for use on the Verizon network and tested on all major US networks.
 
+# Release 4.0.0 is almost ready... working on doxygen comments and cleanup with a planned release on March 17th (yes 2024). In the meantime, you can get the RC code on the  4.0.0 branch.
+
 ### Latest Release: v3.0.1
 
 ## Introducing LTEmC Generation 3
