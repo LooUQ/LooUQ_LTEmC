@@ -2,7 +2,7 @@
 #define ENABLE_DIAGPRINT                    // expand DPRINT into debug output
 //#define ENABLE_DIAGPRINT_VERBOSE            // expand DPRINT and DPRINT_V into debug output
 #define ENABLE_ASSERT
-#include <lqdiag.h>
+#include <lq-diagnostics.h>
 
 /* specify the pin configuration 
  * --------------------------------------------------------------------------------------------- */
@@ -29,7 +29,7 @@ uint32_t lastCycle;
 
 // this test has no reference to global g_lqLTEM variable
 // so we need a surrogate a pointer here to test locally 
-platformSpi_t* platformSpi; 
+lqSpi_t* platformSpi; 
 
 union regBuffer { uint16_t val; struct { uint8_t msb; uint8_t lsb; }; };
 regBuffer txBuffer;
@@ -47,28 +47,28 @@ void setup()
     DPRINT(PRNT_DEFAULT, "LED pin = %i \r\n", LED_BUILTIN);           // could have used 0 as color code, rather than enum dbgColor__none
     randomSeed(analogRead(7));
 
-	platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
-	platform_writePin(ltem_pinConfig.resetPin, gpioValue_low);
-	platform_writePin(ltem_pinConfig.spiCsPin, gpioValue_high);
+	lqGpio_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
+	lqGpio_writePin(ltem_pinConfig.resetPin, gpioValue_low);
+	lqGpio_writePin(ltem_pinConfig.spiCsPin, gpioValue_high);
     
-	platform_openPin(ltem_pinConfig.powerkeyPin, gpioMode_output);
-	platform_openPin(ltem_pinConfig.statusPin, gpioMode_input);
+	lqGpio_openPin(ltem_pinConfig.powerkeyPin, gpioMode_output);
+	lqGpio_openPin(ltem_pinConfig.statusPin, gpioMode_input);
 
-    DPRINT(PRNT_DEFAULT, "Modem status(%i) = %i \r\n", ltem_pinConfig.statusPin, platform_readPin(ltem_pinConfig.statusPin));
+    DPRINT(PRNT_DEFAULT, "Modem status(%i) = %i \r\n", ltem_pinConfig.statusPin, lqGpio_readPin(ltem_pinConfig.statusPin));
 
     powerModemOn();
-    DPRINT(PRNT_DEFAULT, "   ON Status = %i \r\n", platform_readPin(ltem_pinConfig.statusPin));
-    pDelay(500);
+    DPRINT(PRNT_DEFAULT, "   ON Status = %i \r\n", lqGpio_readPin(ltem_pinConfig.statusPin));
+    lqDelay(500);
 
     powerModemOff();
-    DPRINT(PRNT_DEFAULT, "  OFF Status = %i \r\n", platform_readPin(ltem_pinConfig.statusPin));
-    pDelay(500);
+    DPRINT(PRNT_DEFAULT, "  OFF Status = %i \r\n", lqGpio_readPin(ltem_pinConfig.statusPin));
+    lqDelay(500);
 
     DPRINT(PRNT_INFO, "Turn modem on for SPI tests\r\n");
     powerModemOn();
 
     #if defined(ARDUINO_ARCH_SAMD)
-	platformSpi = spi_createFromIndex(ltem_pinConfig.spiIndx, ltem_pinConfig.spiCsPin);
+	platformSpi = lqSpi_createFromIndex(ltem_pinConfig.spiIndx, ltem_pinConfig.spiCsPin);
     #else
 	platformSpi = spi_createFromPins(ltem_pinConfig.spiClkPin, ltem_pinConfig.spiMisoPin, ltem_pinConfig.spiMosiPin, ltem_pinConfig.spiCsPin);
     #endif
@@ -77,11 +77,11 @@ void setup()
 	{
         DPRINT(PRNT_WARN, "SPI setup failed.\r\n");
 	}
-    spi_start(platformSpi);
+    lqSpi_start(platformSpi);
 
     txBuffer.msb = SC16IS7xx_SPR_regAddr << 3;                                          // clear SPI and NXP-bridge
     txBuffer.lsb = 0;
-    spi_transferWord(platformSpi, txBuffer.val);
+    lqSpi_transferWord(platformSpi, txBuffer.val);
 
     lastCycle = cycle_interval;
 }
@@ -105,8 +105,8 @@ void loop()
         // rxBuffer.lsb doesn't matter prior to read
 
         DPRINT(0, "Writing scratchpad regiser %d with transfer WORD...", testPattern);
-        uint16_t d = spi_transferWord(platformSpi, txBuffer.val);
-        rxBuffer.val = spi_transferWord(platformSpi, rxBuffer.val);
+        uint16_t d = lqSpi_transferWord(platformSpi, txBuffer.val);
+        rxBuffer.val = lqSpi_transferWord(platformSpi, rxBuffer.val);
 
         if (testPattern == rxBuffer.lsb)
         {
@@ -128,8 +128,8 @@ void loop()
         txBuffer.lsb = testPattern;
 
         DPRINT(0, "Writing scratchpad regiser %d with transfer BUFFER...", testPattern);
-        spi_transferBuffer(platformSpi, txBuffer.msb, &txBuffer.lsb, 1);
-        spi_transferBuffer(platformSpi, rxBuffer.msb, &rxBuffer.lsb, 1);
+        lqSpi_transferBuffer(platformSpi, txBuffer.msb, &txBuffer.lsb, NULL, 1);
+        lqSpi_transferBuffer(platformSpi, rxBuffer.msb, &rxBuffer.lsb, NULL, 1);
 
         if (rxBuffer.lsb == testPattern)
         {
@@ -152,15 +152,15 @@ void loop()
 
 void powerModemOn()
 {
-	if (!platform_readPin(ltem_pinConfig.statusPin))
+	if (!lqGpio_readPin(ltem_pinConfig.statusPin))
 	{
 		DPRINT(0, "Powering LTEm On...");
-		platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_high);
-		pDelay(1000);
-		platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
-		while (!platform_readPin(ltem_pinConfig.statusPin))
+		lqGpio_writePin(ltem_pinConfig.powerkeyPin, gpioValue_high);
+		lqDelay(1000);
+		lqGpio_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
+		while (!lqGpio_readPin(ltem_pinConfig.statusPin))
 		{
-			pDelay(500);
+			lqDelay(500);
 		}
 		DPRINT(0, "DONE.\r\n");
 	}
@@ -173,15 +173,15 @@ void powerModemOn()
 
 void powerModemOff()
 {
-	if (platform_readPin(ltem_pinConfig.statusPin))
+	if (lqGpio_readPin(ltem_pinConfig.statusPin))
 	{
 		DPRINT(0, "Powering LTEm Off...");
-		platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_high);
-		pDelay(1000);
-		platform_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
-		while (platform_readPin(ltem_pinConfig.statusPin))
+		lqGpio_writePin(ltem_pinConfig.powerkeyPin, gpioValue_high);
+		lqDelay(1000);
+		lqGpio_writePin(ltem_pinConfig.powerkeyPin, gpioValue_low);
+		while (lqGpio_readPin(ltem_pinConfig.statusPin))
 		{
-			pDelay(500);
+			lqDelay(500);
 		}
 		DPRINT(0, "DONE.\r\n");
 	}
