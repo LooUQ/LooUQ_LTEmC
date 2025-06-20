@@ -282,7 +282,7 @@ resultCode_t sckt_send(scktCtrl_t *scktCtrl, const char *data, uint16_t dataSz)
 
 static void S__scktUrcHndlr()
 {
-    cBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
+    cbuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
 
     // not a socket URC or insufficient chars to parse URC header
     if (cbffr_find(rxBffr, "\"pdpdeact\"", 0, 0, false) >= 0)           // +QIURC: "pdpdeact" handled at higher level, +QIURC overlaps with UDP/TCP

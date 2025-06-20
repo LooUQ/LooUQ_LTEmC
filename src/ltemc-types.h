@@ -39,7 +39,7 @@
 #endif // __cplusplus
 
 #include <lq-types.h>
-#include <lq-cBuffer.h>
+#include <lq-cbuffer.h>
 
 enum ltem__constants
 {
@@ -320,7 +320,7 @@ typedef struct iop_tag
     volatile char* txBffr;
     volatile uint16_t txPending;
 
-    cBuffer_t *rxBffr;                      /// receive buffer
+    cbuffer_t *rxBffr;                      /// receive buffer
     char txEot;                             /// if not NULL, char to output on empty TX FIFO; clears automatically on use.
  
     volatile uint32_t lastTxAt;             /// tick count when TX send started, used for response timeout detection

@@ -38,7 +38,7 @@
 
 #include "ltemc.h"
 #include <lq-str.h>                         /// most LTEmC modules use LooUQ string functions
-#include <lq-cBuffer.h>
+#include <lq-cbuffer.h>
 #include "ltemc-types.h"
 
 #include "ltemc-quectel-bg.h"

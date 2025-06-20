@@ -480,7 +480,7 @@ void ltem_setYieldCallback(platform_yieldCB_func_t yieldCallback)
  */
 S__ltemUrcHandler()                                                     
 {
-    cBuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
+    cbuffer_t *rxBffr = g_lqLTEM.iop->rxBffr;                           // for convenience
     char parseBffr[30];
 
     // bool isQuectel = cbffr_find(rxBffr, "+Q", 0, 0, false) != CBFFR_NOFIND;

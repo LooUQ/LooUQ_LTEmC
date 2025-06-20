@@ -437,7 +437,7 @@ uint16_t http_readPage(httpCtrl_t *httpCtrl)
     if (httpCtrl->requestState != httpState_requestComplete)
         return resultCode__preConditionFailed;                                  // readPage() only valid after a completed GET\POST
     
-    cBuffer_t* rxBffr = g_lqLTEM.iop->rxBffr;                                   // for better readability
+    cbuffer_t* rxBffr = g_lqLTEM.iop->rxBffr;                                   // for better readability
     char* workPtr;
 
     if (atcmd_tryInvoke("AT+QHTTPREAD=%d", httpCtrl->timeoutSec))

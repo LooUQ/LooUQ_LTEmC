@@ -27,7 +27,7 @@
 #ifndef __LTEMC_H__
 #define __LTEMC_H__
 
-#define LTEmC_VERSION "3.0.1"
+#define LTEmC_VERSION "3.0.2"
 
 
 // Internal static buffers you may need to change for your application. Contact LooUQ for details.
@@ -36,16 +36,16 @@
 
 #include <lq-types.h>                           /// LooUQ embedded device library typedefs, common across products/libraries
 #include <lq-diagnostics.h>                     /// ASSERT and diagnostic data collection
-// #include "ltemc-srcfiles.h"                     /// source file manifest for ASSERT use
-
-#include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
 
 #include "lq-platform.h"                        /// platform abstractions (arduino, etc.)
+
+#include "ltemc-platformPins.h"                 /// LTEmC host-pin configuration
+#include "ltemc-types.h"                        /// type definitions for LTEm device driver: LTEmC
 #include "ltemc-atcmd.h"                        /// command processor interface
 #include "ltemc-mdminfo.h"                      /// modem information
 #include "ltemc-network.h"                      /// cellular provider and packet network 
 
-/* Add the following LTEmC feature sets as required for your project
+/* Add the following LTEmC feature sets AS REQUIRED for your project
 */
 // #include "ltemc-gnss.h"                         /// GNSS/GPS location services
 // #include "ltemc-sckt.h"                         /// tcp/udp socket communications
@@ -61,8 +61,10 @@
  * LooUQ set defaults sizes are:
  *      IOP__txBufferSize = 1800
  *      ATCMD__commandBufferSz = 256
- */
-/* ----------------------------------------------------------------------------------- */
+ * 
+ * These sizes can be adjusted WITH CARE for specific implementations.
+ *
+ * ----------------------------------------------------------------------------------- */
 
 
 #ifdef __cplusplus

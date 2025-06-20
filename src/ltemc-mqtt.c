@@ -570,7 +570,7 @@ static resultCode_t S__notifyServerTopicChange(mqttCtrl_t* mqttCtrl, mqttTopicCt
 
 static void S__mqttUrcHandler()
 {
-    cBuffer_t* rxBffr = g_lqLTEM.iop->rxBffr;                                               // for convenience
+    cbuffer_t* rxBffr = g_lqLTEM.iop->rxBffr;                                               // for convenience
 
     /*
     +QMTRECV: <tcpconnectID>,<msgID>,"<topic>","<payload>"

@@ -112,7 +112,7 @@ void IOP_create()
     g_lqLTEM.iop = calloc(1, sizeof(iop_t));
     ASSERT(g_lqLTEM.iop != NULL);
 
-    cBuffer_t *txBffrCtrl = calloc(1, sizeof(cBuffer_t));           // allocate space for TX buffer control struct
+    cbuffer_t *txBffrCtrl = calloc(1, sizeof(cbuffer_t));           // allocate space for TX buffer control struct
     if (txBffrCtrl == NULL)
         return;
     char *txBffr = calloc(1, ltem__bufferSz_tx);                    // allocate space for raw buffer
@@ -122,7 +122,7 @@ void IOP_create()
         return;
     }
 
-    cBuffer_t *rxBffrCtrl = calloc(1, sizeof(cBuffer_t));           // allocate space for RX buffer control struct
+    cbuffer_t *rxBffrCtrl = calloc(1, sizeof(cbuffer_t));           // allocate space for RX buffer control struct
     if (rxBffrCtrl == NULL)
         return;
     char *rxBffr = calloc(1, ltem__bufferSz_rx);                    // allocate space for raw buffer
